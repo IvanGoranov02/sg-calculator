@@ -27,7 +27,7 @@ export function WatchlistToggle({ symbol }: WatchlistToggleProps) {
       className="shrink-0 gap-2 border-white/15"
       disabled={full}
       title={full ? t("watchlist.fullTitle", { max: WATCHLIST_MAX }) : undefined}
-      onClick={() => toggle(symbol)}
+      onClick={() => void Promise.resolve(toggle(symbol))}
     >
       <Bookmark className={cn("size-4", saved && "fill-amber-400 text-amber-400")} aria-hidden />
       {saved ? t("watchlist.saved") : t("watchlist.toggle")}

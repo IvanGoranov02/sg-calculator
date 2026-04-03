@@ -360,7 +360,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
         )}
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="h-[380px] w-full">
+        <div className="h-[260px] w-full sm:h-[320px] md:h-[380px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
               <defs>

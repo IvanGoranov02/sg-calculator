@@ -50,7 +50,9 @@ export function DashboardContent({ market }: DashboardContentProps) {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+          {t("dashboard.title")}
+        </h1>
         <p className="mt-2 text-muted-foreground">{t("dashboard.welcome")}</p>
       </div>
 

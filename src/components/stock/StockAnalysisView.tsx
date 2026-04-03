@@ -3,7 +3,10 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
+import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
+import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
+import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,8 +65,8 @@ export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewPr
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{t("stock.subtitle")}</p>
         </div>
-        <div className="flex shrink-0 items-baseline gap-3">
-          <span className="font-mono text-3xl font-semibold tabular-nums tracking-tight">
+        <div className="flex min-w-0 shrink-0 flex-wrap items-baseline gap-2 sm:gap-3">
+          <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
             {formatCurrency(quote.price)}
           </span>
           <span
@@ -81,6 +84,9 @@ export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewPr
 
       <StockMetricChart data={bundle} />
       <IncomeStatementTable rows={income} />
+      <FundamentalsChartsSection data={bundle} />
+      <AnnualFundamentalsSection data={bundle} />
+      <InvestorMetricsSection data={bundle.investor} />
     </div>
   );
 }

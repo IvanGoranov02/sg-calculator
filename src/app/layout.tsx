@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
 
 import "./globals.css";
@@ -31,7 +32,9 @@ export default function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-zinc-950">
-        <LocaleProvider>{children}</LocaleProvider>
+        <LocaleProvider>
+          <AuthSessionProvider>{children}</AuthSessionProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

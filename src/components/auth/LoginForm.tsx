@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { signIn } from "next-auth/react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -12,15 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 export function LoginForm() {
   const { t } = useI18n();
-  const [info, setInfo] = useState<string | null>(null);
 
   return (
     <Card className="w-full max-w-md border-white/10 bg-zinc-900/80 shadow-xl ring-white/10">
@@ -29,61 +25,16 @@ export function LoginForm() {
         <CardDescription>{t("login.subtitle")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setInfo(t("login.notImplemented"));
-          }}
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="login-email">{t("login.email")}</Label>
-            <Input
-              id="login-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder={t("login.placeholderEmail")}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="login-password">{t("login.password")}</Label>
-            <Input
-              id="login-password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-            />
-          </div>
-          <Button type="submit" className="w-full" size="lg">
-            {t("login.submit")}
-          </Button>
-        </form>
-        {info ? (
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-            {info}
-          </p>
-        ) : null}
-
-        <div className="relative py-1">
-          <Separator className="bg-white/10" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-zinc-900 px-2 text-xs text-muted-foreground">
-            {t("login.divider")}
-          </span>
-        </div>
-
         <Button
           type="button"
-          variant="outline"
           className="w-full"
           size="lg"
-          disabled
-          title={t("login.googleSoon")}
+          onClick={() => void signIn("google", { callbackUrl: "/dashboard" })}
         >
           <GoogleGlyph className="mr-2 size-4" aria-hidden />
           {t("login.google")}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">{t("login.googleSoon")}</p>
+        <p className="text-center text-xs text-muted-foreground">{t("login.hint")}</p>
       </CardContent>
       <CardFooter className="justify-center border-t border-white/10 pt-4">
         <Link href="/dashboard" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>

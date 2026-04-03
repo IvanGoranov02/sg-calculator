@@ -31,3 +31,14 @@ export function formatVolume(n: number): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
   return String(Math.round(n));
 }
+
+/** Yahoo often reports margins and growth as decimals (e.g. 0.25 = 25%). */
+export function formatDecimalAsPercent(n: number | null | undefined, fractionDigits = 2): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(fractionDigits)}%`;
+}
+
+export function formatRatio(n: number | null | undefined, fractionDigits = 2): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return n.toFixed(fractionDigits);
+}

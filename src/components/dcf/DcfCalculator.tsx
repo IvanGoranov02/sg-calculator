@@ -63,9 +63,9 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
       : null;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div className="mx-auto flex max-w-3xl flex-col gap-6 sm:gap-8">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{t("dcf.title")}</h1>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
         <p className="mt-2 text-muted-foreground">{t("dcf.intro")}</p>
         {seed ? (
           <p className="mt-2 text-sm text-muted-foreground">

@@ -25,11 +25,12 @@ export function IncomeStatementTable({ rows }: IncomeStatementTableProps) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
-      <div className="border-b border-white/10 px-5 py-4">
+      <div className="border-b border-white/10 px-4 py-4 sm:px-5">
         <h2 className="text-lg font-semibold tracking-tight">{t("income.title")}</h2>
         <p className="text-sm text-muted-foreground">{t("income.subtitle")}</p>
       </div>
-      <Table>
+      <div className="overflow-x-auto">
+        <Table className="min-w-[520px]">
         <TableHeader>
           <TableRow className="border-white/10 hover:bg-transparent">
             <TableHead className="w-[200px] text-muted-foreground">{t("income.metricCol")}</TableHead>
@@ -59,6 +60,7 @@ export function IncomeStatementTable({ rows }: IncomeStatementTableProps) {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

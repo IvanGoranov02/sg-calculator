@@ -16,7 +16,7 @@ Open [http://localhost:3000](http://localhost:3000). Data is fetched on the **se
 1. Push this repo to GitHub (or GitLab / Bitbucket).
 2. In [Vercel](https://vercel.com), **Add New Project** → import the repo. Framework: **Next.js** (auto-detected).
 3. Use **Node.js 22.x** (matches `engines` in `package.json` and `yahoo-finance2`). In the project: **Settings → General → Node.js Version**.
-4. Deploy. No extra env vars are required for the current Yahoo-only flow; add database and OAuth secrets when you wire auth.
+4. Deploy. Set **DATABASE_URL**, **DIRECT_URL**, **AUTH_SECRET**, **AUTH_URL**, **AUTH_GOOGLE_ID**, and **AUTH_GOOGLE_SECRET** in the Vercel project (see `.env.example`). With **Supabase**, use the **pooler** URL for `DATABASE_URL` and the **non-pooling** (5432) URL for `DIRECT_URL`. If your host has only one URL, set both to the same value. After the first deploy, apply the DB schema: `npx prisma db push` (or `prisma migrate dev`) against that database.
 
 ### Node version
 

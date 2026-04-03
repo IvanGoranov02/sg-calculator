@@ -45,19 +45,27 @@ function StockSearch({ actionPath = "/stock-analysis" }: StockSearchProps) {
   return (
     <form
       onSubmit={onSubmit}
-      className="flex w-full max-w-xl items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-1.5 shadow-inner shadow-black/20 backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20"
+      className="flex w-full max-w-xl flex-col gap-2 rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 shadow-inner shadow-black/20 backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20 sm:flex-row sm:items-center sm:gap-2 sm:py-1.5"
     >
-      <Search className="size-4 shrink-0 text-zinc-500" aria-hidden />
-      <Input
-        name="ticker"
-        value={query}
-        onChange={(e) => setQuery(e.target.value.toUpperCase())}
-        placeholder={t("search.placeholder")}
-        className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
-        autoComplete="off"
-        spellCheck={false}
-      />
-      <Button type="submit" size="sm" variant="secondary" className="shrink-0">
+      <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2">
+        <Search className="size-4 shrink-0 text-zinc-500" aria-hidden />
+        <Input
+          name="ticker"
+          value={query}
+          onChange={(e) => setQuery(e.target.value.toUpperCase())}
+          placeholder={t("search.placeholder")}
+          className="min-h-9 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-8 sm:text-sm"
+          autoComplete="off"
+          spellCheck={false}
+          inputMode="text"
+        />
+      </div>
+      <Button
+        type="submit"
+        size="sm"
+        variant="secondary"
+        className="h-10 w-full shrink-0 sm:h-8 sm:w-auto"
+      >
         {t("search.submit")}
       </Button>
     </form>

@@ -18,7 +18,7 @@ import { useWatchlist } from "./WatchlistProvider";
 
 export function WatchlistClient() {
   const { t } = useI18n();
-  const { symbols, add, remove } = useWatchlist();
+  const { symbols, add, remove, storageMode } = useWatchlist();
   const [input, setInput] = useState("");
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,20 +70,25 @@ export function WatchlistClient() {
     [symbols, quoteMap],
   );
 
-  function onAdd(e: FormEvent) {
+  async function onAdd(e: FormEvent) {
     e.preventDefault();
     const t = input.trim().toUpperCase();
     if (!t) return;
     if (symbols.length >= WATCHLIST_MAX) return;
-    add(t);
+    await Promise.resolve(add(t));
     setInput("");
   }
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{t("watchlist.title")}</h1>
-        <p className="mt-2 text-muted-foreground">{t("watchlist.intro", { max: WATCHLIST_MAX })}</p>
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("watchlist.title")}</h1>
+        <p className="mt-2 text-muted-foreground">
+          {t(
+            storageMode === "cloud" ? "watchlist.introCloud" : "watchlist.intro",
+            { max: WATCHLIST_MAX },
+          )}
+        </p>
       </div>
 
       <form onSubmit={onAdd} className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -175,7 +180,7 @@ export function WatchlistClient() {
                           size="icon"
                           variant="ghost"
                           className="text-muted-foreground hover:text-red-400"
-                          onClick={() => remove(sym)}
+                          onClick={() => void Promise.resolve(remove(sym))}
                           aria-label={t("watchlist.removeAria", { symbol: sym })}
                         >
                           <Trash2 className="size-4" />
@@ -214,7 +219,7 @@ export function WatchlistClient() {
                           size="icon"
                           variant="ghost"
                           className="text-muted-foreground hover:text-red-400"
-                          onClick={() => remove(sym)}
+                          onClick={() => void Promise.resolve(remove(sym))}
                           aria-label={t("watchlist.removeAria", { symbol: sym })}
                         >
                           <Trash2 className="size-4" />

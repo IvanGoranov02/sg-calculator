@@ -13,6 +13,12 @@ import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
+type SidebarProps = {
+  className?: string;
+  /** Call when a nav link is clicked (e.g. close mobile drawer). */
+  onNavigate?: () => void;
+};
+
 const nav = [
   { href: "/dashboard", labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
   { href: "/stock-analysis", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
@@ -20,15 +26,24 @@ const nav = [
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
 ];
 
-export function Sidebar() {
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   const { symbols } = useWatchlist();
   const { t } = useI18n();
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/10 bg-sidebar">
+    <aside
+      className={cn(
+        "flex h-full w-64 min-w-0 shrink-0 flex-col border-r border-white/10 bg-sidebar",
+        className,
+      )}
+    >
       <div className="flex h-14 items-center border-b border-white/10 px-5">
-        <Link href="/dashboard" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Link
+          href="/dashboard"
+          onClick={() => onNavigate?.()}
+          className="flex items-center gap-2 font-semibold tracking-tight"
+        >
           <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
             SG
           </span>
@@ -42,8 +57,9 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={() => onNavigate?.()}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex min-h-10 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
