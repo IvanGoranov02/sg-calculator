@@ -1,36 +1,27 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StockGauge
 
-## Getting Started
+Next.js stock analysis UI with [yahoo-finance2](https://github.com/gadicc/yahoo-finance2) for quotes, historical prices, and annual fundamentals — **no third-party API key**.
 
-First, run the development server:
+## Setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Data is fetched on the **server** (App Router); optional `.env` is only for future features (see `.env.example`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Deploy on Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Push this repo to GitHub (or GitLab / Bitbucket).
+2. In [Vercel](https://vercel.com), **Add New Project** → import the repo. Framework: **Next.js** (auto-detected).
+3. Use **Node.js 22.x** (matches `engines` in `package.json` and `yahoo-finance2`). In the project: **Settings → General → Node.js Version**.
+4. Deploy. No extra env vars are required for the current Yahoo-only flow; add database and OAuth secrets when you wire auth.
 
-## Learn More
+### Node version
 
-To learn more about Next.js, take a look at the following resources:
+`yahoo-finance2` v3 recommends **Node.js 22+**. Older versions may log a warning but often still work.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js (App Router), TypeScript, Tailwind, shadcn/ui, Recharts.
