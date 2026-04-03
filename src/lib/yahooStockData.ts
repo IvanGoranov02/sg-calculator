@@ -64,14 +64,30 @@ async function resolveYahooSymbol(input: string): Promise<string> {
   );
 }
 
-function mapQuote(symbol: string, q: {
-  shortName?: string;
-  longName?: string;
-  symbol?: string;
-  regularMarketPrice?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
-}): StockQuote {
+function toIsoDate(d: unknown): string | null {
+  if (d == null || d === "") return null;
+  const dt = d instanceof Date ? d : new Date(String(d));
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function pickNextEarningsFromCalendar(qs: Record<string, unknown> | null): string | null {
+  if (!qs) return null;
+  const ce = qs.calendarEvents as { earnings?: { earningsDate?: Date[] } } | undefined;
+  const dates = ce?.earnings?.earningsDate;
+  if (!Array.isArray(dates) || dates.length === 0) return null;
+  const parsed = dates
+    .map((x) => (x instanceof Date ? x : new Date(x as string)))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (parsed.length === 0) return null;
+  const t0 = Date.now() - 86400000;
+  const upcoming = parsed.filter((d) => d.getTime() >= t0).sort((a, b) => a.getTime() - b.getTime());
+  const pick = upcoming[0] ?? parsed[parsed.length - 1];
+  return pick.toISOString().slice(0, 10);
+}
+
+function mapQuote(symbol: string, raw: Record<string, unknown>): StockQuote {
+  const q = raw;
   const price = Number(q.regularMarketPrice ?? 0);
   const change = Number(q.regularMarketChange ?? 0);
   let pct = Number(q.regularMarketChangePercent ?? NaN);
@@ -79,12 +95,25 @@ function mapQuote(symbol: string, q: {
     const prev = price - change;
     pct = prev !== 0 ? (change / prev) * 100 : 0;
   }
+  const earningsDate =
+    toIsoDate(q.earningsTimestamp) ??
+    toIsoDate(q.earningsTimestampStart) ??
+    null;
+
   return {
-    symbol: (q.symbol ?? symbol).toUpperCase(),
+    symbol: String((q.symbol ?? symbol) as string).toUpperCase(),
     name: String(q.longName ?? q.shortName ?? symbol),
     price,
     change,
     changesPercentage: Number.isFinite(pct) ? pct : 0,
+    marketState: typeof q.marketState === "string" ? q.marketState : undefined,
+    postMarketPrice: numField(q.postMarketPrice),
+    postMarketChange: numField(q.postMarketChange),
+    postMarketChangePercent: numField(q.postMarketChangePercent),
+    preMarketPrice: numField(q.preMarketPrice),
+    preMarketChange: numField(q.preMarketChange),
+    preMarketChangePercent: numField(q.preMarketChangePercent),
+    earningsDate,
   };
 }
 
@@ -92,6 +121,17 @@ function numField(v: unknown): number | null {
   if (v === undefined || v === null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Yahoo sometimes labels EBITDA differently across filers / annual vs quarterly. */
+function pickEbitda(row: FinRow): number | null {
+  const r = row as Record<string, unknown>;
+  return (
+    numField(row.ebitda) ??
+    numField(r.EBITDA) ??
+    numField(r.normalizedEBITDA) ??
+    numField(r.NormalizedEBITDA)
+  );
 }
 
 type FinRow = {
@@ -104,11 +144,98 @@ type FinRow = {
   netIncome?: number;
   netIncomeCommonStockholders?: number;
   dividendPerShare?: number;
+  dilutedEPS?: number;
+  normalizedDilutedEPS?: number;
+  dilutedAverageShares?: number;
+  basicAverageShares?: number;
 };
 
 function rowDateKey(row: { date: Date }): string {
   const d = row.date instanceof Date ? row.date : new Date(row.date as string);
   return d.toISOString().slice(0, 10);
+}
+
+type DividendEventRow = { date: Date; dividends: number };
+
+/** Server logs for dividend pipeline (dev by default; prod: set DEBUG_YAHOO_DIVIDENDS=1). */
+function shouldLogYahooDividends(): boolean {
+  if (process.env.DEBUG_YAHOO_DIVIDENDS === "0") return false;
+  return process.env.NODE_ENV === "development" || process.env.DEBUG_YAHOO_DIVIDENDS === "1";
+}
+
+function logYahooDividends(symbol: string, message: string, extra?: unknown): void {
+  if (!shouldLogYahooDividends()) return;
+  const prefix = `[sg-calculator:yahoo-dividends:${symbol}]`;
+  if (extra !== undefined) {
+    console.log(prefix, message, extra);
+  } else {
+    console.log(prefix, message);
+  }
+}
+
+/**
+ * Yahoo chart() exposes dividends as `{ amount, date }` (array mode). Normalize to our row shape.
+ * @see https://github.com/gadicc/yahoo-finance2/blob/dev/src/modules/chart.d.ts — prefer chart when historical is flaky (issue #795).
+ */
+function dividendEventsFromChartArray(chart: unknown): DividendEventRow[] {
+  if (!chart || typeof chart !== "object") return [];
+  const ev = (chart as { events?: { dividends?: unknown } }).events?.dividends;
+  if (ev == null) return [];
+  const list = Array.isArray(ev) ? ev : Object.values(ev as Record<string, unknown>);
+  const out: DividendEventRow[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { date?: Date | string | number; amount?: unknown; dividends?: unknown };
+    const d = o.date instanceof Date ? o.date : new Date(o.date as string | number);
+    const amt = Number(o.amount ?? o.dividends);
+    if (!Number.isFinite(d.getTime()) || !Number.isFinite(amt)) continue;
+    out.push({ date: d, dividends: amt });
+  }
+  return out.sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+function mergeDividendEvents(a: DividendEventRow[], b: DividendEventRow[]): DividendEventRow[] {
+  const map = new Map<string, DividendEventRow>();
+  for (const e of [...a, ...b]) {
+    const d = e.date instanceof Date ? e.date : new Date(e.date as string);
+    if (!Number.isFinite(d.getTime())) continue;
+    const k = d.toISOString().slice(0, 10);
+    const amt = Number(e.dividends);
+    if (!Number.isFinite(amt)) continue;
+    if (!map.has(k)) map.set(k, { date: d, dividends: amt });
+  }
+  return [...map.values()].sort((x, y) => x.date.getTime() - y.date.getTime());
+}
+
+/** Sum per-share dividends paid on ex-dates falling in the same calendar quarter as `periodEnd`. */
+function dividendPerShareFromHistory(periodEnd: Date, events: DividendEventRow[]): number {
+  const y = periodEnd.getUTCFullYear();
+  const q0 = Math.floor(periodEnd.getUTCMonth() / 3);
+  let s = 0;
+  for (const e of events) {
+    const d = e.date instanceof Date ? e.date : new Date(e.date as string);
+    if (!Number.isFinite(d.getTime())) continue;
+    if (d.getUTCFullYear() !== y) continue;
+    if (Math.floor(d.getUTCMonth() / 3) !== q0) continue;
+    const amt = Number(e.dividends);
+    if (Number.isFinite(amt)) s += amt;
+  }
+  return s;
+}
+
+function pickQuarterlyDps(
+  finRow: FinRow,
+  periodEnd: Date,
+  divEvents: DividendEventRow[],
+): number | null {
+  const fromFin =
+    numField(finRow.dividendPerShare) ??
+    numField((finRow as Record<string, unknown>).quarterlyDividendPerShare);
+  const fromHist = dividendPerShareFromHistory(periodEnd, divEvents);
+  if (fromFin != null && fromFin > 0) return fromFin;
+  if (fromHist > 0) return fromHist;
+  if (fromFin != null) return fromFin > 0 ? fromFin : null;
+  return null;
 }
 
 function mapIncomeQuarter(symbol: string, row: FinRow): IncomeStatementQuarter {
@@ -121,7 +248,9 @@ function mapIncomeQuarter(symbol: string, row: FinRow): IncomeStatementQuarter {
   opEx ??= 0;
   const ni = row.netIncome ?? row.netIncomeCommonStockholders ?? 0;
   const oi = numField(row.operatingIncome);
-  const ebitda = numField(row.ebitda);
+  const ebitda = pickEbitda(row);
+  const dilEps = numField(row.dilutedEPS ?? row.normalizedDilutedEPS);
+  const dilSh = numField((row as Record<string, unknown>).dilutedAverageShares ?? row.dilutedAverageShares);
   const d = row.date instanceof Date ? row.date : new Date(row.date as string);
   return {
     date: d.toISOString().slice(0, 10),
@@ -132,6 +261,8 @@ function mapIncomeQuarter(symbol: string, row: FinRow): IncomeStatementQuarter {
     netIncome: ni,
     ...(oi !== null ? { operatingIncome: oi } : {}),
     ...(ebitda !== null ? { ebitda } : {}),
+    ...(dilEps !== null ? { dilutedEps: dilEps } : {}),
+    ...(dilSh !== null ? { dilutedAverageShares: dilSh } : {}),
   };
 }
 
@@ -183,7 +314,9 @@ function mapIncomeRow(symbol: string, row: FinRow): IncomeStatementAnnual {
   opEx ??= 0;
   const ni = row.netIncome ?? row.netIncomeCommonStockholders ?? 0;
   const oi = numField(row.operatingIncome);
-  const ebitda = numField(row.ebitda);
+  const ebitda = pickEbitda(row);
+  const dilEps = numField(row.dilutedEPS ?? row.normalizedDilutedEPS);
+  const dilSh = numField((row as Record<string, unknown>).dilutedAverageShares ?? row.dilutedAverageShares);
   return {
     date: row.date.toISOString().slice(0, 10),
     symbol,
@@ -194,6 +327,8 @@ function mapIncomeRow(symbol: string, row: FinRow): IncomeStatementAnnual {
     netIncome: ni,
     ...(oi !== null ? { operatingIncome: oi } : {}),
     ...(ebitda !== null ? { ebitda } : {}),
+    ...(dilEps !== null ? { dilutedEps: dilEps } : {}),
+    ...(dilSh !== null ? { dilutedAverageShares: dilSh } : {}),
   };
 }
 
@@ -296,6 +431,8 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     balanceSheetQuarterlyResult,
     chartIntraday,
     quoteSummaryResult,
+    dividendHistoryResult,
+    dividendChartResult,
   ] = await Promise.all([
     yahooFinance.quote(sym),
     yahooFinance.historical(sym, {
@@ -357,9 +494,31 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
       .catch(() => null),
     yahooFinance
       .quoteSummary(sym, {
-        modules: ["financialData", "defaultKeyStatistics", "summaryDetail"],
+        modules: ["financialData", "defaultKeyStatistics", "summaryDetail", "calendarEvents"],
       })
       .catch(() => null),
+    yahooFinance
+      .historical(sym, {
+        period1: FUNDAMENTALS_PERIOD1,
+        period2: period2Str,
+        events: "dividends",
+      })
+      .catch((err: unknown) => {
+        logYahooDividends(sym, "historical(dividends) failed (library may map to chart; see chart fallback)", err);
+        return [] as DividendEventRow[];
+      }),
+    yahooFinance
+      .chart(sym, {
+        period1: FUNDAMENTALS_PERIOD1,
+        period2: period2,
+        interval: "1d",
+        events: "div",
+        return: "array",
+      })
+      .catch((err: unknown) => {
+        logYahooDividends(sym, "chart(events=div) failed", err);
+        return null;
+      }),
   ]);
 
   const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
@@ -368,13 +527,16 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
   }
 
   const rawQuote = q as Record<string, unknown>;
-  const quote = mapQuote(sym, q as Parameters<typeof mapQuote>[1]);
-  const investor = mapInvestorMetrics(
-    rawQuote,
+  const qs =
     quoteSummaryResult && typeof quoteSummaryResult === "object"
       ? (quoteSummaryResult as Record<string, unknown>)
-      : null,
-  );
+      : null;
+  let quote = mapQuote(sym, rawQuote);
+  if (!quote.earningsDate && qs) {
+    const fromCal = pickNextEarningsFromCalendar(qs);
+    if (fromCal) quote = { ...quote, earningsDate: fromCal };
+  }
+  const investor = mapInvestorMetrics(rawQuote, qs);
 
   const finRows = (financialsResult as FinRow[])
     .filter((r) => r.date)
@@ -443,12 +605,33 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
   const quarterlyKept = quarterlyPairs.filter(({ inc }) => !isEmptyIncomeStatementCore(inc));
   const incomeQuarterly: IncomeStatementQuarter[] = quarterlyKept.map(({ inc }) => inc);
 
+  const fromHistorical = (dividendHistoryResult as DividendEventRow[]).filter(
+    (e) => e?.date && e.dividends != null && Number.isFinite(Number(e.dividends)),
+  );
+  const fromChart = dividendEventsFromChartArray(dividendChartResult);
+  const divEvents: DividendEventRow[] = mergeDividendEvents(fromHistorical, fromChart);
+
   const dividendQuarterly: DividendQuarterlyPoint[] = quarterlyKept.map(({ row }) => {
     const d = row.date instanceof Date ? row.date : new Date(row.date as string);
+    const dps = pickQuarterlyDps(row, d, divEvents);
     return {
       date: d.toISOString().slice(0, 10),
-      dividendPerShare: numField(row.dividendPerShare),
+      dividendPerShare: dps,
     };
+  });
+
+  const quartersWithPositiveDps = dividendQuarterly.filter(
+    (p) => p.dividendPerShare != null && p.dividendPerShare > 0,
+  ).length;
+
+  logYahooDividends(sym, "dividend events merged", {
+    historicalRows: fromHistorical.length,
+    chartRows: fromChart.length,
+    mergedUniqueExDates: divEvents.length,
+    quarterlyRowsKept: quarterlyKept.length,
+    quartersWithPositiveDps,
+    sampleQuarterlyDps: dividendQuarterly.slice(-6),
+    tailMergedExDates: divEvents.slice(-5),
   });
 
   const cfQByDate = new Map<string, CfRow>();

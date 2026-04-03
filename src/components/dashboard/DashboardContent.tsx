@@ -76,7 +76,7 @@ export function DashboardContent({ market }: DashboardContentProps) {
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
         <Link
-          href="/stock-analysis?ticker=AAPL"
+          href="/stock/AAPL"
           className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">

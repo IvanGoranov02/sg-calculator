@@ -8,38 +8,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 
-type StockSearchProps = {
-  /** When not on stock analysis, navigate here with ?ticker= */
-  actionPath?: string;
-};
-
-/** Remount when the query string changes so the input stays in sync with the URL. */
-export function StockSearchContainer({ actionPath }: { actionPath?: string }) {
+/** Remount when the synced ticker changes so the input matches the URL without effects. */
+export function StockSearchContainer({ isDcf }: { isDcf: boolean }) {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  return <StockSearch key={searchParams.toString()} actionPath={actionPath} />;
+  const pathTicker = pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "";
+  const dcfTicker = searchParams.get("ticker") ?? "";
+  const syncKey = isDcf ? `dcf-${dcfTicker}-${searchParams.toString()}` : `stock-${pathTicker}`;
+  return <StockSearch key={syncKey} isDcf={isDcf} />;
 }
 
-/** Uses the current route so search submits to stock analysis or DCF as appropriate. */
+/** Uses DCF vs stock ticker route from the current path. */
 export function StockSearchWithRoute() {
   const pathname = usePathname();
-  const actionPath = pathname.startsWith("/dcf-calculator")
-    ? "/dcf-calculator"
-    : "/stock-analysis";
-  return <StockSearchContainer actionPath={actionPath} />;
+  const isDcf = pathname.startsWith("/dcf-calculator");
+  return <StockSearchContainer isDcf={isDcf} />;
 }
 
-function StockSearch({ actionPath = "/stock-analysis" }: StockSearchProps) {
+type StockSearchProps = {
+  isDcf: boolean;
+};
+
+function StockSearch({ isDcf }: StockSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const fromPath = pathname.match(/^\/stock\/([^/]+)/i)?.[1]?.trim().toUpperCase() ?? "";
   const fromUrl = searchParams.get("ticker")?.trim() ?? "";
-  const [query, setQuery] = useState(() => fromUrl || "AAPL");
+  const [query, setQuery] = useState(() => fromPath || fromUrl || "AAPL");
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const t = query.trim().toUpperCase();
-    if (!t) return;
-    router.push(`${actionPath}?ticker=${encodeURIComponent(t)}`);
+    const sym = query.trim().toUpperCase();
+    if (!sym) return;
+    if (isDcf) {
+      router.push(`/dcf-calculator?ticker=${encodeURIComponent(sym)}`);
+    } else {
+      router.push(`/stock/${encodeURIComponent(sym)}`);
+    }
   }
 
   return (

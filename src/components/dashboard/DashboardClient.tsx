@@ -142,7 +142,7 @@ export function DashboardClient() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Link
-                          href={`/stock-analysis?ticker=${encodeURIComponent(q.symbol)}`}
+                          href={`/stock/${encodeURIComponent(q.symbol)}`}
                           className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-7 text-xs")}
                         >
                           {t("dashboard.actionAnalysis")}

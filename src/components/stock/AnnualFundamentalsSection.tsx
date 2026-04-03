@@ -26,6 +26,19 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
     const cfMap = byFy(data.cashFlow);
     const bsMap = byFy(data.balanceSheet);
 
+    const perShare: FiscalMetricRowDef[] = [
+      {
+        label: t("annual.dilutedEps"),
+        values: inc.map((r) => r.dilutedEps ?? null),
+        format: "eps",
+      },
+      {
+        label: t("annual.dilutedShares"),
+        values: inc.map((r) => r.dilutedAverageShares ?? null),
+        format: "shares",
+      },
+    ];
+
     const incomeExtra: FiscalMetricRowDef[] = [
       {
         label: t("annual.operatingIncome"),
@@ -178,7 +191,7 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
       },
     ];
 
-    return { years, incomeExtra, yoyRows, margins, balanceRows, cfRows, ratioRows };
+    return { years, perShare, incomeExtra, yoyRows, margins, balanceRows, cfRows, ratioRows };
   }, [data, t]);
 
   const metricCol = t("income.metricCol");
@@ -190,6 +203,14 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
         <p className="mt-1 text-sm text-muted-foreground">{t("annual.sectionSubtitle")}</p>
       </div>
 
+      <FiscalMetricTable
+        title={t("annual.perShareTitle")}
+        subtitle={t("annual.perShareSubtitle")}
+        metricCol={metricCol}
+        years={pack.years}
+        rows={pack.perShare}
+        yearLabel={formatFy}
+      />
       <FiscalMetricTable
         title={t("annual.incomeExtraTitle")}
         subtitle={t("annual.incomeExtraSubtitle")}

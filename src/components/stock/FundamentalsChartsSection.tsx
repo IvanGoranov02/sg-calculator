@@ -162,6 +162,8 @@ function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) =
       roa: bs?.totalAssets != null && bs.totalAssets !== 0 ? safePct(r.netIncome, bs.totalAssets) : null,
       fcfMargin:
         cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
+      dilutedEps: r.dilutedEps ?? null,
+      dilutedShares: r.dilutedAverageShares ?? null,
     };
   });
 }
@@ -243,6 +245,8 @@ function buildQuarterlyRows(
       roa: bs?.totalAssets != null && bs.totalAssets !== 0 ? safePct(r.netIncome, bs.totalAssets) : null,
       fcfMargin:
         cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
+      dilutedEps: r.dilutedEps ?? null,
+      dilutedShares: r.dilutedAverageShares ?? null,
     };
   });
 }
@@ -401,12 +405,24 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
       ),
     [rows],
   );
+  const hasDilutedEps = useMemo(
+    () => rows.some((r) => r.dilutedEps != null && Number.isFinite(r.dilutedEps as number)),
+    [rows],
+  );
+  const hasDilutedShares = useMemo(
+    () => rows.some((r) => r.dilutedShares != null && Number.isFinite(r.dilutedShares as number)),
+    [rows],
+  );
 
   const series = useMemo(
     () => ({
       revenue: [{ dataKey: "revenue", color: C.revenue, label: t("income.revenue") }] satisfies FundamentalSeries[],
       grossSolo: [{ dataKey: "grossProfit", color: C.gross, label: t("income.grossProfit") }] satisfies FundamentalSeries[],
       netIncomeSolo: [{ dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") }] satisfies FundamentalSeries[],
+      dilutedEpsSolo: [{ dataKey: "dilutedEps", color: "#f472b6", label: t("annual.dilutedEps") }] satisfies FundamentalSeries[],
+      dilutedSharesSolo: [
+        { dataKey: "dilutedShares", color: "#94a3b8", label: t("annual.dilutedShares") },
+      ] satisfies FundamentalSeries[],
       operatingIncomeSolo: [
         { dataKey: "operatingIncome", color: C.opIncome, label: t("annual.operatingIncome") },
       ] satisfies FundamentalSeries[],
@@ -603,7 +619,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
       {empty ? (
         <p className="text-sm text-muted-foreground">{t("chartsFund.noRows")}</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <FundamentalChartCard
             title={t("chartsFund.chartRevenue")}
             description={t("chartsFund.chartRevenueDesc")}
@@ -628,6 +644,26 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             chartType="line"
             valueFormat="currency"
           />
+          {hasDilutedEps ? (
+            <FundamentalChartCard
+              title={t("chartsFund.chartDilutedEps")}
+              description={t("chartsFund.chartDilutedEpsDesc")}
+              data={chartRows}
+              series={series.dilutedEpsSolo}
+              chartType="line"
+              valueFormat="perShare"
+            />
+          ) : null}
+          {hasDilutedShares ? (
+            <FundamentalChartCard
+              title={t("chartsFund.chartDilutedShares")}
+              description={t("chartsFund.chartDilutedSharesDesc")}
+              data={chartRows}
+              series={series.dilutedSharesSolo}
+              chartType="line"
+              valueFormat="compactCount"
+            />
+          ) : null}
           {hasOperatingIncome ? (
             <FundamentalChartCard
               title={t("chartsFund.chartOperatingIncomeSolo")}

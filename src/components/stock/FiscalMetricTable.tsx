@@ -8,13 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrencyCompact, formatPercent, formatRatio } from "@/lib/format";
+import { formatCurrencyCompact, formatCurrencyPerShare, formatPercent, formatRatio, formatVolume } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type FiscalMetricRowDef = {
   label: string;
   values: (number | null)[];
-  format: "currency" | "yoy" | "margin" | "ratio";
+  format: "currency" | "yoy" | "margin" | "ratio" | "eps" | "shares";
 };
 
 type FiscalMetricTableProps = {
@@ -37,6 +37,10 @@ function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null): string
       return `${v.toFixed(1)}%`;
     case "ratio":
       return formatRatio(v);
+    case "eps":
+      return formatCurrencyPerShare(v);
+    case "shares":
+      return formatVolume(v);
     default:
       return "—";
   }

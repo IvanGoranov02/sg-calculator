@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -76,10 +76,30 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     return { rows, pills, hasDps };
   }, [data.dividendQuarterly, formatPeriod]);
 
+  const yahooShowsDividend = useMemo(() => {
+    const inv = data.investor;
+    if (inv.dividendRate != null && inv.dividendRate > 0) return true;
+    const y = inv.dividendYield;
+    if (y == null) return false;
+    const frac = y > 1 ? y / 100 : y;
+    return frac > 1e-6;
+  }, [data.investor]);
+
   const qDpsSeries: FundamentalSeries[] = useMemo(
     () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
     [t],
   );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    const sym = data.quote.symbol;
+    const pts = data.dividendQuarterly;
+    const withDps = pts.filter((p) => p.dividendPerShare != null && p.dividendPerShare > 0).length;
+    console.log(
+      `[sg-calculator:DividendChartsSection:${sym}] quarterlyPoints=${pts.length} quartersWithDps>0=${withDps}`,
+      { lastQuarterly: pts.slice(-4), investorYield: data.investor.dividendYield },
+    );
+  }, [data.quote.symbol, data.dividendQuarterly, data.investor.dividendYield]);
 
   if (data.dividendQuarterly.length === 0) {
     return null;
@@ -93,7 +113,9 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       </div>
 
       {!pack.hasDps ? (
-        <p className="text-sm text-muted-foreground">{t("chartsFund.dividendNoData")}</p>
+        <p className="text-sm text-muted-foreground">
+          {yahooShowsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
+        </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-white/10 bg-zinc-900/40 sm:col-span-2">

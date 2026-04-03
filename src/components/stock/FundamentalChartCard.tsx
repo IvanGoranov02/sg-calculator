@@ -14,7 +14,7 @@ import {
 } from "recharts";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio } from "@/lib/format";
+import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +24,7 @@ export type FundamentalSeries = {
   label: string;
 };
 
-type ValueFormat = "currency" | "percent" | "ratio" | "perShare";
+type ValueFormat = "currency" | "percent" | "ratio" | "perShare" | "compactCount";
 
 type FundamentalChartCardProps = {
   title: string;
@@ -48,6 +48,8 @@ function formatTooltipValue(fmt: ValueFormat, v: number): string {
       return formatRatio(v);
     case "perShare":
       return formatCurrencyPerShare(v);
+    case "compactCount":
+      return formatVolume(v);
     default:
       return String(v);
   }
@@ -64,6 +66,8 @@ function axisTick(fmt: ValueFormat, v: number): string {
       return formatRatio(v);
     case "perShare":
       return formatCurrencyPerShare(v);
+    case "compactCount":
+      return formatVolume(v);
     default:
       return String(v);
   }

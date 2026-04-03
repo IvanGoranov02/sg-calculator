@@ -14,6 +14,7 @@ import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 import { cn } from "@/lib/utils";
 
+import { WatchlistDipChart } from "./WatchlistDipChart";
 import { useWatchlist } from "./WatchlistProvider";
 
 export function WatchlistClient() {
@@ -136,7 +137,7 @@ export function WatchlistClient() {
             <CardTitle>{t("watchlist.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("watchlist.emptyDescBefore")}
-              <Link href="/stock-analysis?ticker=AAPL" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/stock/AAPL" className="text-emerald-400 underline-offset-4 hover:underline">
                 {t("watchlist.emptyLink")}
               </Link>
               {t("watchlist.emptyDescAfter")}
@@ -161,6 +162,7 @@ export function WatchlistClient() {
                 <TableHead>{t("watchlist.colName")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colPrice")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colChange")}</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">{t("watchlist.colDip")}</TableHead>
                 <TableHead className="w-[100px] text-right"> </TableHead>
               </TableRow>
             </TableHeader>
@@ -171,7 +173,7 @@ export function WatchlistClient() {
                   return (
                     <TableRow key={sym} className="border-white/10">
                       <TableCell className="font-mono font-medium">{sym}</TableCell>
-                      <TableCell className="text-muted-foreground" colSpan={3}>
+                      <TableCell className="text-muted-foreground" colSpan={4}>
                         {loading ? t("watchlist.loading") : t("watchlist.quoteUnavailable")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -206,10 +208,24 @@ export function WatchlistClient() {
                       {formatPercent(q.changesPercentage)}
                       <span className="ml-1 text-muted-foreground">({formatCurrency(q.change)})</span>
                     </TableCell>
+                    <TableCell
+                      className={cn(
+                        "hidden text-right font-mono text-xs tabular-nums sm:table-cell",
+                        q.dipVsSma200Pct != null && q.dipVsSma200Pct < 0
+                          ? "text-red-400"
+                          : q.dipVsSma200Pct != null && q.dipVsSma200Pct > 0
+                            ? "text-emerald-400"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {q.dipVsSma200Pct != null && Number.isFinite(q.dipVsSma200Pct)
+                        ? formatPercent(q.dipVsSma200Pct)
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Link
-                          href={`/stock-analysis?ticker=${encodeURIComponent(sym)}`}
+                          href={`/stock/${encodeURIComponent(sym)}`}
                           className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}
                         >
                           {t("watchlist.analyze")}
@@ -231,6 +247,11 @@ export function WatchlistClient() {
               })}
             </TableBody>
           </Table>
+          <div className="border-t border-white/10 px-4 py-4">
+            <h3 className="mb-1 text-sm font-semibold tracking-tight">{t("watchlist.dipTitle")}</h3>
+            <p className="mb-3 text-xs text-muted-foreground">{t("watchlist.dipSubtitle")}</p>
+            <WatchlistDipChart quotes={quotes} />
+          </div>
         </Card>
       )}
     </div>

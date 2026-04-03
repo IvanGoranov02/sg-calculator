@@ -6,6 +6,15 @@ export type StockQuote = {
   price: number;
   change: number;
   changesPercentage: number;
+  marketState?: string;
+  postMarketPrice?: number | null;
+  postMarketChange?: number | null;
+  postMarketChangePercent?: number | null;
+  preMarketPrice?: number | null;
+  preMarketChange?: number | null;
+  preMarketChangePercent?: number | null;
+  /** Next earnings date (Yahoo; may be approximate). */
+  earningsDate?: string | null;
 };
 
 export type IncomeStatementAnnual = {
@@ -20,6 +29,9 @@ export type IncomeStatementAnnual = {
   operatingIncome?: number;
   /** EBITDA when Yahoo reports it. */
   ebitda?: number;
+  dilutedEps?: number;
+  /** Weighted average diluted shares (fundamentals time series). */
+  dilutedAverageShares?: number;
 };
 
 export type BalanceSheetAnnual = {
@@ -62,6 +74,8 @@ export type IncomeStatementQuarter = {
   netIncome: number;
   operatingIncome?: number;
   ebitda?: number;
+  dilutedEps?: number;
+  dilutedAverageShares?: number;
 };
 
 export type BalanceSheetQuarter = {
@@ -110,7 +124,7 @@ export type HistoricalEodBar = {
 /** Price chart range (1D uses intraday when available). */
 export type PerformanceRange = "1d" | "1w" | "1m" | "1y" | "5y" | "max";
 
-export type ChartMetric = "price" | "revenue" | "netIncome" | "freeCashFlow";
+export type ChartMetric = "price" | "revenue" | "netIncome" | "freeCashFlow" | "eps";
 
 /** Yahoo quoteSummary–derived fields for investor-facing tables (mostly TTM / snapshot). */
 export type InvestorMetrics = {

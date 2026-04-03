@@ -26,7 +26,7 @@ type SidebarProps = {
 
 const nav = [
   { href: "/dashboard", labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
-  { href: "/stock-analysis", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
+  { href: "/stock/AAPL", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
   { href: "/dcf-calculator", labelKey: "nav.dcfCalculator" as const, icon: Calculator },
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
 ];
@@ -95,7 +95,10 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
       ) : null}
       <nav className="flex flex-1 flex-col gap-0.5 p-2" aria-label="Main">
         {nav.map(({ href, labelKey, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+          const active =
+            href.startsWith("/stock/")
+              ? pathname.startsWith("/stock/")
+              : pathname === href || pathname.startsWith(`${href}/`);
           const label = t(labelKey);
           const collapsedTitle =
             collapsed && href === "/watchlist" && symbols.length > 0

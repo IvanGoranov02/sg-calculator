@@ -6,6 +6,12 @@ import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 
 const yahooFinance = new YahooFinance();
 
+function num(v: unknown): number | null {
+  if (v === undefined || v === null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function mapQuoteRow(symbol: string, q: Record<string, unknown>): WatchlistQuoteRow | null {
   if ((q.quoteType as string | undefined) === "NONE") return null;
   const price = Number(q.regularMarketPrice ?? 0);
@@ -15,12 +21,19 @@ function mapQuoteRow(symbol: string, q: Record<string, unknown>): WatchlistQuote
     const prev = price - change;
     pct = prev !== 0 ? (change / prev) * 100 : 0;
   }
+  const sma = num(q.twoHundredDayAverage);
+  let dipVsSma200Pct: number | null = null;
+  if (sma != null && sma !== 0 && Number.isFinite(price)) {
+    dipVsSma200Pct = ((price - sma) / sma) * 100;
+  }
   return {
     symbol: String(q.symbol ?? symbol).toUpperCase(),
     name: String(q.longName ?? q.shortName ?? symbol),
     price,
     change,
     changesPercentage: Number.isFinite(pct) ? pct : 0,
+    twoHundredDayAverage: sma,
+    dipVsSma200Pct,
   };
 }
 

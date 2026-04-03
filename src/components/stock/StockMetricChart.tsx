@@ -13,7 +13,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatCurrencyCompact, formatPercent, formatVolume } from "@/lib/format";
+import {
+  formatCurrency,
+  formatCurrencyCompact,
+  formatCurrencyPerShare,
+  formatPercent,
+  formatVolume,
+} from "@/lib/format";
 import type {
   ChartMetric,
   HistoricalEodBar,
@@ -26,13 +32,14 @@ import { cn } from "@/lib/utils";
 
 const rangeIds: PerformanceRange[] = ["1d", "1w", "1m", "1y", "5y", "max"];
 
-const metricIds: ChartMetric[] = ["price", "revenue", "netIncome", "freeCashFlow"];
+const metricIds: ChartMetric[] = ["price", "revenue", "netIncome", "freeCashFlow", "eps"];
 
 const strokeByMetric: Record<ChartMetric, string> = {
   price: "#34d399",
   revenue: "#60a5fa",
   netIncome: "#a78bfa",
   freeCashFlow: "#fbbf24",
+  eps: "#f472b6",
 };
 
 /** Last calendar session in intraday series (YYYY-MM-DD). */
@@ -144,6 +151,17 @@ function buildSeries(
         value: row.freeCashFlow,
       }));
     }
+    case "eps": {
+      const rows = sortIncomeByYearAsc(data.income).filter(
+        (r) => r.dilutedEps != null && Number.isFinite(r.dilutedEps),
+      );
+      const n = fundamentalYearCount(range);
+      const slice = range === "max" ? rows : rows.slice(-Math.min(n, rows.length));
+      return slice.map((row) => ({
+        label: formatFy(row.fiscalYear),
+        value: row.dilutedEps!,
+      }));
+    }
     default:
       return [];
   }
@@ -208,7 +226,9 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
               ? t("chart.metricRevenue")
               : id === "netIncome"
                 ? t("chart.metricNetIncome")
-                : t("chart.metricFcf"),
+                : id === "freeCashFlow"
+                  ? t("chart.metricFcf")
+                  : t("chart.metricEps"),
       })),
     [t],
   );
@@ -240,6 +260,16 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
   );
 
   const stroke = strokeByMetric[metric];
+
+  const fmtValue = useCallback(
+    (v: number) => (metric === "eps" ? formatCurrencyPerShare(v) : formatCurrency(v)),
+    [metric],
+  );
+
+  const fmtAxis = useCallback(
+    (v: number) => (metric === "eps" ? formatCurrencyPerShare(v) : formatCurrencyCompact(v)),
+    [metric],
+  );
 
   const stats = useMemo(() => {
     if (metric === "price") {
@@ -327,17 +357,13 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.rangeHigh")}
               </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">
-                {formatCurrency(stats.high)}
-              </p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.high)}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.rangeLow")}
               </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">
-                {formatCurrency(stats.low)}
-              </p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.low)}</p>
             </div>
             {metric === "price" ? (
               <div>
@@ -351,9 +377,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   {t("chart.lastValue")}
                 </p>
-                <p className="font-mono text-sm tabular-nums text-foreground">
-                  {formatCurrency(stats.last)}
-                </p>
+                <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.last)}</p>
               </div>
             )}
           </div>
@@ -381,7 +405,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v: number) => formatCurrencyCompact(v)}
+                tickFormatter={(v: number) => fmtAxis(v)}
                 width={72}
               />
               <Tooltip
@@ -391,9 +415,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                   return (
                     <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
                       <p className="text-muted-foreground">{label}</p>
-                      <p className="font-mono text-sm tabular-nums text-foreground">
-                        {formatCurrency(v)}
-                      </p>
+                      <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(v)}</p>
                     </div>
                   );
                 }}
