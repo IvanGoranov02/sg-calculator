@@ -13,6 +13,45 @@ export function rollingSum4Quarterly(values: (number | null)[]): (number | null)
   });
 }
 
+/**
+ * Sums the last four quarter slots; ignores nulls (sums known payments only).
+ * `partial[i]` is true when any of the four slots was null — not a full TTM, but avoids empty charts when Yahoo omits some quarters.
+ */
+export function rollingSum4QuarterlyLoose(values: (number | null)[]): {
+  sums: (number | null)[];
+  partial: boolean[];
+} {
+  const sums: (number | null)[] = [];
+  const partial: boolean[] = [];
+  for (let i = 0; i < values.length; i++) {
+    if (i < 3) {
+      sums.push(null);
+      partial.push(false);
+      continue;
+    }
+    let s = 0;
+    let any = false;
+    let anyNull = false;
+    for (let j = 0; j < 4; j++) {
+      const v = values[i - j];
+      if (v == null || !Number.isFinite(v)) {
+        anyNull = true;
+      } else {
+        s += v;
+        any = true;
+      }
+    }
+    if (!any) {
+      sums.push(null);
+      partial.push(false);
+    } else {
+      sums.push(s);
+      partial.push(anyNull);
+    }
+  }
+  return { sums, partial };
+}
+
 export type TtmDpsGrowthPills = {
   oneYear: number | null;
   twoYear: number | null;
@@ -21,7 +60,7 @@ export type TtmDpsGrowthPills = {
 };
 
 /**
- * Uses TTM DPS at quarter ends. 1Y = vs 4 quarters earlier; 2/5/10Y = CAGR vs 8/20/40 quarters earlier.
+ * Uses strict TTM DPS at quarter ends (all four quarters filled). 1Y = vs 4 quarters earlier; 2/5/10Y = CAGR vs 8/20/40 quarters earlier.
  */
 export function computeTtmDpsGrowthPills(ttm: (number | null)[]): TtmDpsGrowthPills {
   let last = -1;

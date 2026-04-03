@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { RefreshCw, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bar,
   BarChart,
@@ -12,8 +14,13 @@ import {
 } from "recharts";
 
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { computeTtmDpsGrowthPills, rollingSum4Quarterly } from "@/lib/dividendMetrics";
+import {
+  computeTtmDpsGrowthPills,
+  rollingSum4Quarterly,
+  rollingSum4QuarterlyLoose,
+} from "@/lib/dividendMetrics";
 import { formatCurrencyPerShare } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -48,6 +55,8 @@ type DividendChartsSectionProps = {
 
 export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
+  const router = useRouter();
+  const [isRefreshing, startRefresh] = useTransition();
 
   const formatPeriod = useCallback(
     (dateIso: string) => {
@@ -63,17 +72,20 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const pack = useMemo(() => {
     const sorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
     const dpsArr = sorted.map((p) => p.dividendPerShare);
-    const ttm = rollingSum4Quarterly(dpsArr);
-    const pills = computeTtmDpsGrowthPills(ttm);
+    const ttmStrict = rollingSum4Quarterly(dpsArr);
+    const loose = rollingSum4QuarterlyLoose(dpsArr);
+    const pills = computeTtmDpsGrowthPills(ttmStrict);
     const hasDps =
       dpsArr.some((v) => v != null && (v as number) > 0) ||
-      ttm.some((v) => v != null && (v as number) > 0);
+      ttmStrict.some((v) => v != null && (v as number) > 0) ||
+      loose.sums.some((v) => v != null && (v as number) > 0);
     const rows = sorted.map((p, i) => ({
       label: formatPeriod(p.date),
-      ttmDps: ttm[i],
+      ttmDps: loose.sums[i],
+      ttmPartial: loose.partial[i],
       qDps: dpsArr[i],
     }));
-    return { rows, pills, hasDps };
+    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean) };
   }, [data.dividendQuarterly, formatPeriod]);
 
   const yahooShowsDividend = useMemo(() => {
@@ -90,16 +102,65 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     [t],
   );
 
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiManualNonce, setAiManualNonce] = useState(0);
+
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
-    const sym = data.quote.symbol;
-    const pts = data.dividendQuarterly;
-    const withDps = pts.filter((p) => p.dividendPerShare != null && p.dividendPerShare > 0).length;
-    console.log(
-      `[sg-calculator:DividendChartsSection:${sym}] quarterlyPoints=${pts.length} quartersWithDps>0=${withDps}`,
-      { lastQuarterly: pts.slice(-4), investorYield: data.investor.dividendYield },
-    );
-  }, [data.quote.symbol, data.dividendQuarterly, data.investor.dividendYield]);
+    if (data.dividendQuarterly.length === 0 || pack.hasDps) {
+      setAiNote(null);
+      setAiLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    setAiLoading(true);
+    setAiNote(null);
+    (async () => {
+      try {
+        const u = new URL("/api/dividend-insight", window.location.origin);
+        u.searchParams.set("ticker", data.quote.symbol);
+        u.searchParams.set("locale", locale);
+        u.searchParams.set("name", data.quote.name);
+        u.searchParams.set("_", String(Date.now()));
+        if (data.investor.dividendYield != null) {
+          u.searchParams.set("yield", String(data.investor.dividendYield));
+        }
+        if (data.investor.dividendRate != null) {
+          u.searchParams.set("rate", String(data.investor.dividendRate));
+        }
+        const res = await fetch(u.toString(), { signal: ac.signal, cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { ok?: boolean; text?: string };
+        if (body.ok && typeof body.text === "string" && body.text.trim()) {
+          setAiNote(body.text.trim());
+        }
+      } catch {
+        /* aborted or network */
+      } finally {
+        if (!ac.signal.aborted) setAiLoading(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [
+    pack.hasDps,
+    data.dividendQuarterly.length,
+    data.quote.symbol,
+    data.quote.name,
+    data.investor.dividendYield,
+    data.investor.dividendRate,
+    locale,
+    aiManualNonce,
+  ]);
+
+  const onReloadYahoo = () => {
+    startRefresh(() => {
+      router.refresh();
+    });
+  };
+
+  const onReloadAi = () => {
+    setAiManualNonce((n) => n + 1);
+  };
 
   if (data.dividendQuarterly.length === 0) {
     return null;
@@ -107,21 +168,67 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.dividendSectionTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.dividendSectionSubtitle")}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.dividendSectionTitle")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.dividendSectionSubtitle")}</p>
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{t("chartsFund.dividendRefreshHint")}</p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isRefreshing}
+            onClick={onReloadYahoo}
+            className="border-white/15 bg-zinc-900/50"
+          >
+            <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
+            {t("chartsFund.dividendRefreshData")}
+          </Button>
+          {!pack.hasDps ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={aiLoading}
+              onClick={onReloadAi}
+              className="border-white/15 bg-zinc-900/50"
+            >
+              <Sparkles className="size-3.5" />
+              {t("chartsFund.dividendRefreshAi")}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {!pack.hasDps ? (
-        <p className="text-sm text-muted-foreground">
-          {yahooShowsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
-        </p>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {yahooShowsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
+          </p>
+          {aiLoading ? (
+            <p className="text-xs text-muted-foreground">{t("chartsFund.dividendAiLoading")}</p>
+          ) : null}
+          {aiNote ? (
+            <div className="rounded-lg border border-white/10 bg-zinc-900/50 p-4">
+              <p className="text-xs font-medium text-muted-foreground">{t("chartsFund.dividendAiContextTitle")}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{aiNote}</p>
+              <p className="mt-3 text-[11px] text-muted-foreground">{t("chartsFund.dividendAiDisclaimer")}</p>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-white/10 bg-zinc-900/40 sm:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{t("chartsFund.dividendTtmTitle")}</CardTitle>
-              <CardDescription className="text-xs">{t("chartsFund.dividendTtmDesc")}</CardDescription>
+              <CardDescription className="text-xs">
+                {t("chartsFund.dividendTtmDesc")}
+                {pack.anyTtmPartial ? (
+                  <span className="mt-1 block text-[11px] text-amber-200/80">{t("chartsFund.dividendTtmPartialNote")}</span>
+                ) : null}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[240px] w-full">
@@ -143,10 +250,15 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
                     />
                     <Tooltip
                       formatter={
-                        ((value: unknown) => {
+                        ((value: unknown, name: string, item: { payload?: { ttmPartial?: boolean } }) => {
                           const v = Array.isArray(value) ? value[0] : value;
                           if (v === undefined || v === null) return "—";
-                          return formatCurrencyPerShare(typeof v === "number" ? v : Number(v));
+                          const fmt = formatCurrencyPerShare(typeof v === "number" ? v : Number(v));
+                          const partial = item?.payload?.ttmPartial === true;
+                          if (partial) {
+                            return [`${fmt} (${t("chartsFund.dividendTtmPartialShort")})`, name];
+                          }
+                          return [fmt, name];
                         }) as never
                       }
                       contentStyle={{

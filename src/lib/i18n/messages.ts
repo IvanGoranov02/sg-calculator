@@ -317,6 +317,16 @@ export const messages: Record<AppLocale, MessageDict> = {
         "This company does not pay a regular cash dividend on common stock — reinvestment / growth profile (e.g. AMZN). Dividend metrics in “Key investor metrics” may still show 0.",
       dividendDataIncomplete:
         "Yahoo lists a dividend yield, but quarterly dividend-per-share lines are missing in the loaded fundamentals window. Try another time range or confirm on Yahoo Finance.",
+      dividendAiContextTitle: "Context (AI summary)",
+      dividendAiLoading: "Loading a short summary…",
+      dividendAiDisclaimer: "AI-generated context, not financial advice. Verify on issuer or exchange filings.",
+      dividendRefreshData: "Refresh Yahoo data",
+      dividendRefreshAi: "New AI summary",
+      dividendRefreshHint:
+        "Refresh reloads prices and fundamentals from Yahoo (server). AI only regenerates the explanatory text — it does not replace Yahoo numbers.",
+      dividendTtmPartialNote:
+        "Orange bars may sum fewer than four quarters when per-quarter DPS is missing for some periods (partial trailing sum).",
+      dividendTtmPartialShort: "partial",
       dividendTtmTitle: "TTM dividend per share",
       dividendTtmDesc: "Trailing twelve months (rolling sum of four quarters).",
       dividendTtmLabel: "TTM DPS",
@@ -754,6 +764,17 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Компанията не изплаща редовен паричен дивидент по обикновените акции — често реинвестиране / растеж (напр. AMZN). В „Ключови метрики“ доходността може да е 0.",
       dividendDataIncomplete:
         "Yahoo показва дивидентна доходност, но тримесечните редове за дивидент/акция липсват в заредения прозорец. Опитайте друг период или проверете в Yahoo Finance.",
+      dividendAiContextTitle: "Контекст (AI обобщение)",
+      dividendAiLoading: "Зареждане на кратко обобщение…",
+      dividendAiDisclaimer:
+        "Текстът е генериран от AI и не е финансов съвет. Проверете при емитента или в отчетите.",
+      dividendRefreshData: "Обнови Yahoo данни",
+      dividendRefreshAi: "Нов AI текст",
+      dividendRefreshHint:
+        "Обновяването зарежда наново котировки и фундаментали от Yahoo (сървър). AI само прегенерира обяснителния текст — не подменя числата от Yahoo.",
+      dividendTtmPartialNote:
+        "Оранжевите стълбове могат да сумират по-малко от четири тримесечия, когато липсва DPS за някои периоди (частична сума).",
+      dividendTtmPartialShort: "частично",
       dividendTtmTitle: "TTM дивидент на акция",
       dividendTtmDesc: "Скользящи дванадесет месеца (сума от четири тримесечия).",
       dividendTtmLabel: "TTM DPS",

@@ -265,10 +265,15 @@ function pickQuarterlyDps(
   const fromFin =
     numField(finRow.dividendPerShare) ??
     numField((finRow as Record<string, unknown>).quarterlyDividendPerShare);
-  const fromHist =
+  let fromHist =
     fiscalPrevEndExclusive != null
       ? dividendSumInWindow(divEvents, fiscalPrevEndExclusive, periodEnd)
       : dividendPerShareFromHistory(periodEnd, divEvents);
+  // If fiscal window is empty but ex-dates align with calendar quarter of period end, use that (reduces gaps for odd filers).
+  if (fromHist === 0 && fiscalPrevEndExclusive != null) {
+    const cal = dividendPerShareFromHistory(periodEnd, divEvents);
+    if (cal > 0) fromHist = cal;
+  }
   if (fromFin != null && fromFin > 0) return fromFin;
   if (fromHist > 0) return fromHist;
   if (fromFin != null) return fromFin > 0 ? fromFin : null;
