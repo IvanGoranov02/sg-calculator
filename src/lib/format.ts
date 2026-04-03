@@ -42,3 +42,14 @@ export function formatRatio(n: number | null | undefined, fractionDigits = 2): s
   if (n == null || !Number.isFinite(n)) return "—";
   return n.toFixed(fractionDigits);
 }
+
+const perShareFmt = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+
+export function formatCurrencyPerShare(n: number): string {
+  return perShareFmt.format(n);
+}

@@ -14,7 +14,8 @@ import {
 } from "recharts";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrencyCompact, formatRatio } from "@/lib/format";
+import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 export type FundamentalSeries = {
@@ -23,7 +24,7 @@ export type FundamentalSeries = {
   label: string;
 };
 
-type ValueFormat = "currency" | "percent" | "ratio";
+type ValueFormat = "currency" | "percent" | "ratio" | "perShare";
 
 type FundamentalChartCardProps = {
   title: string;
@@ -45,6 +46,8 @@ function formatTooltipValue(fmt: ValueFormat, v: number): string {
       return `${v.toFixed(1)}%`;
     case "ratio":
       return formatRatio(v);
+    case "perShare":
+      return formatCurrencyPerShare(v);
     default:
       return String(v);
   }
@@ -59,9 +62,26 @@ function axisTick(fmt: ValueFormat, v: number): string {
       return `${v.toFixed(0)}%`;
     case "ratio":
       return formatRatio(v);
+    case "perShare":
+      return formatCurrencyPerShare(v);
     default:
       return String(v);
   }
+}
+
+function seriesHasAnyPoint(
+  rows: Record<string, unknown>[],
+  keys: string[],
+): boolean {
+  for (const row of rows) {
+    for (const k of keys) {
+      const v = row[k];
+      if (v === undefined || v === null) continue;
+      const n = typeof v === "number" ? v : Number(v);
+      if (Number.isFinite(n)) return true;
+    }
+  }
+  return false;
 }
 
 export function FundamentalChartCard({
@@ -74,7 +94,10 @@ export function FundamentalChartCard({
   valueFormat,
   className,
 }: FundamentalChartCardProps) {
+  const { t } = useI18n();
   const manyTicks = data.length > 10;
+  const keys = series.map((s) => s.dataKey);
+  const hasPoints = data.length === 0 ? false : seriesHasAnyPoint(data, keys);
 
   function formatTooltipValueRaw(value: unknown): string {
     const v = Array.isArray(value) ? value[0] : value;
@@ -182,7 +205,15 @@ export function FundamentalChartCard({
         <CardTitle className="text-base">{title}</CardTitle>
         {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="h-[220px] pt-0">{data.length === 0 ? <p className="text-sm text-muted-foreground">—</p> : chart}</CardContent>
+      <CardContent className="h-[220px] pt-0">
+        {data.length === 0 ? (
+          <p className="text-sm text-muted-foreground">—</p>
+        ) : !hasPoints ? (
+          <p className="text-sm text-muted-foreground">{t("chartsFund.chartMetricNoData")}</p>
+        ) : (
+          chart
+        )}
+      </CardContent>
     </Card>
   );
 }

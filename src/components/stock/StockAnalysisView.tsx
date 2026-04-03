@@ -4,6 +4,7 @@ import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
+import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
@@ -85,6 +86,7 @@ export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewPr
       <StockMetricChart data={bundle} />
       <IncomeStatementTable rows={income} />
       <FundamentalsChartsSection data={bundle} />
+      <DividendChartsSection data={bundle} />
       <AnnualFundamentalsSection data={bundle} />
       <InvestorMetricsSection data={bundle.investor} />
     </div>

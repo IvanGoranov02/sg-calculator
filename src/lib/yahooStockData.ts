@@ -6,22 +6,25 @@
 import YahooFinance from "yahoo-finance2";
 
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
-import type {
-  BalanceSheetAnnual,
-  BalanceSheetQuarter,
-  CashFlowAnnual,
-  CashFlowQuarter,
-  HistoricalEodBar,
-  IncomeStatementAnnual,
-  IncomeStatementQuarter,
-  StockAnalysisBundle,
-  StockQuote,
+import {
+  isEmptyIncomeStatementCore,
+  type BalanceSheetAnnual,
+  type BalanceSheetQuarter,
+  type CashFlowAnnual,
+  type CashFlowQuarter,
+  type DividendQuarterlyPoint,
+  type HistoricalEodBar,
+  type IncomeStatementAnnual,
+  type IncomeStatementQuarter,
+  type StockAnalysisBundle,
+  type StockQuote,
 } from "@/lib/stockAnalysisTypes";
 
 const yahooFinance = new YahooFinance();
 
-const MAX_INCOME_YEARS = 5;
-const MAX_QUARTERS = 24;
+const MAX_INCOME_YEARS = 15;
+const MAX_QUARTERS = 100;
+const FUNDAMENTALS_PERIOD1 = "2000-01-01";
 
 /**
  * Yahoo expects a trading symbol (e.g. NVDA), not a company name (e.g. NVIDIA).
@@ -99,6 +102,7 @@ type FinRow = {
   ebitda?: number;
   netIncome?: number;
   netIncomeCommonStockholders?: number;
+  dividendPerShare?: number;
 };
 
 function rowDateKey(row: { date: Date }): string {
@@ -158,8 +162,8 @@ function mapBalanceQuarter(symbol: string, row: BsRow): BalanceSheetQuarter {
     netDebt: numField(row.netDebt),
     stockholdersEquity: numField(row.stockholdersEquity),
     cashAndCashEquivalents: numField(row.cashAndCashEquivalents),
-    totalCurrentAssets: numField(row.totalCurrentAssets),
-    totalCurrentLiabilities: numField(row.totalCurrentLiabilities),
+    totalCurrentAssets: bsCurrentAssets(row),
+    totalCurrentLiabilities: bsCurrentLiabilities(row),
     inventory: numField(row.inventory),
     accountsReceivable: numField(row.accountsReceivable),
     goodwill: numField(row.goodwill),
@@ -199,13 +203,25 @@ type BsRow = {
   netDebt?: number;
   stockholdersEquity?: number;
   cashAndCashEquivalents?: number;
+  /** US-style naming in some responses. */
   totalCurrentAssets?: number;
   totalCurrentLiabilities?: number;
+  /** Yahoo timeseries uses these for many IFRS / non-US filers (see CurrentAssets in timeseries keys). */
+  currentAssets?: number;
+  currentLiabilities?: number;
   inventory?: number;
   accountsReceivable?: number;
   goodwill?: number;
   longTermDebt?: number;
 };
+
+function bsCurrentAssets(row: BsRow): number | null {
+  return numField(row.totalCurrentAssets ?? row.currentAssets);
+}
+
+function bsCurrentLiabilities(row: BsRow): number | null {
+  return numField(row.totalCurrentLiabilities ?? row.currentLiabilities);
+}
 
 function emptyBalanceSheet(symbol: string, inc: IncomeStatementAnnual): BalanceSheetAnnual {
   return {
@@ -237,8 +253,8 @@ function mapBalanceRow(symbol: string, row: BsRow): BalanceSheetAnnual {
     netDebt: numField(row.netDebt),
     stockholdersEquity: numField(row.stockholdersEquity),
     cashAndCashEquivalents: numField(row.cashAndCashEquivalents),
-    totalCurrentAssets: numField(row.totalCurrentAssets),
-    totalCurrentLiabilities: numField(row.totalCurrentLiabilities),
+    totalCurrentAssets: bsCurrentAssets(row),
+    totalCurrentLiabilities: bsCurrentLiabilities(row),
     inventory: numField(row.inventory),
     accountsReceivable: numField(row.accountsReceivable),
     goodwill: numField(row.goodwill),
@@ -268,8 +284,6 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
   const intradayPeriod1 = new Date(period2);
   intradayPeriod1.setDate(intradayPeriod1.getDate() - 7);
 
-  const quarterPeriod1 = "2018-01-01";
-
   const [
     quoteResult,
     historicalResult,
@@ -289,20 +303,20 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
       interval: "1d",
     }),
     yahooFinance.fundamentalsTimeSeries(sym, {
-      period1: "2010-01-01",
+      period1: FUNDAMENTALS_PERIOD1,
       period2: period2Str,
       type: "annual",
       module: "financials",
     }),
     yahooFinance.fundamentalsTimeSeries(sym, {
-      period1: "2010-01-01",
+      period1: FUNDAMENTALS_PERIOD1,
       period2: period2Str,
       type: "annual",
       module: "cash-flow",
     }),
     yahooFinance
       .fundamentalsTimeSeries(sym, {
-        period1: "2010-01-01",
+        period1: FUNDAMENTALS_PERIOD1,
         period2: period2Str,
         type: "annual",
         module: "balance-sheet",
@@ -310,7 +324,7 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
       .catch(() => [] as BsRow[]),
     yahooFinance
       .fundamentalsTimeSeries(sym, {
-        period1: quarterPeriod1,
+        period1: FUNDAMENTALS_PERIOD1,
         period2: period2Str,
         type: "quarterly",
         module: "financials",
@@ -318,7 +332,7 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
       .catch(() => [] as FinRow[]),
     yahooFinance
       .fundamentalsTimeSeries(sym, {
-        period1: quarterPeriod1,
+        period1: FUNDAMENTALS_PERIOD1,
         period2: period2Str,
         type: "quarterly",
         module: "cash-flow",
@@ -326,7 +340,7 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
       .catch(() => [] as CfRow[]),
     yahooFinance
       .fundamentalsTimeSeries(sym, {
-        period1: quarterPeriod1,
+        period1: FUNDAMENTALS_PERIOD1,
         period2: period2Str,
         type: "quarterly",
         module: "balance-sheet",
@@ -365,7 +379,9 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     .filter((r) => r.date)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
   const recentFin = finRows.slice(-MAX_INCOME_YEARS);
-  const income: IncomeStatementAnnual[] = recentFin.map((row) => mapIncomeRow(sym, row));
+  const income: IncomeStatementAnnual[] = recentFin
+    .map((row) => mapIncomeRow(sym, row))
+    .filter((r) => !isEmptyIncomeStatementCore(r));
 
   if (income.length === 0) {
     throw new Error(`No annual income statement data for "${sym}".`);
@@ -415,7 +431,20 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     .filter((r) => r?.date)
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .slice(-MAX_QUARTERS);
-  const incomeQuarterly: IncomeStatementQuarter[] = finQRows.map((row) => mapIncomeQuarter(sym, row));
+  const quarterlyPairs = finQRows.map((row) => ({
+    inc: mapIncomeQuarter(sym, row),
+    row,
+  }));
+  const quarterlyKept = quarterlyPairs.filter(({ inc }) => !isEmptyIncomeStatementCore(inc));
+  const incomeQuarterly: IncomeStatementQuarter[] = quarterlyKept.map(({ inc }) => inc);
+
+  const dividendQuarterly: DividendQuarterlyPoint[] = quarterlyKept.map(({ row }) => {
+    const d = row.date instanceof Date ? row.date : new Date(row.date as string);
+    return {
+      date: d.toISOString().slice(0, 10),
+      dividendPerShare: numField(row.dividendPerShare),
+    };
+  });
 
   const cfQByDate = new Map<string, CfRow>();
   for (const row of cashQuarterlyResult as CfRow[]) {
@@ -507,6 +536,7 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     incomeQuarterly,
     cashFlowQuarterly,
     balanceSheetQuarterly,
+    dividendQuarterly,
     historical,
     intraday,
     investor,

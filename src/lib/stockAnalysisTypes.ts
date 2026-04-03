@@ -92,6 +92,12 @@ export type CashFlowQuarter = {
   stockRepurchase: number | null;
 };
 
+/** Quarterly dividend per share from Yahoo financials (`DividendPerShare`), when available. */
+export type DividendQuarterlyPoint = {
+  date: string;
+  dividendPerShare: number | null;
+};
+
 export type HistoricalEodBar = {
   /** ISO date (daily) or datetime (intraday) */
   date: string;
@@ -171,6 +177,8 @@ export type StockAnalysisBundle = {
   incomeQuarterly: IncomeStatementQuarter[];
   cashFlowQuarterly: CashFlowQuarter[];
   balanceSheetQuarterly: BalanceSheetQuarter[];
+  /** Same quarter order as `incomeQuarterly` (aligned by date). */
+  dividendQuarterly: DividendQuarterlyPoint[];
 };
 
 export type IncomeMetricKey = "revenue" | "grossProfit" | "operatingExpenses" | "netIncome";
@@ -193,6 +201,27 @@ export const incomeTableRows: IncomeTableRow[] = [
   { label: "Operating expenses", key: "operatingExpenses" },
   { label: "Net income", key: "netIncome" },
 ];
+
+/**
+ * True when income statement core lines are all zero / unusable — omit from UI (charts & tables).
+ * Negative values count as real data.
+ */
+export function isEmptyIncomeStatementCore(r: {
+  revenue: number;
+  netIncome: number;
+  grossProfit: number;
+  operatingIncome?: number;
+}): boolean {
+  const meaningful = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n !== 0;
+  };
+  if (meaningful(r.revenue)) return false;
+  if (meaningful(r.netIncome)) return false;
+  if (meaningful(r.grossProfit)) return false;
+  if (r.operatingIncome != null && meaningful(r.operatingIncome)) return false;
+  return true;
+}
 
 export function sortIncomeByYearAsc(rows: IncomeStatementAnnual[]): IncomeStatementAnnual[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));

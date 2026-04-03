@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { safePct, safeRatio } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -12,7 +13,53 @@ import { cn } from "@/lib/utils";
 
 type Freq = "annual" | "quarterly";
 
-type Row = Record<string, unknown>;
+/** ISO date (period end) for filtering; stripped before passing to Recharts. */
+type Row = Record<string, unknown> & { periodEnd?: string };
+
+type ChartTimeRange = "all" | "10y" | "5y" | "3y" | "1y" | "custom";
+
+function filterByCalendarYears(rows: Row[], years: number): Row[] {
+  if (rows.length === 0) return rows;
+  const cutoff = new Date();
+  cutoff.setUTCHours(12, 0, 0, 0);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const out = rows.filter((r) => {
+    const pe = r.periodEnd;
+    if (!pe || typeof pe !== "string") return true;
+    return pe >= cutoffStr;
+  });
+  return out.length > 0 ? out : rows;
+}
+
+function filterByFiscalYearRange(rows: Row[], fromYear: number, toYear: number): Row[] {
+  const lo = Math.min(fromYear, toYear);
+  const hi = Math.max(fromYear, toYear);
+  const out = rows.filter((r) => {
+    const pe = r.periodEnd;
+    if (!pe || typeof pe !== "string") return true;
+    const y = new Date(`${pe}T12:00:00Z`).getFullYear();
+    return y >= lo && y <= hi;
+  });
+  return out.length > 0 ? out : rows;
+}
+
+function yearOptionsFromRows(rows: Row[]): number[] {
+  const ys = new Set<number>();
+  for (const r of rows) {
+    const pe = r.periodEnd;
+    if (!pe || typeof pe !== "string") continue;
+    ys.add(new Date(`${pe}T12:00:00Z`).getFullYear());
+  }
+  return [...ys].sort((a, b) => a - b);
+}
+
+function rowsForCharts(rows: Row[]): Record<string, unknown>[] {
+  return rows.map((r) => {
+    const { periodEnd: _p, ...rest } = r;
+    return rest;
+  });
+}
 
 const C = {
   revenue: "#60a5fa",
@@ -52,6 +99,7 @@ function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) =
     const ebitda = r.ebitda ?? null;
     return {
       label: formatYear(r.fiscalYear),
+      periodEnd: r.date.slice(0, 10),
       revenue: r.revenue,
       netIncome: r.netIncome,
       operatingIncome: r.operatingIncome ?? null,
@@ -71,6 +119,8 @@ function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) =
       financeCf: cf?.financingCashFlow ?? null,
       dividendsPaid: cf?.dividendsPaid ?? null,
       stockRepurchase: cf?.stockRepurchase ?? null,
+      dividendsPaidPos: cf?.dividendsPaid != null ? Math.abs(cf.dividendsPaid) : null,
+      stockRepurchasePos: cf?.stockRepurchase != null ? Math.abs(cf.stockRepurchase) : null,
       totalAssets: bs?.totalAssets ?? null,
       totalDebt: bs?.totalDebt ?? null,
       equity: bs?.stockholdersEquity ?? null,
@@ -88,6 +138,15 @@ function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) =
         bs?.totalCurrentLiabilities ?? null,
       ),
       debtToEquity: safeRatio(bs?.totalDebt ?? null, bs?.stockholdersEquity ?? null),
+      debtPctCapital:
+        bs?.totalDebt != null && bs?.stockholdersEquity != null
+          ? (() => {
+              const td = bs.totalDebt;
+              const eq = bs.stockholdersEquity;
+              const cap = td + eq;
+              return cap !== 0 && Number.isFinite(cap) ? safePct(td, cap) : null;
+            })()
+          : null,
       netDebtToEbitda:
         ebitda != null && bs?.netDebt != null && ebitda > 0
           ? safeRatio(bs.netDebt, ebitda)
@@ -121,6 +180,7 @@ function buildQuarterlyRows(
     const ebitda = r.ebitda ?? null;
     return {
       label: formatPeriod(r.date),
+      periodEnd: r.date.slice(0, 10),
       revenue: r.revenue,
       netIncome: r.netIncome,
       operatingIncome: r.operatingIncome ?? null,
@@ -140,6 +200,8 @@ function buildQuarterlyRows(
       financeCf: cf?.financingCashFlow ?? null,
       dividendsPaid: cf?.dividendsPaid ?? null,
       stockRepurchase: cf?.stockRepurchase ?? null,
+      dividendsPaidPos: cf?.dividendsPaid != null ? Math.abs(cf.dividendsPaid) : null,
+      stockRepurchasePos: cf?.stockRepurchase != null ? Math.abs(cf.stockRepurchase) : null,
       totalAssets: bs?.totalAssets ?? null,
       totalDebt: bs?.totalDebt ?? null,
       equity: bs?.stockholdersEquity ?? null,
@@ -157,6 +219,15 @@ function buildQuarterlyRows(
         bs?.totalCurrentLiabilities ?? null,
       ),
       debtToEquity: safeRatio(bs?.totalDebt ?? null, bs?.stockholdersEquity ?? null),
+      debtPctCapital:
+        bs?.totalDebt != null && bs?.stockholdersEquity != null
+          ? (() => {
+              const td = bs.totalDebt;
+              const eq = bs.stockholdersEquity;
+              const cap = td + eq;
+              return cap !== 0 && Number.isFinite(cap) ? safePct(td, cap) : null;
+            })()
+          : null,
       netDebtToEbitda:
         ebitda != null && bs?.netDebt != null && ebitda > 0
           ? safeRatio(bs.netDebt, ebitda)
@@ -207,7 +278,10 @@ type FundamentalsChartsSectionProps = {
 
 export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
-  const [freq, setFreq] = useState<Freq>("annual");
+  const [freq, setFreq] = useState<Freq>("quarterly");
+  const [timeRange, setTimeRange] = useState<ChartTimeRange>("all");
+  const [customFromYear, setCustomFromYear] = useState<number | null>(null);
+  const [customToYear, setCustomToYear] = useState<number | null>(null);
 
   const formatYear = useCallback((fy: string) => t("chart.fyYear", { y: fy }), [t]);
 
@@ -222,11 +296,60 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
     [locale],
   );
 
-  const rows = useMemo(() => {
-    const base =
-      freq === "annual" ? buildAnnualRows(data, formatYear) : buildQuarterlyRows(data, formatPeriod);
-    return enrichPopGrowth(base);
+  const baseRows = useMemo((): Row[] => {
+    return freq === "annual" ? buildAnnualRows(data, formatYear) : buildQuarterlyRows(data, formatPeriod);
   }, [data, freq, formatYear, formatPeriod]);
+
+  const yearOptions = useMemo(() => yearOptionsFromRows(baseRows), [baseRows]);
+
+  useEffect(() => {
+    if (timeRange !== "custom" || yearOptions.length === 0) return;
+    const minY = yearOptions[0];
+    const maxY = yearOptions[yearOptions.length - 1];
+    setCustomFromYear((prev) => {
+      if (prev == null) return minY;
+      return Math.max(minY, Math.min(maxY, prev));
+    });
+    setCustomToYear((prev) => {
+      if (prev == null) return maxY;
+      return Math.max(minY, Math.min(maxY, prev));
+    });
+  }, [timeRange, yearOptions]);
+
+  const filteredBaseRows = useMemo((): Row[] => {
+    if (baseRows.length === 0) return [];
+    if (timeRange === "custom") {
+      if (customFromYear == null || customToYear == null) return baseRows;
+      return filterByFiscalYearRange(baseRows, customFromYear, customToYear);
+    }
+    if (timeRange === "all") return baseRows;
+    const y = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
+    return filterByCalendarYears(baseRows, y);
+  }, [baseRows, timeRange, customFromYear, customToYear]);
+
+  const rows = useMemo(() => enrichPopGrowth(filteredBaseRows), [filteredBaseRows]);
+
+  const chartRows = useMemo(() => rowsForCharts(rows), [rows]);
+
+  const loadedMeta = useMemo(() => {
+    if (baseRows.length === 0 || yearOptions.length === 0) return null;
+    return {
+      fromY: yearOptions[0],
+      toY: yearOptions[yearOptions.length - 1],
+      n: baseRows.length,
+    };
+  }, [baseRows, yearOptions]);
+
+  /** Preset (1y–10y) did not remove any rows — chart matches “All history”. */
+  const presetMatchesAllLoaded =
+    chartRows.length > 0 &&
+    timeRange !== "all" &&
+    timeRange !== "custom" &&
+    chartRows.length === baseRows.length;
+
+  const showFilterCount =
+    chartRows.length > 0 &&
+    (timeRange === "custom" || chartRows.length !== baseRows.length);
 
   const hasQuarterly = data.incomeQuarterly.length > 0;
   const hasEbitda = useMemo(
@@ -323,8 +446,8 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
         { dataKey: "niPopGrowth", color: C.niGrowth, label: t("chartsFund.seriesNiPop") },
       ] satisfies FundamentalSeries[],
       shareholder: [
-        { dataKey: "dividendsPaid", color: C.div, label: t("annual.dividends") },
-        { dataKey: "stockRepurchase", color: C.buyback, label: t("annual.buyback") },
+        { dataKey: "dividendsPaidPos", color: C.div, label: t("annual.dividends") },
+        { dataKey: "stockRepurchasePos", color: C.buyback, label: t("annual.buyback") },
       ] satisfies FundamentalSeries[],
       arInv: [
         { dataKey: "ar", color: C.ar, label: t("annual.accountsReceivable") },
@@ -338,7 +461,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
         { dataKey: "ebitdaMargin", color: C.ebitda, label: t("chartsFund.seriesEbitdaMargin") },
         { dataKey: "ocfMargin", color: C.ocf, label: t("chartsFund.seriesOcfMargin") },
       ] satisfies FundamentalSeries[],
-      debtEquity: [{ dataKey: "debtToEquity", color: C.debt, label: t("annual.debtToEquity") }] satisfies FundamentalSeries[],
+      debtPctCapital: [{ dataKey: "debtPctCapital", color: C.debt, label: t("chartsFund.debtPctCapitalLabel") }] satisfies FundamentalSeries[],
       netDebtEbitda: [{ dataKey: "netDebtToEbitda", color: C.netDebt, label: t("chartsFund.seriesNetDebtEbitda") }] satisfies FundamentalSeries[],
       quickRatio: [{ dataKey: "quickRatio", color: C.ocf, label: t("chartsFund.chartQuickRatio") }] satisfies FundamentalSeries[],
       capexIntensity: [{ dataKey: "capexIntensity", color: C.capex, label: t("chartsFund.seriesCapexIntensity") }] satisfies FundamentalSeries[],
@@ -346,43 +469,132 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
     [t],
   );
 
-  const empty = rows.length === 0;
+  const empty = chartRows.length === 0;
+
+  const selectClass =
+    "h-9 min-w-[8.5rem] rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-emerald-500/50";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
+      <div className="rounded-xl border border-white/10 bg-zinc-900/35 p-4 shadow-sm shadow-black/10">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
+          </div>
+          <div className="flex w-full max-w-xl flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end lg:max-w-2xl lg:justify-end">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Label htmlFor="fund-chart-range" className="text-xs text-muted-foreground">
+                {t("chartsFund.filterTimeRange")}
+              </Label>
+              <select
+                id="fund-chart-range"
+                className={selectClass}
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
+              >
+                <option value="all">{t("chartsFund.rangeAll")}</option>
+                <option value="10y">{t("chartsFund.range10y")}</option>
+                <option value="5y">{t("chartsFund.range5y")}</option>
+                <option value="3y">{t("chartsFund.range3y")}</option>
+                <option value="1y">{t("chartsFund.range1y")}</option>
+                <option value="custom">{t("chartsFund.rangeCustom")}</option>
+              </select>
+            </div>
+            {timeRange === "custom" && yearOptions.length > 0 ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="fund-from-y" className="text-xs text-muted-foreground">
+                    {t("chartsFund.filterFromYear")}
+                  </Label>
+                  <select
+                    id="fund-from-y"
+                    className={selectClass}
+                    value={customFromYear ?? yearOptions[0]}
+                    onChange={(e) => setCustomFromYear(Number(e.target.value))}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={`f-${y}`} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="fund-to-y" className="text-xs text-muted-foreground">
+                    {t("chartsFund.filterToYear")}
+                  </Label>
+                  <select
+                    id="fund-to-y"
+                    className={selectClass}
+                    value={customToYear ?? yearOptions[yearOptions.length - 1]}
+                    onChange={(e) => setCustomToYear(Number(e.target.value))}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={`t-${y}`} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">{t("chartsFund.filterGranularity")}</span>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={freq === "quarterly" ? "default" : "outline"}
+                  className={cn(
+                    "rounded-lg",
+                    freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                  )}
+                  onClick={() => setFreq("quarterly")}
+                  disabled={!hasQuarterly}
+                  title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
+                >
+                  {t("chartsFund.quarterly")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={freq === "annual" ? "default" : "outline"}
+                  className={cn(
+                    "rounded-lg",
+                    freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                  )}
+                  onClick={() => setFreq("annual")}
+                >
+                  {t("chartsFund.annual")}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant={freq === "annual" ? "default" : "outline"}
-            className={cn(
-              "rounded-lg",
-              freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-            )}
-            onClick={() => setFreq("annual")}
-          >
-            {t("chartsFund.annual")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={freq === "quarterly" ? "default" : "outline"}
-            className={cn(
-              "rounded-lg",
-              freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-            )}
-            onClick={() => setFreq("quarterly")}
-            disabled={!hasQuarterly}
-            title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
-          >
-            {t("chartsFund.quarterly")}
-          </Button>
-        </div>
+        {!empty && loadedMeta ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {t("chartsFund.loadedDataSpan", {
+              fromYear: loadedMeta.fromY,
+              toYear: loadedMeta.toY,
+              n: loadedMeta.n,
+              unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),
+            })}
+          </p>
+        ) : null}
+        {presetMatchesAllLoaded ? (
+          <p className="mt-1 text-xs text-amber-200/85">
+            {t("chartsFund.filterPresetNoNarrow")}
+          </p>
+        ) : null}
+        {showFilterCount ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("chartsFund.filterShowing", {
+              n: chartRows.length,
+              unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),
+            })}
+          </p>
+        ) : null}
       </div>
 
       {empty ? (
@@ -392,7 +604,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartRevenue")}
             description={t("chartsFund.chartRevenueDesc")}
-            data={rows}
+            data={chartRows}
             series={series.revenue}
             chartType="bar"
             valueFormat="currency"
@@ -400,7 +612,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartNetOpIncome")}
             description={t("chartsFund.chartNetOpIncomeDesc")}
-            data={rows}
+            data={chartRows}
             series={series.incomeDual}
             chartType="line"
             valueFormat="currency"
@@ -408,7 +620,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartGpOpex")}
             description={t("chartsFund.chartGpOpexDesc")}
-            data={rows}
+            data={chartRows}
             series={series.gpOpex}
             chartType="bar"
             valueFormat="currency"
@@ -416,7 +628,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartMargins")}
             description={t("chartsFund.chartMarginsDesc")}
-            data={rows}
+            data={chartRows}
             series={series.margins}
             chartType="line"
             valueFormat="percent"
@@ -425,7 +637,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             <FundamentalChartCard
               title={t("chartsFund.chartEbitdaNi")}
               description={t("chartsFund.chartEbitdaNiDesc")}
-              data={rows}
+              data={chartRows}
               series={series.ebitdaNi}
               chartType="line"
               valueFormat="currency"
@@ -434,7 +646,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartCashTrio")}
             description={t("chartsFund.chartCashTrioDesc")}
-            data={rows}
+            data={chartRows}
             series={series.cashTrio}
             chartType="bar"
             valueFormat="currency"
@@ -442,7 +654,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartInvestFinance")}
             description={t("chartsFund.chartInvestFinanceDesc")}
-            data={rows}
+            data={chartRows}
             series={series.investFinance}
             chartType="bar"
             valueFormat="currency"
@@ -450,7 +662,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartBalance")}
             description={t("chartsFund.chartBalanceDesc")}
-            data={rows}
+            data={chartRows}
             series={series.balance3}
             chartType="line"
             valueFormat="currency"
@@ -458,7 +670,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartCashNetDebt")}
             description={t("chartsFund.chartCashNetDebtDesc")}
-            data={rows}
+            data={chartRows}
             series={series.cashDebt}
             chartType="line"
             valueFormat="currency"
@@ -466,7 +678,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartRoeRoa")}
             description={t("chartsFund.chartRoeRoaDesc")}
-            data={rows}
+            data={chartRows}
             series={series.roeRoa}
             chartType="line"
             valueFormat="percent"
@@ -474,7 +686,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartCurrentRatio")}
             description={t("chartsFund.chartCurrentRatioDesc")}
-            data={rows}
+            data={chartRows}
             series={series.currentRatio}
             chartType="line"
             valueFormat="ratio"
@@ -482,7 +694,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartFcfMargin")}
             description={t("chartsFund.chartFcfMarginDesc")}
-            data={rows}
+            data={chartRows}
             series={series.fcfMargin}
             chartType="line"
             valueFormat="percent"
@@ -490,7 +702,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartPopGrowth")}
             description={freq === "annual" ? t("chartsFund.chartPopGrowthDescAnnual") : t("chartsFund.chartPopGrowthDescQ")}
-            data={rows}
+            data={chartRows}
             series={series.popGrowth}
             chartType="line"
             valueFormat="percent"
@@ -499,7 +711,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             <FundamentalChartCard
               title={t("chartsFund.chartShareholder")}
               description={t("chartsFund.chartShareholderDesc")}
-              data={rows}
+              data={chartRows}
               series={series.shareholder}
               chartType="bar"
               valueFormat="currency"
@@ -509,7 +721,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             <FundamentalChartCard
               title={t("chartsFund.chartArInv")}
               description={t("chartsFund.chartArInvDesc")}
-              data={rows}
+              data={chartRows}
               series={series.arInv}
               chartType="line"
               valueFormat="currency"
@@ -519,7 +731,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             <FundamentalChartCard
               title={t("chartsFund.chartGwLt")}
               description={t("chartsFund.chartGwLtDesc")}
-              data={rows}
+              data={chartRows}
               series={series.gwLt}
               chartType="line"
               valueFormat="currency"
@@ -529,25 +741,25 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             <FundamentalChartCard
               title={t("chartsFund.chartEbitdaOcfMargin")}
               description={t("chartsFund.chartEbitdaOcfMarginDesc")}
-              data={rows}
+              data={chartRows}
               series={series.ebitdaOcfMargin}
               chartType="line"
               valueFormat="percent"
             />
           ) : null}
           <FundamentalChartCard
-            title={t("chartsFund.chartDebtEquity")}
-            description={t("chartsFund.chartDebtEquityDesc")}
-            data={rows}
-            series={series.debtEquity}
+            title={t("chartsFund.chartDebtPctCapital")}
+            description={t("chartsFund.chartDebtPctCapitalDesc")}
+            data={chartRows}
+            series={series.debtPctCapital}
             chartType="line"
-            valueFormat="ratio"
+            valueFormat="percent"
           />
           {hasNetDebtEbitda ? (
             <FundamentalChartCard
               title={t("chartsFund.chartNetDebtEbitda")}
               description={t("chartsFund.chartNetDebtEbitdaDesc")}
-              data={rows}
+              data={chartRows}
               series={series.netDebtEbitda}
               chartType="line"
               valueFormat="ratio"
@@ -556,7 +768,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartQuickRatio")}
             description={t("chartsFund.chartQuickRatioDesc")}
-            data={rows}
+            data={chartRows}
             series={series.quickRatio}
             chartType="line"
             valueFormat="ratio"
@@ -564,7 +776,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <FundamentalChartCard
             title={t("chartsFund.chartCapexIntensity")}
             description={t("chartsFund.chartCapexIntensityDesc")}
-            data={rows}
+            data={chartRows}
             series={series.capexIntensity}
             chartType="line"
             valueFormat="percent"
