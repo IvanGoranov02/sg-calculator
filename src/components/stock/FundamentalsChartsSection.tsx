@@ -356,6 +356,11 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
     () => rows.some((r) => r.ebitda != null && Number.isFinite(r.ebitda as number)),
     [rows],
   );
+  const hasOperatingIncome = useMemo(
+    () =>
+      rows.some((r) => r.operatingIncome != null && Number.isFinite(r.operatingIncome as number)),
+    [rows],
+  );
   const hasEbitdaOcfMargins = useMemo(
     () =>
       rows.some(
@@ -400,12 +405,12 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
   const series = useMemo(
     () => ({
       revenue: [{ dataKey: "revenue", color: C.revenue, label: t("income.revenue") }] satisfies FundamentalSeries[],
-      incomeDual: [
-        { dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") },
+      grossSolo: [{ dataKey: "grossProfit", color: C.gross, label: t("income.grossProfit") }] satisfies FundamentalSeries[],
+      netIncomeSolo: [{ dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") }] satisfies FundamentalSeries[],
+      operatingIncomeSolo: [
         { dataKey: "operatingIncome", color: C.opIncome, label: t("annual.operatingIncome") },
       ] satisfies FundamentalSeries[],
-      gpOpex: [
-        { dataKey: "grossProfit", color: C.gross, label: t("income.grossProfit") },
+      opexSolo: [
         { dataKey: "operatingExpenses", color: C.opex, label: t("income.operatingExpenses") },
       ] satisfies FundamentalSeries[],
       margins: [
@@ -417,11 +422,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
         { dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") },
         { dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") },
       ] satisfies FundamentalSeries[],
-      cashTrio: [
-        { dataKey: "ocf", color: C.ocf, label: t("annual.ocf") },
-        { dataKey: "fcf", color: C.fcf, label: t("annual.fcf") },
-        { dataKey: "capex", color: C.capex, label: t("annual.capex") },
-      ] satisfies FundamentalSeries[],
+      ocfSolo: [{ dataKey: "ocf", color: C.ocf, label: t("annual.ocf") }] satisfies FundamentalSeries[],
+      fcfSolo: [{ dataKey: "fcf", color: C.fcf, label: t("annual.fcf") }] satisfies FundamentalSeries[],
+      capexSolo: [{ dataKey: "capex", color: C.capex, label: t("annual.capex") }] satisfies FundamentalSeries[],
       investFinance: [
         { dataKey: "investCf", color: C.invest, label: t("annual.investingCf") },
         { dataKey: "financeCf", color: C.finance, label: t("annual.financingCf") },
@@ -610,18 +613,36 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             valueFormat="currency"
           />
           <FundamentalChartCard
-            title={t("chartsFund.chartNetOpIncome")}
-            description={t("chartsFund.chartNetOpIncomeDesc")}
+            title={t("chartsFund.chartGrossProfitSolo")}
+            description={t("chartsFund.chartGrossProfitSoloDesc")}
             data={chartRows}
-            series={series.incomeDual}
-            chartType="line"
+            series={series.grossSolo}
+            chartType="bar"
             valueFormat="currency"
           />
           <FundamentalChartCard
-            title={t("chartsFund.chartGpOpex")}
-            description={t("chartsFund.chartGpOpexDesc")}
+            title={t("chartsFund.chartNetIncomeSolo")}
+            description={t("chartsFund.chartNetIncomeSoloDesc")}
             data={chartRows}
-            series={series.gpOpex}
+            series={series.netIncomeSolo}
+            chartType="line"
+            valueFormat="currency"
+          />
+          {hasOperatingIncome ? (
+            <FundamentalChartCard
+              title={t("chartsFund.chartOperatingIncomeSolo")}
+              description={t("chartsFund.chartOperatingIncomeSoloDesc")}
+              data={chartRows}
+              series={series.operatingIncomeSolo}
+              chartType="line"
+              valueFormat="currency"
+            />
+          ) : null}
+          <FundamentalChartCard
+            title={t("chartsFund.chartOpexSolo")}
+            description={t("chartsFund.chartOpexSoloDesc")}
+            data={chartRows}
+            series={series.opexSolo}
             chartType="bar"
             valueFormat="currency"
           />
@@ -644,10 +665,26 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             />
           ) : null}
           <FundamentalChartCard
-            title={t("chartsFund.chartCashTrio")}
-            description={t("chartsFund.chartCashTrioDesc")}
+            title={t("chartsFund.chartOcfSolo")}
+            description={t("chartsFund.chartOcfSoloDesc")}
             data={chartRows}
-            series={series.cashTrio}
+            series={series.ocfSolo}
+            chartType="bar"
+            valueFormat="currency"
+          />
+          <FundamentalChartCard
+            title={t("chartsFund.chartFcfSolo")}
+            description={t("chartsFund.chartFcfSoloDesc")}
+            data={chartRows}
+            series={series.fcfSolo}
+            chartType="bar"
+            valueFormat="currency"
+          />
+          <FundamentalChartCard
+            title={t("chartsFund.chartCapexSolo")}
+            description={t("chartsFund.chartCapexSoloDesc")}
+            data={chartRows}
+            series={series.capexSolo}
             chartType="bar"
             valueFormat="currency"
           />

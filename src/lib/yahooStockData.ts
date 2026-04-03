@@ -23,8 +23,9 @@ import {
 const yahooFinance = new YahooFinance();
 
 const MAX_INCOME_YEARS = 15;
-const MAX_QUARTERS = 100;
 const FUNDAMENTALS_PERIOD1 = "2000-01-01";
+/** Include quarterly periods from this date onward when Yahoo returns a long history (avoids tiny “last N” windows). */
+const QUARTERLY_INCLUDE_FROM = new Date("2022-01-01T00:00:00.000Z");
 
 /**
  * Yahoo expects a trading symbol (e.g. NVDA), not a company name (e.g. NVIDIA).
@@ -427,10 +428,14 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     return mapBalanceRow(sym, r);
   });
 
-  const finQRows = (financialsQuarterlyResult as FinRow[])
+  const finQSorted = (financialsQuarterlyResult as FinRow[])
     .filter((r) => r?.date)
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(-MAX_QUARTERS);
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const finQFrom2022 = finQSorted.filter((r) => {
+    const d = r.date instanceof Date ? r.date : new Date(r.date as string);
+    return d >= QUARTERLY_INCLUDE_FROM;
+  });
+  const finQRows = finQFrom2022.length > 0 ? finQFrom2022 : finQSorted;
   const quarterlyPairs = finQRows.map((row) => ({
     inc: mapIncomeQuarter(sym, row),
     row,

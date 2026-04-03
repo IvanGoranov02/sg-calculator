@@ -126,5 +126,7 @@
   }
   html {
     @apply font-sans;
+    /* ~15% larger type/spacing vs default 16px root (all rem utilities scale). */
+    font-size: 115%;
   }
 }

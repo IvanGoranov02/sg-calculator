@@ -57,7 +57,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           title={t("nav.brand")}
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
-            SG
+            SP
           </span>
           {!collapsed ? <span className="text-sidebar-foreground">{t("nav.brand")}</span> : null}
         </Link>
