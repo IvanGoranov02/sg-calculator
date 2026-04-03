@@ -207,7 +207,40 @@ function mergeDividendEvents(a: DividendEventRow[], b: DividendEventRow[]): Divi
   return [...map.values()].sort((x, y) => x.date.getTime() - y.date.getTime());
 }
 
-/** Sum per-share dividends paid on ex-dates falling in the same calendar quarter as `periodEnd`. */
+function indexOfFinQuarter(rows: FinRow[], row: FinRow): number {
+  const key = rowDateKey(row);
+  const i = rows.findIndex((r) => rowDateKey(r) === key);
+  return i;
+}
+
+function utcDayNumber(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
+ * Sum per-share dividends on ex-dates in (startExclusive, endInclusive] using UTC calendar days.
+ * Matches Yahoo fiscal quarter rows: ex-dates belong to the period after the previous report date.
+ */
+function dividendSumInWindow(
+  events: DividendEventRow[],
+  startExclusive: Date,
+  endInclusive: Date,
+): number {
+  const startN = utcDayNumber(startExclusive);
+  const endN = utcDayNumber(endInclusive);
+  let s = 0;
+  for (const e of events) {
+    const d = e.date instanceof Date ? e.date : new Date(e.date as string);
+    if (!Number.isFinite(d.getTime())) continue;
+    const n = utcDayNumber(d);
+    if (n <= startN || n > endN) continue;
+    const amt = Number(e.dividends);
+    if (Number.isFinite(amt)) s += amt;
+  }
+  return s;
+}
+
+/** Fallback: same calendar quarter as `periodEnd` (UTC) — used only for the earliest quarter in the series. */
 function dividendPerShareFromHistory(periodEnd: Date, events: DividendEventRow[]): number {
   const y = periodEnd.getUTCFullYear();
   const q0 = Math.floor(periodEnd.getUTCMonth() / 3);
@@ -227,11 +260,15 @@ function pickQuarterlyDps(
   finRow: FinRow,
   periodEnd: Date,
   divEvents: DividendEventRow[],
+  fiscalPrevEndExclusive: Date | null,
 ): number | null {
   const fromFin =
     numField(finRow.dividendPerShare) ??
     numField((finRow as Record<string, unknown>).quarterlyDividendPerShare);
-  const fromHist = dividendPerShareFromHistory(periodEnd, divEvents);
+  const fromHist =
+    fiscalPrevEndExclusive != null
+      ? dividendSumInWindow(divEvents, fiscalPrevEndExclusive, periodEnd)
+      : dividendPerShareFromHistory(periodEnd, divEvents);
   if (fromFin != null && fromFin > 0) return fromFin;
   if (fromHist > 0) return fromHist;
   if (fromFin != null) return fromFin > 0 ? fromFin : null;
@@ -613,7 +650,18 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
 
   const dividendQuarterly: DividendQuarterlyPoint[] = quarterlyKept.map(({ row }) => {
     const d = row.date instanceof Date ? row.date : new Date(row.date as string);
-    const dps = pickQuarterlyDps(row, d, divEvents);
+    const idx = indexOfFinQuarter(finQRows, row);
+    if (idx < 0) {
+      logYahooDividends(sym, "quarter row missing from finQRows by date key; using calendar DPS fallback", {
+        key: rowDateKey(row),
+      });
+    }
+    let fiscalPrev: Date | null = null;
+    if (idx > 0) {
+      const p = finQRows[idx - 1]?.date;
+      if (p) fiscalPrev = p instanceof Date ? p : new Date(p as string);
+    }
+    const dps = pickQuarterlyDps(row, d, divEvents, fiscalPrev);
     return {
       date: d.toISOString().slice(0, 10),
       dividendPerShare: dps,
