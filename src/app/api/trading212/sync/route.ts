@@ -15,7 +15,10 @@ export async function POST() {
 
   if (!isPortfolioEncryptionConfigured()) {
     return Response.json(
-      { error: "Server is not configured for encrypted credentials (PORTFOLIO_ENCRYPTION_KEY)." },
+      {
+        error:
+          "Add PORTFOLIO_ENCRYPTION_KEY to your server environment (e.g. Vercel → Environment Variables). Value: base64 of 32 random bytes (run: openssl rand -base64 32). Redeploy after adding.",
+      },
       { status: 503 },
     );
   }

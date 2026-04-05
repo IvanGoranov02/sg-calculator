@@ -153,6 +153,7 @@ export function PortfolioClient() {
     e.preventDefault();
     if (!apiKey.trim() || !apiSecret.trim()) return;
     setSavingCreds(true);
+    setError(null);
     try {
       const res = await fetch("/api/trading212/settings", {
         method: "PUT",
@@ -163,14 +164,25 @@ export function PortfolioClient() {
           apiSecret: apiSecret.trim(),
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      let message = t("portfolio.saveFailed");
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch {
+        if (!res.ok) message = `${res.status} ${res.statusText}`;
+      }
       if (!res.ok) {
-        setError(data.error ?? "Save failed");
+        setError(message);
+        setTimeout(() => {
+          document.getElementById("portfolio-page-error")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 0);
         return;
       }
       setApiKey("");
       setApiSecret("");
       await load();
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
     } finally {
       setSavingCreds(false);
     }
@@ -332,7 +344,7 @@ export function PortfolioClient() {
       </div>
 
       {error ? (
-        <p className="text-sm text-red-400" role="alert">
+        <p id="portfolio-page-error" className="text-sm text-red-400" role="alert">
           {error}
         </p>
       ) : null}
@@ -582,13 +594,7 @@ export function PortfolioClient() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                disabled={savingCreds || trading212?.encryptionConfigured !== true}
-                title={
-                  trading212?.encryptionConfigured !== true ? t("portfolio.saveDisabledHint") : undefined
-                }
-              >
+              <Button type="submit" disabled={savingCreds}>
                 {savingCreds ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />

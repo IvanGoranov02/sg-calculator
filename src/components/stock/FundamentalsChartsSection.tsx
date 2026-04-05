@@ -283,7 +283,7 @@ type FundamentalsChartsSectionProps = {
 export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
   const [freq, setFreq] = useState<Freq>("quarterly");
-  const [timeRange, setTimeRange] = useState<ChartTimeRange>("all");
+  const [timeRange, setTimeRange] = useState<ChartTimeRange>("3y");
   const [customFromYear, setCustomFromYear] = useState<number | null>(null);
   const [customToYear, setCustomToYear] = useState<number | null>(null);
 

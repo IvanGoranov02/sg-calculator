@@ -427,9 +427,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
       t212Docs: "Trading 212 API key (Help Centre)",
       encryptionOff:
-        "Add env var PORTFOLIO_ENCRYPTION_KEY on the server (32 random bytes as base64 — openssl rand -base64 32). This is separate from GEMINI_API_KEY; the app cannot encrypt your Trading 212 secrets without it.",
-      saveDisabledHint:
-        "Set PORTFOLIO_ENCRYPTION_KEY in Vercel Environment Variables, redeploy, then save. Not the same as the Gemini key.",
+        "To store keys securely, add PORTFOLIO_ENCRYPTION_KEY on the server (32 random bytes as base64 — openssl rand -base64 32). Separate from GEMINI_API_KEY. You can still press Save — the red message above will show the exact server error if it is missing.",
+      saveFailed: "Could not save connection.",
+      saveNetworkError: "Network error while saving. Try again.",
       envLabel: "Environment",
       envDemo: "Demo (paper)",
       envLive: "Live",
@@ -939,9 +939,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
       t212Docs: "API ключ на Trading 212 (Help Centre)",
       encryptionOff:
-        "Добави PORTFOLIO_ENCRYPTION_KEY в средата на сървъра (32 случайни байта като base64 — openssl rand -base64 32). Това е различно от GEMINI_API_KEY — без него ключовете към Trading 212 не могат да се криптират.",
-      saveDisabledHint:
-        "Задай PORTFOLIO_ENCRYPTION_KEY в Vercel Environment Variables, redeploy, после запази. Не е същото като ключа за Gemini.",
+        "За сигурно пазене добави PORTFOLIO_ENCRYPTION_KEY в средата (32 байта base64 — openssl rand -base64 32). Различно е от GEMINI_API_KEY. Можеш да натиснеш Save — червеното съобщение по-горе ще покаже точната грешка от сървъра, ако липсва.",
+      saveFailed: "Неуспешно запазване на връзката.",
+      saveNetworkError: "Мрежова грешка при запазване. Опитай отново.",
       envLabel: "Среда",
       envDemo: "Демо (paper)",
       envLive: "Реална",

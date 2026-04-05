@@ -157,6 +157,31 @@ function rowDateKey(row: { date: Date }): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Yahoo often uses slightly different period-end dates for income vs balance-sheet in the same quarter.
+ * Exact date keys then miss every row — charts show no BS metrics while cash flow (matched separately) works.
+ */
+const NEAREST_BS_QUARTER_DAYS = 45;
+const NEAREST_BS_ANNUAL_DAYS = 120;
+
+function nearestBsRowByDate(targetIso: string, rows: BsRow[], maxDays: number): BsRow | null {
+  const target = new Date(`${targetIso}T12:00:00Z`).getTime();
+  if (Number.isNaN(target)) return null;
+  let best: BsRow | null = null;
+  let bestDays = Infinity;
+  for (const r of rows) {
+    if (!r?.date) continue;
+    const d = r.date instanceof Date ? r.date : new Date(r.date as string);
+    if (Number.isNaN(d.getTime())) continue;
+    const days = Math.abs(d.getTime() - target) / 86400000;
+    if (days <= maxDays && days < bestDays) {
+      bestDays = days;
+      best = r;
+    }
+  }
+  return best;
+}
+
 type DividendEventRow = { date: Date; dividends: number };
 
 /** Server logs for dividend pipeline (dev by default; prod: set DEBUG_YAHOO_DIVIDENDS=1). */
@@ -684,8 +709,10 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
   }
   const balanceSheet: BalanceSheetAnnual[] = income.map((inc) => {
     const r = bsByYear.get(Number(inc.fiscalYear));
-    if (!r) return emptyBalanceSheet(sym, inc);
-    return mapBalanceRow(sym, r);
+    if (r) return mapBalanceRow(sym, r);
+    const nearest = nearestBsRowByDate(inc.date.slice(0, 10), bsRows, NEAREST_BS_ANNUAL_DAYS);
+    if (nearest) return mapBalanceRow(sym, nearest);
+    return emptyBalanceSheet(sym, inc);
   });
 
   const finQSorted = (financialsQuarterlyResult as FinRow[])
@@ -769,16 +796,19 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     };
   });
 
+  const bsQList = (balanceSheetQuarterlyResult as BsRow[]).filter((r) => r?.date);
   const bsQByDate = new Map<string, BsRow>();
-  for (const row of balanceSheetQuarterlyResult as BsRow[]) {
-    if (!row?.date) continue;
+  for (const row of bsQList) {
     bsQByDate.set(rowDateKey(row), row);
   }
 
   const balanceSheetQuarterly: BalanceSheetQuarter[] = incomeQuarterly.map((inc) => {
-    const r = bsQByDate.get(inc.date.slice(0, 10));
-    if (!r) return emptyBalanceQuarter(sym, inc);
-    return mapBalanceQuarter(sym, r);
+    const key = inc.date.slice(0, 10);
+    const exact = bsQByDate.get(key);
+    if (exact) return mapBalanceQuarter(sym, exact);
+    const nearest = nearestBsRowByDate(key, bsQList, NEAREST_BS_QUARTER_DAYS);
+    if (nearest) return mapBalanceQuarter(sym, nearest);
+    return emptyBalanceQuarter(sym, inc);
   });
 
   const histArr = historicalResult as Array<{
