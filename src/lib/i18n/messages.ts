@@ -427,7 +427,7 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
       t212Docs: "Trading 212 API key (Help Centre)",
       encryptionOff:
-        "To store keys securely, add PORTFOLIO_ENCRYPTION_KEY on the server (32 random bytes as base64 — openssl rand -base64 32). Separate from GEMINI_API_KEY. You can still press Save — the red message above will show the exact server error if it is missing.",
+        "Your Trading 212 keys are encrypted before being saved to the database. The server uses AUTH_SECRET (already set for login) or optionally a dedicated PORTFOLIO_ENCRYPTION_KEY. Not your per-user broker keys, and not the Gemini key. You can press Save to see a server error if something is missing.",
       saveFailed: "Could not save connection.",
       saveNetworkError: "Network error while saving. Try again.",
       envLabel: "Environment",
@@ -939,7 +939,7 @@ export const messages: Record<AppLocale, MessageDict> = {
         "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
       t212Docs: "API ключ на Trading 212 (Help Centre)",
       encryptionOff:
-        "За сигурно пазене добави PORTFOLIO_ENCRYPTION_KEY в средата (32 байта base64 — openssl rand -base64 32). Различно е от GEMINI_API_KEY. Можеш да натиснеш Save — червеното съобщение по-горе ще покаже точната грешка от сървъра, ако липсва.",
+        "Ключовете към Trading 212 се криптират преди запис в базата. Сървърът ползва AUTH_SECRET (вече за вход) или по желание отделен PORTFOLIO_ENCRYPTION_KEY. Това не са твоите брокерски ключове и не е Gemini. Натисни Save за грешка от сървъра, ако нещо липсва.",
       saveFailed: "Неуспешно запазване на връзката.",
       saveNetworkError: "Мрежова грешка при запазване. Опитай отново.",
       envLabel: "Среда",

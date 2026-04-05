@@ -1,31 +1,46 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
 const KEY_BYTES = 32;
 
+/**
+ * 32-byte AES key for encrypting per-user secrets at rest in the DB.
+ * Prefer PORTFOLIO_ENCRYPTION_KEY (dedicated, rotatable without touching sessions).
+ * If unset, derives from AUTH_SECRET (same secret NextAuth already needs) so you
+ * don't need a second env var on Vercel.
+ * Changing which key is used invalidates existing encrypted rows until users re-save credentials.
+ */
+function keyFromAuthSecret(): Buffer | null {
+  const s = process.env.AUTH_SECRET;
+  if (!s || typeof s !== "string" || s.trim().length < 8) return null;
+  return createHash("sha256").update(s.trim(), "utf8").digest();
+}
+
 function getKeyBuffer(): Buffer {
   const b64 = process.env.PORTFOLIO_ENCRYPTION_KEY;
-  if (!b64 || typeof b64 !== "string") {
-    throw new Error("PORTFOLIO_ENCRYPTION_KEY is not set");
-  }
-  const buf = Buffer.from(b64.trim(), "base64");
-  if (buf.length !== KEY_BYTES) {
+  if (b64 && typeof b64 === "string") {
+    const buf = Buffer.from(b64.trim(), "base64");
+    if (buf.length === KEY_BYTES) return buf;
     throw new Error("PORTFOLIO_ENCRYPTION_KEY must decode to 32 bytes (base64-encoded)");
   }
-  return buf;
+  const derived = keyFromAuthSecret();
+  if (derived) return derived;
+  throw new Error("Set AUTH_SECRET (NextAuth) or PORTFOLIO_ENCRYPTION_KEY for credential encryption");
 }
 
 export function isPortfolioEncryptionConfigured(): boolean {
   const b64 = process.env.PORTFOLIO_ENCRYPTION_KEY;
-  if (!b64 || typeof b64 !== "string") return false;
-  try {
-    const buf = Buffer.from(b64.trim(), "base64");
-    return buf.length === KEY_BYTES;
-  } catch {
-    return false;
+  if (b64 && typeof b64 === "string") {
+    try {
+      const buf = Buffer.from(b64.trim(), "base64");
+      return buf.length === KEY_BYTES;
+    } catch {
+      return false;
+    }
   }
+  return keyFromAuthSecret() !== null;
 }
 
 /** Stored as base64(iv || tag || ciphertext). */

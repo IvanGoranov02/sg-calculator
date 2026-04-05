@@ -17,7 +17,7 @@ export async function POST() {
     return Response.json(
       {
         error:
-          "Add PORTFOLIO_ENCRYPTION_KEY to your server environment (e.g. Vercel → Environment Variables). Value: base64 of 32 random bytes (run: openssl rand -base64 32). Redeploy after adding.",
+          "Server cannot decrypt credentials: set AUTH_SECRET or PORTFOLIO_ENCRYPTION_KEY on the server.",
       },
       { status: 503 },
     );

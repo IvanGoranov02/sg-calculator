@@ -36,7 +36,7 @@ export async function PUT(request: Request) {
     return Response.json(
       {
         error:
-          "Add PORTFOLIO_ENCRYPTION_KEY to your server environment (e.g. Vercel → Environment Variables). Value: base64 of 32 random bytes (run: openssl rand -base64 32). Redeploy after adding. This is not the Gemini key.",
+          "Server cannot encrypt credentials: set AUTH_SECRET (required for sign-in anyway) or optionally PORTFOLIO_ENCRYPTION_KEY (openssl rand -base64 32). User T212 keys are encrypted with this before saving to the database.",
       },
       { status: 503 },
     );
