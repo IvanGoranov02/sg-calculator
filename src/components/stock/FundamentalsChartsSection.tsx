@@ -9,15 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { safePct, safeRatio } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
+import { useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
-type Freq = "annual" | "quarterly";
-
 /** ISO date (period end) for filtering; stripped before passing to Recharts. */
 type Row = Record<string, unknown> & { periodEnd?: string };
-
-type ChartTimeRange = "all" | "10y" | "5y" | "3y" | "1y" | "custom";
 
 function filterByCalendarYears(rows: Row[], years: number): Row[] {
   if (rows.length === 0) return rows;
@@ -289,10 +287,16 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
   const [geminiFillHint, setGeminiFillHint] = useState<string | null>(null);
 
   const geminiRetry = Boolean(onBundleReplace);
-  const [freq, setFreq] = useState<Freq>("quarterly");
-  const [timeRange, setTimeRange] = useState<ChartTimeRange>("3y");
-  const [customFromYear, setCustomFromYear] = useState<number | null>(null);
-  const [customToYear, setCustomToYear] = useState<number | null>(null);
+  const {
+    timeRange,
+    setTimeRange,
+    freq,
+    setFreq,
+    customFromYear,
+    setCustomFromYear,
+    customToYear,
+    setCustomToYear,
+  } = useStockAnalysisPeriod();
 
   const formatYear = useCallback((fy: string) => t("chart.fyYear", { y: fy }), [t]);
 
@@ -555,109 +559,116 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
   return (
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-white/10 bg-zinc-900/35 p-4 shadow-sm shadow-black/10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
-            <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
-            {geminiFillHint ? (
-              <p className="mt-2 text-xs text-amber-400/95" role="status">
-                {geminiFillHint}
-              </p>
-            ) : null}
+        <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
+        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
+        {geminiFillHint ? (
+          <p className="mt-2 text-xs text-amber-400/95" role="status">
+            {geminiFillHint}
+          </p>
+        ) : null}
+      </div>
+
+      <div
+        className={cn(
+          "sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b border-white/10 bg-zinc-950/90 px-4 py-3 shadow-[0_6px_28px_rgba(0,0,0,0.5)] backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:border-white/10",
+        )}
+      >
+        <div className="flex w-full flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor="fund-chart-range" className="text-xs text-muted-foreground">
+              {t("chartsFund.filterTimeRange")}
+            </Label>
+            <select
+              id="fund-chart-range"
+              className={selectClass}
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
+            >
+              <option value="all">{t("chartsFund.rangeAll")}</option>
+              <option value="10y">{t("chartsFund.range10y")}</option>
+              <option value="5y">{t("chartsFund.range5y")}</option>
+              <option value="3y">{t("chartsFund.range3y")}</option>
+              <option value="1y">{t("chartsFund.range1y")}</option>
+              <option value="custom">{t("chartsFund.rangeCustom")}</option>
+            </select>
           </div>
-          <div className="flex w-full max-w-xl flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end lg:max-w-2xl lg:justify-end">
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <Label htmlFor="fund-chart-range" className="text-xs text-muted-foreground">
-                {t("chartsFund.filterTimeRange")}
-              </Label>
-              <select
-                id="fund-chart-range"
-                className={selectClass}
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
-              >
-                <option value="all">{t("chartsFund.rangeAll")}</option>
-                <option value="10y">{t("chartsFund.range10y")}</option>
-                <option value="5y">{t("chartsFund.range5y")}</option>
-                <option value="3y">{t("chartsFund.range3y")}</option>
-                <option value="1y">{t("chartsFund.range1y")}</option>
-                <option value="custom">{t("chartsFund.rangeCustom")}</option>
-              </select>
+          {timeRange === "custom" && yearOptions.length > 0 ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fund-from-y" className="text-xs text-muted-foreground">
+                  {t("chartsFund.filterFromYear")}
+                </Label>
+                <select
+                  id="fund-from-y"
+                  className={selectClass}
+                  value={customFromYear ?? yearOptions[0]}
+                  onChange={(e) => setCustomFromYear(Number(e.target.value))}
+                >
+                  {yearOptions.map((y) => (
+                    <option key={`f-${y}`} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fund-to-y" className="text-xs text-muted-foreground">
+                  {t("chartsFund.filterToYear")}
+                </Label>
+                <select
+                  id="fund-to-y"
+                  className={selectClass}
+                  value={customToYear ?? yearOptions[yearOptions.length - 1]}
+                  onChange={(e) => setCustomToYear(Number(e.target.value))}
+                >
+                  {yearOptions.map((y) => (
+                    <option key={`t-${y}`} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            {timeRange === "custom" && yearOptions.length > 0 ? (
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="fund-from-y" className="text-xs text-muted-foreground">
-                    {t("chartsFund.filterFromYear")}
-                  </Label>
-                  <select
-                    id="fund-from-y"
-                    className={selectClass}
-                    value={customFromYear ?? yearOptions[0]}
-                    onChange={(e) => setCustomFromYear(Number(e.target.value))}
-                  >
-                    {yearOptions.map((y) => (
-                      <option key={`f-${y}`} value={y}>
-                        {y}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="fund-to-y" className="text-xs text-muted-foreground">
-                    {t("chartsFund.filterToYear")}
-                  </Label>
-                  <select
-                    id="fund-to-y"
-                    className={selectClass}
-                    value={customToYear ?? yearOptions[yearOptions.length - 1]}
-                    onChange={(e) => setCustomToYear(Number(e.target.value))}
-                  >
-                    {yearOptions.map((y) => (
-                      <option key={`t-${y}`} value={y}>
-                        {y}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">{t("chartsFund.filterGranularity")}</span>
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={freq === "quarterly" ? "default" : "outline"}
-                  className={cn(
-                    "rounded-lg",
-                    freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                  )}
-                  onClick={() => setFreq("quarterly")}
-                  disabled={!hasQuarterly}
-                  title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
-                >
-                  {t("chartsFund.quarterly")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={freq === "annual" ? "default" : "outline"}
-                  className={cn(
-                    "rounded-lg",
-                    freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                  )}
-                  onClick={() => setFreq("annual")}
-                >
-                  {t("chartsFund.annual")}
-                </Button>
-              </div>
+          ) : null}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{t("chartsFund.filterGranularity")}</span>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={freq === "quarterly" ? "default" : "outline"}
+                className={cn(
+                  "rounded-lg",
+                  freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                )}
+                onClick={() => setFreq("quarterly")}
+                disabled={!hasQuarterly}
+                title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
+              >
+                {t("chartsFund.quarterly")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={freq === "annual" ? "default" : "outline"}
+                className={cn(
+                  "rounded-lg",
+                  freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                )}
+                onClick={() => setFreq("annual")}
+              >
+                {t("chartsFund.annual")}
+              </Button>
             </div>
           </div>
         </div>
+        <p className="text-[11px] leading-snug text-muted-foreground">{t("chartsFund.periodFilterStickyHint")}</p>
+      </div>
+
+      <div className="space-y-1">
         {!empty && loadedMeta ? (
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {t("chartsFund.loadedDataSpan", {
               fromYear: loadedMeta.fromY,
               toYear: loadedMeta.toY,
@@ -667,7 +678,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
           </p>
         ) : null}
         {showPresetShorterThanRequested && loadedMeta ? (
-          <p className="mt-1 text-xs text-amber-200/85">
+          <p className="text-xs text-amber-200/85">
             {t("chartsFund.filterPresetShorterThanRequested", {
               presetYears: presetYearsRequested!,
               n: loadedMeta.n,
@@ -678,12 +689,10 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             })}
           </p>
         ) : presetMatchesAllLoaded ? (
-          <p className="mt-1 text-xs text-amber-200/85">
-            {t("chartsFund.filterPresetNoNarrow")}
-          </p>
+          <p className="text-xs text-amber-200/85">{t("chartsFund.filterPresetNoNarrow")}</p>
         ) : null}
         {showFilterCount ? (
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {t("chartsFund.filterShowing", {
               n: chartRows.length,
               unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),

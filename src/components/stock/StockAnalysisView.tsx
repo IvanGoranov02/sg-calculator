@@ -11,6 +11,7 @@ import { StockMetricChart } from "@/components/stock/StockMetricChart";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateStockError } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 type StockAnalysisViewProps = {
@@ -77,17 +78,19 @@ export function StockAnalysisView({
   const { quote, income } = bundle;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
-      <StockLiveHeader quote={quote} />
+    <StockAnalysisPeriodProvider key={symbol}>
+      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <StockLiveHeader quote={quote} />
 
-      <StockAiSection symbol={symbol} />
+        <StockAiSection symbol={symbol} />
 
-      <StockMetricChart data={bundle} />
-      <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-      <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-      <IncomeStatementTable rows={income} />
-      <AnnualFundamentalsSection data={bundle} />
-      <InvestorMetricsSection data={bundle.investor} />
-    </div>
+        <StockMetricChart data={bundle} />
+        <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
+        <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
+        <IncomeStatementTable rows={income} />
+        <AnnualFundamentalsSection data={bundle} />
+        <InvestorMetricsSection data={bundle.investor} />
+      </div>
+    </StockAnalysisPeriodProvider>
   );
 }

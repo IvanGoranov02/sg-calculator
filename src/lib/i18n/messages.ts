@@ -250,10 +250,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterFromYear: "From",
       filterToYear: "To",
       filterShowing: "Showing {n} {unit}.",
+      periodFilterStickyHint:
+        "This bar stays visible while you scroll. The same range applies to annual tables and the dividend section below.",
+      periodFilterTablesHint: "Fiscal year columns match the time range selected under Fundamentals.",
       filterUnitYears: "fiscal years",
       filterUnitQuarters: "quarters",
       loadedDataSpan:
-        "Yahoo fundamentals in this view span {fromYear}–{toYear} ({n} {unit}). Quarters default from 2022 onward when history is long. Depth varies by symbol — not an app chart cap.",
+        "Yahoo fundamentals in this view span {fromYear}–{toYear} ({n} {unit}). Depth varies by symbol — not an app chart cap.",
       filterPresetNoNarrow:
         "This preset does not remove any loaded periods — same as “All history”.",
       filterPresetShorterThanRequested:
@@ -781,10 +784,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterFromYear: "От",
       filterToYear: "До",
       filterShowing: "Показани са {n} {unit}.",
+      periodFilterStickyHint:
+        "Лентата остава видима при скрол. Същият диапазон важи за годишните таблици и секцията „Дивиденти“ по-долу.",
+      periodFilterTablesHint: "Колоните по фискални години следват времевия диапазон под „Фундаменти“.",
       filterUnitYears: "фискални години",
       filterUnitQuarters: "тримесечия",
       loadedDataSpan:
-        "Фундаментите от Yahoo: {fromYear}–{toYear} ({n} {unit}). Тримесечията по подразбиране от 2022 накъм при дълга история. Дълбочината зависи от символа — не е таван на графиките.",
+        "Фундаментите от Yahoo: {fromYear}–{toYear} ({n} {unit}). Дълбочината зависи от символа — не е таван на графиките.",
       filterPresetNoNarrow:
         "Този пресет не премахва заредени периоди — същото като „цялата история“.",
       filterPresetShorterThanRequested:

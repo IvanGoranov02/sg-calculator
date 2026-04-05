@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrencyCompact } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { filterAnnualRowsByPeriod, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { IncomeStatementAnnual } from "@/lib/stockAnalysisTypes";
 import { incomeStatementMetricKeys, sortIncomeByYearAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,10 @@ type IncomeStatementTableProps = {
 
 export function IncomeStatementTable({ rows }: IncomeStatementTableProps) {
   const { t } = useI18n();
-  const sorted = sortIncomeByYearAsc(rows);
+  const { timeRange, customFromYear, customToYear } = useStockAnalysisPeriod();
+  const sorted = sortIncomeByYearAsc(
+    filterAnnualRowsByPeriod(rows, timeRange, customFromYear, customToYear),
+  );
   const years = sorted.map((r) => r.fiscalYear);
 
   return (
@@ -28,6 +32,7 @@ export function IncomeStatementTable({ rows }: IncomeStatementTableProps) {
       <div className="border-b border-white/10 px-4 py-4 sm:px-5">
         <h2 className="text-lg font-semibold tracking-tight">{t("income.title")}</h2>
         <p className="text-sm text-muted-foreground">{t("income.subtitle")}</p>
+        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
       </div>
       <div className="overflow-x-auto">
         <Table className="min-w-[520px]">

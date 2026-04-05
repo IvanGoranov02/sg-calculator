@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { FiscalMetricTable, type FiscalMetricRowDef } from "@/components/stock/FiscalMetricTable";
 import { safePct, safeRatio, yoyPercentNullableSeries, yoyPercentSeries } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { filterAnnualRowsByPeriod, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc } from "@/lib/stockAnalysisTypes";
 
@@ -18,13 +19,17 @@ function byFy<T extends { fiscalYear: string }>(rows: T[]): Map<string, T> {
 
 export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionProps) {
   const { t } = useI18n();
+  const { timeRange, customFromYear, customToYear } = useStockAnalysisPeriod();
   const formatFy = useCallback((y: string) => t("chart.fyYear", { y }), [t]);
 
   const pack = useMemo(() => {
-    const inc = sortIncomeByYearAsc(data.income);
+    const inc = sortIncomeByYearAsc(
+      filterAnnualRowsByPeriod(data.income, timeRange, customFromYear, customToYear),
+    );
     const years = inc.map((r) => r.fiscalYear);
-    const cfMap = byFy(data.cashFlow);
-    const bsMap = byFy(data.balanceSheet);
+    const yearSet = new Set(years);
+    const cfMap = byFy(data.cashFlow.filter((c) => yearSet.has(c.fiscalYear)));
+    const bsMap = byFy(data.balanceSheet.filter((b) => yearSet.has(b.fiscalYear)));
 
     const perShare: FiscalMetricRowDef[] = [
       {
@@ -192,7 +197,7 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
     ];
 
     return { years, perShare, incomeExtra, yoyRows, margins, balanceRows, cfRows, ratioRows };
-  }, [data, t]);
+  }, [data, t, timeRange, customFromYear, customToYear]);
 
   const metricCol = t("income.metricCol");
 
@@ -201,6 +206,7 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
       <div>
         <h2 className="text-xl font-semibold tracking-tight">{t("annual.sectionTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("annual.sectionSubtitle")}</p>
+        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
       </div>
 
       <FiscalMetricTable

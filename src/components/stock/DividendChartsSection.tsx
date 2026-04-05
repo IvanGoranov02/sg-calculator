@@ -23,6 +23,7 @@ import {
 } from "@/lib/dividendMetrics";
 import { formatCurrencyPerShare } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { filterDividendQuarterlyByPeriod, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ type DividendChartsSectionProps = {
 
 export function DividendChartsSection({ data, symbol, onBundleReplace }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
+  const { timeRange, customFromYear, customToYear } = useStockAnalysisPeriod();
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
   const [geminiBusy, setGeminiBusy] = useState(false);
@@ -73,7 +75,13 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
   );
 
   const pack = useMemo(() => {
-    const sorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
+    const filtered = filterDividendQuarterlyByPeriod(
+      data.dividendQuarterly,
+      timeRange,
+      customFromYear,
+      customToYear,
+    );
+    const sorted = sortQuarterlyByDateAsc(filtered);
     const dpsArr = sorted.map((p) => p.dividendPerShare);
     const ttmStrict = rollingSum4Quarterly(dpsArr);
     const loose = rollingSum4QuarterlyLoose(dpsArr);
@@ -89,7 +97,7 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
       qDps: dpsArr[i],
     }));
     return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean) };
-  }, [data.dividendQuarterly, formatPeriod]);
+  }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear]);
 
   /** Some quarters have DPS, others null — holes in the series (TTM / charts). */
   const hasDividendSeriesGaps = useMemo(() => {
@@ -203,6 +211,7 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.dividendSectionTitle")}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.dividendSectionSubtitle")}</p>
+          <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{t("chartsFund.dividendRefreshHint")}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
