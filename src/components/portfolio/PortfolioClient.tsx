@@ -71,9 +71,11 @@ export function PortfolioClient() {
   const [editAvg, setEditAvg] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);
-    setError(null);
+    if (opts?.clearPageError !== false) {
+      setError(null);
+    }
     try {
       const [portfolioRes, settingsRes] = await Promise.all([
         fetch("/api/portfolio"),
@@ -136,6 +138,28 @@ export function PortfolioClient() {
     }
   }, [t]);
 
+  const runSync = useCallback(async (): Promise<boolean> => {
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/trading212/sync", { method: "POST" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Sync failed");
+        await load({ clearPageError: false });
+        return false;
+      }
+      await load();
+      return true;
+    } catch {
+      setError(t("portfolio.syncNetworkError"));
+      await load({ clearPageError: false });
+      return false;
+    } finally {
+      setSyncing(false);
+    }
+  }, [load, t]);
+
   useEffect(() => {
     if (status === "authenticated") void load();
     else if (status === "unauthenticated") {
@@ -181,6 +205,7 @@ export function PortfolioClient() {
       setApiKey("");
       setApiSecret("");
       await load();
+      await runSync();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
@@ -199,20 +224,8 @@ export function PortfolioClient() {
     }
   }
 
-  async function onSync() {
-    setSyncing(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/trading212/sync", { method: "POST" });
-      const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Sync failed");
-        return;
-      }
-      await load();
-    } finally {
-      setSyncing(false);
-    }
+  function onSync() {
+    void runSync();
   }
 
   async function onAddManual(e: FormEvent) {
@@ -300,6 +313,20 @@ export function PortfolioClient() {
     });
   }, [holdings, quotes]);
 
+  /** Sums est. annual dividend by holding currency (same basis as table column). */
+  const dividendTotalsByCurrency = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const { h, estAnnual } of rows) {
+      if (estAnnual == null || !Number.isFinite(estAnnual) || estAnnual <= 0) continue;
+      const c =
+        typeof h.currency === "string" && h.currency.trim().length >= 3
+          ? h.currency.trim().toUpperCase().slice(0, 8)
+          : "USD";
+      map.set(c, (map.get(c) ?? 0) + estAnnual);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows]);
+
   if (status === "loading") {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -349,6 +376,34 @@ export function PortfolioClient() {
         </p>
       ) : null}
 
+      {trading212?.connected &&
+      trading212.encryptionConfigured &&
+      !trading212.lastSyncAt &&
+      !trading212.lastError ? (
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-amber-500/35 bg-amber-950/35 px-4 py-3 text-sm text-amber-50/95 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <p className="min-w-0 flex-1 leading-relaxed">{t("portfolio.syncNeededHint")}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0 border-amber-500/40 bg-amber-950/50 hover:bg-amber-900/50"
+            disabled={syncing || savingCreds}
+            onClick={() => void runSync()}
+          >
+            {syncing ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
+                {t("portfolio.syncing")}
+              </>
+            ) : (
+              t("portfolio.syncNow")
+            )}
+          </Button>
+        </div>
+      ) : null}
+
       <Card className="border-white/10 bg-zinc-900/50">
         <CardHeader>
           <CardTitle>{t("portfolio.manualTitle")}</CardTitle>
@@ -392,6 +447,33 @@ export function PortfolioClient() {
       </Card>
 
       <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
+
+      {holdings.length > 0 ? (
+        <Card className="border border-emerald-500/25 bg-emerald-950/25">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
+            <CardDescription>{t("portfolio.dividendSummaryHint")}</CardDescription>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            {dividendTotalsByCurrency.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("portfolio.dividendNoData")}</p>
+            ) : (
+              <div className="flex flex-wrap gap-8">
+                {dividendTotalsByCurrency.map(([currency, sum]) => (
+                  <div key={currency}>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {currency} · {t("portfolio.dividendPerYearLabel")}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-emerald-400">
+                      {fmtMoney(sum, currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : null}
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">

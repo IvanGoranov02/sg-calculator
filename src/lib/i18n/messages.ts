@@ -422,6 +422,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       quoteMissing: "—",
       divDisclaimer:
         "Estimated from Yahoo trailing dividend rate or yield × your shares. Actual payments vary.",
+      dividendSummaryTitle: "Estimated annual dividend (full portfolio)",
+      dividendSummaryHint:
+        "Sum of per-position estimates (~next 12 months from Yahoo trailing figures). Multiple currencies are shown separately. Not tax or broker advice.",
+      dividendNoData:
+        "No dividend rate/yield from Yahoo for your symbols yet — try Refresh data or check tickers.",
+      dividendPerYearLabel: "per year",
       t212Title: "Trading 212 (optional)",
       t212Desc:
         "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
@@ -430,6 +436,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Your Trading 212 keys are encrypted before being saved to the database. The server uses AUTH_SECRET (already set for login) or optionally a dedicated PORTFOLIO_ENCRYPTION_KEY. Not your per-user broker keys, and not the Gemini key. You can press Save to see a server error if something is missing.",
       saveFailed: "Could not save connection.",
       saveNetworkError: "Network error while saving. Try again.",
+      syncNetworkError: "Network error during Trading 212 sync. Try again.",
+      syncNeededHint:
+        "Trading 212 is connected, but positions are not imported yet. Click Sync positions — or use Save again after connecting (we run sync automatically after a successful save). If you see 403, check API key IP allowlist in Trading 212 (Vercel must be allowed, or leave IPs unrestricted).",
       envLabel: "Environment",
       envDemo: "Demo (paper)",
       envLive: "Live",
@@ -934,6 +943,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       quoteMissing: "—",
       divDisclaimer:
         "Оценка от Yahoo (trailing дивидент rate или yield × брой акции). Реалните плащания варират.",
+      dividendSummaryTitle: "Очакван годишен дивидент (цяло портфолио)",
+      dividendSummaryHint:
+        "Сума от редовете (~следващи 12 месеца по trailing данни от Yahoo). Различни валути — отделно. Не е данъчен или брокерски съвет.",
+      dividendNoData:
+        "Няма дивидент rate/yield от Yahoo за тези символи — опитай „Опресни данните“ или провери тикерите.",
+      dividendPerYearLabel: "годишно",
       t212Title: "Trading 212 (по избор)",
       t212Desc:
         "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
@@ -942,6 +957,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Ключовете към Trading 212 се криптират преди запис в базата. Сървърът ползва AUTH_SECRET (вече за вход) или по желание отделен PORTFOLIO_ENCRYPTION_KEY. Това не са твоите брокерски ключове и не е Gemini. Натисни Save за грешка от сървъра, ако нещо липсва.",
       saveFailed: "Неуспешно запазване на връзката.",
       saveNetworkError: "Мрежова грешка при запазване. Опитай отново.",
+      syncNetworkError: "Мрежова грешка при синхронизация с Trading 212. Опитай отново.",
+      syncNeededHint:
+        "Връзката с Trading 212 е запазена, но позициите още не са импортирани. Натисни „Синхронизирай позиции“ — или запази отново след свързване (след успешен запис пускаме синхронизация автоматично). При 403 провери IP ограниченията на API ключа в Trading 212 (трябва да е позволен сървърът/Vercel, или без ограничение).",
       envLabel: "Среда",
       envDemo: "Демо (paper)",
       envLive: "Реална",

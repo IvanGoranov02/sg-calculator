@@ -129,18 +129,26 @@ export async function t212FetchJson<T>(
   }
 }
 
+function normalizePositionsPayload(data: unknown): T212Position[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)) {
+    return (data as { items: T212Position[] }).items;
+  }
+  return [];
+}
+
 export async function fetchT212Positions(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
 ): Promise<T212Position[]> {
-  const { data } = await t212FetchJson<T212Position[]>(
+  const { data } = await t212FetchJson<unknown>(
     environment,
     apiKey,
     apiSecret,
     "/api/v0/equity/positions",
   );
-  return Array.isArray(data) ? data : [];
+  return normalizePositionsPayload(data);
 }
 
 export async function fetchT212AccountSummary(
