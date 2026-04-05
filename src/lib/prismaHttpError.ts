@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 
+import { logApiException } from "@/lib/serverDebugLog";
+
 export function isPrismaInfrastructureError(e: unknown): boolean {
   return (
     e instanceof Prisma.PrismaClientKnownRequestError ||
@@ -12,6 +14,8 @@ export function isPrismaInfrastructureError(e: unknown): boolean {
  * Map Prisma failures to HTTP responses (avoids opaque 500s when migrations are missing, etc.).
  */
 export function prismaErrorToHttp(e: unknown): { status: number; error: string } {
+  logApiException("prismaErrorToHttp", e);
+
   if (e instanceof Prisma.PrismaClientKnownRequestError) {
     if (e.code === "P2021" || e.code === "P2022") {
       return {
@@ -30,6 +34,5 @@ export function prismaErrorToHttp(e: unknown): { status: number; error: string }
   if (e instanceof Prisma.PrismaClientRustPanicError) {
     return { status: 503, error: "Database driver error. Check server logs." };
   }
-  console.error("[prisma]", e);
   return { status: 500, error: "Database error. Try again later." };
 }

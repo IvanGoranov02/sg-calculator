@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
+import { logApiException } from "@/lib/serverDebugLog";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
 
@@ -100,6 +101,10 @@ export async function POST() {
     }
     const msg = e instanceof Error ? e.message : "Sync failed";
     const status = (e as T212RequestError).status;
+    logApiException("POST /api/trading212/sync (broker API or other)", e, {
+      userId,
+      trading212HttpStatus: status ?? undefined,
+    });
     try {
       await prisma.trading212Connection.update({
         where: { userId },

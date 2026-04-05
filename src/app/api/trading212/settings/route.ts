@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
+import { logApiException, logApiInfo } from "@/lib/serverDebugLog";
 import type { Trading212Environment } from "@prisma/client";
 
 function parseEnv(v: unknown): Trading212Environment | null {
@@ -39,6 +40,7 @@ export async function PUT(request: Request) {
   }
 
   if (!isPortfolioEncryptionConfigured()) {
+    logApiInfo("PUT /api/trading212/settings", "encryption not configured (no AUTH_SECRET / valid PORTFOLIO_ENCRYPTION_KEY)");
     return Response.json(
       {
         error:
@@ -76,6 +78,7 @@ export async function PUT(request: Request) {
         apiKeyEnc = encryptSecret(apiKey);
         apiSecretEnc = encryptSecret(apiSecret);
       } catch (encErr) {
+        logApiException("PUT /api/trading212/settings encryptSecret", encErr, { userId });
         const msg = encErr instanceof Error ? encErr.message : "Encryption failed";
         return Response.json(
           {

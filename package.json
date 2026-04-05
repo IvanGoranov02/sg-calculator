@@ -9,6 +9,10 @@
     "dev": "next dev",
     "postinstall": "prisma generate",
     "build": "prisma generate && prisma migrate deploy && next build",
+    "build:skip-migrate": "prisma generate && next build",
+    "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:studio": "prisma studio",
     "start": "next start",
     "lint": "eslint"
   },

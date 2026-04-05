@@ -22,7 +22,7 @@ import {
   type StockQuote,
 } from "@/lib/stockAnalysisTypes";
 
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
 const MAX_INCOME_YEARS = 15;
 const FUNDAMENTALS_PERIOD1 = "2000-01-01";
