@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
+import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
 
@@ -23,7 +24,16 @@ export async function POST() {
     );
   }
 
-  const conn = await prisma.trading212Connection.findUnique({ where: { userId } });
+  let conn;
+  try {
+    conn = await prisma.trading212Connection.findUnique({ where: { userId } });
+  } catch (e) {
+    if (isPrismaInfrastructureError(e)) {
+      const { status, error } = prismaErrorToHttp(e);
+      return Response.json({ error }, { status });
+    }
+    throw e;
+  }
   if (!conn) {
     return Response.json({ error: "Trading 212 is not connected" }, { status: 400 });
   }
@@ -84,12 +94,20 @@ export async function POST() {
       totalValue: summary?.totalValue ?? null,
     });
   } catch (e) {
+    if (isPrismaInfrastructureError(e)) {
+      const { status, error } = prismaErrorToHttp(e);
+      return Response.json({ error }, { status });
+    }
     const msg = e instanceof Error ? e.message : "Sync failed";
     const status = (e as T212RequestError).status;
-    await prisma.trading212Connection.update({
-      where: { userId },
-      data: { lastError: msg.slice(0, 2000) },
-    });
+    try {
+      await prisma.trading212Connection.update({
+        where: { userId },
+        data: { lastError: msg.slice(0, 2000) },
+      });
+    } catch {
+      /* ignore if row missing */
+    }
     return Response.json(
       { error: msg, trading212Status: status ?? null },
       { status: status && status >= 400 && status < 500 ? status : 502 },

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { normalizeTicker } from "@/lib/watchlistStorage";
 
 function parsePositiveDecimal(raw: unknown, label: string): Prisma.Decimal {
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return Response.json({ error: "You already have a manual row for this symbol" }, { status: 409 });
     }
-    throw e;
+    const { status, error } = prismaErrorToHttp(e);
+    return Response.json({ error }, { status });
   }
 }
