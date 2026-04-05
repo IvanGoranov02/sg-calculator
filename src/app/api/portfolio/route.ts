@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { fetchPortfolioQuotesForSymbols } from "@/lib/portfolioMarketData";
+import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 
@@ -42,8 +42,12 @@ export async function GET() {
       prisma.trading212Connection.findUnique({ where: { userId } }),
     ]);
 
-    const symbols = [...new Set(holdings.map((h) => h.symbolYahoo))];
-    const quotes = symbols.length > 0 ? await fetchPortfolioQuotesForSymbols(symbols) : {};
+    const quotes =
+      holdings.length > 0
+        ? await fetchPortfolioQuotesForHoldings(
+            holdings.map((h) => ({ symbolYahoo: h.symbolYahoo, symbolT212: h.symbolT212 })),
+          )
+        : {};
 
     return Response.json({
       holdings: holdings.map(serializeHolding),

@@ -12,6 +12,7 @@ import {
   formatCurrency,
   formatCurrencyCompact,
   formatDecimalAsPercent,
+  formatDividendYieldPercent,
   formatRatio,
   formatVolume,
 } from "@/lib/format";
@@ -60,9 +61,7 @@ function fmtMoney(n: number | null): string {
 }
 
 function fmtYield(n: number | null): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  const x = n > 1 ? n / 100 : n;
-  return formatDecimalAsPercent(x);
+  return formatDividendYieldPercent(n);
 }
 
 function fmtPayout(n: number | null): string {

@@ -84,7 +84,7 @@ export function StockAnalysisView({
 
       <StockMetricChart data={bundle} />
       <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-      <DividendChartsSection data={bundle} />
+      <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
       <IncomeStatementTable rows={income} />
       <AnnualFundamentalsSection data={bundle} />
       <InvestorMetricsSection data={bundle.investor} />

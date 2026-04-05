@@ -93,6 +93,21 @@ function seriesHasAnyPoint(
   return false;
 }
 
+/** True when at least one point exists but another period is missing a value in any plotted series (holes in the chart). */
+function seriesHasPartialGaps(rows: Record<string, unknown>[], keys: string[]): boolean {
+  if (rows.length === 0 || keys.length === 0) return false;
+  if (!seriesHasAnyPoint(rows, keys)) return false;
+  for (const row of rows) {
+    for (const k of keys) {
+      const v = row[k];
+      if (v === undefined || v === null) return true;
+      const n = typeof v === "number" ? v : Number(v);
+      if (!Number.isFinite(n)) return true;
+    }
+  }
+  return false;
+}
+
 export function FundamentalChartCard({
   title,
   description,
@@ -110,6 +125,7 @@ export function FundamentalChartCard({
   const manyTicks = data.length > 10;
   const keys = series.map((s) => s.dataKey);
   const hasPoints = data.length === 0 ? false : seriesHasAnyPoint(data, keys);
+  const hasGaps = data.length === 0 ? false : seriesHasPartialGaps(data, keys);
 
   function formatTooltipValueRaw(value: unknown): string {
     const v = Array.isArray(value) ? value[0] : value;
@@ -229,7 +245,7 @@ export function FundamentalChartCard({
           chart
         )}
       </CardContent>
-      {geminiRetry && !hasPoints && data.length > 0 && onGeminiRetry ? (
+      {geminiRetry && data.length > 0 && onGeminiRetry && (!hasPoints || hasGaps) ? (
         <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
           <Button
             type="button"

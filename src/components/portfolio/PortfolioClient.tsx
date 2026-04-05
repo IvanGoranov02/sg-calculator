@@ -10,7 +10,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatDecimalAsPercent, formatPercent } from "@/lib/format";
+import { formatDecimalAsPercent, formatDividendYieldPercent, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import { cn } from "@/lib/utils";
@@ -603,10 +603,12 @@ export function PortfolioClient() {
                     {plPct != null ? formatPercent(plPct) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="hidden text-right text-muted-foreground md:table-cell">
-                    {q?.dividendYield != null ? formatDecimalAsPercent(q.dividendYield) : "—"}
+                    {formatDividendYieldPercent(q?.dividendYield ?? null)}
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
-                    {estAnnual != null ? fmtMoney(estAnnual, h.currency) : "—"}
+                    {estAnnual != null && q
+                      ? fmtMoney(estAnnual, q.currency ?? h.currency)
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     {h.source === "manual" ? (

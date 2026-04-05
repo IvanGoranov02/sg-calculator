@@ -1,11 +1,13 @@
 /**
  * Server-only: batch Yahoo quotes + dividend metrics for portfolio rows.
- * Resolves symbols with fallbacks (EU listings, -EQ ETPs) when direct quote fails.
+ * Order: stored symbolYahoo → T212-mapped ticker → EU/ETP suffix fallbacks → Yahoo search.
  */
 
 import YahooFinance from "yahoo-finance2";
 
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
+import { normalizeYahooDividendYieldToDecimal } from "@/lib/format";
+import { t212TickerToYahoo } from "@/lib/t212Ticker";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
 
@@ -34,6 +36,10 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
   if (u.endsWith("-EQ")) {
     const base = u.slice(0, -3);
     add(base);
+    // T212 EU stubs often add a trailing "A" (e.g. ASMLA-EQ → ASML on AMS).
+    if (base.length >= 5 && base.endsWith("A")) {
+      add(`${base.slice(0, -1)}.AS`);
+    }
     for (const suf of [
       ".DE",
       ".L",
@@ -59,6 +65,29 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
   return out;
 }
 
+/** Try Yahoo in a stable order: UI symbol → broker mapping → heuristics. */
+function buildOrderedCandidates(symbolYahoo: string, symbolT212: string | null): string[] {
+  const u = symbolYahoo.trim().toUpperCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (s: string) => {
+    const x = s.trim().toUpperCase();
+    if (!x || seen.has(x)) return;
+    seen.add(x);
+    out.push(x);
+  };
+
+  push(u);
+  if (symbolT212) {
+    const mapped = t212TickerToYahoo(symbolT212).trim().toUpperCase();
+    if (mapped) push(mapped);
+  }
+  for (const c of buildYahooSymbolCandidates(u)) {
+    push(c);
+  }
+  return out;
+}
+
 function rawQuoteToRow(
   portfolioKey: string,
   resolvedYahoo: string,
@@ -71,13 +100,14 @@ function rawQuoteToRow(
 
   const metrics = mapInvestorMetrics(raw, qs);
   const pct = Number(raw.regularMarketChangePercent ?? 0);
+  const yieldDec = normalizeYahooDividendYieldToDecimal(metrics.dividendYield);
   return {
     symbol: portfolioKey,
     resolvedYahooSymbol: resolvedYahoo,
     name: String(raw.longName ?? raw.shortName ?? portfolioKey),
     price,
     currency: metrics.currency,
-    dividendYield: metrics.dividendYield,
+    dividendYield: yieldDec,
     dividendRate: metrics.dividendRate,
     changePercent: Number.isFinite(pct) ? pct : 0,
   };
@@ -124,25 +154,48 @@ async function searchFallbackQuote(portfolioKey: string): Promise<PortfolioQuote
   return null;
 }
 
-async function fetchOnePortfolioQuote(portfolioSymbol: string): Promise<PortfolioQuoteRow | null> {
-  for (const c of buildYahooSymbolCandidates(portfolioSymbol)) {
+async function fetchOnePortfolioQuote(
+  portfolioSymbol: string,
+  symbolT212: string | null,
+): Promise<PortfolioQuoteRow | null> {
+  for (const c of buildOrderedCandidates(portfolioSymbol, symbolT212)) {
     const row = await tryQuoteSymbol(portfolioSymbol, c);
     if (row) return row;
   }
   return searchFallbackQuote(portfolioSymbol);
 }
 
-export async function fetchPortfolioQuotesForSymbols(
-  symbols: string[],
+export type PortfolioHoldingQuoteKey = {
+  symbolYahoo: string;
+  symbolT212: string | null;
+};
+
+export async function fetchPortfolioQuotesForHoldings(
+  holdings: PortfolioHoldingQuoteKey[],
 ): Promise<Record<string, PortfolioQuoteRow | null>> {
-  const uniq = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  const t212ByYahoo = new Map<string, string | null>();
+  for (const h of holdings) {
+    const k = h.symbolYahoo.trim().toUpperCase();
+    if (!k) continue;
+    if (!t212ByYahoo.has(k)) t212ByYahoo.set(k, h.symbolT212 ?? null);
+    else if (!t212ByYahoo.get(k) && h.symbolT212) t212ByYahoo.set(k, h.symbolT212);
+  }
+
+  const uniq = [...t212ByYahoo.keys()];
   const out: Record<string, PortfolioQuoteRow | null> = Object.fromEntries(uniq.map((s) => [s, null]));
 
   await Promise.all(
     uniq.map(async (sym) => {
-      out[sym] = await fetchOnePortfolioQuote(sym);
+      out[sym] = await fetchOnePortfolioQuote(sym, t212ByYahoo.get(sym) ?? null);
     }),
   );
 
   return out;
+}
+
+/** @deprecated Prefer {@link fetchPortfolioQuotesForHoldings} so T212 tickers can refine Yahoo resolution. */
+export async function fetchPortfolioQuotesForSymbols(
+  symbols: string[],
+): Promise<Record<string, PortfolioQuoteRow | null>> {
+  return fetchPortfolioQuotesForHoldings(symbols.map((symbolYahoo) => ({ symbolYahoo, symbolT212: null })));
 }

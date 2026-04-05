@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
@@ -51,12 +51,15 @@ function GrowthPill({ label, pct }: { label: string; pct: number | null }) {
 
 type DividendChartsSectionProps = {
   data: StockAnalysisBundle;
+  symbol: string;
+  onBundleReplace?: (bundle: StockAnalysisBundle) => void;
 };
 
-export function DividendChartsSection({ data }: DividendChartsSectionProps) {
+export function DividendChartsSection({ data, symbol, onBundleReplace }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
+  const [geminiBusy, setGeminiBusy] = useState(false);
 
   const formatPeriod = useCallback(
     (dateIso: string) => {
@@ -87,6 +90,34 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     }));
     return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean) };
   }, [data.dividendQuarterly, formatPeriod]);
+
+  /** Some quarters have DPS, others null — holes in the series (TTM / charts). */
+  const hasDividendSeriesGaps = useMemo(() => {
+    const sorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
+    const dps = sorted.map((p) => p.dividendPerShare);
+    const anyValue = dps.some((v) => v != null && Number.isFinite(v as number) && (v as number) > 0);
+    const anyHole = dps.some((v) => v == null || !Number.isFinite(v as number));
+    return anyValue && anyHole;
+  }, [data.dividendQuarterly]);
+
+  const showGeminiFill =
+    Boolean(onBundleReplace) && (hasDividendSeriesGaps || pack.anyTtmPartial || !pack.hasDps);
+
+  const runGeminiFill = useCallback(async () => {
+    if (!onBundleReplace) return;
+    setGeminiBusy(true);
+    try {
+      const res = await fetch("/api/stock/gemini-balance-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: symbol, bundle: data }),
+      });
+      const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle };
+      if (j.bundle && j.ok) onBundleReplace(j.bundle);
+    } finally {
+      setGeminiBusy(false);
+    }
+  }, [onBundleReplace, symbol, data]);
 
   const yahooShowsDividend = useMemo(() => {
     const inv = data.investor;
@@ -199,6 +230,19 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
               {t("chartsFund.dividendRefreshAi")}
             </Button>
           ) : null}
+          {showGeminiFill ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={geminiBusy}
+              onClick={() => void runGeminiFill()}
+              className="border-emerald-500/35 bg-emerald-950/45 hover:bg-emerald-900/45"
+            >
+              {geminiBusy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
+              {geminiBusy ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadAgainGemini")}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -296,6 +340,9 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             series={qDpsSeries}
             chartType="line"
             valueFormat="perShare"
+            geminiRetry={Boolean(onBundleReplace)}
+            onGeminiRetry={() => void runGeminiFill()}
+            geminiRetryPending={geminiBusy}
           />
         </div>
       )}
