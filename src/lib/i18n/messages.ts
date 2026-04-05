@@ -398,11 +398,12 @@ export const messages: Record<AppLocale, MessageDict> = {
     portfolio: {
       title: "Portfolio",
       subtitle:
-        "Track positions manually or sync open positions from Trading 212 (Invest / ISA API). Quotes and dividend hints are from Yahoo Finance — illustrative only, not investment advice.",
+        "Add positions manually below — Trading 212 is optional and only syncs open positions if you connect it. Quotes and dividend hints are from Yahoo Finance — illustrative only, not investment advice.",
       signInTitle: "Sign in required",
-      signInDesc: "Your portfolio and Trading 212 credentials are stored per account. Sign in to continue.",
+      signInDesc: "Your saved positions are stored per account. Sign in to continue.",
       signInCta: "Sign in",
       refresh: "Refresh",
+      refreshData: "Refresh data",
       loading: "Loading portfolio…",
       errorLoad: "Could not load portfolio.",
       colSource: "Source",
@@ -421,11 +422,14 @@ export const messages: Record<AppLocale, MessageDict> = {
       quoteMissing: "—",
       divDisclaimer:
         "Estimated from Yahoo trailing dividend rate or yield × your shares. Actual payments vary.",
-      t212Title: "Trading 212",
+      t212Title: "Trading 212 (optional)",
       t212Desc:
-        "API keys are encrypted on the server. Use demo keys for paper trading. See Trading 212 API docs.",
-      t212Docs: "API documentation",
-      encryptionOff: "Server missing PORTFOLIO_ENCRYPTION_KEY — cannot store credentials safely.",
+        "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
+      t212Docs: "Trading 212 API key (Help Centre)",
+      encryptionOff:
+        "Add env var PORTFOLIO_ENCRYPTION_KEY on the server (32 random bytes as base64 — openssl rand -base64 32). This is separate from GEMINI_API_KEY; the app cannot encrypt your Trading 212 secrets without it.",
+      saveDisabledHint:
+        "Set PORTFOLIO_ENCRYPTION_KEY in Vercel Environment Variables, redeploy, then save. Not the same as the Gemini key.",
       envLabel: "Environment",
       envDemo: "Demo (paper)",
       envLive: "Live",
@@ -449,7 +453,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualSave: "Save",
       manualCancel: "Cancel",
       emptyTitle: "No positions yet",
-      emptyDesc: "Connect Trading 212 or add a manual row above.",
+      emptyDesc: "Add a manual row above, or expand Trading 212 below to sync from your broker.",
       noEncryptionHint: "Set a 32-byte base64 PORTFOLIO_ENCRYPTION_KEY in the server environment.",
     },
     ai: {
@@ -906,11 +910,12 @@ export const messages: Record<AppLocale, MessageDict> = {
     portfolio: {
       title: "Портфолио",
       subtitle:
-        "Следете позиции ръчно или синхронизирайте отворени позиции от Trading 212 (Invest / ISA API). Котировки и дивидентни подсказки са от Yahoo Finance — ориентировъчни, не са инвестиционен съвет.",
+        "Добавяй позиции ръчно по-долу — Trading 212 е по избор и синхронизира отворени позиции само ако го свържеш. Котировки и дивидентни подсказки са от Yahoo Finance — ориентировъчни, не са инвестиционен съвет.",
       signInTitle: "Нужна е идентификация",
-      signInDesc: "Портфолиото и ключовете към Trading 212 са по акаунт. Влезте, за да продължите.",
+      signInDesc: "Запазените позиции са по акаунт. Влезте, за да продължите.",
       signInCta: "Вход",
       refresh: "Опресни",
+      refreshData: "Опресни данните",
       loading: "Зареждане на портфолио…",
       errorLoad: "Неуспешно зареждане на портфолио.",
       colSource: "Източник",
@@ -929,11 +934,14 @@ export const messages: Record<AppLocale, MessageDict> = {
       quoteMissing: "—",
       divDisclaimer:
         "Оценка от Yahoo (trailing дивидент rate или yield × брой акции). Реалните плащания варират.",
-      t212Title: "Trading 212",
+      t212Title: "Trading 212 (по избор)",
       t212Desc:
-        "API ключовете се криптират на сървъра. За демо използвайте paper акаунт. Виж документацията на Trading 212.",
-      t212Docs: "Документация на API",
-      encryptionOff: "Липсва PORTFOLIO_ENCRYPTION_KEY на сървъра — не може безопасно да се пазят ключове.",
+        "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
+      t212Docs: "API ключ на Trading 212 (Help Centre)",
+      encryptionOff:
+        "Добави PORTFOLIO_ENCRYPTION_KEY в средата на сървъра (32 случайни байта като base64 — openssl rand -base64 32). Това е различно от GEMINI_API_KEY — без него ключовете към Trading 212 не могат да се криптират.",
+      saveDisabledHint:
+        "Задай PORTFOLIO_ENCRYPTION_KEY в Vercel Environment Variables, redeploy, после запази. Не е същото като ключа за Gemini.",
       envLabel: "Среда",
       envDemo: "Демо (paper)",
       envLive: "Реална",
@@ -957,7 +965,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualSave: "Запази",
       manualCancel: "Отказ",
       emptyTitle: "Няма позиции",
-      emptyDesc: "Свържи Trading 212 или добави ръчна позиция по-горе.",
+      emptyDesc: "Добави ръчна позиция по-горе или разгъни Trading 212 по-долу за синхрон с брокера.",
       noEncryptionHint: "Задайте 32-байтов base64 PORTFOLIO_ENCRYPTION_KEY в средата на сървъра.",
     },
     ai: {

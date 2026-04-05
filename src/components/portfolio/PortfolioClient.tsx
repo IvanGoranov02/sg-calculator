@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -75,29 +75,60 @@ export function PortfolioClient() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/portfolio");
-      if (res.status === 401) {
+      const [portfolioRes, settingsRes] = await Promise.all([
+        fetch("/api/portfolio"),
+        fetch("/api/trading212/settings"),
+      ]);
+
+      // Settings load even when /api/portfolio fails (e.g. Yahoo/DB), so Save isn't wrongly disabled.
+      if (settingsRes.ok) {
+        const s = (await settingsRes.json()) as {
+          encryptionConfigured?: boolean;
+          connected?: boolean;
+          environment?: "demo" | "live" | null;
+          lastSyncAt?: string | null;
+          lastError?: string | null;
+        };
+        if (typeof s.encryptionConfigured === "boolean") {
+          setTrading212({
+            encryptionConfigured: s.encryptionConfigured,
+            connected: !!s.connected,
+            environment: s.environment ?? null,
+            lastSyncAt: s.lastSyncAt ?? null,
+            lastError: s.lastError ?? null,
+          });
+          if (s.environment) setT212Env(s.environment);
+        }
+      }
+
+      if (portfolioRes.status === 401) {
         setHoldings([]);
         setQuotes({});
         setTrading212(null);
         setError(null);
         return;
       }
-      const data = (await res.json()) as {
+
+      const data = (await portfolioRes.json()) as {
         holdings?: HoldingApi[];
         quotes?: Record<string, PortfolioQuoteRow | null>;
         trading212?: Trading212Api;
         error?: string;
       };
-      if (!res.ok) {
+
+      if (!portfolioRes.ok) {
         setError(data.error ?? t("portfolio.errorLoad"));
+        setHoldings([]);
+        setQuotes({});
         return;
       }
+
       setHoldings(data.holdings ?? []);
       setQuotes(data.quotes ?? {});
-      const t12 = data.trading212 ?? null;
-      setTrading212(t12);
-      if (t12?.environment) setT212Env(t12.environment);
+      if (data.trading212) {
+        setTrading212(data.trading212);
+        if (data.trading212.environment) setT212Env(data.trading212.environment);
+      }
     } catch {
       setError(t("portfolio.errorLoad"));
     } finally {
@@ -282,9 +313,22 @@ export function PortfolioClient() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("portfolio.title")}</h1>
-        <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("portfolio.subtitle")}</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("portfolio.title")}</h1>
+          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("portfolio.subtitle")}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0 border-white/15"
+          onClick={() => void load()}
+          disabled={loading}
+          aria-busy={loading}
+        >
+          <RefreshCw className={cn("mr-2 size-4", loading && "animate-spin")} aria-hidden />
+          {t("portfolio.refreshData")}
+        </Button>
       </div>
 
       {error ? (
@@ -292,113 +336,6 @@ export function PortfolioClient() {
           {error}
         </p>
       ) : null}
-
-      <Card className="border-white/10 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle>{t("portfolio.t212Title")}</CardTitle>
-          <CardDescription>
-            {t("portfolio.t212Desc")}{" "}
-            <a
-              href="https://docs.trading212.com/api"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-400 underline-offset-4 hover:underline"
-            >
-              {t("portfolio.t212Docs")}
-            </a>
-          </CardDescription>
-        </CardHeader>
-        <div className="space-y-4 px-6 pb-6">
-          {trading212 && !trading212.encryptionConfigured ? (
-            <p className="text-sm text-amber-400">{t("portfolio.encryptionOff")}</p>
-          ) : null}
-
-          <form onSubmit={onSaveT212} className="flex max-w-lg flex-col gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="t212-env">{t("portfolio.envLabel")}</Label>
-              <select
-                id="t212-env"
-                value={t212Env}
-                onChange={(e) => setT212Env(e.target.value === "live" ? "live" : "demo")}
-                className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
-              >
-                <option value="demo">{t("portfolio.envDemo")}</option>
-                <option value="live">{t("portfolio.envLive")}</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="t212-key">{t("portfolio.apiKey")}</Label>
-              <Input
-                id="t212-key"
-                type="password"
-                autoComplete="off"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="border-white/10 bg-zinc-950"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="t212-secret">{t("portfolio.apiSecret")}</Label>
-              <Input
-                id="t212-secret"
-                type="password"
-                autoComplete="off"
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                className="border-white/10 bg-zinc-950"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={savingCreds || !trading212?.encryptionConfigured}>
-                {savingCreds ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("portfolio.saveCreds")}
-                  </>
-                ) : (
-                  t("portfolio.saveCreds")
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!trading212?.connected || syncing || savingCreds}
-                onClick={() => void onSync()}
-              >
-                {syncing ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("portfolio.syncing")}
-                  </>
-                ) : (
-                  t("portfolio.syncNow")
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!trading212?.connected || savingCreds}
-                onClick={() => void onDisconnect()}
-              >
-                {t("portfolio.disconnect")}
-              </Button>
-            </div>
-          </form>
-
-          {trading212?.connected ? (
-            <p className="text-xs text-muted-foreground">
-              {trading212.lastSyncAt
-                ? t("portfolio.lastSync", {
-                    time: new Date(trading212.lastSyncAt).toLocaleString(),
-                  })
-                : t("portfolio.neverSynced")}
-              {trading212.lastError
-                ? ` · ${t("portfolio.syncError", { msg: trading212.lastError })}`
-                : null}
-            </p>
-          ) : null}
-        </div>
-      </Card>
 
       <Card className="border-white/10 bg-zinc-900/50">
         <CardHeader>
@@ -442,13 +379,7 @@ export function PortfolioClient() {
         </form>
       </Card>
 
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
-        <Button type="button" variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={cn("mr-2 size-4", loading && "animate-spin")} />
-          {t("portfolio.refresh")}
-        </Button>
-      </div>
+      <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -590,6 +521,123 @@ export function PortfolioClient() {
           </Table>
         </div>
       )}
+
+      <details className="group rounded-xl border border-white/10 bg-zinc-900/50 [&_summary::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-left text-base font-medium tracking-tight text-foreground hover:bg-white/5">
+          <span>{t("portfolio.t212Title")}</span>
+          <ChevronDown
+            className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="space-y-4 border-t border-white/10 px-6 pb-6 pt-2">
+          <p className="text-sm text-muted-foreground">
+            {t("portfolio.t212Desc")}{" "}
+            <a
+              href="https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 underline-offset-4 hover:underline"
+            >
+              {t("portfolio.t212Docs")}
+            </a>
+          </p>
+          {trading212?.encryptionConfigured === false ? (
+            <p className="text-sm text-amber-400">{t("portfolio.encryptionOff")}</p>
+          ) : null}
+
+          <form onSubmit={onSaveT212} className="flex max-w-lg flex-col gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="t212-env">{t("portfolio.envLabel")}</Label>
+              <select
+                id="t212-env"
+                value={t212Env}
+                onChange={(e) => setT212Env(e.target.value === "live" ? "live" : "demo")}
+                className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+              >
+                <option value="demo">{t("portfolio.envDemo")}</option>
+                <option value="live">{t("portfolio.envLive")}</option>
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="t212-key">{t("portfolio.apiKey")}</Label>
+              <Input
+                id="t212-key"
+                type="password"
+                autoComplete="off"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="border-white/10 bg-zinc-950"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="t212-secret">{t("portfolio.apiSecret")}</Label>
+              <Input
+                id="t212-secret"
+                type="password"
+                autoComplete="off"
+                value={apiSecret}
+                onChange={(e) => setApiSecret(e.target.value)}
+                className="border-white/10 bg-zinc-950"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                disabled={savingCreds || trading212?.encryptionConfigured !== true}
+                title={
+                  trading212?.encryptionConfigured !== true ? t("portfolio.saveDisabledHint") : undefined
+                }
+              >
+                {savingCreds ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    {t("portfolio.saveCreds")}
+                  </>
+                ) : (
+                  t("portfolio.saveCreds")
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!trading212?.connected || syncing || savingCreds}
+                onClick={() => void onSync()}
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                    {t("portfolio.syncing")}
+                  </>
+                ) : (
+                  t("portfolio.syncNow")
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!trading212?.connected || savingCreds}
+                onClick={() => void onDisconnect()}
+              >
+                {t("portfolio.disconnect")}
+              </Button>
+            </div>
+          </form>
+
+          {trading212?.connected ? (
+            <p className="text-xs text-muted-foreground">
+              {trading212.lastSyncAt
+                ? t("portfolio.lastSync", {
+                    time: new Date(trading212.lastSyncAt).toLocaleString(),
+                  })
+                : t("portfolio.neverSynced")}
+              {trading212.lastError
+                ? ` · ${t("portfolio.syncError", { msg: trading212.lastError })}`
+                : null}
+            </p>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }
