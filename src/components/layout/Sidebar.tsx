@@ -41,7 +41,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
   return (
     <aside
       className={cn(
-        "flex h-full min-w-0 shrink-0 flex-col border-r border-white/10 bg-sidebar transition-[width] duration-200 ease-out",
+        "flex h-full min-h-0 min-w-0 shrink-0 flex-col border-r border-white/10 bg-sidebar transition-[width] duration-200 ease-out lg:h-dvh lg:max-h-dvh",
         collapsed ? "w-[4.25rem]" : "w-64",
         className,
       )}
@@ -95,7 +95,10 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           </Button>
         </div>
       ) : null}
-      <nav className="flex flex-1 flex-col gap-0.5 p-2" aria-label="Main">
+      <nav
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain bg-sidebar p-2"
+        aria-label="Main"
+      >
         {nav.map(({ href, labelKey, icon: Icon }) => {
           const active =
             href.startsWith("/stock/")
