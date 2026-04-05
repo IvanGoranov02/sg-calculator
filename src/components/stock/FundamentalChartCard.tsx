@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
 import { cn } from "@/lib/utils";
 
 export type FundamentalSeries = {
@@ -36,10 +37,16 @@ type FundamentalChartCardProps = {
   chartType: "bar" | "line";
   valueFormat: ValueFormat;
   className?: string;
+  /** One-line growth vs prior period (last two points in range). */
+  growthNote?: string | null;
   /** Balance-sheet–heavy charts: offer Gemini fill when series are all null but periods exist. */
   geminiRetry?: boolean;
   onGeminiRetry?: () => void;
   geminiRetryPending?: boolean;
+  /** P/E & P/S when Yahoo price × TTM left gaps. */
+  valuationGemini?: boolean;
+  onValuationGeminiRetry?: () => void;
+  valuationGeminiPending?: boolean;
 };
 
 function formatTooltipValue(fmt: ValueFormat, v: number): string {
@@ -78,36 +85,6 @@ function axisTick(fmt: ValueFormat, v: number): string {
   }
 }
 
-function seriesHasAnyPoint(
-  rows: Record<string, unknown>[],
-  keys: string[],
-): boolean {
-  for (const row of rows) {
-    for (const k of keys) {
-      const v = row[k];
-      if (v === undefined || v === null) continue;
-      const n = typeof v === "number" ? v : Number(v);
-      if (Number.isFinite(n)) return true;
-    }
-  }
-  return false;
-}
-
-/** True when at least one point exists but another period is missing a value in any plotted series (holes in the chart). */
-function seriesHasPartialGaps(rows: Record<string, unknown>[], keys: string[]): boolean {
-  if (rows.length === 0 || keys.length === 0) return false;
-  if (!seriesHasAnyPoint(rows, keys)) return false;
-  for (const row of rows) {
-    for (const k of keys) {
-      const v = row[k];
-      if (v === undefined || v === null) return true;
-      const n = typeof v === "number" ? v : Number(v);
-      if (!Number.isFinite(n)) return true;
-    }
-  }
-  return false;
-}
-
 export function FundamentalChartCard({
   title,
   description,
@@ -117,9 +94,13 @@ export function FundamentalChartCard({
   chartType,
   valueFormat,
   className,
+  growthNote,
   geminiRetry,
   onGeminiRetry,
   geminiRetryPending,
+  valuationGemini,
+  onValuationGeminiRetry,
+  valuationGeminiPending,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const manyTicks = data.length > 10;
@@ -244,7 +225,25 @@ export function FundamentalChartCard({
         ) : (
           chart
         )}
+        {growthNote ? (
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
+        ) : null}
       </CardContent>
+      {valuationGemini && data.length > 0 && onValuationGeminiRetry && (!hasPoints || hasGaps) ? (
+        <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/40"
+            disabled={valuationGeminiPending}
+            onClick={onValuationGeminiRetry}
+          >
+            {valuationGeminiPending ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadValuationGemini")}
+          </Button>
+          <p className="text-[10px] leading-snug text-muted-foreground">{t("chartsFund.valuationGeminiDisclaimer")}</p>
+        </CardFooter>
+      ) : null}
       {geminiRetry && data.length > 0 && onGeminiRetry && (!hasPoints || hasGaps) ? (
         <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
           <Button

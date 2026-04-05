@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StockGauge · Stock analysis",
+  title: "Stelian Petrov · Stock analysis",
   description: "Stock analysis, DCF, and watchlist — Yahoo Finance data.",
 };
 

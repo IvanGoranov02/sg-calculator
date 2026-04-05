@@ -43,7 +43,7 @@ export function StockAnalysisView({
         </div>
         <div className="h-12 w-40 rounded-lg bg-zinc-800/70 animate-pulse" />
         <div className="h-72 rounded-xl border border-white/5 bg-zinc-900/30 animate-pulse" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="h-56 rounded-xl border border-white/5 bg-zinc-900/25 animate-pulse" />
           ))}
@@ -87,8 +87,8 @@ export function StockAnalysisView({
         <StockMetricChart data={bundle} />
         <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
         <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-        <IncomeStatementTable rows={income} />
         <AnnualFundamentalsSection data={bundle} />
+        <IncomeStatementTable rows={income} />
         <InvestorMetricsSection data={bundle.investor} />
       </div>
     </StockAnalysisPeriodProvider>

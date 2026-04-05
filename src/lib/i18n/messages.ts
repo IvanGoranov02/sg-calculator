@@ -10,7 +10,7 @@ export interface MessageDict {
 export const messages: Record<AppLocale, MessageDict> = {
   en: {
     meta: {
-      title: "StockGauge · Stock analysis",
+      title: "Stelian Petrov · Stock analysis",
       description: "Stock analysis, DCF, and watchlist — Yahoo Finance data.",
     },
     nav: {
@@ -311,6 +311,21 @@ export const messages: Record<AppLocale, MessageDict> = {
       geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
       geminiFillNoChange:
         "Gemini did not add values (missing API key, parse error, or nothing to fill). Balance-sheet gaps need inventory for quick ratio; dividend gaps need quarterly DPS for TTM.",
+      loadValuationGemini: "Fill missing P/E & P/S (Gemini)",
+      valuationGeminiDisclaimer:
+        "Illustrative valuation only — uses price history × TTM fundamentals when possible; Gemini fills gaps. Not audited. Requires GEMINI_API_KEY.",
+      geminiValuationNoChange: "Gemini did not add P/E or P/S (missing key, parse error, or nothing to fill).",
+      growthYoy: "YoY",
+      growthQoq: "QoQ",
+      growthFooterLine: "{tag}: {value}",
+      chartPeTtm: "Trailing P/E",
+      chartPeTtmDesc: "Share price at period end ÷ trailing EPS (annual: FY EPS; quarterly: sum of last four diluted EPS). From Yahoo price history and fundamentals.",
+      chartPsTtm: "Trailing P/S",
+      chartPsTtmDesc: "Price × diluted shares ÷ trailing revenue (annual: FY; quarterly: sum of last four quarters).",
+      seriesPeTtm: "Trailing P/E",
+      seriesPsTtm: "Trailing P/S",
+      chartEbitdaSolo: "EBITDA",
+      chartEbitdaSoloDesc: "Earnings before interest, taxes, depreciation and amortization (absolute).",
       chartFcfMargin: "FCF margin",
       chartFcfMarginDesc: "Free cash flow as % of revenue.",
       chartPopGrowth: "Period-over-period growth",
@@ -543,7 +558,7 @@ export const messages: Record<AppLocale, MessageDict> = {
   },
   bg: {
     meta: {
-      title: "StockGauge · Анализ на акции",
+      title: "Stelian Petrov · Анализ на акции",
       description: "Анализ на акции, DCF и списък за наблюдение — данни от Yahoo Finance.",
     },
     nav: {
@@ -845,6 +860,22 @@ export const messages: Record<AppLocale, MessageDict> = {
       geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",
       geminiFillNoChange:
         "Gemini не добави стойности (липсва ключ, грешка при отговор или няма какво да се попълни). За quick ratio са нужни запаси (inventory); за TTM дивидент — тримесечен DPS.",
+      loadValuationGemini: "Попълни липсващи P/E и P/S (Gemini)",
+      valuationGeminiDisclaimer:
+        "Ориентировъчна оценка — при възможност цена × TTM фундаменти; Gemini за празнини. Не е одитирано. Изисква GEMINI_API_KEY.",
+      geminiValuationNoChange: "Gemini не добави P/E или P/S (липсва ключ, грешка или няма какво да се попълни).",
+      growthYoy: "Г/г",
+      growthQoq: "Т/т",
+      growthFooterLine: "{tag}: {value}",
+      chartPeTtm: "P/E (TTM)",
+      chartPeTtmDesc:
+        "Цена при край на периода ÷ трейлинг EPS (годишно: FY EPS; тримесечно: сума от последните четири разводнени EPS). От Yahoo цени и фундаменти.",
+      chartPsTtm: "P/S (TTM)",
+      chartPsTtmDesc: "Цена × разводнени акции ÷ трейлинг приходи (годишно: FY; тримесечно: сума от последните четири тримесечия).",
+      seriesPeTtm: "P/E (TTM)",
+      seriesPsTtm: "P/S (TTM)",
+      chartEbitdaSolo: "EBITDA",
+      chartEbitdaSoloDesc: "Печалба пред лихви, данъци, амортизация и обезценки (абсолютна стойност).",
       chartFcfMargin: "FCF маржа",
       chartFcfMarginDesc: "Свободен паричен поток като % от приходите.",
       chartPopGrowth: "Ръст спрямо предишен период",

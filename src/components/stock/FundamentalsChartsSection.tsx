@@ -8,10 +8,12 @@ import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { safePct, safeRatio } from "@/lib/annualTables";
+import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import { useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
+import { computeValuationByPeriodEnd } from "@/lib/valuationFromHistory";
 import { cn } from "@/lib/utils";
 
 /** ISO date (period end) for filtering; stripped before passing to Recharts. */
@@ -85,6 +87,8 @@ const C = {
   ltDebt: "#f97316",
   revGrowth: "#22c55e",
   niGrowth: "#eab308",
+  valuationPe: "#38bdf8",
+  valuationPs: "#fb7185",
 };
 
 function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) => string): Row[] {
@@ -250,12 +254,26 @@ function buildQuarterlyRows(
   });
 }
 
+function pctPop(prevRaw: unknown, currRaw: unknown): number | null {
+  const prev = Number(prevRaw);
+  const curr = Number(currRaw);
+  if (!Number.isFinite(prev) || !Number.isFinite(curr) || prev === 0) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
 function enrichPopGrowth(rows: Row[]): Row[] {
   return rows.map((row, i) => {
-    const base = { ...row };
+    const base = { ...row } as Row;
     if (i === 0) {
       base.revPopGrowth = null;
       base.niPopGrowth = null;
+      base.grossPopGrowth = null;
+      base.ocfPopGrowth = null;
+      base.fcfPopGrowth = null;
+      base.ebitdaPopGrowth = null;
+      base.dilutedEpsPopGrowth = null;
+      base.operatingIncomePopGrowth = null;
+      base.opexPopGrowth = null;
       return base;
     }
     const prev = rows[i - 1];
@@ -271,8 +289,43 @@ function enrichPopGrowth(rows: Row[]): Row[] {
       Number.isFinite(ni) && Number.isFinite(prevNi) && prevNi !== 0
         ? ((ni - prevNi) / prevNi) * 100
         : null;
+    base.grossPopGrowth = pctPop(prev.grossProfit, base.grossProfit);
+    base.ocfPopGrowth = pctPop(prev.ocf, base.ocf);
+    base.fcfPopGrowth = pctPop(prev.fcf, base.fcf);
+    base.ebitdaPopGrowth = pctPop(prev.ebitda, base.ebitda);
+    base.dilutedEpsPopGrowth = pctPop(prev.dilutedEps, base.dilutedEps);
+    base.operatingIncomePopGrowth = pctPop(prev.operatingIncome, base.operatingIncome);
+    base.opexPopGrowth = pctPop(prev.operatingExpenses, base.operatingExpenses);
     return base;
   });
+}
+
+function growthFooterLine(
+  rows: Record<string, unknown>[],
+  key: string,
+  freq: "annual" | "quarterly",
+  t: (k: string, p?: Record<string, string | number>) => string,
+): string | null {
+  if (rows.length < 2) return null;
+  const a = rows[rows.length - 2][key];
+  const b = rows[rows.length - 1][key];
+  const pct = pctPop(a, b);
+  if (pct == null) return null;
+  const tag = freq === "annual" ? t("chartsFund.growthYoy") : t("chartsFund.growthQoq");
+  const sign = pct >= 0 ? "+" : "";
+  return t("chartsFund.growthFooterLine", { tag, value: `${sign}${pct.toFixed(1)}%` });
+}
+
+function growthFooterMulti(
+  rows: Record<string, unknown>[],
+  keys: string[],
+  freq: "annual" | "quarterly",
+  t: (k: string, p?: Record<string, string | number>) => string,
+): string | null {
+  const parts = keys
+    .map((k) => growthFooterLine(rows, k, freq, t))
+    .filter((s): s is string => Boolean(s));
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 type FundamentalsChartsSectionProps = {
@@ -284,7 +337,15 @@ type FundamentalsChartsSectionProps = {
 export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
   const [geminiBusy, setGeminiBusy] = useState(false);
+  const [geminiValuationBusy, setGeminiValuationBusy] = useState(false);
   const [geminiFillHint, setGeminiFillHint] = useState<string | null>(null);
+  const [valuationPatches, setValuationPatches] = useState<
+    Record<string, { peTtm?: number | null; psTtm?: number | null }>
+  >({});
+
+  useEffect(() => {
+    setValuationPatches({});
+  }, [symbol]);
 
   const geminiRetry = Boolean(onBundleReplace);
   const {
@@ -377,7 +438,80 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
 
   const rows = useMemo(() => enrichPopGrowth(filteredBaseRows), [filteredBaseRows]);
 
-  const chartRows = useMemo(() => rowsForCharts(rows), [rows]);
+  const valuationGranularity = freq === "annual" ? "annual" : "quarterly";
+  const valuationByPeriod = useMemo(
+    () => computeValuationByPeriodEnd(data, valuationGranularity),
+    [data, valuationGranularity],
+  );
+
+  const rowsMerged = useMemo(() => {
+    return rows.map((r) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      const base = pe ? valuationByPeriod.get(pe) : undefined;
+      const patch = pe ? valuationPatches[pe] : undefined;
+      return {
+        ...r,
+        peTtm: patch?.peTtm ?? base?.peTtm ?? null,
+        psTtm: patch?.psTtm ?? base?.psTtm ?? null,
+      };
+    });
+  }, [rows, valuationByPeriod, valuationPatches]);
+
+  const runGeminiValuationFill = useCallback(async () => {
+    setGeminiValuationBusy(true);
+    setGeminiFillHint(null);
+    try {
+      const needingFill = rowsMerged
+        .filter((r) => {
+          const peOk = r.peTtm != null && Number.isFinite(r.peTtm as number);
+          const psOk = r.psTtm != null && Number.isFinite(r.psTtm as number);
+          return !peOk || !psOk;
+        })
+        .map((r) => (typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : ""))
+        .filter((s): s is string => Boolean(s));
+      if (needingFill.length === 0) {
+        setGeminiFillHint(t("chartsFund.geminiValuationNoChange"));
+        return;
+      }
+      const res = await fetch("/api/stock/gemini-valuation-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: symbol,
+          bundle: data,
+          freq: valuationGranularity,
+          needingFill,
+        }),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        patches?: Record<string, { peTtm: number | null; psTtm: number | null }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        setGeminiFillHint(j.error ?? t("chartsFund.geminiValuationNoChange"));
+        return;
+      }
+      if (j.patches && j.ok !== false && Object.keys(j.patches).length > 0) {
+        setValuationPatches((prev) => ({ ...prev, ...j.patches }));
+        setGeminiFillHint(null);
+      } else {
+        setGeminiFillHint(t("chartsFund.geminiValuationNoChange"));
+      }
+    } finally {
+      setGeminiValuationBusy(false);
+    }
+  }, [data, rowsMerged, symbol, t, valuationGranularity]);
+
+  const chartRows = useMemo(() => rowsForCharts(rowsMerged), [rowsMerged]);
+
+  const peValGaps =
+    chartRows.length > 0 &&
+    (!seriesHasAnyPoint(chartRows, ["peTtm"]) || seriesHasPartialGaps(chartRows, ["peTtm"]));
+  const psValGaps =
+    chartRows.length > 0 &&
+    (!seriesHasAnyPoint(chartRows, ["psTtm"]) || seriesHasPartialGaps(chartRows, ["psTtm"]));
+  const showValuationGemini = geminiRetry && (peValGaps || psValGaps);
 
   const loadedMeta = useMemo(() => {
     if (baseRows.length === 0 || yearOptions.length === 0) return null;
@@ -501,6 +635,9 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
         { dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") },
         { dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") },
       ] satisfies FundamentalSeries[],
+      ebitdaSolo: [{ dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") }] satisfies FundamentalSeries[],
+      peTtm: [{ dataKey: "peTtm", color: C.valuationPe, label: t("chartsFund.seriesPeTtm") }] satisfies FundamentalSeries[],
+      psTtm: [{ dataKey: "psTtm", color: C.valuationPs, label: t("chartsFund.seriesPsTtm") }] satisfies FundamentalSeries[],
       ocfSolo: [{ dataKey: "ocf", color: C.ocf, label: t("annual.ocf") }] satisfies FundamentalSeries[],
       fcfSolo: [{ dataKey: "fcf", color: C.fcf, label: t("annual.fcf") }] satisfies FundamentalSeries[],
       capexSolo: [{ dataKey: "capex", color: C.capex, label: t("annual.capex") }] satisfies FundamentalSeries[],
@@ -704,7 +841,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
       {empty ? (
         <p className="text-sm text-muted-foreground">{t("chartsFund.noRows")}</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FundamentalChartCard
             title={t("chartsFund.chartRevenue")}
             description={t("chartsFund.chartRevenueDesc")}
@@ -712,6 +849,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.revenue}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "revenue", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartGrossProfitSolo")}
@@ -720,6 +858,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.grossSolo}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "grossProfit", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartNetIncomeSolo")}
@@ -728,6 +867,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.netIncomeSolo}
             chartType="line"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "netIncome", freq, t)}
           />
           {hasDilutedEps ? (
             <FundamentalChartCard
@@ -737,6 +877,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.dilutedEpsSolo}
               chartType="line"
               valueFormat="perShare"
+              growthNote={growthFooterLine(chartRows, "dilutedEps", freq, t)}
             />
           ) : null}
           {hasDilutedShares ? (
@@ -747,8 +888,30 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.dilutedSharesSolo}
               chartType="line"
               valueFormat="compactCount"
+              growthNote={growthFooterLine(chartRows, "dilutedShares", freq, t)}
             />
           ) : null}
+          <FundamentalChartCard
+            title={t("chartsFund.chartPeTtm")}
+            description={t("chartsFund.chartPeTtmDesc")}
+            data={chartRows}
+            series={series.peTtm}
+            chartType="line"
+            valueFormat="ratio"
+            growthNote={growthFooterLine(chartRows, "peTtm", freq, t)}
+            valuationGemini={showValuationGemini}
+            onValuationGeminiRetry={runGeminiValuationFill}
+            valuationGeminiPending={geminiValuationBusy}
+          />
+          <FundamentalChartCard
+            title={t("chartsFund.chartPsTtm")}
+            description={t("chartsFund.chartPsTtmDesc")}
+            data={chartRows}
+            series={series.psTtm}
+            chartType="line"
+            valueFormat="ratio"
+            growthNote={growthFooterLine(chartRows, "psTtm", freq, t)}
+          />
           {hasOperatingIncome ? (
             <FundamentalChartCard
               title={t("chartsFund.chartOperatingIncomeSolo")}
@@ -757,6 +920,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.operatingIncomeSolo}
               chartType="line"
               valueFormat="currency"
+              growthNote={growthFooterLine(chartRows, "operatingIncome", freq, t)}
             />
           ) : null}
           <FundamentalChartCard
@@ -766,6 +930,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.opexSolo}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "operatingExpenses", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartMargins")}
@@ -774,6 +939,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.margins}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterMulti(chartRows, ["grossMargin", "operatingMargin", "netMargin"], freq, t)}
           />
           {hasEbitda ? (
             <FundamentalChartCard
@@ -783,6 +949,18 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.ebitdaNi}
               chartType="line"
               valueFormat="currency"
+              growthNote={growthFooterMulti(chartRows, ["ebitda", "netIncome"], freq, t)}
+            />
+          ) : null}
+          {hasEbitda ? (
+            <FundamentalChartCard
+              title={t("chartsFund.chartEbitdaSolo")}
+              description={t("chartsFund.chartEbitdaSoloDesc")}
+              data={chartRows}
+              series={series.ebitdaSolo}
+              chartType="bar"
+              valueFormat="currency"
+              growthNote={growthFooterLine(chartRows, "ebitda", freq, t)}
             />
           ) : null}
           <FundamentalChartCard
@@ -792,6 +970,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.ocfSolo}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "ocf", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartFcfSolo")}
@@ -800,6 +979,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.fcfSolo}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "fcf", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCapexSolo")}
@@ -808,6 +988,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.capexSolo}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterLine(chartRows, "capex", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartInvestFinance")}
@@ -816,6 +997,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.investFinance}
             chartType="bar"
             valueFormat="currency"
+            growthNote={growthFooterMulti(chartRows, ["investCf", "financeCf"], freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartBalance")}
@@ -824,6 +1006,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.balance3}
             chartType="line"
             valueFormat="currency"
+            growthNote={growthFooterMulti(chartRows, ["totalAssets", "totalDebt", "equity"], freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -835,6 +1018,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.cashDebt}
             chartType="line"
             valueFormat="currency"
+            growthNote={growthFooterMulti(chartRows, ["cash", "netDebt"], freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -846,6 +1030,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.roeRoa}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterMulti(chartRows, ["roe", "roa"], freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -857,6 +1042,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.currentRatio}
             chartType="line"
             valueFormat="ratio"
+            growthNote={growthFooterLine(chartRows, "currentRatio", freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -868,6 +1054,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.fcfMargin}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterLine(chartRows, "fcfMargin", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartPopGrowth")}
@@ -876,6 +1063,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.popGrowth}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterMulti(chartRows, ["revPopGrowth", "niPopGrowth"], freq, t)}
           />
           {hasShareholderFlows ? (
             <FundamentalChartCard
@@ -885,6 +1073,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.shareholder}
               chartType="bar"
               valueFormat="currency"
+              growthNote={growthFooterMulti(chartRows, ["dividendsPaidPos", "stockRepurchasePos"], freq, t)}
             />
           ) : null}
           {hasArInv ? (
@@ -895,6 +1084,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.arInv}
               chartType="line"
               valueFormat="currency"
+              growthNote={growthFooterMulti(chartRows, ["ar", "inventory"], freq, t)}
               geminiRetry={geminiRetry}
               onGeminiRetry={runGeminiBalanceFill}
               geminiRetryPending={geminiBusy}
@@ -908,6 +1098,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.gwLt}
               chartType="line"
               valueFormat="currency"
+              growthNote={growthFooterMulti(chartRows, ["goodwill", "longTermDebt"], freq, t)}
               geminiRetry={geminiRetry}
               onGeminiRetry={runGeminiBalanceFill}
               geminiRetryPending={geminiBusy}
@@ -921,6 +1112,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.ebitdaOcfMargin}
               chartType="line"
               valueFormat="percent"
+              growthNote={growthFooterMulti(chartRows, ["ebitdaMargin", "ocfMargin"], freq, t)}
             />
           ) : null}
           <FundamentalChartCard
@@ -930,6 +1122,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.debtPctCapital}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterLine(chartRows, "debtPctCapital", freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -942,6 +1135,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               series={series.netDebtEbitda}
               chartType="line"
               valueFormat="ratio"
+              growthNote={growthFooterLine(chartRows, "netDebtToEbitda", freq, t)}
               geminiRetry={geminiRetry}
               onGeminiRetry={runGeminiBalanceFill}
               geminiRetryPending={geminiBusy}
@@ -954,6 +1148,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.quickRatio}
             chartType="line"
             valueFormat="ratio"
+            growthNote={growthFooterLine(chartRows, "quickRatio", freq, t)}
             geminiRetry={geminiRetry}
             onGeminiRetry={runGeminiBalanceFill}
             geminiRetryPending={geminiBusy}
@@ -965,6 +1160,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             series={series.capexIntensity}
             chartType="line"
             valueFormat="percent"
+            growthNote={growthFooterLine(chartRows, "capexIntensity", freq, t)}
           />
         </div>
       )}

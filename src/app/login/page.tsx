@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export const metadata: Metadata = {
-  title: "Sign in · StockGauge",
+  title: "Sign in · Stelian Petrov",
   description: "Account sign-in — database and Google OAuth will be connected next.",
 };
 
