@@ -82,6 +82,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       couldNotLoad: "Could not load {symbol}",
       noData: "No data",
       searchValid: "Search for a valid ticker symbol.",
+      loadingSections: "Loading quote, history, and fundamentals…",
       subtitle: "Stock analysis · Yahoo Finance (via yahoo-finance2)",
       nextEarnings: "Next earnings",
       afterHours: "After hours",
@@ -300,6 +301,11 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCurrentRatioDesc: "Current assets / current liabilities.",
       chartMetricNoData:
         "No numeric values for this metric in the loaded series (Yahoo may omit line items for some filings).",
+      chartMetricNoDataDetail:
+        "Why: Yahoo’s fundamentalsTimeSeries often returns nulls for balance-sheet lines (IFRS vs US labels, period-end mismatches, or API gaps). Income and cash-flow may still load.",
+      loadAgainGemini: "Fill missing balance sheet (Gemini)",
+      loadAgainGeminiBusy: "Filling…",
+      geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
       chartFcfMargin: "FCF margin",
       chartFcfMarginDesc: "Free cash flow as % of revenue.",
       chartPopGrowth: "Period-over-period growth",
@@ -604,6 +610,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       couldNotLoad: "Неуспешно зареждане на {symbol}",
       noData: "Няма данни",
       searchValid: "Въведете валиден тикер.",
+      loadingSections: "Зареждане на котировка, история и фундаменти…",
       subtitle: "Анализ на акции · Yahoo Finance (yahoo-finance2)",
       nextEarnings: "Следващ отчет",
       afterHours: "След борсова сесия",
@@ -823,6 +830,11 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCurrentRatioDesc: "Текущи активи / текущи пасиви.",
       chartMetricNoData:
         "Няма числени стойности за тази метрика в заредената серия (Yahoo понякога не подава редове за част от отчетите).",
+      chartMetricNoDataDetail:
+        "Защо: fundamentalsTimeSeries на Yahoo често връща null за редове от баланс (IFRS срещу US етикети, разминаване на край на период или пропуски в API). Приходите и паричният поток може да са наред.",
+      loadAgainGemini: "Попълни липсващ баланс (Gemini)",
+      loadAgainGeminiBusy: "Попълване…",
+      geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",
       chartFcfMargin: "FCF маржа",
       chartFcfMarginDesc: "Свободен паричен поток като % от приходите.",
       chartPopGrowth: "Ръст спрямо предишен период",

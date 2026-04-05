@@ -17,12 +17,40 @@ type StockAnalysisViewProps = {
   ticker: string;
   bundle: StockAnalysisBundle | null;
   error: string | null;
+  loading?: boolean;
+  onBundleReplace?: (bundle: StockAnalysisBundle) => void;
 };
 
-export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewProps) {
+export function StockAnalysisView({
+  ticker,
+  bundle,
+  error,
+  loading = false,
+  onBundleReplace,
+}: StockAnalysisViewProps) {
   const { t } = useI18n();
   const symbol = ticker.trim().toUpperCase() || "AAPL";
   const errorText = error ? translateStockError(t, error) : null;
+
+  if (loading && !bundle) {
+    return (
+      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+        <div className="space-y-3 rounded-xl border border-white/10 bg-zinc-900/40 p-5 animate-pulse">
+          <div className="h-8 w-2/3 rounded bg-zinc-800" />
+          <div className="h-4 w-1/3 rounded bg-zinc-800/80" />
+          <div className="mt-4 h-24 rounded-lg bg-zinc-800/60" />
+        </div>
+        <div className="h-12 w-40 rounded-lg bg-zinc-800/70 animate-pulse" />
+        <div className="h-72 rounded-xl border border-white/5 bg-zinc-900/30 animate-pulse" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-56 rounded-xl border border-white/5 bg-zinc-900/25 animate-pulse" />
+          ))}
+        </div>
+        <p className="text-center text-sm text-muted-foreground">{t("stock.loadingSections")}</p>
+      </div>
+    );
+  }
 
   if (error && !bundle) {
     return (
@@ -55,7 +83,7 @@ export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewPr
       <StockAiSection symbol={symbol} />
 
       <StockMetricChart data={bundle} />
-      <FundamentalsChartsSection data={bundle} />
+      <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
       <DividendChartsSection data={bundle} />
       <IncomeStatementTable rows={income} />
       <AnnualFundamentalsSection data={bundle} />

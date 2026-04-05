@@ -62,7 +62,7 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6">
           {children}
         </main>
       </div>

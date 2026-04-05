@@ -13,7 +13,8 @@ import {
   YAxis,
 } from "recharts";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,10 @@ type FundamentalChartCardProps = {
   chartType: "bar" | "line";
   valueFormat: ValueFormat;
   className?: string;
+  /** Balance-sheet–heavy charts: offer Gemini fill when series are all null but periods exist. */
+  geminiRetry?: boolean;
+  onGeminiRetry?: () => void;
+  geminiRetryPending?: boolean;
 };
 
 function formatTooltipValue(fmt: ValueFormat, v: number): string {
@@ -97,6 +102,9 @@ export function FundamentalChartCard({
   chartType,
   valueFormat,
   className,
+  geminiRetry,
+  onGeminiRetry,
+  geminiRetryPending,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const manyTicks = data.length > 10;
@@ -213,11 +221,29 @@ export function FundamentalChartCard({
         {data.length === 0 ? (
           <p className="text-sm text-muted-foreground">—</p>
         ) : !hasPoints ? (
-          <p className="text-sm text-muted-foreground">{t("chartsFund.chartMetricNoData")}</p>
+          <div className="flex h-full flex-col gap-2">
+            <p className="text-sm text-muted-foreground">{t("chartsFund.chartMetricNoData")}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
+          </div>
         ) : (
           chart
         )}
       </CardContent>
+      {geminiRetry && !hasPoints && data.length > 0 && onGeminiRetry ? (
+        <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/40"
+            disabled={geminiRetryPending}
+            onClick={onGeminiRetry}
+          >
+            {geminiRetryPending ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadAgainGemini")}
+          </Button>
+          <p className="text-[10px] leading-snug text-muted-foreground">{t("chartsFund.geminiRetryDisclaimer")}</p>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

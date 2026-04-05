@@ -362,16 +362,16 @@ export function PortfolioClient() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t("portfolio.title")}</h1>
-          <p className="mt-2 max-w-3xl text-sm text-muted-foreground">{t("portfolio.subtitle")}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{t("portfolio.title")}</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("portfolio.subtitle")}</p>
         </div>
         <Button
           type="button"
           variant="outline"
-          className="shrink-0 border-white/15"
+          className="w-full shrink-0 border-white/15 sm:w-auto"
           onClick={() => void load()}
           disabled={loading}
           aria-busy={loading}
@@ -422,10 +422,10 @@ export function PortfolioClient() {
       ) : null}
 
       <Card className="border-white/10 bg-zinc-900/50">
-        <CardHeader>
-          <CardTitle>{t("portfolio.manualTitle")}</CardTitle>
+        <CardHeader className="space-y-1 pb-2 sm:pb-6">
+          <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
         </CardHeader>
-        <form onSubmit={onAddManual} className="grid gap-3 px-6 pb-6 sm:grid-cols-4">
+        <form onSubmit={onAddManual} className="grid grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
           <div className="grid gap-1.5">
             <Label htmlFor="m-sym">{t("portfolio.manualSymbol")}</Label>
             <Input
@@ -467,21 +467,23 @@ export function PortfolioClient() {
 
       {holdings.length > 0 ? (
         <Card className="border border-emerald-500/25 bg-emerald-950/25">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
-            <CardDescription>{t("portfolio.dividendSummaryHint")}</CardDescription>
+          <CardHeader className="space-y-1.5 px-4 pb-2 sm:px-6">
+            <CardTitle className="text-base leading-snug sm:text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
+            <CardDescription className="text-xs leading-relaxed sm:text-sm">
+              {t("portfolio.dividendSummaryHint")}
+            </CardDescription>
           </CardHeader>
-          <div className="px-6 pb-6">
+          <div className="px-4 pb-6 sm:px-6">
             {dividendTotalsByCurrency.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t("portfolio.dividendNoData")}</p>
             ) : (
-              <div className="flex flex-wrap gap-8">
+              <div className="flex flex-wrap gap-6 sm:gap-8">
                 {dividendTotalsByCurrency.map(([currency, sum]) => (
                   <div key={currency}>
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       {currency} · {t("portfolio.dividendPerYearLabel")}
                     </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-emerald-400">
+                    <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-emerald-400 sm:text-2xl">
                       {fmtMoney(sum, currency)}
                     </p>
                   </div>
@@ -505,37 +507,47 @@ export function PortfolioClient() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-white/10">
-          <Table>
+        <div className="-mx-4 rounded-lg border border-white/10 sm:mx-0">
+          <Table className="min-w-[36rem] sm:min-w-[44rem] md:min-w-full">
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead>{t("portfolio.colSource")}</TableHead>
+                <TableHead className="hidden lg:table-cell">{t("portfolio.colSource")}</TableHead>
                 <TableHead>{t("portfolio.colSymbol")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colQty")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colAvg")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colPrice")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colValue")}</TableHead>
-                <TableHead className="text-right">{t("portfolio.colCost")}</TableHead>
+                <TableHead className="hidden text-right md:table-cell">{t("portfolio.colCost")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colPl")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colPlPct")}</TableHead>
-                <TableHead className="text-right">{t("portfolio.colDivYld")}</TableHead>
-                <TableHead className="text-right">{t("portfolio.colExpDiv")}</TableHead>
-                <TableHead className="w-[120px]" />
+                <TableHead className="hidden text-right md:table-cell">{t("portfolio.colDivYld")}</TableHead>
+                <TableHead className="hidden text-right md:table-cell">{t("portfolio.colExpDiv")}</TableHead>
+                <TableHead className="w-[100px] sm:w-[120px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map(({ h, q, qQty, mv, cost, pl, plPct, estAnnual }) => (
                 <TableRow key={h.id} className="border-white/10">
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden text-muted-foreground lg:table-cell">
                     {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                   </TableCell>
                   <TableCell className="font-medium">
-                    <Link href={`/stock/${encodeURIComponent(h.symbolYahoo)}`} className="text-emerald-400 hover:underline">
-                      {h.symbolYahoo}
-                    </Link>
-                    {h.symbolT212 ? (
-                      <span className="ml-1 text-xs text-muted-foreground">({h.symbolT212})</span>
-                    ) : null}
+                    <div className="flex min-w-0 max-w-[11rem] flex-col gap-0.5 sm:max-w-none">
+                      <span>
+                        <Link
+                          href={`/stock/${encodeURIComponent(h.symbolYahoo)}`}
+                          className="text-emerald-400 hover:underline"
+                        >
+                          {h.symbolYahoo}
+                        </Link>
+                        {h.symbolT212 ? (
+                          <span className="ml-1 text-xs text-muted-foreground">({h.symbolT212})</span>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground lg:hidden">
+                        {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {editingId === h.id ? (
@@ -563,7 +575,9 @@ export function PortfolioClient() {
                     {q ? fmtMoney(q.price, q.currency) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{fmtMoney(mv, h.currency)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtMoney(cost, h.currency)}</TableCell>
+                  <TableCell className="hidden text-right tabular-nums md:table-cell">
+                    {fmtMoney(cost, h.currency)}
+                  </TableCell>
                   <TableCell
                     className={cn(
                       "text-right tabular-nums",
@@ -580,10 +594,10 @@ export function PortfolioClient() {
                   >
                     {formatPercent(plPct)}
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="hidden text-right text-muted-foreground md:table-cell">
                     {q?.dividendYield != null ? formatDecimalAsPercent(q.dividendYield) : "—"}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                  <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
                     {estAnnual != null ? fmtMoney(estAnnual, h.currency) : "—"}
                   </TableCell>
                   <TableCell>
@@ -634,14 +648,14 @@ export function PortfolioClient() {
       )}
 
       <details className="group rounded-xl border border-white/10 bg-zinc-900/50 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-6 py-4 text-left text-base font-medium tracking-tight text-foreground hover:bg-white/5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-white/5 sm:px-6 sm:py-4 sm:text-base">
           <span>{t("portfolio.t212Title")}</span>
           <ChevronDown
             className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
             aria-hidden
           />
         </summary>
-        <div className="space-y-4 border-t border-white/10 px-6 pb-6 pt-2">
+        <div className="space-y-4 border-t border-white/10 px-4 pb-6 pt-2 sm:px-6">
           <p className="text-sm text-muted-foreground">
             {t("portfolio.t212Desc")}{" "}
             <a

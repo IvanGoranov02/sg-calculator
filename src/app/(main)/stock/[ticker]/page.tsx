@@ -1,5 +1,4 @@
-import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
-import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
+import { StockAnalysisPageClient } from "@/components/stock/StockAnalysisPageClient";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +9,6 @@ type PageProps = {
 export default async function StockTickerPage({ params }: PageProps) {
   const { ticker: raw } = await params;
   const ticker = raw?.trim() || "AAPL";
-  const { bundle, error } = await loadStockAnalysis(ticker);
 
-  return <StockAnalysisView ticker={ticker} bundle={bundle} error={error} />;
+  return <StockAnalysisPageClient ticker={ticker} />;
 }

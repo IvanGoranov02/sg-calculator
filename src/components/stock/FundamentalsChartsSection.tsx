@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { safePct, safeRatio } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
@@ -278,10 +279,33 @@ function enrichPopGrowth(rows: Row[]): Row[] {
 
 type FundamentalsChartsSectionProps = {
   data: StockAnalysisBundle;
+  symbol: string;
+  onBundleReplace?: (bundle: StockAnalysisBundle) => void;
 };
 
-export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionProps) {
+export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
+  const [geminiBusy, setGeminiBusy] = useState(false);
+
+  const runGeminiBalanceFill = useCallback(async () => {
+    if (!onBundleReplace) return;
+    setGeminiBusy(true);
+    try {
+      const res = await fetch("/api/stock/gemini-balance-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: symbol, bundle: data }),
+      });
+      const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle; error?: string };
+      if (j.bundle && j.ok) {
+        onBundleReplace(j.bundle);
+      }
+    } finally {
+      setGeminiBusy(false);
+    }
+  }, [onBundleReplace, symbol, data]);
+
+  const geminiRetry = Boolean(onBundleReplace);
   const [freq, setFreq] = useState<Freq>("quarterly");
   const [timeRange, setTimeRange] = useState<ChartTimeRange>("3y");
   const [customFromYear, setCustomFromYear] = useState<number | null>(null);
@@ -519,6 +543,7 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
           <div className="min-w-0">
             <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
+            <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
           </div>
           <div className="flex w-full max-w-xl flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end lg:max-w-2xl lg:justify-end">
             <div className="flex min-w-0 flex-col gap-1.5">
@@ -769,6 +794,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.balance3}
             chartType="line"
             valueFormat="currency"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCashNetDebt")}
@@ -777,6 +805,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.cashDebt}
             chartType="line"
             valueFormat="currency"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartRoeRoa")}
@@ -785,6 +816,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.roeRoa}
             chartType="line"
             valueFormat="percent"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCurrentRatio")}
@@ -793,6 +827,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.currentRatio}
             chartType="line"
             valueFormat="ratio"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartFcfMargin")}
@@ -828,6 +865,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
               series={series.arInv}
               chartType="line"
               valueFormat="currency"
+              geminiRetry={geminiRetry}
+              onGeminiRetry={runGeminiBalanceFill}
+              geminiRetryPending={geminiBusy}
             />
           ) : null}
           {hasGwLt ? (
@@ -838,6 +878,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
               series={series.gwLt}
               chartType="line"
               valueFormat="currency"
+              geminiRetry={geminiRetry}
+              onGeminiRetry={runGeminiBalanceFill}
+              geminiRetryPending={geminiBusy}
             />
           ) : null}
           {hasEbitdaOcfMargins ? (
@@ -857,6 +900,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.debtPctCapital}
             chartType="line"
             valueFormat="percent"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           {hasNetDebtEbitda ? (
             <FundamentalChartCard
@@ -866,6 +912,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
               series={series.netDebtEbitda}
               chartType="line"
               valueFormat="ratio"
+              geminiRetry={geminiRetry}
+              onGeminiRetry={runGeminiBalanceFill}
+              geminiRetryPending={geminiBusy}
             />
           ) : null}
           <FundamentalChartCard
@@ -875,6 +924,9 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             series={series.quickRatio}
             chartType="line"
             valueFormat="ratio"
+            geminiRetry={geminiRetry}
+            onGeminiRetry={runGeminiBalanceFill}
+            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCapexIntensity")}
