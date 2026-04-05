@@ -344,12 +344,31 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
     };
   }, [baseRows, yearOptions]);
 
+  /** Inclusive calendar-year span of distinct period-end years (matches x-axis density, not Yahoo depth). */
+  const loadedCalendarYearSpan = useMemo(() => {
+    if (yearOptions.length === 0) return 0;
+    return yearOptions[yearOptions.length - 1] - yearOptions[0] + 1;
+  }, [yearOptions]);
+
+  const presetYearsRequested: number | null =
+    timeRange === "all" || timeRange === "custom"
+      ? null
+      : ({ "1y": 1, "3y": 3, "5y": 5, "10y": 10 } as const)[timeRange];
+
   /** Preset (1y–10y) did not remove any rows — chart matches “All history”. */
   const presetMatchesAllLoaded =
     chartRows.length > 0 &&
     timeRange !== "all" &&
     timeRange !== "custom" &&
     chartRows.length === baseRows.length;
+
+  /** User asked for a longer calendar window than distinct years in the loaded series (e.g. “10y” but only FY 2022–2025). */
+  const showPresetShorterThanRequested =
+    Boolean(loadedMeta) &&
+    presetMatchesAllLoaded &&
+    presetYearsRequested != null &&
+    loadedCalendarYearSpan > 0 &&
+    presetYearsRequested > loadedCalendarYearSpan;
 
   const showFilterCount =
     chartRows.length > 0 &&
@@ -601,7 +620,18 @@ export function FundamentalsChartsSection({ data }: FundamentalsChartsSectionPro
             })}
           </p>
         ) : null}
-        {presetMatchesAllLoaded ? (
+        {showPresetShorterThanRequested && loadedMeta ? (
+          <p className="mt-1 text-xs text-amber-200/85">
+            {t("chartsFund.filterPresetShorterThanRequested", {
+              presetYears: presetYearsRequested!,
+              n: loadedMeta.n,
+              unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),
+              fromYear: loadedMeta.fromY,
+              toYear: loadedMeta.toY,
+              loadedSpanYears: loadedCalendarYearSpan,
+            })}
+          </p>
+        ) : presetMatchesAllLoaded ? (
           <p className="mt-1 text-xs text-amber-200/85">
             {t("chartsFund.filterPresetNoNarrow")}
           </p>

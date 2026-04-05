@@ -36,14 +36,56 @@ model Session {
 }
 
 model User {
-  id               String             @id @default(cuid())
-  name             String?
-  email            String?            @unique
-  emailVerified    DateTime?
-  image            String?
-  accounts         Account[]
-  sessions         Session[]
-  watchlistSymbols WatchlistSymbol[]
+  id                    String                 @id @default(cuid())
+  name                  String?
+  email                 String?                @unique
+  emailVerified         DateTime?
+  image                 String?
+  accounts              Account[]
+  sessions              Session[]
+  watchlistSymbols      WatchlistSymbol[]
+  trading212Connection  Trading212Connection?
+  portfolioHoldings     PortfolioHolding[]
+}
+
+enum Trading212Environment {
+  demo
+  live
+}
+
+enum PortfolioHoldingSource {
+  manual
+  t212
+}
+
+model Trading212Connection {
+  id           String                  @id @default(cuid())
+  userId       String                  @unique
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  environment  Trading212Environment   @default(demo)
+  apiKeyEnc    String                  @db.Text
+  apiSecretEnc String                  @db.Text
+  lastSyncAt   DateTime?
+  lastError    String?                 @db.Text
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+}
+
+model PortfolioHolding {
+  id          String                 @id @default(cuid())
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbolYahoo String
+  symbolT212  String?
+  quantity    Decimal                @db.Decimal(20, 8)
+  avgPrice    Decimal                @db.Decimal(20, 8)
+  currency    String                 @default("USD")
+  source      PortfolioHoldingSource
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([userId, symbolYahoo, source])
+  @@index([userId])
 }
 
 model VerificationToken {

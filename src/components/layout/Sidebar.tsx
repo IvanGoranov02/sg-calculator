@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Briefcase,
   Calculator,
   ChevronRight,
   LayoutDashboard,
@@ -29,6 +30,7 @@ const nav = [
   { href: "/stock/AAPL", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
   { href: "/dcf-calculator", labelKey: "nav.dcfCalculator" as const, icon: Calculator },
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
+  { href: "/portfolio", labelKey: "nav.portfolio" as const, icon: Briefcase },
 ];
 
 export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNavigate }: SidebarProps) {
