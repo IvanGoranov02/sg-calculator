@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "prisma generate && prisma migrate deploy && next build",
-    "build:skip-migrate": "prisma generate && next build",
+    "build": "prisma generate && prisma db push && next build",
+    "build:skip-db": "prisma generate && next build",
+    "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
