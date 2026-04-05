@@ -306,6 +306,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadAgainGemini: "Fill missing balance sheet (Gemini)",
       loadAgainGeminiBusy: "Filling…",
       geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
+      geminiFillNoChange:
+        "Gemini did not add values (missing API key, parse error, or nothing to fill). Balance-sheet gaps need inventory for quick ratio; dividend gaps need quarterly DPS for TTM.",
       chartFcfMargin: "FCF margin",
       chartFcfMarginDesc: "Free cash flow as % of revenue.",
       chartPopGrowth: "Period-over-period growth",
@@ -835,6 +837,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadAgainGemini: "Попълни липсващ баланс (Gemini)",
       loadAgainGeminiBusy: "Попълване…",
       geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",
+      geminiFillNoChange:
+        "Gemini не добави стойности (липсва ключ, грешка при отговор или няма какво да се попълни). За quick ratio са нужни запаси (inventory); за TTM дивидент — тримесечен DPS.",
       chartFcfMargin: "FCF маржа",
       chartFcfMarginDesc: "Свободен паричен поток като % от приходите.",
       chartPopGrowth: "Ръст спрямо предишен период",

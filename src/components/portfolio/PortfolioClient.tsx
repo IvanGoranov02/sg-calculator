@@ -307,16 +307,16 @@ export function PortfolioClient() {
       const q = quotes[h.symbolYahoo];
       const qQty = Number(h.quantity);
       const qAvg = Number(h.avgPrice);
-      const price = q?.price ?? 0;
-      const mv = price * qQty;
+      const hasValidQuote = q != null && Number.isFinite(q.price) && q.price > 0;
+      const mv = hasValidQuote ? q.price * qQty : null;
       const cost = qAvg * qQty;
-      const pl = mv - cost;
-      const plPct = cost > 0 ? (pl / cost) * 100 : 0;
+      const pl = mv != null ? mv - cost : null;
+      const plPct = cost > 0 && pl != null ? (pl / cost) * 100 : null;
       let estAnnual: number | null = null;
-      if (q) {
+      if (hasValidQuote && q) {
         if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
           estAnnual = q.dividendRate * qQty;
-        } else if (q.dividendYield != null && Number.isFinite(q.dividendYield) && mv > 0) {
+        } else if (q.dividendYield != null && Number.isFinite(q.dividendYield) && mv != null && mv > 0) {
           estAnnual = mv * q.dividendYield;
         }
       }
@@ -535,7 +535,7 @@ export function PortfolioClient() {
                     <div className="flex min-w-0 max-w-[11rem] flex-col gap-0.5 sm:max-w-none">
                       <span>
                         <Link
-                          href={`/stock/${encodeURIComponent(h.symbolYahoo)}`}
+                          href={`/stock/${encodeURIComponent(q?.resolvedYahooSymbol ?? h.symbolYahoo)}`}
                           className="text-emerald-400 hover:underline"
                         >
                           {h.symbolYahoo}
@@ -572,27 +572,35 @@ export function PortfolioClient() {
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {q ? fmtMoney(q.price, q.currency) : t("portfolio.quoteMissing")}
+                    {q && Number.isFinite(q.price) && q.price > 0
+                      ? fmtMoney(q.price, q.currency)
+                      : t("portfolio.quoteMissing")}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtMoney(mv, h.currency)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {mv != null ? fmtMoney(mv, h.currency) : t("portfolio.quoteMissing")}
+                  </TableCell>
                   <TableCell className="hidden text-right tabular-nums md:table-cell">
                     {fmtMoney(cost, h.currency)}
                   </TableCell>
                   <TableCell
                     className={cn(
                       "text-right tabular-nums",
-                      pl > 0 ? "text-emerald-400" : pl < 0 ? "text-red-400" : "",
+                      pl != null && pl > 0 ? "text-emerald-400" : pl != null && pl < 0 ? "text-red-400" : "",
                     )}
                   >
-                    {fmtMoney(pl, h.currency)}
+                    {pl != null ? fmtMoney(pl, h.currency) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell
                     className={cn(
                       "text-right tabular-nums",
-                      plPct > 0 ? "text-emerald-400" : plPct < 0 ? "text-red-400" : "",
+                      plPct != null && plPct > 0
+                        ? "text-emerald-400"
+                        : plPct != null && plPct < 0
+                          ? "text-red-400"
+                          : "",
                     )}
                   >
-                    {formatPercent(plPct)}
+                    {plPct != null ? formatPercent(plPct) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="hidden text-right text-muted-foreground md:table-cell">
                     {q?.dividendYield != null ? formatDecimalAsPercent(q.dividendYield) : "—"}

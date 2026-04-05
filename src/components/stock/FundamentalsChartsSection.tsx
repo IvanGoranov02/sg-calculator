@@ -286,24 +286,7 @@ type FundamentalsChartsSectionProps = {
 export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
   const [geminiBusy, setGeminiBusy] = useState(false);
-
-  const runGeminiBalanceFill = useCallback(async () => {
-    if (!onBundleReplace) return;
-    setGeminiBusy(true);
-    try {
-      const res = await fetch("/api/stock/gemini-balance-fill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: symbol, bundle: data }),
-      });
-      const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle; error?: string };
-      if (j.bundle && j.ok) {
-        onBundleReplace(j.bundle);
-      }
-    } finally {
-      setGeminiBusy(false);
-    }
-  }, [onBundleReplace, symbol, data]);
+  const [geminiFillHint, setGeminiFillHint] = useState<string | null>(null);
 
   const geminiRetry = Boolean(onBundleReplace);
   const [freq, setFreq] = useState<Freq>("quarterly");
@@ -354,6 +337,39 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
     const y = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
     return filterByCalendarYears(baseRows, y);
   }, [baseRows, timeRange, customFromYear, customToYear]);
+
+  const runGeminiBalanceFill = useCallback(async () => {
+    if (!onBundleReplace) return;
+    setGeminiBusy(true);
+    setGeminiFillHint(null);
+    try {
+      const focusPeriodEnds = filteredBaseRows
+        .map((r) => (typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : null))
+        .filter((x): x is string => Boolean(x));
+      const res = await fetch("/api/stock/gemini-balance-fill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: symbol,
+          bundle: data,
+          ...(focusPeriodEnds.length > 0 ? { focusPeriodEnds } : {}),
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle; error?: string };
+      if (!res.ok) {
+        setGeminiFillHint(j.error ?? t("chartsFund.geminiFillNoChange"));
+        return;
+      }
+      if (j.bundle && j.ok) {
+        onBundleReplace(j.bundle);
+        setGeminiFillHint(null);
+      } else {
+        setGeminiFillHint(j.error ?? t("chartsFund.geminiFillNoChange"));
+      }
+    } finally {
+      setGeminiBusy(false);
+    }
+  }, [onBundleReplace, symbol, data, filteredBaseRows, t]);
 
   const rows = useMemo(() => enrichPopGrowth(filteredBaseRows), [filteredBaseRows]);
 
@@ -544,6 +560,11 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
             <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
+            {geminiFillHint ? (
+              <p className="mt-2 text-xs text-amber-400/95" role="status">
+                {geminiFillHint}
+              </p>
+            ) : null}
           </div>
           <div className="flex w-full max-w-xl flex-col gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-end lg:max-w-2xl lg:justify-end">
             <div className="flex min-w-0 flex-col gap-1.5">
