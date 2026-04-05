@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import YahooFinance from "yahoo-finance2";
 import { NextResponse } from "next/server";
 
+import { geminiGenerateText, getGeminiApiKey } from "@/lib/geminiClient";
 import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
 
 export const maxDuration = 60;
@@ -9,10 +10,12 @@ export const maxDuration = 60;
 const yahooFinance = new YahooFinance();
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey?.trim()) {
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  const geminiKey = getGeminiApiKey();
+
+  if (!openaiKey && !geminiKey) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY is not configured." },
+      { error: "Configure OPENAI_API_KEY or GEMINI_API_KEY for AI analysis." },
       { status: 503 },
     );
   }
@@ -83,21 +86,47 @@ Respond in markdown ONLY with this exact structure:
 
 Use English. One short sentence per bullet. No extra sections.`;
 
-  try {
-    const openai = new OpenAI({ apiKey });
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 600,
-      temperature: 0.35,
-    });
-    const text = completion.choices[0]?.message?.content?.trim() ?? "";
-    if (!text) {
-      return NextResponse.json({ error: "Empty model response." }, { status: 502 });
+  if (openaiKey) {
+    try {
+      const openai = new OpenAI({ apiKey: openaiKey });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 600,
+        temperature: 0.35,
+      });
+      const text = completion.choices[0]?.message?.content?.trim() ?? "";
+      if (!text) {
+        return NextResponse.json({ error: "Empty model response." }, { status: 502 });
+      }
+      return NextResponse.json({ markdown: text, provider: "openai" as const });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "OpenAI request failed.";
+      if (!geminiKey) {
+        return NextResponse.json({ error: msg }, { status: 502 });
+      }
+      /* fall through to Gemini */
     }
-    return NextResponse.json({ markdown: text });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "OpenAI request failed.";
-    return NextResponse.json({ error: msg }, { status: 502 });
   }
+
+  const g = await geminiGenerateText({
+    prompt,
+    maxOutputTokens: 800,
+    temperature: 0.35,
+    timeoutMs: 55_000,
+  });
+
+  if (!g.ok) {
+    const err =
+      g.error === "http"
+        ? `Gemini error${g.status != null ? ` (${g.status})` : ""}.`
+        : g.error === "network"
+          ? "Gemini request failed (network)."
+          : g.error === "empty"
+            ? "Empty Gemini response."
+            : "Gemini is not configured.";
+    return NextResponse.json({ error: err }, { status: 502 });
+  }
+
+  return NextResponse.json({ markdown: g.text, provider: "gemini" as const });
 }

@@ -6,6 +6,8 @@
 import YahooFinance from "yahoo-finance2";
 
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
+import { applyGeminiFundamentalGaps } from "@/lib/geminiFundamentalsGapFill";
+import { fetchSecQuarterlyFundamentals } from "@/lib/secQuarterlyIncome";
 import {
   isEmptyIncomeStatementCore,
   type BalanceSheetAnnual,
@@ -453,6 +455,60 @@ type CfRow = {
 
 const DAILY_HISTORY_START = "1990-01-01";
 
+const NEAREST_QUARTER_CF_DAYS = 75;
+
+function quarterDaysApart(a: string, b: string): number {
+  return Math.abs(
+    (new Date(`${a}T12:00:00Z`).getTime() - new Date(`${b}T12:00:00Z`).getTime()) / 86400000,
+  );
+}
+
+function nearestDividendMatch(
+  target: string,
+  oldIncome: IncomeStatementQuarter[],
+  oldDiv: DividendQuarterlyPoint[],
+  maxDays: number,
+): number | null {
+  let bestIdx = -1;
+  let bestD = maxDays + 1;
+  for (let i = 0; i < oldIncome.length; i++) {
+    const d = quarterDaysApart(target, oldIncome[i].date.slice(0, 10));
+    if (d < bestD) {
+      bestD = d;
+      bestIdx = i;
+    }
+  }
+  if (bestIdx < 0 || bestD > maxDays) return null;
+  const v = oldDiv[bestIdx]?.dividendPerShare;
+  return v != null && Number.isFinite(v) ? v : null;
+}
+
+/** Replace Yahoo short quarterly windows with SEC 10-Q + derived Q4 when SEC has more history. */
+async function enrichQuarterlyFromSecWhenDeep(sym: string, bundle: StockAnalysisBundle): Promise<void> {
+  let sec: Awaited<ReturnType<typeof fetchSecQuarterlyFundamentals>> = null;
+  try {
+    sec = await fetchSecQuarterlyFundamentals(sym);
+  } catch {
+    return;
+  }
+  if (!sec?.income.length) return;
+
+  if (sec.income.length <= bundle.incomeQuarterly.length) return;
+
+  const oldInc = bundle.incomeQuarterly;
+  const oldDiv = bundle.dividendQuarterly;
+
+  bundle.incomeQuarterly = sec.income;
+  bundle.cashFlowQuarterly = sec.cashFlow;
+  bundle.balanceSheetQuarterly = sec.balanceSheet;
+
+  bundle.dividendQuarterly = sec.income.map((row) => ({
+    date: row.date,
+    dividendPerShare: nearestDividendMatch(row.date.slice(0, 10), oldInc, oldDiv, NEAREST_QUARTER_CF_DAYS),
+  }));
+
+}
+
 export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<StockAnalysisBundle> {
   const sym = await resolveYahooSymbol(symbol);
   const period2 = new Date();
@@ -769,7 +825,7 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     if (intraday.length === 0) intraday = undefined;
   }
 
-  return {
+  const bundle: StockAnalysisBundle = {
     quote,
     income,
     cashFlow,
@@ -782,4 +838,9 @@ export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<Stock
     intraday,
     investor,
   };
+
+  await enrichQuarterlyFromSecWhenDeep(sym, bundle);
+  await applyGeminiFundamentalGaps(sym, bundle);
+
+  return bundle;
 }

@@ -5,7 +5,7 @@ import { DividendChartsSection } from "@/components/stock/DividendChartsSection"
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
-// import { StockAiSection } from "@/components/stock/StockAiSection"; // optional: set OPENAI_API_KEY and re-enable
+import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +51,8 @@ export function StockAnalysisView({ ticker, bundle, error }: StockAnalysisViewPr
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8">
       <StockLiveHeader quote={quote} />
+
+      <StockAiSection symbol={symbol} />
 
       <StockMetricChart data={bundle} />
       <FundamentalsChartsSection data={bundle} />

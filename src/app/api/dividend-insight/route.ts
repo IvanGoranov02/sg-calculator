@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+
 /**
  * Short Gemini context when Yahoo quarterly DPS is missing in the UI.
- * @see https://ai.google.dev/gemini-api/docs
- * Default model: gemini-3.1-flash-lite-preview (fast / cost-efficient; override with GEMINI_MODEL).
- * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-preview
+ * @see https://ai.google.dev/gemini-api/docs — model via GEMINI_MODEL (see defaultGeminiModel).
  */
 export async function GET(req: Request) {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
     return NextResponse.json({ ok: false, error: "no_key" as const }, { status: 503 });
   }
@@ -33,8 +33,7 @@ Yahoo snapshot annual dividend rate per share (if any): ${divRate || "unknown"}
 
 Write 2–4 short sentences in ${lang}. Explain plausible reasons the app may show no per-quarter DPS (timing, irregular/special dividends, sector patterns, REIT/MLP quirks, fiscal vs calendar alignment, API gaps). If the company is widely known for a clear dividend policy, you may mention it in general terms only — do NOT invent exact amounts, dates, or yields. End with one sentence that this is general information, not investment advice.`;
 
-  const model =
-    process.env.GEMINI_MODEL?.trim() || "gemini-3.1-flash-lite-preview";
+  const model = defaultGeminiModel();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   let res: Response;
