@@ -439,6 +439,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       syncNetworkError: "Network error during Trading 212 sync. Try again.",
       syncNeededHint:
         "Trading 212 is connected, but positions are not imported yet. Click Sync positions — or use Save again after connecting (we run sync automatically after a successful save). If you see 403, check API key IP allowlist in Trading 212 (Vercel must be allowed, or leave IPs unrestricted).",
+      syncSkippedManual:
+        "Broker sync did not import rows for symbols you already track manually (one row per ticker): {symbols}.",
+      manualReplacedBroker:
+        "That symbol was imported from Trading 212; your manual entry replaced the broker row for this ticker only.",
       envLabel: "Environment",
       envDemo: "Demo (paper)",
       envLive: "Live",
@@ -960,6 +964,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       syncNetworkError: "Мрежова грешка при синхронизация с Trading 212. Опитай отново.",
       syncNeededHint:
         "Връзката с Trading 212 е запазена, но позициите още не са импортирани. Натисни „Синхронизирай позиции“ — или запази отново след свързване (след успешен запис пускаме синхронизация автоматично). При 403 провери IP ограниченията на API ключа в Trading 212 (трябва да е позволен сървърът/Vercel, или без ограничение).",
+      syncSkippedManual:
+        "Синхронизацията не импортира символи, които вече следиш ръчно (един ред на тикер): {symbols}.",
+      manualReplacedBroker:
+        "Този символ беше от Trading 212; ръчният запис замени брокерския ред само за този тикер.",
       envLabel: "Среда",
       envDemo: "Демо (paper)",
       envLive: "Реална",

@@ -49,16 +49,45 @@ export async function POST(request: Request) {
       : "USD";
 
   try {
-    const row = await prisma.portfolioHolding.create({
-      data: {
-        userId,
-        symbolYahoo,
-        symbolT212: null,
-        quantity,
-        avgPrice,
-        currency,
-        source: "manual",
-      },
+    const existingManual = await prisma.portfolioHolding.findFirst({
+      where: { userId, symbolYahoo, source: "manual" },
+    });
+    if (existingManual) {
+      return Response.json(
+        { error: "You already have a manual row for this symbol" },
+        { status: 409 },
+      );
+    }
+
+    const { row, replacedBrokerRow } = await prisma.$transaction(async (tx) => {
+      const brokerRow = await tx.portfolioHolding.findFirst({
+        where: { userId, symbolYahoo, source: "t212" },
+      });
+      if (brokerRow) {
+        const updated = await tx.portfolioHolding.update({
+          where: { id: brokerRow.id },
+          data: {
+            source: "manual",
+            symbolT212: null,
+            quantity,
+            avgPrice,
+            currency,
+          },
+        });
+        return { row: updated, replacedBrokerRow: true };
+      }
+      const created = await tx.portfolioHolding.create({
+        data: {
+          userId,
+          symbolYahoo,
+          symbolT212: null,
+          quantity,
+          avgPrice,
+          currency,
+          source: "manual",
+        },
+      });
+      return { row: created, replacedBrokerRow: false };
     });
 
     return Response.json({
@@ -70,6 +99,7 @@ export async function POST(request: Request) {
       currency: row.currency,
       source: row.source,
       updatedAt: row.updatedAt.toISOString(),
+      replacedBrokerRow,
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

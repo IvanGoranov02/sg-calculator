@@ -49,10 +49,17 @@ export async function POST() {
   }
 
   try {
-    const [positions, summary] = await Promise.all([
+    const [positions, summary, manualSymbolsRows] = await Promise.all([
       fetchT212Positions(conn.environment, apiKey, apiSecret),
       fetchT212AccountSummary(conn.environment, apiKey, apiSecret),
+      prisma.portfolioHolding.findMany({
+        where: { userId, source: "manual" },
+        select: { symbolYahoo: true },
+      }),
     ]);
+
+    const manualSymbols = new Set(manualSymbolsRows.map((r) => r.symbolYahoo));
+    const skippedDueToManual: string[] = [];
 
     const rows: Prisma.PortfolioHoldingCreateManyInput[] = [];
     for (const p of positions) {
@@ -61,6 +68,10 @@ export async function POST() {
       const ticker = p.instrument?.ticker;
       if (!ticker) continue;
       const yahoo = t212TickerToYahoo(ticker);
+      if (manualSymbols.has(yahoo)) {
+        if (!skippedDueToManual.includes(yahoo)) skippedDueToManual.push(yahoo);
+        continue;
+      }
       const avg = Number(p.averagePricePaid ?? 0);
       const cur = p.instrument?.currency ?? summary?.currency ?? "USD";
       rows.push({
@@ -77,7 +88,11 @@ export async function POST() {
     await prisma.$transaction(async (tx) => {
       await tx.portfolioHolding.deleteMany({ where: { userId, source: "t212" } });
       if (rows.length > 0) {
-        await tx.portfolioHolding.createMany({ data: rows });
+        const bySymbol = new Map<string, (typeof rows)[0]>();
+        for (const r of rows) {
+          bySymbol.set(r.symbolYahoo, r);
+        }
+        await tx.portfolioHolding.createMany({ data: [...bySymbol.values()] });
       }
       await tx.trading212Connection.update({
         where: { userId },
@@ -91,6 +106,7 @@ export async function POST() {
     return Response.json({
       ok: true,
       positionsSynced: rows.length,
+      skippedDueToManual,
       accountCurrency: summary?.currency ?? null,
       totalValue: summary?.totalValue ?? null,
     });

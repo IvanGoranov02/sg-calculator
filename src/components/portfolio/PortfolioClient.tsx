@@ -71,6 +71,9 @@ export function PortfolioClient() {
   const [editAvg, setEditAvg] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  /** Non-error info (e.g. per-symbol sync skip or manual replacing broker row). */
+  const [portfolioInfo, setPortfolioInfo] = useState<string | null>(null);
+
   const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);
     if (opts?.clearPageError !== false) {
@@ -141,15 +144,19 @@ export function PortfolioClient() {
   const runSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     setError(null);
+    setPortfolioInfo(null);
     try {
       const res = await fetch("/api/trading212/sync", { method: "POST" });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; skippedDueToManual?: string[] };
       if (!res.ok) {
         setError(data.error ?? "Sync failed");
         await load({ clearPageError: false });
         return false;
       }
       await load();
+      if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
+        setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
+      }
       return true;
     } catch {
       setError(t("portfolio.syncNetworkError"));
@@ -233,13 +240,14 @@ export function PortfolioClient() {
     const s = sym.trim().toUpperCase();
     if (!s || !qty || !avg) return;
     setAdding(true);
+    setPortfolioInfo(null);
     try {
       const res = await fetch("/api/portfolio/holdings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbolYahoo: s, quantity: qty, avgPrice: avg }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; replacedBrokerRow?: boolean };
       if (!res.ok) {
         setError(data.error ?? "Add failed");
         return;
@@ -248,6 +256,9 @@ export function PortfolioClient() {
       setQty("");
       setAvg("");
       await load();
+      if (data.replacedBrokerRow) {
+        setPortfolioInfo(t("portfolio.manualReplacedBroker"));
+      }
     } finally {
       setAdding(false);
     }
@@ -373,6 +384,12 @@ export function PortfolioClient() {
       {error ? (
         <p id="portfolio-page-error" className="text-sm text-red-400" role="alert">
           {error}
+        </p>
+      ) : null}
+
+      {portfolioInfo ? (
+        <p className="text-sm text-emerald-400/90" role="status">
+          {portfolioInfo}
         </p>
       ) : null}
 
