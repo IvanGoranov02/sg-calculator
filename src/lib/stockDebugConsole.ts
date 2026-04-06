@@ -10,19 +10,34 @@ declare global {
   }
 }
 
-/** `true` in development, or when URL has `?stockDebug=1`. */
+const STOCK_DEBUG_LS = "stockDebug";
+
+/**
+ * Stock bundle / fundamentals console logging.
+ * On: local dev (`next dev`), or production when any of:
+ * - `NEXT_PUBLIC_STOCK_DEBUG=1` (e.g. Vercel env),
+ * - URL query `?stockDebug=1`,
+ * - `localStorage.setItem("stockDebug", "1")` then reload.
+ */
 export function isStockBundleDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   if (process.env.NODE_ENV === "development") return true;
+  if (process.env.NEXT_PUBLIC_STOCK_DEBUG === "1") return true;
   try {
-    return new URLSearchParams(window.location.search).get("stockDebug") === "1";
+    if (new URLSearchParams(window.location.search).get("stockDebug") === "1") return true;
   } catch {
-    return false;
+    /* ignore */
   }
+  try {
+    if (window.localStorage.getItem(STOCK_DEBUG_LS) === "1") return true;
+  } catch {
+    /* private mode / blocked storage */
+  }
+  return false;
 }
 
 /**
- * Logs the full bundle and shallow counts. Enable with dev server or `?stockDebug=1` on production.
+ * Logs the full bundle and shallow counts. See {@link isStockBundleDebugEnabled}.
  */
 export function debugLogStockBundle(
   ticker: string,
@@ -37,9 +52,6 @@ export function debugLogStockBundle(
 
   const title = `[stock-analysis] ${ticker}`;
   console.groupCollapsed(`${title} — loaded payload`);
-  if (process.env.NODE_ENV === "production") {
-    console.info(`${title}: on production, open with ?stockDebug=1 to see these logs.`);
-  }
   console.log("ticker:", ticker);
   console.log("error:", error ?? null);
   if (bundle) {
@@ -109,7 +121,7 @@ export type FundamentalsPipelineDebugPayload = {
 
 /**
  * Logs how raw Yahoo rows become chart rows (filters + per-metric non-null counts).
- * Enable with dev server or `?stockDebug=1`. Explains cases like “quarterly has net income but revenue is null”.
+ * See {@link isStockBundleDebugEnabled}.
  */
 export function debugLogFundamentalsPipeline(symbol: string, payload: FundamentalsPipelineDebugPayload): void {
   if (!isStockBundleDebugEnabled()) return;
