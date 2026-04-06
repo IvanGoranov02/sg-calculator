@@ -40,8 +40,9 @@ export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
   }
 
   return (
-    <div className="h-[min(360px,50vh)] min-h-0 min-w-0 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="relative h-[min(360px,50vh)] min-h-0 min-w-0 w-full">
+      <div className="absolute inset-0 min-h-0 min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={rows}
           layout="vertical"
@@ -89,7 +90,8 @@ export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
             ))}
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

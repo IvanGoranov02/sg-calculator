@@ -9,7 +9,9 @@ import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { normalizeYahooDividendYieldToDecimal } from "@/lib/format";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 
-const yahooFinance = new YahooFinance({ suppressNotices: ["ripHistorical"] });
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["ripHistorical", "yahooSurvey"],
+});
 
 export type PortfolioQuoteRow = {
   symbol: string;

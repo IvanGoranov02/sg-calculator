@@ -1,7 +1,7 @@
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
-/** DevTools: `window.__STOCK_BUNDLE__` — full last loaded bundle (when debug logging is on). */
+/** DevTools: always set on stock page after load — type `__STOCK_BUNDLE__` in the console. */
 declare global {
   interface Window {
     __STOCK_BUNDLE__?: StockAnalysisBundle | null;
@@ -12,28 +12,46 @@ declare global {
 
 const STOCK_DEBUG_LS = "stockDebug";
 
+function readQueryFlag(name: string): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get(name) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Stock bundle / fundamentals console logging.
- * On: local dev (`next dev`), or production when any of:
- * - `NEXT_PUBLIC_STOCK_DEBUG=1` (e.g. Vercel env),
- * - URL query `?stockDebug=1`,
+ * Verbose `console` logging for bundle + fundamentals pipeline.
+ * On: `next dev`, or production when any of:
+ * - `NEXT_PUBLIC_STOCK_DEBUG=1` (Vercel),
+ * - `?debug=1` or `?stockDebug=1` in the URL,
  * - `localStorage.setItem("stockDebug", "1")` then reload.
+ *
+ * Raw payload is always on `window.__STOCK_BUNDLE__` (see {@link attachStockBundleToWindow}).
  */
 export function isStockBundleDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   if (process.env.NODE_ENV === "development") return true;
   if (process.env.NEXT_PUBLIC_STOCK_DEBUG === "1") return true;
-  try {
-    if (new URLSearchParams(window.location.search).get("stockDebug") === "1") return true;
-  } catch {
-    /* ignore */
-  }
+  if (readQueryFlag("debug") || readQueryFlag("stockDebug")) return true;
   try {
     if (window.localStorage.getItem(STOCK_DEBUG_LS) === "1") return true;
   } catch {
     /* private mode / blocked storage */
   }
   return false;
+}
+
+/** Always attach last fetch to `window` so DevTools can inspect without verbose logging. */
+export function attachStockBundleToWindow(
+  ticker: string,
+  bundle: StockAnalysisBundle | null,
+  error: string | null,
+): void {
+  if (typeof window === "undefined") return;
+  window.__STOCK_TICKER__ = ticker;
+  window.__STOCK_BUNDLE__ = bundle;
+  window.__STOCK_BUNDLE_ERROR__ = error;
 }
 
 /**
@@ -44,11 +62,8 @@ export function debugLogStockBundle(
   bundle: StockAnalysisBundle | null,
   error: string | null,
 ): void {
+  attachStockBundleToWindow(ticker, bundle, error);
   if (!isStockBundleDebugEnabled()) return;
-
-  window.__STOCK_TICKER__ = ticker;
-  window.__STOCK_BUNDLE__ = bundle;
-  window.__STOCK_BUNDLE_ERROR__ = error;
 
   const title = `[stock-analysis] ${ticker}`;
   console.groupCollapsed(`${title} — loaded payload`);

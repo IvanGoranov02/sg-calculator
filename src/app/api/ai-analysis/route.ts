@@ -7,7 +7,7 @@ import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
 
 export const maxDuration = 60;
 
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 export async function POST(request: Request) {
   const openaiKey = process.env.OPENAI_API_KEY?.trim();

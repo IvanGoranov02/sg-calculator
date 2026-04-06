@@ -223,7 +223,9 @@ export function FundamentalChartCard({
             <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
           </div>
         ) : (
-          <div className="h-full min-h-0 min-w-0 w-full">{chart}</div>
+          <div className="relative h-full min-h-0 min-w-0 w-full">
+            <div className="absolute inset-0 min-h-0 min-w-0">{chart}</div>
+          </div>
         )}
         {growthNote ? (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>

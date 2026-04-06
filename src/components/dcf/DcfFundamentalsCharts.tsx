@@ -239,14 +239,15 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
           </div>
         )}
       </CardHeader>
-      <CardContent className="pt-0">
-        <div className="h-[240px] min-h-0 min-w-0 w-full sm:h-[300px] md:h-[360px]">
+      <CardContent className="min-h-0 min-w-0 pt-0">
+        <div className="relative h-[240px] min-h-0 min-w-0 w-full sm:h-[300px] md:h-[360px]">
           {series.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               Няма данни за този показател (напр. липсва EBITDA).
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <div className="absolute inset-0 min-h-0 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="dcfFillFund" x1="0" y1="0" x2="0" y2="1">
@@ -294,7 +295,8 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
                   connectNulls={metric === "ebitda"}
                 />
               </AreaChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
       </CardContent>

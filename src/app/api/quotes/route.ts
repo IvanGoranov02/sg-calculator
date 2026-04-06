@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 function num(v: unknown): number | null {
   if (v === undefined || v === null) return null;

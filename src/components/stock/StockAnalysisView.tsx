@@ -35,7 +35,7 @@ export function StockAnalysisView({
 
   if (loading && !bundle) {
     return (
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
         <div className="space-y-3 rounded-xl border border-white/10 bg-zinc-900/40 p-5 animate-pulse">
           <div className="h-8 w-2/3 rounded bg-zinc-800" />
           <div className="h-4 w-1/3 rounded bg-zinc-800/80" />
@@ -79,7 +79,7 @@ export function StockAnalysisView({
 
   return (
     <StockAnalysisPeriodProvider key={symbol}>
-      <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
         <StockLiveHeader quote={quote} />
 
         <StockAiSection symbol={symbol} />

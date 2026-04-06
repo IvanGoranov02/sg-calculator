@@ -293,54 +293,56 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
                 ) : null}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[240px] min-h-0 min-w-0 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={pack.rows} margin={{ top: 8, right: 8, left: 0, bottom: 36 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
-                      interval="preserveStartEnd"
-                      angle={-32}
-                      textAnchor="end"
-                      height={44}
-                    />
-                    <YAxis
-                      tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-                      width={76}
-                      tickFormatter={(v: number) => formatCurrencyPerShare(v)}
-                    />
-                    <Tooltip
-                      formatter={
-                        ((value: unknown, name: string, item: { payload?: { ttmPartial?: boolean } }) => {
-                          const v = Array.isArray(value) ? value[0] : value;
-                          if (v === undefined || v === null) return "—";
-                          const fmt = formatCurrencyPerShare(typeof v === "number" ? v : Number(v));
-                          const partial = item?.payload?.ttmPartial === true;
-                          if (partial) {
-                            return [`${fmt} (${t("chartsFund.dividendTtmPartialShort")})`, name];
-                          }
-                          return [fmt, name];
-                        }) as never
-                      }
-                      contentStyle={{
-                        background: "rgba(9,9,11,0.95)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                      }}
-                      labelStyle={{ color: "var(--muted-foreground)" }}
-                    />
-                    <Bar
-                      dataKey="ttmDps"
-                      name={t("chartsFund.dividendTtmLabel")}
-                      fill="#fb923c"
-                      radius={[3, 3, 0, 0]}
-                      maxBarSize={44}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+            <CardContent className="min-h-0 min-w-0">
+              <div className="relative h-[240px] min-h-0 min-w-0 w-full">
+                <div className="absolute inset-0 min-h-0 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={pack.rows} margin={{ top: 8, right: 8, left: 0, bottom: 36 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
+                        interval="preserveStartEnd"
+                        angle={-32}
+                        textAnchor="end"
+                        height={44}
+                      />
+                      <YAxis
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                        width={76}
+                        tickFormatter={(v: number) => formatCurrencyPerShare(v)}
+                      />
+                      <Tooltip
+                        formatter={
+                          ((value: unknown, name: string, item: { payload?: { ttmPartial?: boolean } }) => {
+                            const v = Array.isArray(value) ? value[0] : value;
+                            if (v === undefined || v === null) return "—";
+                            const fmt = formatCurrencyPerShare(typeof v === "number" ? v : Number(v));
+                            const partial = item?.payload?.ttmPartial === true;
+                            if (partial) {
+                              return [`${fmt} (${t("chartsFund.dividendTtmPartialShort")})`, name];
+                            }
+                            return [fmt, name];
+                          }) as never
+                        }
+                        contentStyle={{
+                          background: "rgba(9,9,11,0.95)",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                        labelStyle={{ color: "var(--muted-foreground)" }}
+                      />
+                      <Bar
+                        dataKey="ttmDps"
+                        name={t("chartsFund.dividendTtmLabel")}
+                        fill="#fb923c"
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={44}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <GrowthPill label={t("chartsFund.pill1Y")} pct={pack.pills.oneYear} />
