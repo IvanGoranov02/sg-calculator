@@ -240,7 +240,7 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
         )}
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="h-[240px] w-full sm:h-[300px] md:h-[360px]">
+        <div className="h-[240px] min-h-0 min-w-0 w-full sm:h-[300px] md:h-[360px]">
           {series.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               Няма данни за този показател (напр. липсва EBITDA).

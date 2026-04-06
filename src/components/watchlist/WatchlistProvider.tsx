@@ -35,6 +35,9 @@ type WatchlistContextValue = {
 
 const WatchlistContext = createContext<WatchlistContextValue | null>(null);
 
+/** Stable empty snapshot for SSR — must be the same reference every call (React 19 useSyncExternalStore). */
+const SERVER_WATCHLIST_EMPTY: string[] = [];
+
 async function putWatchlist(symbols: string[]): Promise<boolean> {
   const res = await fetch("/api/watchlist", {
     method: "PUT",
@@ -48,7 +51,11 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
   const isAuthed = status === "authenticated" && !!session?.user?.id;
 
-  const guestSymbols = useSyncExternalStore(subscribeWatchlist, getWatchlistSnapshot, () => []);
+  const guestSymbols = useSyncExternalStore(
+    subscribeWatchlist,
+    getWatchlistSnapshot,
+    () => SERVER_WATCHLIST_EMPTY,
+  );
 
   const [serverSymbols, setServerSymbols] = useState<string[] | null>(null);
   const [serverReady, setServerReady] = useState(false);

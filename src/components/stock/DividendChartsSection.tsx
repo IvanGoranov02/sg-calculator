@@ -294,7 +294,7 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[240px] w-full">
+              <div className="h-[240px] min-h-0 min-w-0 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={pack.rows} margin={{ top: 8, right: 8, left: 0, bottom: 36 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />

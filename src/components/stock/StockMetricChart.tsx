@@ -288,7 +288,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
       : "—";
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40 shadow-xl shadow-black/20">
+    <Card className="min-w-0 border-white/10 bg-zinc-900/40 shadow-xl shadow-black/20">
       <CardHeader className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -383,54 +383,56 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
           </div>
         )}
       </CardHeader>
-      <CardContent className="pt-0">
-        <div className="h-[260px] w-full sm:h-[320px] md:h-[380px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="fillMetric" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v: number) => fmtAxis(v)}
-                width={72}
-              />
-              <Tooltip
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  const v = payload[0].value as number;
-                  return (
-                    <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
-                      <p className="text-muted-foreground">{label}</p>
-                      <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(v)}</p>
-                    </div>
-                  );
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke={stroke}
-                strokeWidth={2}
-                fill="url(#fillMetric)"
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      <CardContent className="min-h-0 min-w-0 pt-0">
+        <div className="relative h-[260px] min-h-0 min-w-0 w-full sm:h-[320px] md:h-[380px]">
+          <div className="absolute inset-0 min-h-0 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="fillMetric" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => fmtAxis(v)}
+                  width={72}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const v = payload[0].value as number;
+                    return (
+                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                        <p className="text-muted-foreground">{label}</p>
+                        <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(v)}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke={stroke}
+                  strokeWidth={2}
+                  fill="url(#fillMetric)"
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 0 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </CardContent>
     </Card>

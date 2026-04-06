@@ -209,12 +209,12 @@ export function FundamentalChartCard({
   );
 
   return (
-    <Card className={cn("border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
+    <Card className={cn("min-w-0 border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{title}</CardTitle>
         {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="h-[220px] pt-0">
+      <CardContent className="h-[220px] min-h-0 min-w-0 pt-0">
         {data.length === 0 ? (
           <p className="text-sm text-muted-foreground">—</p>
         ) : !hasPoints ? (
@@ -223,7 +223,7 @@ export function FundamentalChartCard({
             <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
           </div>
         ) : (
-          chart
+          <div className="h-full min-h-0 min-w-0 w-full">{chart}</div>
         )}
         {growthNote ? (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>

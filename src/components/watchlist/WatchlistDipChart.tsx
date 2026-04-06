@@ -40,7 +40,7 @@ export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
   }
 
   return (
-    <div className="h-[min(360px,50vh)] w-full">
+    <div className="h-[min(360px,50vh)] min-h-0 min-w-0 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={rows}

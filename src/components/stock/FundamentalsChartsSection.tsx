@@ -19,6 +19,7 @@ import {
 } from "@/lib/stockAnalysisPeriod";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { computeValuationByPeriodEnd } from "@/lib/valuationFromHistory";
+import { debugLogFundamentalsPipeline } from "@/lib/stockDebugConsole";
 import { cn } from "@/lib/utils";
 
 /** ISO date (period end) for filtering; stripped before passing to Recharts. Annual rows also carry `fiscalYear`. */
@@ -513,6 +514,45 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
   }, [data, rowsMerged, symbol, t, valuationGranularity]);
 
   const chartRows = useMemo(() => rowsForCharts(rowsMerged), [rowsMerged]);
+
+  useEffect(() => {
+    const incA = sortIncomeByYearAsc(data.income);
+    const incQ = sortQuarterlyByDateAsc(data.incomeQuarterly);
+    const qDates = incQ.map((r) => r.date.slice(0, 10));
+    const qSample =
+      qDates.length <= 6 ? qDates : [...qDates.slice(0, 3), "…", ...qDates.slice(-3)];
+    const annualAfter =
+      freq === "annual"
+        ? filterAnnualRowsByPeriod(incA, timeRange, customFromYear, customToYear)
+        : null;
+
+    debugLogFundamentalsPipeline(symbol, {
+      freq,
+      timeRange,
+      customFromYear,
+      customToYear,
+      rawAnnualIncomeCount: data.income.length,
+      rawQuarterlyIncomeCount: data.incomeQuarterly.length,
+      annualFiscalYearsInBundle: incA.map((r) => r.fiscalYear),
+      quarterlyPeriodEndsSample: qSample,
+      annualRowsAfterTimeFilter: annualAfter?.length ?? null,
+      annualFiscalYearsAfterTimeFilter: annualAfter?.map((r) => r.fiscalYear) ?? null,
+      baseRowsCount: baseRows.length,
+      filteredRowsCount: filteredBaseRows.length,
+      chartRows: chartRows as Record<string, unknown>[],
+      visibleLabels: filteredBaseRows.map((r) => String(r.label ?? "")),
+    });
+  }, [
+    symbol,
+    freq,
+    timeRange,
+    customFromYear,
+    customToYear,
+    data,
+    baseRows,
+    filteredBaseRows,
+    chartRows,
+  ]);
 
   const peValGaps =
     chartRows.length > 0 &&
