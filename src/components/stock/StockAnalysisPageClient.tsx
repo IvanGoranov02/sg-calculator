@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
+import { debugLogStockBundle } from "@/lib/stockDebugConsole";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 type Props = {
@@ -41,6 +42,12 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       cancelled = true;
     };
   }, [ticker]);
+
+  useEffect(() => {
+    if (loading) return;
+    const sym = ticker.trim().toUpperCase() || "AAPL";
+    debugLogStockBundle(sym, bundle, error);
+  }, [loading, bundle, error, ticker]);
 
   return (
     <StockAnalysisView

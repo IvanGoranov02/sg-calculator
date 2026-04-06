@@ -12,8 +12,7 @@ import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils"
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
-  annualDataYearBounds,
-  annualFiscalYearInRange,
+  filterAnnualRowsByPeriod,
   quarterlyFilterYearBounds,
   quarterlyPeriodEndInRange,
   useStockAnalysisPeriod,
@@ -385,18 +384,14 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
   const filteredBaseRows = useMemo((): Row[] => {
     if (baseRows.length === 0) return [];
     if (freq === "annual") {
-      const bounds = annualDataYearBounds(sortIncomeByYearAsc(data.income));
-      if (!bounds) return [];
-      return baseRows.filter((r) =>
-        annualFiscalYearInRange(
-          String(r.fiscalYear ?? ""),
-          timeRange,
-          customFromYear,
-          customToYear,
-          bounds.min,
-          bounds.max,
-        ),
+      const incFiltered = filterAnnualRowsByPeriod(
+        sortIncomeByYearAsc(data.income),
+        timeRange,
+        customFromYear,
+        customToYear,
       );
+      const allowed = new Set(incFiltered.map((r) => r.fiscalYear));
+      return baseRows.filter((r) => typeof r.fiscalYear === "string" && allowed.has(r.fiscalYear));
     }
     const bounds = quarterlyFilterYearBounds({
       incomeQuarterly: data.incomeQuarterly,

@@ -116,35 +116,6 @@ export function quarterlyFilterYearBounds(bundle: {
   return quarterlyDataYearBounds(dates);
 }
 
-/**
- * Whether a fiscal year (label) is included for the selected range.
- * Presets compare to **fiscal year number** (not period-end calendar date) so charts match income tables.
- */
-export function annualFiscalYearInRange(
-  fiscalYearStr: string,
-  timeRange: ChartTimeRange,
-  customFromYear: number | null,
-  customToYear: number | null,
-  dataYearMin: number,
-  dataYearMax: number,
-): boolean {
-  const fy = parseInt(fiscalYearStr, 10);
-  if (!Number.isFinite(fy)) return false;
-  if (timeRange === "all") return true;
-
-  if (timeRange === "custom") {
-    const lo = customFromYear ?? dataYearMin;
-    const hi = customToYear ?? dataYearMax;
-    const a = Math.min(lo, hi);
-    const b = Math.max(lo, hi);
-    return fy >= a && fy <= b;
-  }
-
-  const years = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
-  const cutoffYear = new Date().getUTCFullYear() - years;
-  return fy >= cutoffYear;
-}
-
 /** Quarterly / daily period-end: rolling window from today (UTC) or custom calendar-year bounds on period-end. */
 export function quarterlyPeriodEndInRange(
   dateIso: string,
@@ -173,7 +144,11 @@ export function quarterlyPeriodEndInRange(
   return d >= cutoffStr;
 }
 
-/** Filter annual statement rows to match the fundamentals chart time range (no silent fallback to full history). */
+/**
+ * Filter annual statement rows to match the fundamentals chart time range.
+ * Presets (1y–10y) keep the **last N fiscal years in loaded data** (not calendar cutoffs), so tables never go empty
+ * when the latest FY label is behind the current calendar year.
+ */
 export function filterAnnualRowsByPeriod<T extends { fiscalYear: string; date: string }>(
   rows: T[],
   timeRange: ChartTimeRange,
@@ -182,20 +157,24 @@ export function filterAnnualRowsByPeriod<T extends { fiscalYear: string; date: s
 ): T[] {
   if (rows.length === 0) return rows;
   const sorted = [...rows].sort((a, b) => fiscalYearFromRow(a) - fiscalYearFromRow(b));
-  const bounds = annualDataYearBounds(sorted);
-  if (!bounds) return [];
 
-  const out = sorted.filter((r) =>
-    annualFiscalYearInRange(
-      r.fiscalYear,
-      timeRange,
-      customFromYear,
-      customToYear,
-      bounds.min,
-      bounds.max,
-    ),
-  );
-  return out;
+  if (timeRange === "all") return sorted;
+
+  if (timeRange === "custom") {
+    const bounds = annualDataYearBounds(sorted);
+    if (!bounds) return [];
+    const lo = customFromYear ?? bounds.min;
+    const hi = customToYear ?? bounds.max;
+    const a = Math.min(lo, hi);
+    const b = Math.max(lo, hi);
+    return sorted.filter((r) => {
+      const fy = fiscalYearFromRow(r);
+      return fy >= a && fy <= b;
+    });
+  }
+
+  const n = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
+  return sorted.slice(-Math.min(n, sorted.length));
 }
 
 /** Filter dividend quarterly points the same way as quarterly fundamentals (by period-end date). */
