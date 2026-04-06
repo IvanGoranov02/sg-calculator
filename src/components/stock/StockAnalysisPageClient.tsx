@@ -66,7 +66,6 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       bundle={bundle}
       error={error}
       loading={loading}
-      onBundleReplace={setBundle}
       onForceRefresh={handleForceRefresh}
     />
   );

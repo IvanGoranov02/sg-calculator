@@ -13,11 +13,10 @@ import {
   YAxis,
 } from "recharts";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
+import { seriesHasAnyPoint } from "@/lib/chartSeriesUtils";
 import { cn } from "@/lib/utils";
 
 export type FundamentalSeries = {
@@ -39,14 +38,6 @@ type FundamentalChartCardProps = {
   className?: string;
   /** One-line growth vs prior period (last two points in range). */
   growthNote?: string | null;
-  /** Balance-sheet–heavy charts: offer Gemini fill when series are all null but periods exist. */
-  geminiRetry?: boolean;
-  onGeminiRetry?: () => void;
-  geminiRetryPending?: boolean;
-  /** P/E & P/S when Yahoo price × TTM left gaps. */
-  valuationGemini?: boolean;
-  onValuationGeminiRetry?: () => void;
-  valuationGeminiPending?: boolean;
 };
 
 function formatTooltipValue(fmt: ValueFormat, v: number): string {
@@ -95,18 +86,11 @@ export function FundamentalChartCard({
   valueFormat,
   className,
   growthNote,
-  geminiRetry,
-  onGeminiRetry,
-  geminiRetryPending,
-  valuationGemini,
-  onValuationGeminiRetry,
-  valuationGeminiPending,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const manyTicks = data.length > 10;
   const keys = series.map((s) => s.dataKey);
   const hasPoints = data.length === 0 ? false : seriesHasAnyPoint(data, keys);
-  const hasGaps = data.length === 0 ? false : seriesHasPartialGaps(data, keys);
 
   function formatTooltipValueRaw(value: unknown): string {
     const v = Array.isArray(value) ? value[0] : value;
@@ -231,36 +215,6 @@ export function FundamentalChartCard({
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
         ) : null}
       </CardContent>
-      {valuationGemini && data.length > 0 && onValuationGeminiRetry && (!hasPoints || hasGaps) ? (
-        <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-full border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/40"
-            disabled={valuationGeminiPending}
-            onClick={onValuationGeminiRetry}
-          >
-            {valuationGeminiPending ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadValuationGemini")}
-          </Button>
-          <p className="text-[10px] leading-snug text-muted-foreground">{t("chartsFund.valuationGeminiDisclaimer")}</p>
-        </CardFooter>
-      ) : null}
-      {geminiRetry && data.length > 0 && onGeminiRetry && (!hasPoints || hasGaps) ? (
-        <CardFooter className="flex flex-col items-stretch gap-2 border-t border-white/10 pt-3">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="w-full border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-900/40"
-            disabled={geminiRetryPending}
-            onClick={onGeminiRetry}
-          >
-            {geminiRetryPending ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadAgainGemini")}
-          </Button>
-          <p className="text-[10px] leading-snug text-muted-foreground">{t("chartsFund.geminiRetryDisclaimer")}</p>
-        </CardFooter>
-      ) : null}
     </Card>
   );
 }

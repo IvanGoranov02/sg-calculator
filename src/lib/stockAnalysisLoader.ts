@@ -1,7 +1,7 @@
-import { applyGeminiFundamentalGaps } from "@/lib/geminiFundamentalsGapFill";
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
 import { prisma } from "@/lib/prisma";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import { enrichBundleFundamentalsFromYahoo } from "@/lib/yahooFundamentalsMerge";
 import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
 
 export type StockAnalysisResult = {
@@ -13,7 +13,7 @@ export type StockAnalysisResult = {
  * Bump this whenever the normalizer or prompt changes significantly
  * so stale caches (produced by older normalisation) are discarded.
  */
-const CACHE_SCHEMA_VERSION = 4;
+const CACHE_SCHEMA_VERSION = 5;
 
 const CACHE_TTL_MS = (() => {
   const h = Number(process.env.STOCK_CACHE_TTL_HOURS?.trim());
@@ -31,8 +31,8 @@ function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
 export type LoadStockOptions = { forceRefresh?: boolean };
 
 /**
- * Stock analysis: Prisma cache (fundamentals from Gemini) → optional CF gap fill → upsert on miss →
- * **always** overlay Yahoo for live quote + daily/intraday price history (fundamentals unchanged).
+ * Stock analysis: Prisma cache (Gemini bundle) → on miss: Gemini → Yahoo fundamentals merge (gap fill)
+ * → upsert → **always** Yahoo for live quote + daily/intraday prices.
  */
 export async function loadStockAnalysis(
   symbol: string,
@@ -60,7 +60,7 @@ export async function loadStockAnalysis(
     }
 
     const bundle = await fetchStockBundleFromGemini(sym);
-    await applyGeminiFundamentalGaps(sym, bundle);
+    await enrichBundleFundamentalsFromYahoo(bundle);
 
     const plain = JSON.parse(JSON.stringify({ ...bundle, __cacheVersion: CACHE_SCHEMA_VERSION })) as object;
     try {

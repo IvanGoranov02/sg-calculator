@@ -1,7 +1,6 @@
 "use client";
 
 import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
-import { AnnualTablesGeminiStrip } from "@/components/stock/AnnualTablesGeminiStrip";
 import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
@@ -21,7 +20,6 @@ type StockAnalysisViewProps = {
   bundle: StockAnalysisBundle | null;
   error: string | null;
   loading?: boolean;
-  onBundleReplace?: (bundle: StockAnalysisBundle) => void;
   onForceRefresh?: () => void;
 };
 
@@ -30,7 +28,6 @@ export function StockAnalysisView({
   bundle,
   error,
   loading = false,
-  onBundleReplace,
   onForceRefresh,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
@@ -105,9 +102,8 @@ export function StockAnalysisView({
         <StockAiSection symbol={symbol} />
 
         <StockMetricChart data={bundle} />
-        <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-        <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
-        <AnnualTablesGeminiStrip data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
+        <FundamentalsChartsSection data={bundle} symbol={symbol} />
+        <DividendChartsSection data={bundle} />
         <AnnualFundamentalsSection data={bundle} />
         <IncomeStatementTable bundle={bundle} />
         <InvestorMetricsSection data={bundle.investor} />

@@ -1,9 +1,38 @@
-import { bundleHasBalanceSheetOrDividendGaps } from "@/lib/geminiBalanceSheetGapFill";
-import { isEmptyIncomeStatementCore, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import {
+  isEmptyIncomeStatementCore,
+  type BalanceSheetAnnual,
+  type BalanceSheetQuarter,
+  type StockAnalysisBundle,
+} from "@/lib/stockAnalysisTypes";
+
+function bundleHasBalanceSheetOrDividendGaps(bundle: StockAnalysisBundle): boolean {
+  const rowGap = (r: BalanceSheetAnnual | BalanceSheetQuarter) =>
+    r.totalAssets == null || r.stockholdersEquity == null || r.totalDebt == null;
+
+  const quickRatioGap = (r: BalanceSheetAnnual | BalanceSheetQuarter) => {
+    const tca = r.totalCurrentAssets;
+    const tcl = r.totalCurrentLiabilities;
+    if (tca == null || tcl == null) return true;
+    if (r.inventory == null) return true;
+    return false;
+  };
+
+  if (bundle.balanceSheet.some((r) => rowGap(r) || quickRatioGap(r))) return true;
+  if (bundle.balanceSheetQuarterly.some((r) => rowGap(r) || quickRatioGap(r))) return true;
+
+  const tail = bundle.dividendQuarterly.slice(-20);
+  if (!tail.some((p) => p.dividendPerShare == null)) return false;
+  const inv = bundle.investor;
+  const pays =
+    (inv.dividendRate != null && inv.dividendRate > 0) ||
+    (inv.dividendYield != null && inv.dividendYield > 1e-8) ||
+    bundle.dividendQuarterly.some((p) => p.dividendPerShare != null && p.dividendPerShare > 0);
+  return pays;
+}
 
 /**
- * True when Yahoo/SEC left something missing for the fundamentals UI: empty fiscal slots,
- * sparse income rows, many null cash-flow fields, or BS/DPS gaps Gemini can patch.
+ * True when data still looks incomplete for the fundamentals UI: empty fiscal slots,
+ * sparse rows, many null cash-flow fields, or BS/DPS gaps after Gemini + Yahoo merge.
  */
 export function bundleHasYahooSecDataGaps(
   bundle: StockAnalysisBundle,

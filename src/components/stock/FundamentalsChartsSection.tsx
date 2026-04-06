@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { isEmptyIncomeStatementCore, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
@@ -8,7 +8,6 @@ import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { safePct, safeRatio } from "@/lib/annualTables";
-import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
@@ -306,23 +305,10 @@ function growthFooterMulti(
 type FundamentalsChartsSectionProps = {
   data: StockAnalysisBundle;
   symbol: string;
-  onBundleReplace?: (bundle: StockAnalysisBundle) => void;
 };
 
-export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: FundamentalsChartsSectionProps) {
+export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSectionProps) {
   const { t, locale } = useI18n();
-  const [geminiBusy, setGeminiBusy] = useState(false);
-  const [geminiValuationBusy, setGeminiValuationBusy] = useState(false);
-  const [geminiFillHint, setGeminiFillHint] = useState<string | null>(null);
-  const [valuationPatches, setValuationPatches] = useState<
-    Record<string, { peTtm?: number | null; psTtm?: number | null }>
-  >({});
-
-  useEffect(() => {
-    setValuationPatches({});
-  }, [symbol, data.income.length, data.incomeQuarterly.length, data.historical.length, data.dividendQuarterly.length]);
-
-  const geminiRetry = Boolean(onBundleReplace);
   const {
     timeRange,
     setTimeRange,
@@ -412,39 +398,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
     return filterQuarterlyChartRowsByPeriod(baseRows, timeRange, customFromYear, customToYear, bounds);
   }, [baseRows, freq, data.income, data.incomeQuarterly, data.dividendQuarterly, timeRange, customFromYear, customToYear]);
 
-  const runGeminiBalanceFill = useCallback(async () => {
-    if (!onBundleReplace) return;
-    setGeminiBusy(true);
-    setGeminiFillHint(null);
-    try {
-      const focusPeriodEnds = filteredBaseRows
-        .map((r) => (typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : null))
-        .filter((x): x is string => Boolean(x));
-      const res = await fetch("/api/stock/gemini-balance-fill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticker: symbol,
-          bundle: data,
-          ...(focusPeriodEnds.length > 0 ? { focusPeriodEnds } : {}),
-        }),
-      });
-      const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle; error?: string };
-      if (!res.ok) {
-        setGeminiFillHint(j.error ?? t("chartsFund.geminiFillNoChange"));
-        return;
-      }
-      if (j.bundle && j.ok) {
-        onBundleReplace(j.bundle);
-        setGeminiFillHint(null);
-      } else {
-        setGeminiFillHint(j.error ?? t("chartsFund.geminiFillNoChange"));
-      }
-    } finally {
-      setGeminiBusy(false);
-    }
-  }, [onBundleReplace, symbol, data, filteredBaseRows, t]);
-
   const rows = useMemo(() => enrichPopGrowth(filteredBaseRows), [filteredBaseRows]);
 
   const valuationGranularity = freq === "annual" ? "annual" : "quarterly";
@@ -457,60 +410,13 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
     return rows.map((r) => {
       const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
       const base = pe ? valuationByPeriod.get(pe) : undefined;
-      const patch = pe ? valuationPatches[pe] : undefined;
       return {
         ...r,
-        peTtm: patch?.peTtm ?? base?.peTtm ?? null,
-        psTtm: patch?.psTtm ?? base?.psTtm ?? null,
+        peTtm: base?.peTtm ?? null,
+        psTtm: base?.psTtm ?? null,
       };
     });
-  }, [rows, valuationByPeriod, valuationPatches]);
-
-  const runGeminiValuationFill = useCallback(async () => {
-    setGeminiValuationBusy(true);
-    setGeminiFillHint(null);
-    try {
-      const needingFill = rowsMerged
-        .filter((r) => {
-          const peOk = r.peTtm != null && Number.isFinite(r.peTtm as number);
-          const psOk = r.psTtm != null && Number.isFinite(r.psTtm as number);
-          return !peOk || !psOk;
-        })
-        .map((r) => (typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : ""))
-        .filter((s): s is string => Boolean(s));
-      if (needingFill.length === 0) {
-        setGeminiFillHint(t("chartsFund.geminiValuationNoChange"));
-        return;
-      }
-      const res = await fetch("/api/stock/gemini-valuation-fill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticker: symbol,
-          bundle: data,
-          freq: valuationGranularity,
-          needingFill,
-        }),
-      });
-      const j = (await res.json()) as {
-        ok?: boolean;
-        patches?: Record<string, { peTtm: number | null; psTtm: number | null }>;
-        error?: string;
-      };
-      if (!res.ok) {
-        setGeminiFillHint(j.error ?? t("chartsFund.geminiValuationNoChange"));
-        return;
-      }
-      if (j.patches && j.ok !== false && Object.keys(j.patches).length > 0) {
-        setValuationPatches((prev) => ({ ...prev, ...j.patches }));
-        setGeminiFillHint(null);
-      } else {
-        setGeminiFillHint(t("chartsFund.geminiValuationNoChange"));
-      }
-    } finally {
-      setGeminiValuationBusy(false);
-    }
-  }, [data, rowsMerged, symbol, t, valuationGranularity]);
+  }, [rows, valuationByPeriod]);
 
   const chartRows = useMemo(() => rowsForCharts(rowsMerged), [rowsMerged]);
 
@@ -552,14 +458,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
     filteredBaseRows,
     chartRows,
   ]);
-
-  const peValGaps =
-    chartRows.length > 0 &&
-    (!seriesHasAnyPoint(chartRows, ["peTtm"]) || seriesHasPartialGaps(chartRows, ["peTtm"]));
-  const psValGaps =
-    chartRows.length > 0 &&
-    (!seriesHasAnyPoint(chartRows, ["psTtm"]) || seriesHasPartialGaps(chartRows, ["psTtm"]));
-  const showValuationGemini = geminiRetry && (peValGaps || psValGaps);
 
   const loadedMeta = useMemo(() => {
     if (baseRows.length === 0 || yearOptions.length === 0) return null;
@@ -744,11 +642,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
         <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
         <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
-        {geminiFillHint ? (
-          <p className="mt-2 text-xs text-amber-400/95" role="status">
-            {geminiFillHint}
-          </p>
-        ) : null}
       </div>
 
       <div
@@ -943,9 +836,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "peTtm", freq, t)}
-            valuationGemini={showValuationGemini}
-            onValuationGeminiRetry={runGeminiValuationFill}
-            valuationGeminiPending={geminiValuationBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartPsTtm")}
@@ -1051,9 +941,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="currency"
             growthNote={growthFooterMulti(chartRows, ["totalAssets", "totalDebt", "equity"], freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCashNetDebt")}
@@ -1063,9 +950,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="currency"
             growthNote={growthFooterMulti(chartRows, ["cash", "netDebt"], freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartRoeRoa")}
@@ -1075,9 +959,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="percent"
             growthNote={growthFooterMulti(chartRows, ["roe", "roa"], freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCurrentRatio")}
@@ -1087,9 +968,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "currentRatio", freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartFcfMargin")}
@@ -1129,9 +1007,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               chartType="line"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["ar", "inventory"], freq, t)}
-              geminiRetry={geminiRetry}
-              onGeminiRetry={runGeminiBalanceFill}
-              geminiRetryPending={geminiBusy}
             />
           ) : null}
           {hasGwLt ? (
@@ -1143,9 +1018,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               chartType="line"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["goodwill", "longTermDebt"], freq, t)}
-              geminiRetry={geminiRetry}
-              onGeminiRetry={runGeminiBalanceFill}
-              geminiRetryPending={geminiBusy}
             />
           ) : null}
           {hasEbitdaOcfMargins ? (
@@ -1167,9 +1039,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="percent"
             growthNote={growthFooterLine(chartRows, "debtPctCapital", freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           {hasNetDebtEbitda ? (
             <FundamentalChartCard
@@ -1180,9 +1049,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               chartType="line"
               valueFormat="ratio"
               growthNote={growthFooterLine(chartRows, "netDebtToEbitda", freq, t)}
-              geminiRetry={geminiRetry}
-              onGeminiRetry={runGeminiBalanceFill}
-              geminiRetryPending={geminiBusy}
             />
           ) : null}
           <FundamentalChartCard
@@ -1193,9 +1059,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
             chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "quickRatio", freq, t)}
-            geminiRetry={geminiRetry}
-            onGeminiRetry={runGeminiBalanceFill}
-            geminiRetryPending={geminiBusy}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartCapexIntensity")}
