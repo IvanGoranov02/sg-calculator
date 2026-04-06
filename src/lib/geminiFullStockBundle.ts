@@ -155,7 +155,17 @@ function normalizeInvestor(raw: unknown): InvestorMetrics {
 }
 
 function normalizeQuote(sym: string, raw: unknown): StockQuote {
-  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  if (!o) {
+    return {
+      symbol: sym.toUpperCase(),
+      name: sym,
+      price: 0,
+      change: 0,
+      changesPercentage: 0,
+      earningsDate: null,
+    };
+  }
   return {
     symbol: str(o.symbol, sym).toUpperCase(),
     name: str(o.name, sym),
@@ -173,39 +183,21 @@ function normalizeQuote(sym: string, raw: unknown): StockQuote {
   };
 }
 
-function normalizeHistorical(raw: unknown): HistoricalEodBar[] {
-  if (!Array.isArray(raw)) return [];
-  const out: HistoricalEodBar[] = [];
-  for (const x of raw) {
-    if (!x || typeof x !== "object") continue;
-    const r = x as Record<string, unknown>;
-    const date = str(r.date, "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-    const close = num(r.close, NaN);
-    if (!Number.isFinite(close)) continue;
-    out.push({
-      date,
-      close,
-      high: numOrNull(r.high) ?? undefined,
-      low: numOrNull(r.low) ?? undefined,
-      volume: numOrNull(r.volume) ?? undefined,
-    });
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date));
-}
-
 /** Turn Gemini JSON into a strict bundle; throws if unusable. */
 export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): StockAnalysisBundle {
   if (!parsed || typeof parsed !== "object") throw new Error("Gemini returned non-object JSON.");
   const b = parsed as Record<string, unknown>;
 
+  // Never use Gemini for OHLCV — it burns output tokens and can truncate fundamentals JSON.
+  delete b.historical;
+  delete b.intraday;
+
   const quote = normalizeQuote(sym, b.quote);
   const investor = normalizeInvestor(b.investor);
-  let historical = normalizeHistorical(b.historical);
-  if (historical.length === 0) {
-    const d = new Date().toISOString().slice(0, 10);
-    historical = [{ date: d, close: quote.price > 0 ? quote.price : 1 }];
-  }
+  const d = new Date().toISOString().slice(0, 10);
+  const historical: HistoricalEodBar[] = [
+    { date: d, close: quote.price > 0 ? quote.price : 1 },
+  ];
 
   const income = Array.isArray(b.income) ? b.income : [];
   const cashFlow = Array.isArray(b.cashFlow) ? b.cashFlow : [];
@@ -223,15 +215,6 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
   const withSym = <T extends { symbol?: string }>(rows: T[]) =>
     rows.map((r) => ({ ...r, symbol: str(r.symbol, sym) }));
 
-  const intradayRaw = b.intraday;
-  let intraday: StockAnalysisBundle["intraday"];
-  if (Array.isArray(intradayRaw) && intradayRaw.length > 0) {
-    intraday = normalizeHistorical(intradayRaw).map((x) => ({
-      date: x.date,
-      close: x.close,
-    }));
-  }
-
   const incomeQ = sortQuarterlyByDateAsc(withSym(incomeQuarterly as StockAnalysisBundle["incomeQuarterly"]));
   const cfQ = sortQuarterlyByDateAsc(withSym(cashFlowQuarterly as StockAnalysisBundle["cashFlowQuarterly"]));
   const bsQ = sortQuarterlyByDateAsc(withSym(balanceSheetQuarterly as StockAnalysisBundle["balanceSheetQuarterly"]));
@@ -242,7 +225,7 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
     quote,
     investor,
     historical,
-    intraday,
+    intraday: undefined,
     income: sortAnnualByFy(withSym(income as StockAnalysisBundle["income"])),
     cashFlow: sortAnnualByFy(withSym(cashFlow as StockAnalysisBundle["cashFlow"])),
     balanceSheet: sortAnnualByFy(withSym(balanceSheet as StockAnalysisBundle["balanceSheet"])),
@@ -286,32 +269,29 @@ export async function fetchStockBundleFromGemini(symbol: string): Promise<StockA
 
   const depthBlock = fullHistoryPromptEnabled()
     ? `
-FULL HISTORY (this JSON is cached once in our DB — include as much as fits; UI will slice by date later):
-- **Annual** income, cashFlow, balanceSheet: every fiscal year you can justify from public 10-K-style data, ideally back toward IPO or the 1990s for US large-caps (minimum target ~15–20 fiscal years if the company existed that long).
-- **Quarterly** incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: same period-end dates for the first three; **all quarters** you can back through at least ~15–20 years where 10-Q/10-K data exists (aligned row counts, sorted by period end).
-- **historical** daily bars: optional short placeholder (server replaces with **Yahoo Finance** OHLCV on load); prioritize fundamentals row count over price history in this JSON.
+MAXIMUM FUNDAMENTALS (this JSON is cached once; UI slices by period later). **Do not waste tokens on stock prices.**
+- **Annual** income, cashFlow, balanceSheet: as many fiscal years as you can (target 15–20+ years for mature US listings).
+- **Quarterly** incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: aligned period-end dates, as many quarters as fit (target 15–20+ years of quarters).
 `
     : `
-Include a reasonably long history: several years of annuals and many quarters; daily OHLCV can be minimal (Yahoo fills prices server-side).
+Include several years of annuals and many quarters of fundamentals.
 `;
 
   const prompt = `You output ONE JSON object only (no markdown) for US equity ticker ${sym}.
 
-This object is stored **once** server-side; the app will filter by period in memory — you must output the **widest** history you can in one JSON.
+**CRITICAL:** Do **not** include \`historical\` or \`intraday\` keys. Daily/intraday OHLCV is loaded separately (Yahoo). Put **every** token into income / cash flow / balance sheet / dividends / investor context — a long price series will truncate your JSON and **wipe** annual income (broken payload).
+
 ${depthBlock}
 
-Use widely reported 10-K / 10-Q figures you are confident about. Numbers must be internally consistent (same fiscal calendar, same currency).
+Use widely reported 10-K / 10-Q figures. Same fiscal calendar and currency throughout.
 
-Required top-level keys:
-- quote: { symbol, name, price, change, changesPercentage, marketState?, earningsDate? (ISO date) }
-- investor: object with keys like currency, marketCap, trailingPE, dividendYield, beta, fiftyTwoWeekHigh, fiftyTwoWeekLow — use null where unknown
-- historical: minimal daily rows OK (Yahoo overwrites with real market history)
-- intraday?: optional [ { date ISO datetime string, close } ] for recent sessions only
-- income: annual array — full history as above
-- cashFlow, balanceSheet: annual — aligned fiscal years to income
-- incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: quarterly rows, ISO period-end date, symbol "${sym}". Include **at least 8 recent quarters** for large caps (e.g. MA, NVDA); **same period-end dates** on incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly when possible. If the response is long, still return **at least 4** income quarters — never fewer than 1. dividendQuarterly: { date, dividendPerShare }.
+Required top-level keys (no historical, no intraday):
+- quote: { symbol, name, price?, change?, changesPercentage? } — rough snapshot OK; server refreshes price from Yahoo
+- investor: currency, marketCap, trailingPE, dividendYield, beta, etc. — nulls OK
+- income, cashFlow, balanceSheet: annual arrays
+- incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: quarterly; symbol "${sym}"; **≥1** income quarter (prefer **≥8**); align CF/BS dates to income quarters when possible
 
-Use the same symbol string "${sym}" on every row. Numbers are company scale (not per share except dilutedEps and dividendPerShare).`;
+Use "${sym}" on every fundamentals row. Company-scale USD amounts unless the listing is different.`;
 
   let res: Response;
   try {

@@ -34,11 +34,16 @@ export function bundleHasYahooSecDataGaps(
   }
 
   const divTail = bundle.dividendQuarterly.slice(-12);
+  const hasSomeHistoricDps = bundle.dividendQuarterly.some(
+    (p) => p.dividendPerShare != null && p.dividendPerShare > 0,
+  );
+  const investorSaysDividend =
+    (bundle.investor.dividendYield != null && bundle.investor.dividendYield > 1e-8) ||
+    (bundle.investor.dividendRate != null && bundle.investor.dividendRate > 0);
   if (
     divTail.length > 0 &&
     divTail.every((p) => p.dividendPerShare == null) &&
-    ((bundle.investor.dividendYield != null && bundle.investor.dividendYield > 1e-8) ||
-      (bundle.investor.dividendRate != null && bundle.investor.dividendRate > 0))
+    (investorSaysDividend || hasSomeHistoricDps)
   ) {
     return true;
   }

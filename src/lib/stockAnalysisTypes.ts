@@ -195,17 +195,6 @@ export type StockAnalysisBundle = {
   dividendQuarterly: DividendQuarterlyPoint[];
 };
 
-/** Yahoo quote + OHLCV + quoteSummary (fast path for progressive stock page load). */
-export type StockMarketPart = Pick<StockAnalysisBundle, "quote" | "investor" | "historical"> & {
-  intraday?: StockAnalysisBundle["intraday"];
-};
-
-/** Fundamentals time series (slower path). Merges with {@link StockMarketPart} into {@link StockAnalysisBundle}. */
-export type StockFundamentalsPart = Omit<
-  StockAnalysisBundle,
-  "quote" | "investor" | "historical" | "intraday"
->;
-
 export type IncomeMetricKey = "revenue" | "grossProfit" | "operatingExpenses" | "netIncome";
 
 export const incomeStatementMetricKeys: IncomeMetricKey[] = [

@@ -1,7 +1,7 @@
 /**
- * On-demand: Gemini suggests balance-sheet line items when Yahoo fundamentalsTimeSeries
- * returns nulls (common for IFRS naming, delayed filings, or API gaps).
- * Also fills quarterly dividendPerShare when Yahoo omits DPS but the company pays dividends,
+ * On-demand: Gemini suggests balance-sheet line items when the cached fundamentals bundle
+ * still has nulls (IFRS vs US GAAP labels, gaps, etc.).
+ * Also fills quarterly dividendPerShare when null but the company pays dividends,
  * and inventory (needed for quick ratio ≈ (current assets − inventory) / current liabilities).
  * Merges into null fields only; caller should show an illustrative disclaimer.
  */
@@ -162,7 +162,7 @@ export async function applyGeminiBalanceSheetGaps(
     dividendPerShare: r.dividendPerShare,
   }));
 
-  const prompt = `You help fill NULL fields for a stock fundamentals UI. Yahoo Finance time series often omits line items (IFRS vs US GAAP labels, timing). Use widely reported 10-K / 10-Q figures when you are confident.
+  const prompt = `You help fill NULL fields for a stock fundamentals UI. The bundle may come from Gemini + cache; line items are often missing (IFRS vs US GAAP labels, timing). Use widely reported 10-K / 10-Q figures when you are confident.
 
 Ticker: ${sym}
 ${options?.forceAttempt ? "\nThe user asked to fill gaps — prioritize every null balance-sheet or dividend-per-share field below where filings support a value.\n" : ""}
@@ -184,7 +184,7 @@ Rules:
 Annual income (context):
 ${JSON.stringify(incSummary.slice(-12))}
 
-Current annual balance sheet (null = missing from Yahoo):
+Current annual balance sheet (null = missing):
 ${JSON.stringify(bsAnnualSummary.slice(-12))}
 
 Quarterly period ends (last 12 rows, BS — null = missing):
@@ -201,7 +201,7 @@ ${JSON.stringify(
     })),
   )}
 
-Quarterly dividend per share (null = Yahoo omitted — fill via dividends[] when appropriate):
+Quarterly dividend per share (null = missing — fill via dividends[] when appropriate):
 ${JSON.stringify(divTail)}`;
 
   let res: Response;

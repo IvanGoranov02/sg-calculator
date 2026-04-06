@@ -14,6 +14,7 @@ import { formatCurrencyCompact } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { annualDisplayFiscalYears, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import {
+  isEmptyIncomeStatementCore,
   type IncomeStatementAnnual,
   type StockAnalysisBundle,
   incomeStatementMetricKeys,
@@ -73,7 +74,9 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
                   const r = incByFy.get(y);
                   return (
                     <TableCell key={y + key} className="text-right font-mono text-sm tabular-nums">
-                      {r == null ? "—" : formatCurrencyCompact(r[key])}
+                      {r == null || isEmptyIncomeStatementCore(r)
+                        ? "—"
+                        : formatCurrencyCompact(r[key])}
                     </TableCell>
                   );
                 })}

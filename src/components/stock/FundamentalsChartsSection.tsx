@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import { isEmptyIncomeStatementCore, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
@@ -61,8 +61,12 @@ const C = {
   valuationPs: "#fb7185",
 };
 
+function isStubIncome(r: { revenue: number; netIncome: number; grossProfit: number; operatingIncome?: number }): boolean {
+  return isEmptyIncomeStatementCore(r);
+}
+
 function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) => string): Row[] {
-  const inc = sortIncomeByYearAsc(bundle.income);
+  const inc = sortIncomeByYearAsc(bundle.income).filter((r) => !isStubIncome(r));
   const cfMap = new Map(bundle.cashFlow.map((c) => [c.fiscalYear, c]));
   const bsMap = new Map(bundle.balanceSheet.map((b) => [b.fiscalYear, b]));
   return inc.map((r) => {
@@ -146,12 +150,12 @@ function buildQuarterlyRows(
   bundle: StockAnalysisBundle,
   formatPeriod: (dateIso: string) => string,
 ): Row[] {
-  const inc = sortQuarterlyByDateAsc(bundle.incomeQuarterly);
-  const cfByDate = new Map(bundle.cashFlowQuarterly.map((c) => [c.date, c]));
-  const bsByDate = new Map(bundle.balanceSheetQuarterly.map((b) => [b.date, b]));
+  const inc = sortQuarterlyByDateAsc(bundle.incomeQuarterly).filter((r) => !isStubIncome(r));
+  const cfByDate = new Map(bundle.cashFlowQuarterly.map((c) => [c.date.slice(0, 10), c]));
+  const bsByDate = new Map(bundle.balanceSheetQuarterly.map((b) => [b.date.slice(0, 10), b]));
   return inc.map((r) => {
-    const cf = cfByDate.get(r.date);
-    const bs = bsByDate.get(r.date);
+    const cf = cfByDate.get(r.date.slice(0, 10));
+    const bs = bsByDate.get(r.date.slice(0, 10));
     const rev = r.revenue;
     const ebitda = r.ebitda ?? null;
     return {

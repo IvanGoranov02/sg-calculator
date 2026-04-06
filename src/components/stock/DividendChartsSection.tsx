@@ -137,14 +137,18 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
     }
   }, [onBundleReplace, symbol, data]);
 
-  const yahooShowsDividend = useMemo(() => {
+  const showsDividend = useMemo(() => {
     const inv = data.investor;
     if (inv.dividendRate != null && inv.dividendRate > 0) return true;
     const y = inv.dividendYield;
-    if (y == null) return false;
-    const frac = y > 1 ? y / 100 : y;
-    return frac > 1e-6;
-  }, [data.investor]);
+    if (y != null) {
+      const frac = y > 1 ? y / 100 : y;
+      if (frac > 1e-6) return true;
+    }
+    if (data.dividendQuarterly.some((p) => p.dividendPerShare != null && p.dividendPerShare > 0))
+      return true;
+    return false;
+  }, [data.investor, data.dividendQuarterly]);
 
   const qDpsSeries: FundamentalSeries[] = useMemo(
     () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
@@ -268,7 +272,7 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
       {!pack.hasDps ? (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {yahooShowsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
+            {showsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
           </p>
           {aiLoading ? (
             <p className="text-xs text-muted-foreground">{t("chartsFund.dividendAiLoading")}</p>
