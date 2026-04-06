@@ -13,7 +13,8 @@ import {
 import type { DividendQuarterlyPoint } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
-export type ChartTimeRange = "all" | "10y" | "5y" | "3y" | "1y" | "custom";
+/** Max history in bundle is 10y; UI presets top out at 10y (no “all time”). */
+export type ChartTimeRange = "10y" | "5y" | "3y" | "1y" | "custom";
 
 export type FundamentalsFreq = "annual" | "quarterly";
 
@@ -117,7 +118,6 @@ function fiscalYearStringRangeInclusive(a: number, b: number): string[] {
 /**
  * Fiscal year **columns** for annual tables: presets use a fixed count (e.g. 10y → 10) ending at the latest FY
  * in the bundle (fallback: current calendar year if nothing loaded). Missing FYs still get a column (empty cells).
- * `all` uses every fiscal year from min…max inclusive so gaps in the feed show as dashes.
  */
 export function annualDisplayFiscalYears(
   bundle: {
@@ -130,12 +130,6 @@ export function annualDisplayFiscalYears(
   customToYear: number | null,
 ): string[] {
   const incomeSorted = [...bundle.income].sort((x, y) => fiscalYearFromRow(x) - fiscalYearFromRow(y));
-
-  if (timeRange === "all") {
-    const bounds = annualDataYearBounds(incomeSorted);
-    if (!bounds) return [];
-    return fiscalYearStringRangeInclusive(bounds.min, bounds.max);
-  }
 
   if (timeRange === "custom") {
     const bounds = annualDataYearBounds(incomeSorted);
@@ -179,7 +173,7 @@ export function quarterlyFilterYearBounds(bundle: {
 }
 
 /** Quarters to show per preset — mirrors “last N fiscal years” for annual (≈4 quarters per year). */
-const PRESET_QUARTER_COUNT: Record<Exclude<ChartTimeRange, "all" | "custom">, number> = {
+const PRESET_QUARTER_COUNT: Record<Exclude<ChartTimeRange, "custom">, number> = {
   "1y": 4,
   "3y": 12,
   "5y": 20,
@@ -188,7 +182,7 @@ const PRESET_QUARTER_COUNT: Record<Exclude<ChartTimeRange, "all" | "custom">, nu
 
 /**
  * Filter quarterly chart rows: **presets** keep the last N quarters in **loaded** data (like annual `slice(-n)`),
- * so charts stay populated when Yahoo lags behind “today”. Custom / all use calendar rules.
+ * so charts stay populated when Yahoo lags behind “today”. Custom uses calendar rules.
  */
 export function filterQuarterlyChartRowsByPeriod<T extends { periodEnd?: string }>(
   rows: T[],
@@ -202,8 +196,6 @@ export function filterQuarterlyChartRowsByPeriod<T extends { periodEnd?: string 
   const sorted = [...withPe].sort((a, b) =>
     (a.periodEnd as string).slice(0, 10).localeCompare((b.periodEnd as string).slice(0, 10)),
   );
-
-  if (timeRange === "all") return sorted;
 
   if (timeRange === "custom") {
     return sorted.filter((r) =>
@@ -232,7 +224,6 @@ export function quarterlyPeriodEndInRange(
   dataYearMax: number,
 ): boolean {
   const d = dateIso.slice(0, 10);
-  if (timeRange === "all") return true;
 
   if (timeRange === "custom") {
     const lo = customFromYear ?? dataYearMin;
@@ -264,8 +255,6 @@ export function filterAnnualRowsByPeriod<T extends { fiscalYear: string; date: s
   if (rows.length === 0) return rows;
   const sorted = [...rows].sort((a, b) => fiscalYearFromRow(a) - fiscalYearFromRow(b));
 
-  if (timeRange === "all") return sorted;
-
   if (timeRange === "custom") {
     const bounds = annualDataYearBounds(sorted);
     if (!bounds) return [];
@@ -296,8 +285,6 @@ export function filterDividendQuarterlyByPeriod(
   const bounds =
     quarterBounds ?? quarterlyDataYearBounds(sorted.map((p) => p.date.slice(0, 10)));
   if (!bounds) return [];
-
-  if (timeRange === "all") return sorted;
 
   if (timeRange === "custom") {
     return sorted.filter((p) =>

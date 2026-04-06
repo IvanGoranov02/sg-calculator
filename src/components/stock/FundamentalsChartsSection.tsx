@@ -577,16 +577,13 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
   }, [yearOptions]);
 
   const presetYearsRequested: number | null =
-    timeRange === "all" || timeRange === "custom"
+    timeRange === "custom"
       ? null
       : ({ "1y": 1, "3y": 3, "5y": 5, "10y": 10 } as const)[timeRange];
 
-  /** Preset (1y–10y) did not remove any rows — chart matches “All history”. */
+  /** Preset (1y–10y) did not remove any rows — chart shows full loaded series for that preset. */
   const presetMatchesAllLoaded =
-    chartRows.length > 0 &&
-    timeRange !== "all" &&
-    timeRange !== "custom" &&
-    chartRows.length === baseRows.length;
+    chartRows.length > 0 && timeRange !== "custom" && chartRows.length === baseRows.length;
 
   /** User asked for a longer calendar window than distinct years in the loaded series (e.g. “10y” but only FY 2022–2025). */
   const showPresetShorterThanRequested =
@@ -770,7 +767,6 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               value={timeRange}
               onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
             >
-              <option value="all">{t("chartsFund.rangeAll")}</option>
               <option value="10y">{t("chartsFund.range10y")}</option>
               <option value="5y">{t("chartsFund.range5y")}</option>
               <option value="3y">{t("chartsFund.range3y")}</option>

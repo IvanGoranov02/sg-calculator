@@ -152,8 +152,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (net income / equity)",
       roa: "ROA (net income / assets)",
       geminiStripBody:
-        "Yahoo or SEC left gaps in this view — e.g. {missing} of {total} fiscal years without a full annual row, empty line items, balance sheet nulls, or missing dividend per share. You can try Gemini to fill some fields (server API key).",
-      fillGapsGemini: "Fill gaps (Gemini)",
+        "Yahoo or SEC left gaps in this view — e.g. {missing} of {total} fiscal years without a full annual row, empty line items, balance sheet nulls, or missing dividend per share. A second Gemini pass can fill some null fields (server API key).",
+      fillGapsGemini: "Fill null fields (Gemini)",
     },
     investor: {
       title: "Key investor metrics",
@@ -246,7 +246,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       quarterlyEmpty: "Quarterly fundamentals are not available for this symbol.",
       filterTimeRange: "Time range",
       filterGranularity: "Granularity",
-      rangeAll: "All history",
       range10y: "Up to 10 calendar years",
       range5y: "Up to 5 calendar years",
       range3y: "Up to 3 calendar years",
@@ -264,7 +263,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadedDataSpan:
         "Yahoo fundamentals in this view span {fromYear}–{toYear} ({n} {unit}). Depth varies by symbol — not an app chart cap.",
       filterPresetNoNarrow:
-        "This preset does not remove any loaded periods — same as “All history”.",
+        "This preset shows every period that fits the preset window — nothing extra is filtered out.",
       filterPresetShorterThanRequested:
         "You asked for up to {presetYears} calendar years, but Yahoo only returned {n} {unit} here ({fromYear}–{toYear}, {loadedSpanYears} calendar years). The chart shows everything loaded — not a filter bug.",
       noRows: "No chart data.",
@@ -312,7 +311,7 @@ export const messages: Record<AppLocale, MessageDict> = {
         "No numeric values for this metric in the loaded series (Yahoo may omit line items for some filings).",
       chartMetricNoDataDetail:
         "Why: Yahoo’s fundamentalsTimeSeries often returns nulls for balance-sheet lines (IFRS vs US labels, period-end mismatches, or API gaps). Income and cash-flow may still load.",
-      loadAgainGemini: "Fill missing balance sheet (Gemini)",
+      loadAgainGemini: "Fill null balance sheet & dividend fields (Gemini)",
       loadAgainGeminiBusy: "Filling…",
       geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
       geminiFillNoChange:
@@ -707,8 +706,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (нетна печалба / капитал)",
       roa: "ROA (нетна печалба / активи)",
       geminiStripBody:
-        "Yahoo или SEC са оставили празнини — напр. {missing} от {total} фискални години без пълен годишен ред, липсващи редове, null в баланса или липсващ дивидент на акция. Можеш да опиташ Gemini да попълни част от полетата (API ключ на сървъра).",
-      fillGapsGemini: "Попълни с Gemini",
+        "Yahoo или SEC са оставили празнини — напр. {missing} от {total} фискални години без пълен годишен ред, липсващи редове, null в баланса или липсващ дивидент на акция. Второ извикване към Gemini може да попълни част от null полетата (API ключ на сървъра).",
+      fillGapsGemini: "Попълни null полета (Gemini)",
     },
     investor: {
       title: "Ключови метрики за инвеститори",
@@ -801,7 +800,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       quarterlyEmpty: "Тримесечните фундаменти не са налични за този символ.",
       filterTimeRange: "Времеви диапазон",
       filterGranularity: "Честота",
-      rangeAll: "Цялата история",
       range10y: "До 10 календарни години",
       range5y: "До 5 календарни години",
       range3y: "До 3 календарни години",
@@ -819,7 +817,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadedDataSpan:
         "Фундаментите от Yahoo: {fromYear}–{toYear} ({n} {unit}). Дълбочината зависи от символа — не е таван на графиките.",
       filterPresetNoNarrow:
-        "Този пресет не премахва заредени периоди — същото като „цялата история“.",
+        "Този пресет показва всички периоди в прозореца на пресета — без допълнително отрязване.",
       filterPresetShorterThanRequested:
         "Избран е прозорец до {presetYears} календарни години, но Yahoo връща тук само {n} {unit} ({fromYear}–{toYear}, {loadedSpanYears} календарни години). Показват се всички налични периоди — не е грешка във филтъра.",
       noRows: "Няма данни за графика.",
@@ -867,7 +865,7 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Няма числени стойности за тази метрика в заредената серия (Yahoo понякога не подава редове за част от отчетите).",
       chartMetricNoDataDetail:
         "Защо: fundamentalsTimeSeries на Yahoo често връща null за редове от баланс (IFRS срещу US етикети, разминаване на край на период или пропуски в API). Приходите и паричният поток може да са наред.",
-      loadAgainGemini: "Попълни липсващ баланс (Gemini)",
+      loadAgainGemini: "Попълни null баланс и дивидент на акция (Gemini)",
       loadAgainGeminiBusy: "Попълване…",
       geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",
       geminiFillNoChange:

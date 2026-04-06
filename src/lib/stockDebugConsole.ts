@@ -153,7 +153,10 @@ export function debugLogFundamentalsPipeline(symbol: string, payload: Fundamenta
     annualIncomeRows: payload.rawAnnualIncomeCount,
     quarterlyIncomeRows: payload.rawQuarterlyIncomeCount,
   });
-  console.log("annual fiscal years (all loaded)", payload.annualFiscalYearsInBundle);
+  console.log(
+    "fiscal years in bundle — income annual (full payload; ignores chart period filter)",
+    payload.annualFiscalYearsInBundle,
+  );
   console.log("quarterly period-ends (sample)", payload.quarterlyPeriodEndsSample);
   if (payload.freq === "annual") {
     console.log("annual after time filter", {
@@ -198,7 +201,10 @@ export function debugLogAnnualTable(symbol: string, payload: AnnualTableDebugPay
   });
   console.log("raw annual income rows (bundle)", payload.rawAnnualIncomeRows);
   console.log("display fiscal years (columns)", payload.displayYears);
-  console.log("loaded fiscal years (income)", payload.loadedFiscalYears);
+  console.log(
+    "distinct FYs in bundle income[] (not the same as table columns when period ≠ 10y)",
+    payload.loadedFiscalYears,
+  );
   console.log("missing fiscal years (empty cells)", payload.missingYears);
   console.log("counts", {
     columns: payload.displayYears.length,
