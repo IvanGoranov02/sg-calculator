@@ -471,6 +471,126 @@ function requestTimeoutMs(): number {
   return 240_000;
 }
 
+/**
+ * Gemini responseSchema – constrains decoding so `historical`/`intraday`
+ * can never appear and every output token goes to fundamentals.
+ */
+function stockBundleResponseSchema() {
+  const N = { type: "NUMBER" as const, nullable: true };
+  const S = { type: "STRING" as const };
+  const SN = { type: "STRING" as const, nullable: true };
+
+  const incomeRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S, fiscalYear: S,
+      revenue: N, grossProfit: N, operatingExpenses: N, netIncome: N,
+      operatingIncome: N, ebitda: N, dilutedEps: N, dilutedAverageShares: N,
+    },
+    required: ["date"],
+  };
+
+  const cashFlowRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S, fiscalYear: S,
+      freeCashFlow: N, operatingCashFlow: N, capitalExpenditure: N,
+      investingCashFlow: N, financingCashFlow: N, dividendsPaid: N, stockRepurchase: N,
+    },
+    required: ["date"],
+  };
+
+  const balanceRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S, fiscalYear: S,
+      totalAssets: N, totalDebt: N, netDebt: N, stockholdersEquity: N,
+      cashAndCashEquivalents: N, totalCurrentAssets: N, totalCurrentLiabilities: N,
+      inventory: N, accountsReceivable: N, goodwill: N, longTermDebt: N,
+    },
+    required: ["date"],
+  };
+
+  const incomeQRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S,
+      revenue: N, grossProfit: N, operatingExpenses: N, netIncome: N,
+      operatingIncome: N, ebitda: N, dilutedEps: N, dilutedAverageShares: N,
+    },
+    required: ["date"],
+  };
+
+  const cashFlowQRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S,
+      freeCashFlow: N, operatingCashFlow: N, capitalExpenditure: N,
+      investingCashFlow: N, financingCashFlow: N, dividendsPaid: N, stockRepurchase: N,
+    },
+    required: ["date"],
+  };
+
+  const balanceQRow = {
+    type: "OBJECT" as const,
+    properties: {
+      date: S, symbol: S,
+      totalAssets: N, totalDebt: N, netDebt: N, stockholdersEquity: N,
+      cashAndCashEquivalents: N, totalCurrentAssets: N, totalCurrentLiabilities: N,
+      inventory: N, accountsReceivable: N, goodwill: N, longTermDebt: N,
+    },
+    required: ["date"],
+  };
+
+  return {
+    type: "OBJECT" as const,
+    properties: {
+      quote: {
+        type: "OBJECT" as const,
+        properties: {
+          symbol: S, name: S, price: N, change: N, changesPercentage: N,
+        },
+        required: ["symbol", "name", "price"],
+      },
+      investor: {
+        type: "OBJECT" as const,
+        properties: {
+          currency: SN, marketCap: N, enterpriseValue: N, trailingPE: N, forwardPE: N,
+          pegRatio: N, priceToSales: N, priceToBook: N, enterpriseToRevenue: N, enterpriseToEbitda: N,
+          beta: N, fiftyTwoWeekLow: N, fiftyTwoWeekHigh: N, fiftyDayAverage: N, twoHundredDayAverage: N,
+          regularMarketVolume: N, averageDailyVolume3Month: N,
+          grossMargins: N, operatingMargins: N, profitMargins: N,
+          returnOnEquity: N, returnOnAssets: N, revenueGrowth: N, earningsGrowth: N,
+          debtToEquity: N, currentRatio: N, quickRatio: N, totalCash: N, totalDebt: N,
+          dividendRate: N, dividendYield: N, payoutRatio: N,
+          trailingEps: N, forwardEps: N, bookValue: N, revenuePerShare: N,
+          sharesOutstanding: N, floatShares: N,
+          heldPercentInsiders: N, heldPercentInstitutions: N, shortPercentOfFloat: N,
+          targetMeanPrice: N, targetMedianPrice: N, recommendationKey: SN, numberOfAnalystOpinions: N,
+        },
+      },
+      income:               { type: "ARRAY" as const, items: incomeRow },
+      cashFlow:             { type: "ARRAY" as const, items: cashFlowRow },
+      balanceSheet:         { type: "ARRAY" as const, items: balanceRow },
+      incomeQuarterly:      { type: "ARRAY" as const, items: incomeQRow },
+      cashFlowQuarterly:    { type: "ARRAY" as const, items: cashFlowQRow },
+      balanceSheetQuarterly:{ type: "ARRAY" as const, items: balanceQRow },
+      dividendQuarterly: {
+        type: "ARRAY" as const,
+        items: {
+          type: "OBJECT" as const,
+          properties: { date: S, dividendPerShare: N },
+          required: ["date"],
+        },
+      },
+    },
+    required: [
+      "quote", "investor", "income", "cashFlow", "balanceSheet",
+      "incomeQuarterly", "cashFlowQuarterly", "balanceSheetQuarterly", "dividendQuarterly",
+    ],
+  };
+}
+
 export async function fetchStockBundleFromGemini(symbol: string): Promise<StockAnalysisBundle> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -590,6 +710,7 @@ Use widely reported 10-K / 10-Q figures. Same fiscal calendar and currency throu
           maxOutputTokens: maxOutputTokensForStockBundle(),
           temperature: 0.15,
           responseMimeType: "application/json",
+          responseSchema: stockBundleResponseSchema(),
         },
       }),
       signal: AbortSignal.timeout(requestTimeoutMs()),
