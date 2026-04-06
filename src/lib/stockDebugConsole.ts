@@ -174,3 +174,36 @@ export function debugLogFundamentalsPipeline(symbol: string, payload: Fundamenta
   console.log("chart rows (full array — expand in console)", payload.chartRows);
   console.groupEnd();
 }
+
+export type AnnualTableDebugPayload = {
+  timeRange: ChartTimeRange;
+  customFromYear: number | null;
+  customToYear: number | null;
+  displayYears: string[];
+  loadedFiscalYears: string[];
+  missingYears: string[];
+  rawAnnualIncomeRows: number;
+};
+
+/** Annual income / fiscal tables: requested FY columns vs what Yahoo returned. See {@link isStockBundleDebugEnabled}. */
+export function debugLogAnnualTable(symbol: string, payload: AnnualTableDebugPayload): void {
+  if (!isStockBundleDebugEnabled()) return;
+
+  const title = `[stock-analysis] ${symbol}`;
+  console.groupCollapsed(`${title} — annual tables (column grid)`);
+  console.log("period", {
+    timeRange: payload.timeRange,
+    customFromYear: payload.customFromYear,
+    customToYear: payload.customToYear,
+  });
+  console.log("raw annual income rows (bundle)", payload.rawAnnualIncomeRows);
+  console.log("display fiscal years (columns)", payload.displayYears);
+  console.log("loaded fiscal years (income)", payload.loadedFiscalYears);
+  console.log("missing fiscal years (empty cells)", payload.missingYears);
+  console.log("counts", {
+    columns: payload.displayYears.length,
+    loadedDistinctFy: payload.loadedFiscalYears.length,
+    missingSlots: payload.missingYears.length,
+  });
+  console.groupEnd();
+}

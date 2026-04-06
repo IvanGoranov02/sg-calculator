@@ -3,9 +3,9 @@
 import { useCallback, useMemo } from "react";
 
 import { FiscalMetricTable, type FiscalMetricRowDef } from "@/components/stock/FiscalMetricTable";
-import { safePct, safeRatio, yoyPercentNullableSeries, yoyPercentSeries } from "@/lib/annualTables";
+import { safePct, safeRatio, yoyPercentNullableSeries } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { filterAnnualRowsByPeriod, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
+import { annualDisplayFiscalYears, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc } from "@/lib/stockAnalysisTypes";
 
@@ -23,23 +23,21 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
   const formatFy = useCallback((y: string) => t("chart.fyYear", { y }), [t]);
 
   const pack = useMemo(() => {
-    const inc = sortIncomeByYearAsc(
-      filterAnnualRowsByPeriod(data.income, timeRange, customFromYear, customToYear),
-    );
-    const years = inc.map((r) => r.fiscalYear);
-    const yearSet = new Set(years);
-    const cfMap = byFy(data.cashFlow.filter((c) => yearSet.has(c.fiscalYear)));
-    const bsMap = byFy(data.balanceSheet.filter((b) => yearSet.has(b.fiscalYear)));
+    const years = annualDisplayFiscalYears(data, timeRange, customFromYear, customToYear);
+    const incSorted = sortIncomeByYearAsc(data.income);
+    const incMap = new Map(incSorted.map((r) => [r.fiscalYear, r]));
+    const cfMap = byFy(data.cashFlow);
+    const bsMap = byFy(data.balanceSheet);
 
     const perShare: FiscalMetricRowDef[] = [
       {
         label: t("annual.dilutedEps"),
-        values: inc.map((r) => r.dilutedEps ?? null),
+        values: years.map((y) => incMap.get(y)?.dilutedEps ?? null),
         format: "eps",
       },
       {
         label: t("annual.dilutedShares"),
-        values: inc.map((r) => r.dilutedAverageShares ?? null),
+        values: years.map((y) => incMap.get(y)?.dilutedAverageShares ?? null),
         format: "shares",
       },
     ];
@@ -47,86 +45,104 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
     const incomeExtra: FiscalMetricRowDef[] = [
       {
         label: t("annual.operatingIncome"),
-        values: inc.map((r) => r.operatingIncome ?? null),
+        values: years.map((y) => incMap.get(y)?.operatingIncome ?? null),
         format: "currency",
       },
       {
         label: t("annual.ebitda"),
-        values: inc.map((r) => r.ebitda ?? null),
+        values: years.map((y) => incMap.get(y)?.ebitda ?? null),
         format: "currency",
       },
     ];
 
-    const revenues = inc.map((r) => r.revenue);
-    const netIncomes = inc.map((r) => r.netIncome);
-    const gps = inc.map((r) => r.grossProfit);
+    const revenues = years.map((y) => {
+      const r = incMap.get(y);
+      return r != null ? r.revenue : null;
+    });
+    const netIncomes = years.map((y) => {
+      const r = incMap.get(y);
+      return r != null ? r.netIncome : null;
+    });
+    const gps = years.map((y) => {
+      const r = incMap.get(y);
+      return r != null ? r.grossProfit : null;
+    });
     const fcfSeries = years.map((y) => {
       const c = cfMap.get(y);
       return c ? c.freeCashFlow : null;
     });
 
     const yoyRows: FiscalMetricRowDef[] = [
-      { label: t("annual.revYoy"), values: yoyPercentSeries(revenues), format: "yoy" },
-      { label: t("annual.niYoy"), values: yoyPercentSeries(netIncomes), format: "yoy" },
-      { label: t("annual.gpYoy"), values: yoyPercentSeries(gps), format: "yoy" },
+      { label: t("annual.revYoy"), values: yoyPercentNullableSeries(revenues), format: "yoy" },
+      { label: t("annual.niYoy"), values: yoyPercentNullableSeries(netIncomes), format: "yoy" },
+      { label: t("annual.gpYoy"), values: yoyPercentNullableSeries(gps), format: "yoy" },
       { label: t("annual.fcfYoy"), values: yoyPercentNullableSeries(fcfSeries), format: "yoy" },
     ];
 
     const margins: FiscalMetricRowDef[] = [
       {
         label: t("annual.grossMargin"),
-        values: inc.map((r) => safePct(r.grossProfit, r.revenue)),
+        values: years.map((y) => {
+          const r = incMap.get(y);
+          if (!r) return null;
+          return safePct(r.grossProfit, r.revenue);
+        }),
         format: "margin",
       },
       {
         label: t("annual.operatingMargin"),
-        values: inc.map((r) =>
-          r.operatingIncome != null ? safePct(r.operatingIncome, r.revenue) : null,
-        ),
+        values: years.map((y) => {
+          const r = incMap.get(y);
+          if (!r || r.operatingIncome == null) return null;
+          return safePct(r.operatingIncome, r.revenue);
+        }),
         format: "margin",
       },
       {
         label: t("annual.netMargin"),
-        values: inc.map((r) => safePct(r.netIncome, r.revenue)),
+        values: years.map((y) => {
+          const r = incMap.get(y);
+          if (!r) return null;
+          return safePct(r.netIncome, r.revenue);
+        }),
         format: "margin",
       },
       {
         label: t("annual.fcfMargin"),
-        values: years.map((y, i) => {
+        values: years.map((y) => {
           const c = cfMap.get(y);
-          const rev = inc[i]?.revenue;
-          if (c == null || rev == null || rev === 0) return null;
-          return safePct(c.freeCashFlow, rev);
+          const r = incMap.get(y);
+          if (c == null || r == null || r.revenue === 0) return null;
+          return safePct(c.freeCashFlow, r.revenue);
         }),
         format: "margin",
       },
     ];
 
-    const bs = years.map((y) => bsMap.get(y));
     const balanceRows: FiscalMetricRowDef[] = [
-      { label: t("annual.totalAssets"), values: bs.map((b) => b?.totalAssets ?? null), format: "currency" },
-      { label: t("annual.cash"), values: bs.map((b) => b?.cashAndCashEquivalents ?? null), format: "currency" },
+      { label: t("annual.totalAssets"), values: years.map((y) => bsMap.get(y)?.totalAssets ?? null), format: "currency" },
+      { label: t("annual.cash"), values: years.map((y) => bsMap.get(y)?.cashAndCashEquivalents ?? null), format: "currency" },
       {
         label: t("annual.accountsReceivable"),
-        values: bs.map((b) => b?.accountsReceivable ?? null),
+        values: years.map((y) => bsMap.get(y)?.accountsReceivable ?? null),
         format: "currency",
       },
-      { label: t("annual.inventory"), values: bs.map((b) => b?.inventory ?? null), format: "currency" },
-      { label: t("annual.goodwill"), values: bs.map((b) => b?.goodwill ?? null), format: "currency" },
+      { label: t("annual.inventory"), values: years.map((y) => bsMap.get(y)?.inventory ?? null), format: "currency" },
+      { label: t("annual.goodwill"), values: years.map((y) => bsMap.get(y)?.goodwill ?? null), format: "currency" },
       {
         label: t("annual.currentAssets"),
-        values: bs.map((b) => b?.totalCurrentAssets ?? null),
+        values: years.map((y) => bsMap.get(y)?.totalCurrentAssets ?? null),
         format: "currency",
       },
       {
         label: t("annual.currentLiabilities"),
-        values: bs.map((b) => b?.totalCurrentLiabilities ?? null),
+        values: years.map((y) => bsMap.get(y)?.totalCurrentLiabilities ?? null),
         format: "currency",
       },
-      { label: t("annual.totalDebt"), values: bs.map((b) => b?.totalDebt ?? null), format: "currency" },
-      { label: t("annual.longTermDebt"), values: bs.map((b) => b?.longTermDebt ?? null), format: "currency" },
-      { label: t("annual.netDebt"), values: bs.map((b) => b?.netDebt ?? null), format: "currency" },
-      { label: t("annual.equity"), values: bs.map((b) => b?.stockholdersEquity ?? null), format: "currency" },
+      { label: t("annual.totalDebt"), values: years.map((y) => bsMap.get(y)?.totalDebt ?? null), format: "currency" },
+      { label: t("annual.longTermDebt"), values: years.map((y) => bsMap.get(y)?.longTermDebt ?? null), format: "currency" },
+      { label: t("annual.netDebt"), values: years.map((y) => bsMap.get(y)?.netDebt ?? null), format: "currency" },
+      { label: t("annual.equity"), values: years.map((y) => bsMap.get(y)?.stockholdersEquity ?? null), format: "currency" },
     ];
 
     const cfRows: FiscalMetricRowDef[] = [
@@ -170,27 +186,39 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
     const ratioRows: FiscalMetricRowDef[] = [
       {
         label: t("annual.currentRatio"),
-        values: bs.map((b) => safeRatio(b?.totalCurrentAssets ?? null, b?.totalCurrentLiabilities ?? null)),
+        values: years.map((y) => {
+          const b = bsMap.get(y);
+          return safeRatio(b?.totalCurrentAssets ?? null, b?.totalCurrentLiabilities ?? null);
+        }),
         format: "ratio",
       },
       {
         label: t("annual.debtToEquity"),
-        values: bs.map((b) => safeRatio(b?.totalDebt ?? null, b?.stockholdersEquity ?? null)),
+        values: years.map((y) => {
+          const b = bsMap.get(y);
+          return safeRatio(b?.totalDebt ?? null, b?.stockholdersEquity ?? null);
+        }),
         format: "ratio",
       },
       {
         label: t("annual.roe"),
-        values: inc.map((r, i) => {
-          const eq = bs[i]?.stockholdersEquity;
-          return eq != null && eq !== 0 ? safePct(r.netIncome, eq) : null;
+        values: years.map((y) => {
+          const r = incMap.get(y);
+          const b = bsMap.get(y);
+          const eq = b?.stockholdersEquity;
+          if (!r || eq == null || eq === 0) return null;
+          return safePct(r.netIncome, eq);
         }),
         format: "margin",
       },
       {
         label: t("annual.roa"),
-        values: inc.map((r, i) => {
-          const ta = bs[i]?.totalAssets;
-          return ta != null && ta !== 0 ? safePct(r.netIncome, ta) : null;
+        values: years.map((y) => {
+          const r = incMap.get(y);
+          const b = bsMap.get(y);
+          const ta = b?.totalAssets;
+          if (!r || ta == null || ta === 0) return null;
+          return safePct(r.netIncome, ta);
         }),
         format: "margin",
       },

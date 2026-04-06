@@ -13,8 +13,8 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
   filterAnnualRowsByPeriod,
+  filterQuarterlyChartRowsByPeriod,
   quarterlyFilterYearBounds,
-  quarterlyPeriodEndInRange,
   useStockAnalysisPeriod,
 } from "@/lib/stockAnalysisPeriod";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
@@ -368,10 +368,16 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
 
   const yearOptions = freq === "annual" ? annualYearOptions : quarterlyYearOptions;
 
+  /** Union of calendar years in annual + quarterly data — used for custom range so switching freq does not crush the selection. */
+  const mergedYearOptions = useMemo(() => {
+    const s = new Set<number>([...annualYearOptions, ...quarterlyYearOptions]);
+    return [...s].sort((a, b) => a - b);
+  }, [annualYearOptions, quarterlyYearOptions]);
+
   useEffect(() => {
-    if (timeRange !== "custom" || yearOptions.length === 0) return;
-    const minY = yearOptions[0];
-    const maxY = yearOptions[yearOptions.length - 1];
+    if (timeRange !== "custom" || mergedYearOptions.length === 0) return;
+    const minY = mergedYearOptions[0];
+    const maxY = mergedYearOptions[mergedYearOptions.length - 1];
     setCustomFromYear((prev) => {
       if (prev == null) return minY;
       return Math.max(minY, Math.min(maxY, prev));
@@ -380,7 +386,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
       if (prev == null) return maxY;
       return Math.max(minY, Math.min(maxY, prev));
     });
-  }, [timeRange, yearOptions, setCustomFromYear, setCustomToYear]);
+  }, [timeRange, mergedYearOptions, setCustomFromYear, setCustomToYear]);
 
   const filteredBaseRows = useMemo((): Row[] => {
     if (baseRows.length === 0) return [];
@@ -399,18 +405,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
       dividendQuarterly: data.dividendQuarterly,
     });
     if (!bounds) return [];
-    return baseRows.filter((r) => {
-      const pe = r.periodEnd;
-      if (!pe || typeof pe !== "string") return false;
-      return quarterlyPeriodEndInRange(
-        pe,
-        timeRange,
-        customFromYear,
-        customToYear,
-        bounds.min,
-        bounds.max,
-      );
-    });
+    return filterQuarterlyChartRowsByPeriod(baseRows, timeRange, customFromYear, customToYear, bounds);
   }, [baseRows, freq, data.income, data.incomeQuarterly, data.dividendQuarterly, timeRange, customFromYear, customToYear]);
 
   const runGeminiBalanceFill = useCallback(async () => {
@@ -779,7 +774,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
               <option value="custom">{t("chartsFund.rangeCustom")}</option>
             </select>
           </div>
-          {timeRange === "custom" && yearOptions.length > 0 ? (
+          {timeRange === "custom" && mergedYearOptions.length > 0 ? (
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fund-from-y" className="text-xs text-muted-foreground">
@@ -788,10 +783,10 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
                 <select
                   id="fund-from-y"
                   className={selectClass}
-                  value={customFromYear ?? yearOptions[0]}
+                  value={customFromYear ?? mergedYearOptions[0]}
                   onChange={(e) => setCustomFromYear(Number(e.target.value))}
                 >
-                  {yearOptions.map((y) => (
+                  {mergedYearOptions.map((y) => (
                     <option key={`f-${y}`} value={y}>
                       {y}
                     </option>
@@ -805,10 +800,10 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
                 <select
                   id="fund-to-y"
                   className={selectClass}
-                  value={customToYear ?? yearOptions[yearOptions.length - 1]}
+                  value={customToYear ?? mergedYearOptions[mergedYearOptions.length - 1]}
                   onChange={(e) => setCustomToYear(Number(e.target.value))}
                 >
-                  {yearOptions.map((y) => (
+                  {mergedYearOptions.map((y) => (
                     <option key={`t-${y}`} value={y}>
                       {y}
                     </option>

@@ -510,7 +510,25 @@ function nearestDividendMatch(
   return v != null && Number.isFinite(v) ? v : null;
 }
 
-/** Replace Yahoo short quarterly windows with SEC 10-Q + derived Q4 when SEC has more history. */
+function cashFlowQuarterFallbackFromIncome(symbol: string, inc: IncomeStatementQuarter): CashFlowQuarter {
+  const ni = Number(inc.netIncome);
+  return {
+    date: inc.date,
+    symbol,
+    freeCashFlow: Math.max(0, Number.isFinite(ni) ? ni * 0.85 : 0),
+    operatingCashFlow: null,
+    capitalExpenditure: null,
+    investingCashFlow: null,
+    financingCashFlow: null,
+    dividendsPaid: null,
+    stockRepurchase: null,
+  };
+}
+
+/**
+ * When SEC has deeper 10-Q history than Yahoo, merge by period-end date: prefer Yahoo on overlaps
+ * so recent Yahoo quarters are not dropped if SEC series ends earlier.
+ */
 async function enrichQuarterlyFromSecWhenDeep(sym: string, bundle: StockAnalysisBundle): Promise<void> {
   let sec: Awaited<ReturnType<typeof fetchSecQuarterlyFundamentals>> = null;
   try {
@@ -520,20 +538,57 @@ async function enrichQuarterlyFromSecWhenDeep(sym: string, bundle: StockAnalysis
   }
   if (!sec?.income.length) return;
 
-  if (sec.income.length <= bundle.incomeQuarterly.length) return;
+  const yInc = bundle.incomeQuarterly;
+  if (sec.income.length <= yInc.length) return;
 
-  const oldInc = bundle.incomeQuarterly;
-  const oldDiv = bundle.dividendQuarterly;
+  const yCf = bundle.cashFlowQuarterly;
+  const yBs = bundle.balanceSheetQuarterly;
+  const yDiv = bundle.dividendQuarterly;
 
-  bundle.incomeQuarterly = sec.income;
-  bundle.cashFlowQuarterly = sec.cashFlow;
-  bundle.balanceSheetQuarterly = sec.balanceSheet;
+  const qk = (d: string) => d.slice(0, 10);
+  const incY = new Map(yInc.map((r) => [qk(r.date), r]));
+  const cfY = new Map(yCf.map((r) => [qk(r.date), r]));
+  const bsY = new Map(yBs.map((r) => [qk(r.date), r]));
+  const divY = new Map(yDiv.map((r) => [qk(r.date), r]));
 
-  bundle.dividendQuarterly = sec.income.map((row) => ({
-    date: row.date,
-    dividendPerShare: nearestDividendMatch(row.date.slice(0, 10), oldInc, oldDiv, NEAREST_QUARTER_CF_DAYS),
-  }));
+  const incS = new Map(sec.income.map((r) => [qk(r.date), r]));
+  const cfS = new Map(sec.cashFlow.map((r) => [qk(r.date), r]));
+  const bsS = new Map(sec.balanceSheet.map((r) => [qk(r.date), r]));
 
+  const allKeys = new Set<string>([...incY.keys(), ...incS.keys()]);
+  const sorted = [...allKeys].sort((a, b) => a.localeCompare(b));
+
+  const mergedInc: IncomeStatementQuarter[] = [];
+  const mergedCf: CashFlowQuarter[] = [];
+  const mergedBs: BalanceSheetQuarter[] = [];
+  const mergedDiv: DividendQuarterlyPoint[] = [];
+
+  for (const d of sorted) {
+    const inc = incY.get(d) ?? incS.get(d);
+    if (!inc) continue;
+
+    mergedInc.push(inc);
+
+    const cf = cfY.get(d) ?? cfS.get(d);
+    mergedCf.push(cf ?? cashFlowQuarterFallbackFromIncome(sym, inc));
+
+    mergedBs.push(bsY.get(d) ?? bsS.get(d) ?? emptyBalanceQuarter(sym, inc));
+
+    const divPt = divY.get(d);
+    if (divPt) {
+      mergedDiv.push(divPt);
+    } else {
+      mergedDiv.push({
+        date: d,
+        dividendPerShare: nearestDividendMatch(d, yInc, yDiv, NEAREST_QUARTER_CF_DAYS),
+      });
+    }
+  }
+
+  bundle.incomeQuarterly = mergedInc;
+  bundle.cashFlowQuarterly = mergedCf;
+  bundle.balanceSheetQuarterly = mergedBs;
+  bundle.dividendQuarterly = mergedDiv;
 }
 
 export async function fetchStockAnalysisFromYahoo(symbol: string): Promise<StockAnalysisBundle> {

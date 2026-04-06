@@ -1,6 +1,7 @@
 "use client";
 
 import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
+import { AnnualTablesGeminiStrip } from "@/components/stock/AnnualTablesGeminiStrip";
 import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
@@ -75,7 +76,7 @@ export function StockAnalysisView({
     );
   }
 
-  const { quote, income } = bundle;
+  const { quote } = bundle;
 
   return (
     <StockAnalysisPeriodProvider key={symbol}>
@@ -87,8 +88,9 @@ export function StockAnalysisView({
         <StockMetricChart data={bundle} />
         <FundamentalsChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
         <DividendChartsSection data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
+        <AnnualTablesGeminiStrip data={bundle} symbol={symbol} onBundleReplace={onBundleReplace} />
         <AnnualFundamentalsSection data={bundle} />
-        <IncomeStatementTable rows={income} />
+        <IncomeStatementTable bundle={bundle} />
         <InvestorMetricsSection data={bundle.investor} />
       </div>
     </StockAnalysisPeriodProvider>

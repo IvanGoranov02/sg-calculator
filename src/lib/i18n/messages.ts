@@ -149,6 +149,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       debtToEquity: "Debt / equity",
       roe: "ROE (net income / equity)",
       roa: "ROA (net income / assets)",
+      geminiStripBody:
+        "{missing} of {total} fiscal years in this range have no annual row in the feed (empty cells). Gemini can try to fill partial nulls in rows that already exist (server API key).",
     },
     investor: {
       title: "Key investor metrics",
@@ -252,7 +254,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterShowing: "Showing {n} {unit}.",
       periodFilterStickyHint:
         "This bar stays visible while you scroll. The same range applies to annual tables and the dividend section below.",
-      periodFilterTablesHint: "Fiscal year columns match the time range selected under Fundamentals.",
+      periodFilterTablesHint:
+        "Fiscal year columns follow the range under Fundamentals (fixed count for 1y–10y). Dashes mean no data for that year in the feed.",
       filterUnitYears: "fiscal years",
       filterUnitQuarters: "quarters",
       loadedDataSpan:
@@ -698,6 +701,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       debtToEquity: "Дълг / собствен капитал",
       roe: "ROE (нетна печалба / капитал)",
       roa: "ROA (нетна печалба / активи)",
+      geminiStripBody:
+        "{missing} от {total} фискални години в този диапазон нямат годишен ред в потока (празни клетки). Gemini може да опита да попълни частични празнини в вече заредени редове (API ключ на сървъра).",
     },
     investor: {
       title: "Ключови метрики за инвеститори",
@@ -801,7 +806,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterShowing: "Показани са {n} {unit}.",
       periodFilterStickyHint:
         "Лентата остава видима при скрол. Същият диапазон важи за годишните таблици и секцията „Дивиденти“ по-долу.",
-      periodFilterTablesHint: "Колоните по фискални години следват времевия диапазон под „Фундаменти“.",
+      periodFilterTablesHint:
+        "Колоните по фискални години следват диапазона под „Фундаменти“ (фиксиран брой за 1г–10г). Тире = няма данни за тази година в потока.",
       filterUnitYears: "фискални години",
       filterUnitQuarters: "тримесечия",
       loadedDataSpan:
