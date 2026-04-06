@@ -23,7 +23,7 @@ import {
 } from "@/lib/dividendMetrics";
 import { formatCurrencyPerShare } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { filterDividendQuarterlyByPeriod, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
+import { filterDividendQuarterlyByPeriod, quarterlyFilterYearBounds, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
@@ -74,12 +74,22 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
     [locale],
   );
 
+  const quarterBounds = useMemo(
+    () =>
+      quarterlyFilterYearBounds({
+        incomeQuarterly: data.incomeQuarterly,
+        dividendQuarterly: data.dividendQuarterly,
+      }),
+    [data.incomeQuarterly, data.dividendQuarterly],
+  );
+
   const pack = useMemo(() => {
     const filtered = filterDividendQuarterlyByPeriod(
       data.dividendQuarterly,
       timeRange,
       customFromYear,
       customToYear,
+      quarterBounds,
     );
     const sorted = sortQuarterlyByDateAsc(filtered);
     const dpsArr = sorted.map((p) => p.dividendPerShare);
@@ -97,7 +107,7 @@ export function DividendChartsSection({ data, symbol, onBundleReplace }: Dividen
       qDps: dpsArr[i],
     }));
     return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean) };
-  }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear]);
+  }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
   /** Some quarters have DPS, others null — holes in the series (TTM / charts). */
   const hasDividendSeriesGaps = useMemo(() => {

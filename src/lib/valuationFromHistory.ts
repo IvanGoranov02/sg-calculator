@@ -1,15 +1,22 @@
 import type { HistoricalEodBar, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
-/** Last daily close on or before `periodEnd` (YYYY-MM-DD), sorted ascending bars. */
+/** YYYY-MM-DD only — avoids bad comparisons between "2024-06-30" and "2024-06-30T00:00:00.000Z". */
+function normBarDate(d: string): string {
+  return d.slice(0, 10);
+}
+
+/** Last daily close on or before `periodEnd` (YYYY-MM-DD). Bars should be sorted by {@link normBarDate} ascending. */
 export function closeOnOrBefore(bars: HistoricalEodBar[], periodEnd: string): number | null {
   if (bars.length === 0) return null;
+  const pe = normBarDate(periodEnd);
   let lo = 0;
   let hi = bars.length - 1;
   let best = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (bars[mid].date <= periodEnd) {
+    const bd = normBarDate(bars[mid].date);
+    if (bd <= pe) {
       best = mid;
       lo = mid + 1;
     } else {
@@ -29,7 +36,7 @@ export type PeriodValuation = { peTtm: number | null; psTtm: number | null };
  * Annual: FY diluted EPS and FY revenue.
  */
 export function computeValuationByPeriodEnd(bundle: StockAnalysisBundle, freq: "annual" | "quarterly"): Map<string, PeriodValuation> {
-  const hist = [...bundle.historical].sort((a, b) => a.date.localeCompare(b.date));
+  const hist = [...bundle.historical].sort((a, b) => normBarDate(a.date).localeCompare(normBarDate(b.date)));
   if (freq === "annual") return computeAnnualMap(bundle, hist);
   return computeQuarterlyMap(bundle, hist);
 }

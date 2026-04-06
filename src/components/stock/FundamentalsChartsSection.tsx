@@ -11,53 +11,23 @@ import { safePct, safeRatio } from "@/lib/annualTables";
 import { seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
-import { useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
+import {
+  annualDataYearBounds,
+  annualFiscalYearInRange,
+  quarterlyFilterYearBounds,
+  quarterlyPeriodEndInRange,
+  useStockAnalysisPeriod,
+} from "@/lib/stockAnalysisPeriod";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { computeValuationByPeriodEnd } from "@/lib/valuationFromHistory";
 import { cn } from "@/lib/utils";
 
-/** ISO date (period end) for filtering; stripped before passing to Recharts. */
-type Row = Record<string, unknown> & { periodEnd?: string };
-
-function filterByCalendarYears(rows: Row[], years: number): Row[] {
-  if (rows.length === 0) return rows;
-  const cutoff = new Date();
-  cutoff.setUTCHours(12, 0, 0, 0);
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  const out = rows.filter((r) => {
-    const pe = r.periodEnd;
-    if (!pe || typeof pe !== "string") return true;
-    return pe >= cutoffStr;
-  });
-  return out.length > 0 ? out : rows;
-}
-
-function filterByFiscalYearRange(rows: Row[], fromYear: number, toYear: number): Row[] {
-  const lo = Math.min(fromYear, toYear);
-  const hi = Math.max(fromYear, toYear);
-  const out = rows.filter((r) => {
-    const pe = r.periodEnd;
-    if (!pe || typeof pe !== "string") return true;
-    const y = new Date(`${pe}T12:00:00Z`).getFullYear();
-    return y >= lo && y <= hi;
-  });
-  return out.length > 0 ? out : rows;
-}
-
-function yearOptionsFromRows(rows: Row[]): number[] {
-  const ys = new Set<number>();
-  for (const r of rows) {
-    const pe = r.periodEnd;
-    if (!pe || typeof pe !== "string") continue;
-    ys.add(new Date(`${pe}T12:00:00Z`).getFullYear());
-  }
-  return [...ys].sort((a, b) => a - b);
-}
+/** ISO date (period end) for filtering; stripped before passing to Recharts. Annual rows also carry `fiscalYear`. */
+type Row = Record<string, unknown> & { periodEnd?: string; fiscalYear?: string };
 
 function rowsForCharts(rows: Row[]): Record<string, unknown>[] {
   return rows.map((r) => {
-    const { periodEnd: _p, ...rest } = r;
+    const { periodEnd: _p, fiscalYear: _fy, ...rest } = r;
     return rest;
   });
 }
@@ -102,6 +72,7 @@ function buildAnnualRows(bundle: StockAnalysisBundle, formatYear: (fy: string) =
     const ebitda = r.ebitda ?? null;
     return {
       label: formatYear(r.fiscalYear),
+      fiscalYear: r.fiscalYear,
       periodEnd: r.date.slice(0, 10),
       revenue: r.revenue,
       netIncome: r.netIncome,
@@ -345,7 +316,7 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
 
   useEffect(() => {
     setValuationPatches({});
-  }, [symbol]);
+  }, [symbol, data.income.length, data.incomeQuarterly.length, data.historical.length, data.dividendQuarterly.length]);
 
   const geminiRetry = Boolean(onBundleReplace);
   const {
@@ -376,7 +347,26 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
     return freq === "annual" ? buildAnnualRows(data, formatYear) : buildQuarterlyRows(data, formatPeriod);
   }, [data, freq, formatYear, formatPeriod]);
 
-  const yearOptions = useMemo(() => yearOptionsFromRows(baseRows), [baseRows]);
+  const annualYearOptions = useMemo(() => {
+    const inc = sortIncomeByYearAsc(data.income);
+    const ys = new Set<number>();
+    for (const r of inc) {
+      const y = parseInt(r.fiscalYear, 10);
+      if (Number.isFinite(y)) ys.add(y);
+    }
+    return [...ys].sort((a, b) => a - b);
+  }, [data.income]);
+
+  const quarterlyYearOptions = useMemo(() => {
+    const q = sortQuarterlyByDateAsc(data.incomeQuarterly);
+    const ys = new Set<number>();
+    for (const r of q) {
+      ys.add(new Date(`${r.date.slice(0, 10)}T12:00:00Z`).getUTCFullYear());
+    }
+    return [...ys].sort((a, b) => a - b);
+  }, [data.incomeQuarterly]);
+
+  const yearOptions = freq === "annual" ? annualYearOptions : quarterlyYearOptions;
 
   useEffect(() => {
     if (timeRange !== "custom" || yearOptions.length === 0) return;
@@ -390,18 +380,42 @@ export function FundamentalsChartsSection({ data, symbol, onBundleReplace }: Fun
       if (prev == null) return maxY;
       return Math.max(minY, Math.min(maxY, prev));
     });
-  }, [timeRange, yearOptions]);
+  }, [timeRange, yearOptions, setCustomFromYear, setCustomToYear]);
 
   const filteredBaseRows = useMemo((): Row[] => {
     if (baseRows.length === 0) return [];
-    if (timeRange === "custom") {
-      if (customFromYear == null || customToYear == null) return baseRows;
-      return filterByFiscalYearRange(baseRows, customFromYear, customToYear);
+    if (freq === "annual") {
+      const bounds = annualDataYearBounds(sortIncomeByYearAsc(data.income));
+      if (!bounds) return [];
+      return baseRows.filter((r) =>
+        annualFiscalYearInRange(
+          String(r.fiscalYear ?? ""),
+          timeRange,
+          customFromYear,
+          customToYear,
+          bounds.min,
+          bounds.max,
+        ),
+      );
     }
-    if (timeRange === "all") return baseRows;
-    const y = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
-    return filterByCalendarYears(baseRows, y);
-  }, [baseRows, timeRange, customFromYear, customToYear]);
+    const bounds = quarterlyFilterYearBounds({
+      incomeQuarterly: data.incomeQuarterly,
+      dividendQuarterly: data.dividendQuarterly,
+    });
+    if (!bounds) return [];
+    return baseRows.filter((r) => {
+      const pe = r.periodEnd;
+      if (!pe || typeof pe !== "string") return false;
+      return quarterlyPeriodEndInRange(
+        pe,
+        timeRange,
+        customFromYear,
+        customToYear,
+        bounds.min,
+        bounds.max,
+      );
+    });
+  }, [baseRows, freq, data.income, data.incomeQuarterly, data.dividendQuarterly, timeRange, customFromYear, customToYear]);
 
   const runGeminiBalanceFill = useCallback(async () => {
     if (!onBundleReplace) return;
