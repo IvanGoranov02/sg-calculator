@@ -9,6 +9,7 @@ import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSectio
 import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateStockError } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -21,6 +22,7 @@ type StockAnalysisViewProps = {
   error: string | null;
   loading?: boolean;
   onBundleReplace?: (bundle: StockAnalysisBundle) => void;
+  onForceRefresh?: () => void;
 };
 
 export function StockAnalysisView({
@@ -29,6 +31,7 @@ export function StockAnalysisView({
   error,
   loading = false,
   onBundleReplace,
+  onForceRefresh,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
   const symbol = ticker.trim().toUpperCase() || "AAPL";
@@ -81,7 +84,23 @@ export function StockAnalysisView({
   return (
     <StockAnalysisPeriodProvider key={symbol}>
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
-        <StockLiveHeader quote={quote} />
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <StockLiveHeader quote={quote} />
+          </div>
+          {onForceRefresh && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0 text-xs"
+              onClick={onForceRefresh}
+              disabled={loading}
+            >
+              {loading ? t("stock.refreshing") : t("stock.refreshData")}
+            </Button>
+          )}
+        </div>
 
         <StockAiSection symbol={symbol} />
 

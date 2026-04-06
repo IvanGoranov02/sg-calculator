@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get("ticker")?.trim() || "AAPL";
-  const { bundle, error } = await loadStockAnalysis(ticker);
+  const forceRefresh = searchParams.get("refresh") === "1";
+  const { bundle, error } = await loadStockAnalysis(ticker, { forceRefresh });
   return Response.json({ bundle, error });
 }

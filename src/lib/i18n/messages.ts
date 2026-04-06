@@ -87,6 +87,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       nextEarnings: "Next earnings",
       afterHours: "After hours",
       preMarket: "Pre-market",
+      refreshData: "Refresh data",
+      refreshing: "Refreshing…",
     },
     income: {
       title: "Income statement",
@@ -639,6 +641,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       nextEarnings: "Следващ отчет",
       afterHours: "След борсова сесия",
       preMarket: "Предпазар",
+      refreshData: "Обнови данните",
+      refreshing: "Обновяване…",
     },
     income: {
       title: "Отчет за приходите",

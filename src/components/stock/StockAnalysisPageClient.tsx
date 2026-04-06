@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
 import { debugLogStockBundle } from "@/lib/stockDebugConsole";
@@ -14,34 +14,45 @@ export function StockAnalysisPageClient({ ticker }: Props) {
   const [bundle, setBundle] = useState<StockAnalysisBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const cancelRef = useRef<() => void>(undefined);
+
+  const fetchData = useCallback(
+    (forceRefresh: boolean) => {
+      cancelRef.current?.();
+      let cancelled = false;
+      cancelRef.current = () => { cancelled = true; };
+      const sym = ticker.trim() || "AAPL";
+      setLoading(true);
+      setError(null);
+      void (async () => {
+        try {
+          const qs = `ticker=${encodeURIComponent(sym)}${forceRefresh ? "&refresh=1" : ""}`;
+          const res = await fetch(`/api/stock-analysis?${qs}`);
+          const data = (await res.json()) as { bundle: StockAnalysisBundle | null; error?: string | null };
+          if (cancelled) return;
+          if (!res.ok) {
+            setBundle(null);
+            setError(data.error ?? `HTTP ${res.status}`);
+            return;
+          }
+          setBundle(data.bundle ?? null);
+          setError(data.error ?? null);
+        } catch {
+          if (!cancelled) setError("Could not load stock data.");
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    },
+    [ticker],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    const sym = ticker.trim() || "AAPL";
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/stock-analysis?ticker=${encodeURIComponent(sym)}`);
-        const data = (await res.json()) as { bundle: StockAnalysisBundle | null; error?: string | null };
-        if (cancelled) return;
-        if (!res.ok) {
-          setBundle(null);
-          setError(data.error ?? `HTTP ${res.status}`);
-          return;
-        }
-        setBundle(data.bundle ?? null);
-        setError(data.error ?? null);
-      } catch {
-        if (!cancelled) setError("Could not load stock data.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker]);
+    fetchData(false);
+    return () => { cancelRef.current?.(); };
+  }, [fetchData]);
+
+  const handleForceRefresh = useCallback(() => fetchData(true), [fetchData]);
 
   useEffect(() => {
     if (loading) return;
@@ -56,6 +67,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       error={error}
       loading={loading}
       onBundleReplace={setBundle}
+      onForceRefresh={handleForceRefresh}
     />
   );
 }
