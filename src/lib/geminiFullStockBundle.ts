@@ -428,6 +428,11 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
     throw new Error("Gemini JSON needs at least one quarterly income row.");
   }
 
+  const nonZeroRevCount = income.filter(r => r.revenue > 0).length;
+  if (income.length >= 2 && nonZeroRevCount < Math.ceil(income.length * 0.3)) {
+    throw new Error(`Data quality: only ${nonZeroRevCount}/${income.length} annual rows have revenue > 0.`);
+  }
+
   const sortedIncome = sortAnnualByFy(income);
   const sortedCf = sortAnnualByFy(cashFlow);
   const sortedBs = sortAnnualByFy(balanceSheet);
@@ -453,181 +458,72 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
 }
 
 
-function fullHistoryPromptEnabled(): boolean {
-  const v = process.env.GEMINI_STOCK_FULL_HISTORY?.trim().toLowerCase();
-  if (v === "0" || v === "false" || v === "off" || v === "no") return false;
-  return true;
-}
+const MAX_HISTORY_YEARS = 10;
+const MAX_QUARTERS = 40;
 
-function maxOutputTokensForStockBundle(): number {
-  const raw = Number(process.env.GEMINI_STOCK_MAX_OUTPUT_TOKENS?.trim());
-  if (Number.isFinite(raw) && raw >= 4096) return Math.min(Math.floor(raw), 65536);
-  return 65536;
-}
-
-function requestTimeoutMs(): number {
+function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
-  if (Number.isFinite(raw) && raw >= 30_000) return Math.min(Math.floor(raw), 600_000);
-  return 240_000;
+  if (Number.isFinite(raw) && raw >= 15_000) return Math.min(Math.floor(raw), 300_000);
+  return 120_000;
 }
 
-/**
- * Gemini responseSchema – constrains decoding so `historical`/`intraday`
- * can never appear and every output token goes to fundamentals.
- */
-function stockBundleResponseSchema() {
-  const N = { type: "NUMBER" as const, nullable: true };
-  const S = { type: "STRING" as const };
-  const SN = { type: "STRING" as const, nullable: true };
-
-  const incomeRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S, fiscalYear: S,
-      revenue: N, grossProfit: N, operatingExpenses: N, netIncome: N,
-      operatingIncome: N, ebitda: N, dilutedEps: N, dilutedAverageShares: N,
-    },
-    required: ["date"],
-  };
-
-  const cashFlowRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S, fiscalYear: S,
-      freeCashFlow: N, operatingCashFlow: N, capitalExpenditure: N,
-      investingCashFlow: N, financingCashFlow: N, dividendsPaid: N, stockRepurchase: N,
-    },
-    required: ["date"],
-  };
-
-  const balanceRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S, fiscalYear: S,
-      totalAssets: N, totalDebt: N, netDebt: N, stockholdersEquity: N,
-      cashAndCashEquivalents: N, totalCurrentAssets: N, totalCurrentLiabilities: N,
-      inventory: N, accountsReceivable: N, goodwill: N, longTermDebt: N,
-    },
-    required: ["date"],
-  };
-
-  const incomeQRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S,
-      revenue: N, grossProfit: N, operatingExpenses: N, netIncome: N,
-      operatingIncome: N, ebitda: N, dilutedEps: N, dilutedAverageShares: N,
-    },
-    required: ["date"],
-  };
-
-  const cashFlowQRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S,
-      freeCashFlow: N, operatingCashFlow: N, capitalExpenditure: N,
-      investingCashFlow: N, financingCashFlow: N, dividendsPaid: N, stockRepurchase: N,
-    },
-    required: ["date"],
-  };
-
-  const balanceQRow = {
-    type: "OBJECT" as const,
-    properties: {
-      date: S, symbol: S,
-      totalAssets: N, totalDebt: N, netDebt: N, stockholdersEquity: N,
-      cashAndCashEquivalents: N, totalCurrentAssets: N, totalCurrentLiabilities: N,
-      inventory: N, accountsReceivable: N, goodwill: N, longTermDebt: N,
-    },
-    required: ["date"],
-  };
-
-  return {
-    type: "OBJECT" as const,
-    properties: {
-      quote: {
-        type: "OBJECT" as const,
-        properties: {
-          symbol: S, name: S, price: N, change: N, changesPercentage: N,
-        },
-        required: ["symbol", "name", "price"],
-      },
-      investor: {
-        type: "OBJECT" as const,
-        properties: {
-          currency: SN, marketCap: N, enterpriseValue: N, trailingPE: N, forwardPE: N,
-          pegRatio: N, priceToSales: N, priceToBook: N, enterpriseToRevenue: N, enterpriseToEbitda: N,
-          beta: N, fiftyTwoWeekLow: N, fiftyTwoWeekHigh: N, fiftyDayAverage: N, twoHundredDayAverage: N,
-          regularMarketVolume: N, averageDailyVolume3Month: N,
-          grossMargins: N, operatingMargins: N, profitMargins: N,
-          returnOnEquity: N, returnOnAssets: N, revenueGrowth: N, earningsGrowth: N,
-          debtToEquity: N, currentRatio: N, quickRatio: N, totalCash: N, totalDebt: N,
-          dividendRate: N, dividendYield: N, payoutRatio: N,
-          trailingEps: N, forwardEps: N, bookValue: N, revenuePerShare: N,
-          sharesOutstanding: N, floatShares: N,
-          heldPercentInsiders: N, heldPercentInstitutions: N, shortPercentOfFloat: N,
-          targetMeanPrice: N, targetMedianPrice: N, recommendationKey: SN, numberOfAnalystOpinions: N,
-        },
-      },
-      income:               { type: "ARRAY" as const, items: incomeRow },
-      cashFlow:             { type: "ARRAY" as const, items: cashFlowRow },
-      balanceSheet:         { type: "ARRAY" as const, items: balanceRow },
-      incomeQuarterly:      { type: "ARRAY" as const, items: incomeQRow },
-      cashFlowQuarterly:    { type: "ARRAY" as const, items: cashFlowQRow },
-      balanceSheetQuarterly:{ type: "ARRAY" as const, items: balanceQRow },
-      dividendQuarterly: {
-        type: "ARRAY" as const,
-        items: {
-          type: "OBJECT" as const,
-          properties: { date: S, dividendPerShare: N },
-          required: ["date"],
-        },
-      },
-    },
-    required: [
-      "quote", "investor", "income", "cashFlow", "balanceSheet",
-      "incomeQuarterly", "cashFlowQuarterly", "balanceSheetQuarterly", "dividendQuarterly",
-    ],
-  };
-}
-
-export async function fetchStockBundleFromGemini(symbol: string): Promise<StockAnalysisBundle> {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "GEMINI_API_KEY is not set. Stock analysis now uses Gemini when the cache is empty.",
-    );
-  }
-
-  const sym = symbol.trim().toUpperCase() || "AAPL";
-  const model = defaultGeminiModel();
+/** Fire a single Gemini request and return parsed JSON. No responseSchema — lite models fill zeros with it. */
+async function callGeminiJson(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  maxTokens: number,
+): Promise<unknown> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
-  const depthBlock = fullHistoryPromptEnabled()
-    ? `
-MAXIMUM FUNDAMENTALS (this JSON is cached once; UI slices by period later). **Do not waste tokens on stock prices.**
-- **Annual** income, cashFlow, balanceSheet: as many fiscal years as you can (target 15–20+ years for mature US listings).
-- **Quarterly** incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: aligned period-end dates, as many quarters as fit (target 15–20+ years of quarters).
-`
-    : `
-Include several years of annuals and many quarters of fundamentals.
-`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.15,
+          responseMimeType: "application/json",
+        },
+      }),
+      signal: AbortSignal.timeout(perRequestTimeoutMs()),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "network error";
+    throw new Error(`Gemini request failed: ${msg}`);
+  }
 
-  const prompt = `You output ONE JSON object only (no markdown, no code fences) for equity ticker ${sym}.
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 400)}`);
+  }
 
-**CRITICAL RULES:**
-1. Do **NOT** include \`historical\` or \`intraday\` keys. Price data comes from Yahoo. Every token must go into fundamentals.
-2. A long price series WILL truncate your JSON and destroy annual/quarterly data — the payload becomes broken.
-3. ALL numeric financial values must be in the reporting currency at company scale (e.g. revenue in actual dollars, not thousands or millions, unless the company reports in thousands).
-4. Use **exactly** the field names shown below — the parser maps them by name.
+  const raw = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text =
+    raw?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("")?.trim() ?? "";
+  if (!text) throw new Error("Empty Gemini response.");
 
-${depthBlock}
+  return parseJsonFromGemini(text);
+}
 
-## EXACT JSON SCHEMA — use these field names:
+function buildAnnualPrompt(sym: string): string {
+  return `You output ONE JSON object (no markdown, no code fences) for ticker ${sym}.
 
-\`\`\`
+**CRITICAL: Do NOT include historical/intraday price data. Only fundamentals.**
+All numeric values in reporting currency at company scale (actual dollars, not thousands).
+
+Provide data for the last ${MAX_HISTORY_YEARS} fiscal years, oldest first.
+
 {
-  "quote": { "symbol": "${sym}", "name": "Company Name", "price": 123.45, "change": -1.2, "changesPercentage": -0.97 },
+  "quote": { "symbol": "${sym}", "name": "Full Company Name", "price": 123.45, "change": -1.2, "changesPercentage": -0.97 },
 
   "investor": {
     "currency": "USD", "marketCap": N, "enterpriseValue": N, "trailingPE": N, "forwardPE": N,
@@ -635,10 +531,8 @@ ${depthBlock}
     "beta": N, "fiftyTwoWeekLow": N, "fiftyTwoWeekHigh": N, "fiftyDayAverage": N, "twoHundredDayAverage": N,
     "regularMarketVolume": N, "averageDailyVolume3Month": N,
     "grossMargins": 0.xx, "operatingMargins": 0.xx, "profitMargins": 0.xx,
-    "returnOnEquity": 0.xx, "returnOnAssets": 0.xx,
-    "revenueGrowth": 0.xx, "earningsGrowth": 0.xx,
-    "debtToEquity": N, "currentRatio": N, "quickRatio": N,
-    "totalCash": N, "totalDebt": N,
+    "returnOnEquity": 0.xx, "returnOnAssets": 0.xx, "revenueGrowth": 0.xx, "earningsGrowth": 0.xx,
+    "debtToEquity": N, "currentRatio": N, "quickRatio": N, "totalCash": N, "totalDebt": N,
     "dividendRate": N, "dividendYield": 0.xx, "payoutRatio": 0.xx,
     "trailingEps": N, "forwardEps": N, "bookValue": N, "revenuePerShare": N,
     "sharesOutstanding": N, "floatShares": N,
@@ -663,8 +557,23 @@ ${depthBlock}
       "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,
       "cashAndCashEquivalents": N, "totalCurrentAssets": N, "totalCurrentLiabilities": N,
       "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N }
-  ],
+  ]
+}
 
+N = number or null. Dates ISO "YYYY-MM-DD" (fiscal period end).
+Provide ${MAX_HISTORY_YEARS} years of annual data. Use 10-K figures.
+Every field on every row — null when unavailable, never omit.`;
+}
+
+function buildQuarterlyIncomeCfPrompt(sym: string): string {
+  return `You output ONE JSON object (no markdown, no code fences) with quarterly income + cash flow for ticker ${sym}.
+
+**CRITICAL: No price data. Only quarterly income statements and cash flow statements.**
+All numeric values in reporting currency at company scale (actual dollars, not thousands).
+
+Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:
+
+{
   "incomeQuarterly": [
     { "date": "YYYY-MM-DD", "symbol": "${sym}",
       "revenue": N, "grossProfit": N, "operatingExpenses": N, "netIncome": N,
@@ -675,8 +584,22 @@ ${depthBlock}
     { "date": "YYYY-MM-DD", "symbol": "${sym}",
       "freeCashFlow": N, "operatingCashFlow": N, "capitalExpenditure": N,
       "investingCashFlow": N, "financingCashFlow": N, "dividendsPaid": N, "stockRepurchase": N }
-  ],
+  ]
+}
 
+N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).
+Use 10-Q figures. Every field on every row — null when unavailable, never omit.`;
+}
+
+function buildQuarterlyBsDivPrompt(sym: string): string {
+  return `You output ONE JSON object (no markdown, no code fences) with quarterly balance sheet + dividends for ticker ${sym}.
+
+**CRITICAL: No price data. Only quarterly balance sheet and dividend data.**
+All numeric values in reporting currency at company scale (actual dollars, not thousands).
+
+Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:
+
+{
   "balanceSheetQuarterly": [
     { "date": "YYYY-MM-DD", "symbol": "${sym}",
       "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,
@@ -688,56 +611,53 @@ ${depthBlock}
     { "date": "YYYY-MM-DD", "dividendPerShare": N }
   ]
 }
-\`\`\`
 
-**N** = number or null. Use null when data is unavailable — never omit the key.
-Dates are ISO "YYYY-MM-DD" (fiscal period end). Use "${sym}" on every fundamentals row.
-Provide **every field** for every row — this is critical. Do not skip fields.
+N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).
+Use 10-Q figures. dividendPerShare = per-share dividend for that quarter, null if none.
+Every field on every row — null when unavailable, never omit.`;
+}
 
-Use widely reported 10-K / 10-Q figures. Same fiscal calendar and currency throughout.`;
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: maxOutputTokensForStockBundle(),
-          temperature: 0.15,
-          responseMimeType: "application/json",
-          responseSchema: stockBundleResponseSchema(),
-        },
-      }),
-      signal: AbortSignal.timeout(requestTimeoutMs()),
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "network error";
-    throw new Error(`Gemini request failed: ${msg}`);
+/**
+ * Fetches stock data from Gemini in 3 sequential requests to avoid overwhelming the model:
+ * 1) Quote + investor + annual statements (10 years)
+ * 2) Quarterly income + cash flow (~40 quarters)
+ * 3) Quarterly balance sheet + dividends (~40 quarters)
+ */
+export async function fetchStockBundleFromGemini(symbol: string): Promise<StockAnalysisBundle> {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not set.");
   }
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 400)}`);
-  }
+  const sym = symbol.trim().toUpperCase() || "AAPL";
+  const model = defaultGeminiModel();
 
-  const raw = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
+  const part1 = (await callGeminiJson(
+    apiKey, model, buildAnnualPrompt(sym), 16384,
+  )) as Record<string, unknown>;
+
+  console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
+  const part2 = (await callGeminiJson(
+    apiKey, model, buildQuarterlyIncomeCfPrompt(sym), 16384,
+  )) as Record<string, unknown>;
+
+  console.log(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
+  const part3 = (await callGeminiJson(
+    apiKey, model, buildQuarterlyBsDivPrompt(sym), 16384,
+  )) as Record<string, unknown>;
+
+  const merged = {
+    quote: part1.quote,
+    investor: part1.investor,
+    income: part1.income,
+    cashFlow: part1.cashFlow,
+    balanceSheet: part1.balanceSheet,
+    incomeQuarterly: part2.incomeQuarterly,
+    cashFlowQuarterly: part2.cashFlowQuarterly,
+    balanceSheetQuarterly: part3.balanceSheetQuarterly,
+    dividendQuarterly: part3.dividendQuarterly,
   };
-  const text =
-    raw?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("")?.trim() ?? "";
-  if (!text) throw new Error("Empty Gemini response.");
 
-  let parsed: unknown;
-  try {
-    parsed = parseJsonFromGemini(text);
-  } catch (e) {
-    throw new Error(`Gemini JSON parse failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  return normalizeGeminiStockBundleJson(sym, parsed);
+  return normalizeGeminiStockBundleJson(sym, merged);
 }

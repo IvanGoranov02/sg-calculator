@@ -13,7 +13,7 @@ export type StockAnalysisResult = {
  * Bump this whenever the normalizer or prompt changes significantly
  * so stale caches (produced by older normalisation) are discarded.
  */
-const CACHE_SCHEMA_VERSION = 3;
+const CACHE_SCHEMA_VERSION = 4;
 
 const CACHE_TTL_MS = (() => {
   const h = Number(process.env.STOCK_CACHE_TTL_HOURS?.trim());
