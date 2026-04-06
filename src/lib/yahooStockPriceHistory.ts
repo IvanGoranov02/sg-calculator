@@ -1,11 +1,12 @@
 /**
- * Server-only: Yahoo Finance for live quote + daily/intraday price history only.
- * Fundamentals stay from Gemini/cache; this overwrites quote.historical/intraday on each load.
+ * Server-only: Yahoo Finance for live quote, daily/intraday prices, and (when needed) ex-dividend
+ * amounts merged into quarterly dividend-per-share. Fundamentals stay from Gemini/cache.
  */
 
 import YahooFinance from "yahoo-finance2";
 
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
+import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["ripHistorical", "yahooSurvey"],
@@ -99,9 +100,129 @@ function numField(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Parse Yahoo chart `events.dividends` (array or timestamp-keyed object). */
+function extractYahooDividendEvents(chartResult: unknown): Array<{ date: string; amount: number }> {
+  if (!chartResult || typeof chartResult !== "object") return [];
+  const ev = (chartResult as { events?: { dividends?: unknown } }).events?.dividends;
+  if (ev == null) return [];
+  const raw = Array.isArray(ev) ? ev : Object.values(ev as Record<string, unknown>);
+  const out: Array<{ date: string; amount: number }> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as { date?: Date; amount?: unknown };
+    const d = o.date instanceof Date ? o.date.toISOString().slice(0, 10) : null;
+    const amt = typeof o.amount === "number" ? o.amount : Number(o.amount);
+    if (!d || !Number.isFinite(amt) || amt <= 0) continue;
+    out.push({ date: d, amount: amt });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** `historical(..., { events: "dividends" })` — often fills gaps when chart events are empty. */
+function extractHistoricalDividendRows(rows: unknown): Array<{ date: string; amount: number }> {
+  if (!Array.isArray(rows)) return [];
+  const out: Array<{ date: string; amount: number }> = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as { date?: Date; dividends?: unknown };
+    const d = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : null;
+    const amt = typeof r.dividends === "number" ? r.dividends : Number(r.dividends);
+    if (!d || !Number.isFinite(amt) || amt <= 0) continue;
+    out.push({ date: d, amount: amt });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Prefer chart ex-dates; add historical-only dates (some tickers omit chart events). */
+function mergeChartAndHistoricalDividends(
+  chart: Array<{ date: string; amount: number }>,
+  historical: Array<{ date: string; amount: number }>,
+): Array<{ date: string; amount: number }> {
+  const byDate = new Map<string, number>();
+  for (const x of chart) byDate.set(x.date, x.amount);
+  for (const x of historical) {
+    if (!byDate.has(x.date)) byDate.set(x.date, x.amount);
+  }
+  return [...byDate.entries()]
+    .map(([date, amount]) => ({ date, amount }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function needsYahooDpsBackfill(bundle: StockAnalysisBundle): boolean {
+  const rows = bundle.dividendQuarterly;
+  if (rows.length === 0) return false;
+  return rows.some((p) => p.dividendPerShare == null || p.dividendPerShare === 0);
+}
+
+/**
+ * Sums Yahoo ex-dividend cash amounts into fiscal quarter windows (period-end dates from the bundle).
+ * Only writes quarters where Gemini left null or 0 and Yahoo has a positive sum for that window.
+ */
+async function mergeYahooExDividendsIntoQuarterly(
+  bundle: StockAnalysisBundle,
+  resolvedYahooSymbol: string,
+): Promise<void> {
+  if (!needsYahooDpsBackfill(bundle)) return;
+
+  const period2 = new Date();
+  const period1 = new Date(period2);
+  period1.setFullYear(period1.getFullYear() - 12);
+
+  const [chartResult, histRows] = await Promise.all([
+    yahooFinance
+      .chart(resolvedYahooSymbol, {
+        period1,
+        period2,
+        interval: "1d",
+        return: "array",
+        events: "div",
+      })
+      .catch(() => null),
+    yahooFinance
+      .historical(resolvedYahooSymbol, {
+        period1,
+        period2,
+        events: "dividends",
+      })
+      .catch(() => []),
+  ]);
+
+  const fromChart = extractYahooDividendEvents(chartResult);
+  const fromHist = extractHistoricalDividendRows(histRows);
+  const divs = mergeChartAndHistoricalDividends(fromChart, fromHist);
+  if (divs.length === 0) return;
+
+  const sorted = sortQuarterlyByDateAsc(bundle.dividendQuarterly);
+  const next: typeof bundle.dividendQuarterly = [];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const row = sorted[i];
+    const end = row.date.slice(0, 10);
+    const prevEnd = i > 0 ? sorted[i - 1]!.date.slice(0, 10) : "1900-01-01";
+
+    let sum = 0;
+    for (const { date: ex, amount } of divs) {
+      if (ex > prevEnd && ex <= end) sum += amount;
+    }
+
+    const rounded = Math.round(sum * 1e6) / 1e6;
+    const cur = row.dividendPerShare;
+    const shouldFill = rounded > 0 && (cur == null || cur === 0);
+
+    if (shouldFill) {
+      next.push({ ...row, dividendPerShare: rounded });
+    } else {
+      next.push(row);
+    }
+  }
+
+  bundle.dividendQuarterly = next;
+}
+
 /**
  * Overwrites {@link StockAnalysisBundle.quote}, {@link StockAnalysisBundle.historical}, and
- * {@link StockAnalysisBundle.intraday} from Yahoo. No-op if Yahoo fails (keeps Gemini/cache values).
+ * {@link StockAnalysisBundle.intraday} from Yahoo; may fill {@link StockAnalysisBundle.dividendQuarterly}
+ * from Yahoo ex-dividend history when Gemini left gaps. No-op if Yahoo fails (keeps Gemini/cache values).
  */
 export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): Promise<void> {
   const inputSym = bundle.quote.symbol.trim().toUpperCase() || "AAPL";
@@ -113,27 +234,29 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     const intradayPeriod1 = new Date(period2);
     intradayPeriod1.setDate(intradayPeriod1.getDate() - 7);
 
-    const [quoteResult, historicalResult, chartIntraday, quoteSummaryResult] = await Promise.all([
-      yahooFinance.quote(resolved),
-      yahooFinance.historical(resolved, {
-        period1: DAILY_HISTORY_START,
-        period2: period2Str,
-        interval: "1d",
-      }),
-      yahooFinance
-        .chart(resolved, {
-          period1: intradayPeriod1,
-          period2: period2,
-          interval: "5m",
-          return: "array",
-        })
-        .catch(() => null),
-      yahooFinance
-        .quoteSummary(resolved, {
-          modules: ["calendarEvents"],
-        })
-        .catch(() => null),
-    ]);
+    const [quoteResult, historicalResult, chartIntraday, quoteSummaryResult, _dpsMerge] =
+      await Promise.all([
+        yahooFinance.quote(resolved),
+        yahooFinance.historical(resolved, {
+          period1: DAILY_HISTORY_START,
+          period2: period2Str,
+          interval: "1d",
+        }),
+        yahooFinance
+          .chart(resolved, {
+            period1: intradayPeriod1,
+            period2: period2,
+            interval: "5m",
+            return: "array",
+          })
+          .catch(() => null),
+        yahooFinance
+          .quoteSummary(resolved, {
+            modules: ["calendarEvents"],
+          })
+          .catch(() => null),
+        mergeYahooExDividendsIntoQuarterly(bundle, resolved),
+      ]);
 
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
     if (!q || (q as { quoteType?: string }).quoteType === "NONE") return;
