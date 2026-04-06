@@ -6,11 +6,76 @@
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
 import {
   sortQuarterlyByDateAsc,
+  type BalanceSheetQuarter,
+  type CashFlowQuarter,
+  type DividendQuarterlyPoint,
   type HistoricalEodBar,
+  type IncomeStatementQuarter,
   type InvestorMetrics,
   type StockAnalysisBundle,
   type StockQuote,
 } from "@/lib/stockAnalysisTypes";
+
+function stubCashFlowQuarter(sym: string, dateIso: string, netIncome: number): CashFlowQuarter {
+  const ni = Number(netIncome);
+  const fcf = Number.isFinite(ni) ? Math.max(0, ni * 0.85) : 0;
+  return {
+    date: dateIso,
+    symbol: sym,
+    freeCashFlow: fcf,
+    operatingCashFlow: null,
+    capitalExpenditure: null,
+    investingCashFlow: null,
+    financingCashFlow: null,
+    dividendsPaid: null,
+    stockRepurchase: null,
+  };
+}
+
+function stubBalanceQuarter(sym: string, dateIso: string): BalanceSheetQuarter {
+  return {
+    date: dateIso,
+    symbol: sym,
+    totalAssets: null,
+    totalDebt: null,
+    netDebt: null,
+    stockholdersEquity: null,
+    cashAndCashEquivalents: null,
+    totalCurrentAssets: null,
+    totalCurrentLiabilities: null,
+    inventory: null,
+    accountsReceivable: null,
+    goodwill: null,
+    longTermDebt: null,
+  };
+}
+
+/** Gemini often returns fewer CF/BS/div rows than income quarters — align by period-end date. */
+function alignQuarterlyToIncome(
+  sym: string,
+  incomeSorted: IncomeStatementQuarter[],
+  cfRaw: CashFlowQuarter[],
+  bsRaw: BalanceSheetQuarter[],
+  divRaw: DividendQuarterlyPoint[],
+): Pick<StockAnalysisBundle, "cashFlowQuarterly" | "balanceSheetQuarterly" | "dividendQuarterly"> {
+  const cfBy = new Map(cfRaw.map((r) => [r.date.slice(0, 10), r]));
+  const bsBy = new Map(bsRaw.map((r) => [r.date.slice(0, 10), r]));
+  const divBy = new Map(divRaw.map((r) => [r.date.slice(0, 10), r]));
+
+  const cashFlowQuarterly: CashFlowQuarter[] = [];
+  const balanceSheetQuarterly: BalanceSheetQuarter[] = [];
+  const dividendQuarterly: DividendQuarterlyPoint[] = [];
+
+  for (const inc of incomeSorted) {
+    const d = inc.date.slice(0, 10);
+    cashFlowQuarterly.push(cfBy.get(d) ?? stubCashFlowQuarter(sym, d, inc.netIncome));
+    balanceSheetQuarterly.push(bsBy.get(d) ?? stubBalanceQuarter(sym, d));
+    const dv = divBy.get(d);
+    dividendQuarterly.push(dv ?? { date: d, dividendPerShare: null });
+  }
+
+  return { cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly };
+}
 
 function sortAnnualByFy<T extends { fiscalYear: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
@@ -151,7 +216,9 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
   const dividendQuarterly = Array.isArray(b.dividendQuarterly) ? b.dividendQuarterly : [];
 
   if (income.length === 0) throw new Error("Gemini JSON missing annual income.");
-  if (incomeQuarterly.length < 4) throw new Error("Gemini JSON needs at least 4 quarterly income rows.");
+  if (incomeQuarterly.length < 1) {
+    throw new Error("Gemini JSON needs at least one quarterly income row.");
+  }
 
   const withSym = <T extends { symbol?: string }>(rows: T[]) =>
     rows.map((r) => ({ ...r, symbol: str(r.symbol, sym) }));
@@ -165,6 +232,12 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
     }));
   }
 
+  const incomeQ = sortQuarterlyByDateAsc(withSym(incomeQuarterly as StockAnalysisBundle["incomeQuarterly"]));
+  const cfQ = sortQuarterlyByDateAsc(withSym(cashFlowQuarterly as StockAnalysisBundle["cashFlowQuarterly"]));
+  const bsQ = sortQuarterlyByDateAsc(withSym(balanceSheetQuarterly as StockAnalysisBundle["balanceSheetQuarterly"]));
+  const divQ = sortQuarterlyByDateAsc(dividendQuarterly as StockAnalysisBundle["dividendQuarterly"]);
+  const aligned = alignQuarterlyToIncome(sym, incomeQ, cfQ, bsQ, divQ);
+
   return {
     quote,
     investor,
@@ -173,16 +246,10 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
     income: sortAnnualByFy(withSym(income as StockAnalysisBundle["income"])),
     cashFlow: sortAnnualByFy(withSym(cashFlow as StockAnalysisBundle["cashFlow"])),
     balanceSheet: sortAnnualByFy(withSym(balanceSheet as StockAnalysisBundle["balanceSheet"])),
-    incomeQuarterly: sortQuarterlyByDateAsc(withSym(incomeQuarterly as StockAnalysisBundle["incomeQuarterly"])),
-    cashFlowQuarterly: sortQuarterlyByDateAsc(
-      withSym(cashFlowQuarterly as StockAnalysisBundle["cashFlowQuarterly"]),
-    ),
-    balanceSheetQuarterly: sortQuarterlyByDateAsc(
-      withSym(balanceSheetQuarterly as StockAnalysisBundle["balanceSheetQuarterly"]),
-    ),
-    dividendQuarterly: sortQuarterlyByDateAsc(
-      dividendQuarterly as StockAnalysisBundle["dividendQuarterly"],
-    ),
+    incomeQuarterly: incomeQ,
+    cashFlowQuarterly: aligned.cashFlowQuarterly,
+    balanceSheetQuarterly: aligned.balanceSheetQuarterly,
+    dividendQuarterly: aligned.dividendQuarterly,
   };
 }
 
@@ -242,7 +309,7 @@ Required top-level keys:
 - intraday?: optional [ { date ISO datetime string, close } ] for recent sessions only
 - income: annual array — full history as above
 - cashFlow, balanceSheet: annual — aligned fiscal years to income
-- incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: quarterly rows, ISO period-end date, symbol "${sym}", **aligned lengths** for the three statement arrays; dividendQuarterly { date, dividendPerShare }
+- incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly: quarterly rows, ISO period-end date, symbol "${sym}". Include **at least 8 recent quarters** for large caps (e.g. MA, NVDA); **same period-end dates** on incomeQuarterly, cashFlowQuarterly, balanceSheetQuarterly when possible. If the response is long, still return **at least 4** income quarters — never fewer than 1. dividendQuarterly: { date, dividendPerShare }.
 
 Use the same symbol string "${sym}" on every row. Numbers are company scale (not per share except dilutedEps and dividendPerShare).`;
 
