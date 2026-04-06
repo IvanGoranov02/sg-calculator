@@ -20,6 +20,8 @@ export type GeminiBalanceFillOptions = {
    * Gemini is instructed to prioritize filings for these periods.
    */
   focusPeriodEnds?: string[];
+  /** When true, run Gemini even if automatic BS/dividend gap detection is negative (e.g. user sees missing fiscal years in the table). */
+  forceAttempt?: boolean;
 };
 
 function saneNumber(n: unknown, maxAbs = 5e14): number | null {
@@ -128,7 +130,7 @@ export async function applyGeminiBalanceSheetGaps(
   const needsBs = bsNeedsGapFill(bundle);
   const needsDiv = dividendNeedsGapFill(bundle);
 
-  if (!needsBs && !needsDiv) return false;
+  if (!needsBs && !needsDiv && !options?.forceAttempt) return false;
 
   const focusRaw = options?.focusPeriodEnds?.length
     ? options.focusPeriodEnds
@@ -163,6 +165,7 @@ export async function applyGeminiBalanceSheetGaps(
   const prompt = `You help fill NULL fields for a stock fundamentals UI. Yahoo Finance time series often omits line items (IFRS vs US GAAP labels, timing). Use widely reported 10-K / 10-Q figures when you are confident.
 
 Ticker: ${sym}
+${options?.forceAttempt ? "\nThe user asked to fill gaps — prioritize every null balance-sheet or dividend-per-share field below where filings support a value.\n" : ""}
 
 **Priority periods (match fiscal quarter/year ends to these dates when possible):**
 ${JSON.stringify(focusPeriodEnds)}
@@ -335,4 +338,9 @@ ${JSON.stringify(divTail)}`;
   bundle.balanceSheetQuarterly = newQ;
   bundle.dividendQuarterly = newDividend;
   return true;
+}
+
+/** True when balance sheet or quarterly DPS still has nulls that the Gemini route can patch. */
+export function bundleHasBalanceSheetOrDividendGaps(bundle: StockAnalysisBundle): boolean {
+  return bsNeedsGapFill(bundle) || dividendNeedsGapFill(bundle);
 }

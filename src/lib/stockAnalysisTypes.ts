@@ -1,4 +1,4 @@
-/** Shared shapes for stock analysis UI (Yahoo Finance via yahoo-finance2). */
+/** Shared shapes for stock analysis UI (bundle may come from Gemini + DB cache). */
 
 export type StockQuote = {
   symbol: string;

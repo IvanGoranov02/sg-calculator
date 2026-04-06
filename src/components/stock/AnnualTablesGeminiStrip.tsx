@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { annualDisplayFiscalYears, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
+import { bundleHasYahooSecDataGaps } from "@/lib/stockBundleGaps";
 import { debugLogAnnualTable } from "@/lib/stockDebugConsole";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
@@ -37,6 +38,11 @@ export function AnnualTablesGeminiStrip({ data, symbol, onBundleReplace }: Annua
     [displayYears, loadedSet],
   );
 
+  const hasYahooSecGaps = useMemo(
+    () => bundleHasYahooSecDataGaps(data, displayYears),
+    [data, displayYears],
+  );
+
   useEffect(() => {
     debugLogAnnualTable(symbol, {
       timeRange,
@@ -65,7 +71,7 @@ export function AnnualTablesGeminiStrip({ data, symbol, onBundleReplace }: Annua
       const res = await fetch("/api/stock/gemini-balance-fill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: symbol, bundle: data }),
+        body: JSON.stringify({ ticker: symbol, bundle: data, forceAttempt: true }),
       });
       const j = (await res.json()) as { ok?: boolean; bundle?: StockAnalysisBundle };
       if (j.bundle && j.ok) onBundleReplace(j.bundle);
@@ -74,7 +80,7 @@ export function AnnualTablesGeminiStrip({ data, symbol, onBundleReplace }: Annua
     }
   }, [onBundleReplace, symbol, data]);
 
-  if (!onBundleReplace || missingYears.length === 0) return null;
+  if (!onBundleReplace || !hasYahooSecGaps) return null;
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -96,7 +102,7 @@ export function AnnualTablesGeminiStrip({ data, symbol, onBundleReplace }: Annua
         onClick={runGeminiFill}
       >
         {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null}
-        {busy ? t("chartsFund.loadAgainGeminiBusy") : t("chartsFund.loadAgainGemini")}
+        {busy ? t("chartsFund.loadAgainGeminiBusy") : t("annual.fillGapsGemini")}
       </Button>
     </div>
   );

@@ -5,8 +5,11 @@
 
 import {
   isEmptyIncomeStatementCore,
+  type BalanceSheetAnnual,
   type BalanceSheetQuarter,
+  type CashFlowAnnual,
   type CashFlowQuarter,
+  type IncomeStatementAnnual,
   type IncomeStatementQuarter,
 } from "@/lib/stockAnalysisTypes";
 
@@ -40,6 +43,10 @@ export type SecQuarterlyFundamentals = {
   income: IncomeStatementQuarter[];
   cashFlow: CashFlowQuarter[];
   balanceSheet: BalanceSheetQuarter[];
+  /** Fiscal-year (10-K) rows from EDGAR FY facts — aligned by period end. */
+  incomeAnnual: IncomeStatementAnnual[];
+  cashFlowAnnual: CashFlowAnnual[];
+  balanceSheetAnnual: BalanceSheetAnnual[];
 };
 
 let tickerCikCache: Map<string, number> | null = null;
@@ -566,10 +573,113 @@ export async function fetchSecQuarterlyFundamentals(
     ),
   );
 
+  function fyLabelFromEnd(end: string, u: SecFactUnit | undefined): string {
+    if (u?.fy != null && Number.isFinite(Number(u.fy))) return String(u.fy);
+    return String(new Date(`${end}T12:00:00Z`).getUTCFullYear());
+  }
+
+  const fyEndSet = new Set<string>([...revFY.keys(), ...niFY.keys()]);
+  const fySorted = [...fyEndSet]
+    .filter((e) => e >= SEC_HISTORY_FROM && e <= maxEnd)
+    .sort();
+
+  const incomeAnnual: IncomeStatementAnnual[] = [];
+  for (const end of fySorted) {
+    const revenue = numOrNull(revFY.get(end)?.val);
+    const netIncome = numOrNull(niFY.get(end)?.val);
+    const grossProfit = numOrNull(gpFY.get(end)?.val);
+    const operatingIncome = numOrNull(oiFY.get(end)?.val);
+    let operatingExpenses = numOrNull(opexFY.get(end)?.val);
+    const ebitda = numOrNull(ebitdaFY.get(end)?.val);
+    if (operatingExpenses == null && grossProfit != null && operatingIncome != null) {
+      operatingExpenses = Math.max(0, grossProfit - operatingIncome);
+    }
+    operatingExpenses ??= 0;
+
+    const coreProbe = {
+      revenue: revenue ?? 0,
+      grossProfit: grossProfit ?? 0,
+      netIncome: netIncome ?? 0,
+      ...(operatingIncome != null ? { operatingIncome } : {}),
+    };
+    if (isEmptyIncomeStatementCore(coreProbe)) continue;
+
+    const fiscalYear = fyLabelFromEnd(end, revFY.get(end) ?? niFY.get(end));
+    const row: IncomeStatementAnnual = {
+      date: end,
+      symbol: sym,
+      fiscalYear,
+      revenue: revenue ?? 0,
+      grossProfit: grossProfit ?? 0,
+      operatingExpenses,
+      netIncome: netIncome ?? 0,
+    };
+    if (operatingIncome != null) row.operatingIncome = operatingIncome;
+    if (ebitda != null) row.ebitda = ebitda;
+    incomeAnnual.push(row);
+  }
+
+  if (incomeAnnual.length === 0) {
+    return null;
+  }
+
+  const cashFlowAnnual: CashFlowAnnual[] = incomeAnnual.map((inc) => {
+    const end = inc.date;
+    const cf = buildCashFlowRow(
+      sym,
+      end,
+      numOrNull(ocfFY.get(end)?.val),
+      numOrNull(capexFY.get(end)?.val),
+      numOrNull(invFY.get(end)?.val),
+      numOrNull(finFY.get(end)?.val),
+      numOrNull(divFY.get(end)?.val),
+      numOrNull(buyFY.get(end)?.val),
+      inc.netIncome,
+    );
+    return {
+      date: cf.date,
+      symbol: sym,
+      fiscalYear: inc.fiscalYear,
+      freeCashFlow: cf.freeCashFlow,
+      operatingCashFlow: cf.operatingCashFlow,
+      capitalExpenditure: cf.capitalExpenditure,
+      investingCashFlow: cf.investingCashFlow,
+      financingCashFlow: cf.financingCashFlow,
+      dividendsPaid: cf.dividendsPaid,
+      stockRepurchase: cf.stockRepurchase,
+    };
+  });
+
+  const balanceSheetAnnual: BalanceSheetAnnual[] = incomeAnnual.map((inc) => {
+    const end = inc.date;
+    const bs = buildBalanceRow(
+      sym,
+      end,
+      numOrNull(assetsFY.get(end)?.val),
+      numOrNull(liabFY.get(end)?.val),
+      numOrNull(eqFY.get(end)?.val),
+      numOrNull(cashFY.get(end)?.val),
+      numOrNull(ltFY.get(end)?.val),
+      numOrNull(cpFY.get(end)?.val),
+      numOrNull(gwFY.get(end)?.val),
+      numOrNull(invnFY.get(end)?.val),
+      numOrNull(arFY.get(end)?.val),
+      numOrNull(caFY.get(end)?.val),
+      numOrNull(clFY.get(end)?.val),
+    );
+    return {
+      ...bs,
+      fiscalYear: inc.fiscalYear,
+    };
+  });
+
   return {
     income: dates.map((d) => incomeNonEmpty.find((r) => r.date === d)!),
     cashFlow,
     balanceSheet,
+    incomeAnnual,
+    cashFlowAnnual,
+    balanceSheetAnnual,
   };
 }
 

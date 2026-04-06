@@ -11,7 +11,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const o = body as { ticker?: string; bundle?: StockAnalysisBundle; focusPeriodEnds?: unknown };
+  const o = body as {
+    ticker?: string;
+    bundle?: StockAnalysisBundle;
+    focusPeriodEnds?: unknown;
+    forceAttempt?: unknown;
+  };
   const ticker = typeof o.ticker === "string" ? o.ticker.trim() : "";
   if (!ticker || !o.bundle) {
     return Response.json({ error: "ticker and bundle are required" }, { status: 400 });
@@ -22,8 +27,9 @@ export async function POST(request: Request) {
     : undefined;
 
   const bundle = JSON.parse(JSON.stringify(o.bundle)) as StockAnalysisBundle;
+  const forceAttempt = o.forceAttempt === true;
   try {
-    const ok = await applyGeminiBalanceSheetGaps(ticker, bundle, { focusPeriodEnds });
+    const ok = await applyGeminiBalanceSheetGaps(ticker, bundle, { focusPeriodEnds, forceAttempt });
     return Response.json({ ok, bundle, filled: ok });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Gemini balance fill failed";

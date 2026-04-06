@@ -83,7 +83,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       noData: "No data",
       searchValid: "Search for a valid ticker symbol.",
       loadingSections: "Loading quote, history, and fundamentals…",
-      subtitle: "Stock analysis · Yahoo Finance (via yahoo-finance2)",
+      subtitle: "Stock analysis · Gemini fundamentals (cached) + Yahoo price history",
       nextEarnings: "Next earnings",
       afterHours: "After hours",
       preMarket: "Pre-market",
@@ -150,12 +150,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (net income / equity)",
       roa: "ROA (net income / assets)",
       geminiStripBody:
-        "{missing} of {total} fiscal years in this range have no annual row in the feed (empty cells). Gemini can try to fill partial nulls in rows that already exist (server API key).",
+        "Yahoo or SEC left gaps in this view — e.g. {missing} of {total} fiscal years without a full annual row, empty line items, balance sheet nulls, or missing dividend per share. You can try Gemini to fill some fields (server API key).",
+      fillGapsGemini: "Fill gaps (Gemini)",
     },
     investor: {
       title: "Key investor metrics",
       subtitle:
-        "Snapshot from Yahoo Finance (quote summary). Figures are as reported by Yahoo; not investment advice.",
+        "Snapshot from the loaded analysis bundle (often Gemini-derived in cache). Not investment advice.",
       currencyNote: "Reporting currency: {currency}",
       colMetric: "Metric",
       colValue: "Value",
@@ -634,7 +635,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       noData: "Няма данни",
       searchValid: "Въведете валиден тикер.",
       loadingSections: "Зареждане на котировка, история и фундаменти…",
-      subtitle: "Анализ на акции · Yahoo Finance (yahoo-finance2)",
+      subtitle: "Анализ на акции · Gemini фундаментали (кеш) + Yahoo ценова история",
       nextEarnings: "Следващ отчет",
       afterHours: "След борсова сесия",
       preMarket: "Предпазар",
@@ -702,12 +703,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (нетна печалба / капитал)",
       roa: "ROA (нетна печалба / активи)",
       geminiStripBody:
-        "{missing} от {total} фискални години в този диапазон нямат годишен ред в потока (празни клетки). Gemini може да опита да попълни частични празнини в вече заредени редове (API ключ на сървъра).",
+        "Yahoo или SEC са оставили празнини — напр. {missing} от {total} фискални години без пълен годишен ред, липсващи редове, null в баланса или липсващ дивидент на акция. Можеш да опиташ Gemini да попълни част от полетата (API ключ на сървъра).",
+      fillGapsGemini: "Попълни с Gemini",
     },
     investor: {
       title: "Ключови метрики за инвеститори",
       subtitle:
-        "Снимка от Yahoo Finance (quote summary). Стойностите са както Yahoo ги подава; не е инвестиционен съвет.",
+        "Снимка от заредения анализ (често от Gemini в кеш). Не е инвестиционен съвет.",
       currencyNote: "Отчетна валута: {currency}",
       colMetric: "Показател",
       colValue: "Стойност",
