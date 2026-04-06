@@ -24,9 +24,27 @@ export function rollingSum4QuarterlyLoose(values: (number | null)[]): {
   const sums: (number | null)[] = [];
   const partial: boolean[] = [];
   for (let i = 0; i < values.length; i++) {
+    // First quarters in the window: no full 4Q TTM yet — show partial sum (1–3Q) so bars render; still partial.
     if (i < 3) {
-      sums.push(null);
-      partial.push(false);
+      let s = 0;
+      let any = false;
+      let anyNull = false;
+      for (let j = 0; j <= i; j++) {
+        const v = values[j];
+        if (v == null || !Number.isFinite(v)) {
+          anyNull = true;
+        } else {
+          s += v;
+          any = true;
+        }
+      }
+      if (!any) {
+        sums.push(null);
+        partial.push(false);
+      } else {
+        sums.push(s);
+        partial.push(true);
+      }
       continue;
     }
     let s = 0;
