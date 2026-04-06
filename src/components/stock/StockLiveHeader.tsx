@@ -1,20 +1,67 @@
 "use client";
 
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { formatCurrency, formatCurrencyEur, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { StockQuote } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
+const DISPLAY_CCY_KEY = "sg-stock-price-ccy-v1";
+
+type DisplayCcy = "usd" | "eur";
+
+function readStoredCcy(): DisplayCcy {
+  if (typeof window === "undefined") return "usd";
+  try {
+    const v = localStorage.getItem(DISPLAY_CCY_KEY);
+    if (v === "eur" || v === "usd") return v;
+  } catch {
+    /* ignore */
+  }
+  return "usd";
+}
+
+function fmtLive(
+  usd: number,
+  ccy: DisplayCcy,
+  eurPerUsd: number | null | undefined,
+): string {
+  if (ccy === "eur" && eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0) {
+    return formatCurrencyEur(usd * eurPerUsd);
+  }
+  return formatCurrency(usd);
+}
+
 type StockLiveHeaderProps = {
   quote: StockQuote;
+  eurPerUsd?: number | null;
 };
 
-export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
+export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
   const { t } = useI18n();
+  const [ccy, setCcy] = useState<DisplayCcy>(readStoredCcy);
+
+  const persistCcy = useCallback((next: DisplayCcy) => {
+    setCcy(next);
+    try {
+      localStorage.setItem(DISPLAY_CCY_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const canEur = eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0;
+
+  const fmt = useCallback(
+    (usd: number) => fmtLive(usd, ccy, eurPerUsd),
+    [ccy, eurPerUsd],
+  );
+
   const positive = quote.changesPercentage >= 0;
 
   const post = quote.postMarketPrice;
@@ -38,6 +85,13 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
     (quote.postMarketChangePercent ?? 0) >= 0 || (quote.postMarketChange ?? 0) >= 0;
   const prePos =
     (quote.preMarketChangePercent ?? 0) >= 0 || (quote.preMarketChange ?? 0) >= 0;
+
+  const changeLabel = useMemo(() => {
+    if (ccy === "eur" && canEur) {
+      return fmtLive(quote.change, "eur", eurPerUsd);
+    }
+    return formatCurrency(quote.change);
+  }, [ccy, canEur, eurPerUsd, quote.change]);
 
   return (
     <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4 shadow-lg shadow-black/20 sm:p-5">
@@ -65,9 +119,36 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
         </div>
 
         <div className="flex min-w-0 flex-col items-start gap-3 sm:items-end">
+          <div
+            className="flex flex-wrap items-center gap-2 sm:justify-end"
+            role="group"
+            aria-label={t("stock.priceCurrencyGroup")}
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant={ccy === "usd" ? "secondary" : "ghost"}
+              className="h-7 px-2.5 font-mono text-[11px]"
+              onClick={() => persistCcy("usd")}
+            >
+              USD
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={ccy === "eur" ? "secondary" : "ghost"}
+              className="h-7 px-2.5 font-mono text-[11px]"
+              disabled={!canEur}
+              title={!canEur ? t("stock.eurUnavailable") : undefined}
+              onClick={() => canEur && persistCcy("eur")}
+            >
+              EUR
+            </Button>
+          </div>
+
           <div className="flex flex-wrap items-baseline gap-2 sm:justify-end sm:gap-3">
             <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
-              {formatCurrency(quote.price)}
+              {fmt(quote.price)}
             </span>
             <span
               className={cn(
@@ -77,16 +158,21 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
             >
               {positive ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
               {formatPercent(quote.changesPercentage)}
-              <span className="text-muted-foreground">({formatCurrency(quote.change)})</span>
+              <span className="text-muted-foreground">({changeLabel})</span>
             </span>
           </div>
+          {ccy === "eur" && canEur ? (
+            <p className="max-w-[240px] text-right text-[10px] leading-snug text-muted-foreground">
+              {t("stock.eurFxNote")}
+            </p>
+          ) : null}
 
           {showPost ? (
             <div className="text-left sm:text-right">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("stock.afterHours")}
               </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">{formatCurrency(post!)}</p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{fmt(post!)}</p>
               <p
                 className={cn(
                   "font-mono text-xs tabular-nums",
@@ -96,7 +182,7 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
                 {quote.postMarketChangePercent != null && Number.isFinite(quote.postMarketChangePercent)
                   ? formatPercent(quote.postMarketChangePercent)
                   : quote.postMarketChange != null
-                    ? formatCurrency(quote.postMarketChange)
+                    ? fmt(quote.postMarketChange)
                     : "—"}
               </p>
             </div>
@@ -107,7 +193,7 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("stock.preMarket")}
               </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">{formatCurrency(pre!)}</p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{fmt(pre!)}</p>
               <p
                 className={cn(
                   "font-mono text-xs tabular-nums",
@@ -117,7 +203,7 @@ export function StockLiveHeader({ quote }: StockLiveHeaderProps) {
                 {quote.preMarketChangePercent != null && Number.isFinite(quote.preMarketChangePercent)
                   ? formatPercent(quote.preMarketChangePercent)
                   : quote.preMarketChange != null
-                    ? formatCurrency(quote.preMarketChange)
+                    ? fmt(quote.preMarketChange)
                     : "—"}
               </p>
             </div>

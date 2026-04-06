@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 
 /**
  * Short Gemini context when Yahoo quarterly DPS is missing in the UI.
@@ -13,9 +14,13 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const ticker = searchParams.get("ticker")?.trim().toUpperCase();
+  const raw = searchParams.get("ticker")?.trim() ?? "";
+  const ticker = raw.toUpperCase();
   const locale = searchParams.get("locale") === "bg" ? "bg" : "en";
   if (!ticker) {
+    return NextResponse.json({ ok: false, error: "ticker" as const }, { status: 400 });
+  }
+  if (!isValidStockSymbolInput(raw)) {
     return NextResponse.json({ ok: false, error: "ticker" as const }, { status: 400 });
   }
 

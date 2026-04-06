@@ -617,13 +617,18 @@ Use 10-Q figures. dividendPerShare = per-share dividend for that quarter, null i
 Every field on every row — null when unavailable, never omit.`;
 }
 
+export type GeminiBundlePart = 1 | 2 | 3;
+
 /**
  * Fetches stock data from Gemini in 3 sequential requests to avoid overwhelming the model:
  * 1) Quote + investor + annual statements (10 years)
  * 2) Quarterly income + cash flow (~40 quarters)
  * 3) Quarterly balance sheet + dividends (~40 quarters)
  */
-export async function fetchStockBundleFromGemini(symbol: string): Promise<StockAnalysisBundle> {
+export async function fetchStockBundleFromGemini(
+  symbol: string,
+  opts?: { onPartStart?: (part: GeminiBundlePart) => void },
+): Promise<StockAnalysisBundle> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not set.");
@@ -632,16 +637,19 @@ export async function fetchStockBundleFromGemini(symbol: string): Promise<StockA
   const sym = symbol.trim().toUpperCase() || "AAPL";
   const model = defaultGeminiModel();
 
+  opts?.onPartStart?.(1);
   console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
   const part1 = (await callGeminiJson(
     apiKey, model, buildAnnualPrompt(sym), 16384,
   )) as Record<string, unknown>;
 
+  opts?.onPartStart?.(2);
   console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
   const part2 = (await callGeminiJson(
     apiKey, model, buildQuarterlyIncomeCfPrompt(sym), 16384,
   )) as Record<string, unknown>;
 
+  opts?.onPartStart?.(3);
   console.log(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
   const part3 = (await callGeminiJson(
     apiKey, model, buildQuarterlyBsDivPrompt(sym), 16384,

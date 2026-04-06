@@ -1,3 +1,5 @@
+import { INVALID_TICKER_SYMBOL_MESSAGE } from "@/lib/stockSymbol";
+
 export type AppLocale = "en" | "bg";
 
 export const LOCALE_STORAGE_KEY = "sg-locale-v1";
@@ -83,12 +85,20 @@ export const messages: Record<AppLocale, MessageDict> = {
       noData: "No data",
       searchValid: "Search for a valid ticker symbol.",
       loadingSections: "Loading quote, history, and fundamentals…",
-      subtitle: "Stock analysis · Gemini fundamentals (cached) + Yahoo price history",
+      subtitle: "Stock analysis · Gemini fundamentals (cached monthly) + Yahoo live prices",
       nextEarnings: "Next earnings",
       afterHours: "After hours",
       preMarket: "Pre-market",
       refreshData: "Refresh data",
       refreshing: "Refreshing…",
+      priceCurrencyGroup: "Quote currency",
+      eurUnavailable: "EUR rate unavailable",
+      eurFxNote: "Approximate EUR from Yahoo EURUSD (spot). Percent change is still in USD terms.",
+      loadProgressConnect: "Connecting…",
+      loadProgressCache: "Loading cached fundamentals…",
+      loadProgressGemini: "Fundamentals request {step} of {total} (Gemini)…",
+      loadProgressYahooFundamentals: "Merging Yahoo fundamentals…",
+      loadProgressYahooPrices: "Updating live prices and charts…",
     },
     income: {
       title: "Income statement",
@@ -555,6 +565,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     errors: {
       emptyTicker: "Empty ticker.",
+      invalidTickerSymbol: "Use Latin letters, numbers, dot or hyphen only (e.g. AAPL).",
       tickerNotFound: 'Ticker "{sym}" was not found. Use a Yahoo symbol (e.g. NVDA for NVIDIA).',
       tickerNotFoundShort: 'Ticker "{sym}" was not found.',
       noIncome: 'No annual income statement data for "{sym}".',
@@ -636,12 +647,20 @@ export const messages: Record<AppLocale, MessageDict> = {
       noData: "Няма данни",
       searchValid: "Въведете валиден тикер.",
       loadingSections: "Зареждане на котировка, история и фундаменти…",
-      subtitle: "Анализ на акции · Gemini фундаментали (кеш) + Yahoo ценова история",
+      subtitle: "Анализ на акции · Gemini фундаментали (кеш по месец) + Yahoo на живо",
       nextEarnings: "Следващ отчет",
       afterHours: "След борсова сесия",
       preMarket: "Предпазар",
       refreshData: "Обнови данните",
       refreshing: "Обновяване…",
+      priceCurrencyGroup: "Валута на котировката",
+      eurUnavailable: "Няма курс EUR",
+      eurFxNote: "Приблизителен EUR от Yahoo EURUSD (спот). Промяната в % е в USD.",
+      loadProgressConnect: "Свързване…",
+      loadProgressCache: "Зареждане на кеширани фундаментали…",
+      loadProgressGemini: "Заявка {step} от {total} към Gemini (фундаментали)…",
+      loadProgressYahooFundamentals: "Сливане с Yahoo фундаментали…",
+      loadProgressYahooPrices: "Обновяване на котировки и графики…",
     },
     income: {
       title: "Отчет за приходите",
@@ -1113,6 +1132,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     errors: {
       emptyTicker: "Празен тикер.",
+      invalidTickerSymbol: "Само латиница, цифри, точка или тире (напр. AAPL).",
       tickerNotFound: 'Тикерът "{sym}" не е намерен. Ползвайте Yahoo символ (напр. NVDA за NVIDIA).',
       tickerNotFoundShort: 'Тикерът "{sym}" не е намерен.',
       noIncome: 'Няма годишни приходни отчети за "{sym}".',
@@ -1145,6 +1165,7 @@ type TFn = (path: string, vars?: Record<string, string | number>) => string;
 /** Map Yahoo loader error strings to localized messages. */
 export function translateStockError(t: TFn, message: string): string {
   const m = message.trim();
+  if (m === INVALID_TICKER_SYMBOL_MESSAGE) return t("errors.invalidTickerSymbol");
   if (m === "Empty ticker.") return t("errors.emptyTicker");
   if (m === "Could not load stock data.") return t("errors.loadFailed");
   const longForm =

@@ -234,7 +234,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     const intradayPeriod1 = new Date(period2);
     intradayPeriod1.setDate(intradayPeriod1.getDate() - 7);
 
-    const [quoteResult, historicalResult, chartIntraday, quoteSummaryResult, _dpsMerge] =
+    const [quoteResult, historicalResult, chartIntraday, quoteSummaryResult, fxQuote, _dpsMerge] =
       await Promise.all([
         yahooFinance.quote(resolved),
         yahooFinance.historical(resolved, {
@@ -255,6 +255,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
             modules: ["calendarEvents"],
           })
           .catch(() => null),
+        yahooFinance.quote("EURUSD=X").catch(() => null),
         mergeYahooExDividendsIntoQuarterly(bundle, resolved),
       ]);
 
@@ -319,6 +320,16 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       if (intraday.length === 0) intraday = undefined;
     }
     bundle.intraday = intraday;
+
+    const fxQ = Array.isArray(fxQuote) ? fxQuote[0] : fxQuote;
+    let eurPerUsd: number | null = null;
+    if (fxQ && typeof fxQ === "object") {
+      const eurUsd = Number((fxQ as { regularMarketPrice?: unknown }).regularMarketPrice);
+      if (Number.isFinite(eurUsd) && eurUsd > 0) {
+        eurPerUsd = 1 / eurUsd;
+      }
+    }
+    bundle.eurPerUsd = eurPerUsd;
   } catch {
     // Keep Gemini/cache OHLCV and quote if Yahoo is unavailable.
   }

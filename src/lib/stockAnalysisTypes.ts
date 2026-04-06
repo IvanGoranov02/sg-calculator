@@ -177,6 +177,8 @@ export type InvestorMetrics = {
 
 export type StockAnalysisBundle = {
   quote: StockQuote;
+  /** EUR per 1 USD (from Yahoo EURUSD=X), for optional display toggle; set when prices refresh. */
+  eurPerUsd?: number | null;
   income: IncomeStatementAnnual[];
   cashFlow: CashFlowAnnual[];
   /** Annual balance sheet lines aligned to income fiscal years. */

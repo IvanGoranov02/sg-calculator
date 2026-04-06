@@ -4,6 +4,12 @@ const currencyFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+const currencyEurFmt = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 2,
+});
+
 const compactFmt = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -13,6 +19,10 @@ const compactFmt = new Intl.NumberFormat("en-US", {
 
 export function formatCurrency(n: number): string {
   return currencyFmt.format(n);
+}
+
+export function formatCurrencyEur(n: number): string {
+  return currencyEurFmt.format(n);
 }
 
 export function formatCurrencyCompact(n: number): string {

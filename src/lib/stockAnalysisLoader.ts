@@ -1,8 +1,16 @@
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
 import { prisma } from "@/lib/prisma";
+import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
+import {
+  INVALID_TICKER_SYMBOL_MESSAGE,
+  isValidStockSymbolInput,
+  normalizeStockSymbol,
+} from "@/lib/stockSymbol";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { enrichBundleFundamentalsFromYahoo } from "@/lib/yahooFundamentalsMerge";
 import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
+
+export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 
 export type StockAnalysisResult = {
   bundle: StockAnalysisBundle | null;
@@ -15,30 +23,37 @@ export type StockAnalysisResult = {
  */
 const CACHE_SCHEMA_VERSION = 5;
 
-const CACHE_TTL_MS = (() => {
-  const h = Number(process.env.STOCK_CACHE_TTL_HOURS?.trim());
-  if (Number.isFinite(h) && h > 0) return h * 3600_000;
-  return 24 * 3600_000;
-})();
-
 type CachePayload = StockAnalysisBundle & { __cacheVersion?: number };
 
-function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
+/** Fundamentals cache is fresh for the same calendar month (UTC) as `updatedAt`. */
+function cacheIsFreshForMonth(payload: CachePayload, updatedAt: Date): boolean {
   if ((payload.__cacheVersion ?? 0) < CACHE_SCHEMA_VERSION) return false;
-  return Date.now() - updatedAt.getTime() < CACHE_TTL_MS;
+  const now = new Date();
+  return (
+    updatedAt.getUTCFullYear() === now.getUTCFullYear() &&
+    updatedAt.getUTCMonth() === now.getUTCMonth()
+  );
 }
 
 export type LoadStockOptions = { forceRefresh?: boolean };
 
+export type LoadStockAnalysisOptions = LoadStockOptions & {
+  onProgress?: (e: StockAnalysisLoadProgress) => void;
+};
+
 /**
- * Stock analysis: Prisma cache (Gemini bundle) → on miss: Gemini → Yahoo fundamentals merge (gap fill)
- * → upsert → **always** Yahoo for live quote + daily/intraday prices.
+ * Stock analysis: validate ticker → **DB first** (Gemini bundle, fresh for current month) → on miss/stale:
+ * Gemini → Yahoo fundamentals merge → upsert → **always** Yahoo for live quote + history + EUR/USD.
  */
 export async function loadStockAnalysis(
   symbol: string,
-  opts?: LoadStockOptions,
+  opts?: LoadStockAnalysisOptions,
 ): Promise<StockAnalysisResult> {
-  const sym = symbol.trim().toUpperCase() || "AAPL";
+  const raw = symbol.trim();
+  if (!isValidStockSymbolInput(raw)) {
+    return { bundle: null, error: INVALID_TICKER_SYMBOL_MESSAGE };
+  }
+  const sym = normalizeStockSymbol(raw);
 
   try {
     if (!opts?.forceRefresh) {
@@ -52,14 +67,19 @@ export async function loadStockAnalysis(
         row = null;
       }
 
-      if (row && cacheIsFresh(row.payload as CachePayload, row.updatedAt)) {
+      if (row && cacheIsFreshForMonth(row.payload as CachePayload, row.updatedAt)) {
         const bundle = row.payload as StockAnalysisBundle;
+        opts?.onProgress?.({ kind: "cache_hit" });
+        opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
         return { bundle, error: null };
       }
     }
 
-    const bundle = await fetchStockBundleFromGemini(sym);
+    const bundle = await fetchStockBundleFromGemini(sym, {
+      onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+    });
+    opts?.onProgress?.({ kind: "yahoo_fundamentals" });
     await enrichBundleFundamentalsFromYahoo(bundle);
 
     const plain = JSON.parse(JSON.stringify({ ...bundle, __cacheVersion: CACHE_SCHEMA_VERSION })) as object;
@@ -73,6 +93,7 @@ export async function loadStockAnalysis(
       // DB optional in some dev setups
     }
 
+    opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
     return { bundle, error: null };
   } catch (e) {

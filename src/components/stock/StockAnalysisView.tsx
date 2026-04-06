@@ -7,7 +7,9 @@ import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
 import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
+import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
+import type { StockAnalysisPageLoadProgress } from "@/lib/stockLoadProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { translateStockError } from "@/lib/i18n/messages";
@@ -20,6 +22,7 @@ type StockAnalysisViewProps = {
   bundle: StockAnalysisBundle | null;
   error: string | null;
   loading?: boolean;
+  loadProgress?: StockAnalysisPageLoadProgress | null;
   onForceRefresh?: () => void;
 };
 
@@ -28,6 +31,7 @@ export function StockAnalysisView({
   bundle,
   error,
   loading = false,
+  loadProgress = null,
   onForceRefresh,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
@@ -37,6 +41,15 @@ export function StockAnalysisView({
   if (loading && !bundle) {
     return (
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
+        {loadProgress ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/70 p-4 shadow-inner shadow-black/20">
+            <StockLoadProgressBar
+              event={loadProgress.event}
+              percent={loadProgress.percent}
+              connecting={loadProgress.connecting}
+            />
+          </div>
+        ) : null}
         <div className="space-y-3 rounded-xl border border-white/10 bg-zinc-900/40 p-5 animate-pulse">
           <div className="h-8 w-2/3 rounded bg-zinc-800" />
           <div className="h-4 w-1/3 rounded bg-zinc-800/80" />
@@ -49,7 +62,9 @@ export function StockAnalysisView({
             <div key={i} className="h-56 rounded-xl border border-white/5 bg-zinc-900/25 animate-pulse" />
           ))}
         </div>
-        <p className="text-center text-sm text-muted-foreground">{t("stock.loadingSections")}</p>
+        {!loadProgress ? (
+          <p className="text-center text-sm text-muted-foreground">{t("stock.loadingSections")}</p>
+        ) : null}
       </div>
     );
   }
@@ -76,14 +91,23 @@ export function StockAnalysisView({
     );
   }
 
-  const { quote } = bundle;
+  const { quote, eurPerUsd } = bundle;
 
   return (
     <StockAnalysisPeriodProvider key={symbol}>
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
+        {loading && loadProgress ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/70 p-4 shadow-inner shadow-black/20">
+            <StockLoadProgressBar
+              event={loadProgress.event}
+              percent={loadProgress.percent}
+              connecting={loadProgress.connecting}
+            />
+          </div>
+        ) : null}
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <StockLiveHeader quote={quote} />
+            <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
           </div>
           {onForceRefresh && (
             <Button

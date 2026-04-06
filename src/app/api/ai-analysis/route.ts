@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { geminiGenerateText, getGeminiApiKey } from "@/lib/geminiClient";
 import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
+import { INVALID_TICKER_SYMBOL_MESSAGE, isValidStockSymbolInput } from "@/lib/stockSymbol";
 
 export const maxDuration = 60;
 
@@ -27,10 +28,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const ticker = body.ticker?.trim().toUpperCase();
-  if (!ticker) {
+  const raw = body.ticker?.trim() ?? "";
+  if (!raw) {
     return NextResponse.json({ error: "ticker is required." }, { status: 400 });
   }
+  if (!isValidStockSymbolInput(raw)) {
+    return NextResponse.json({ error: INVALID_TICKER_SYMBOL_MESSAGE }, { status: 400 });
+  }
+  const ticker = raw.toUpperCase();
 
   const { bundle, error } = await loadStockAnalysis(ticker);
   if (!bundle || error) {

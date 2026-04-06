@@ -7,6 +7,7 @@ import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 
 /** Remount when the synced ticker changes so the input matches the URL without effects. */
 export function StockSearchContainer({ isDcf }: { isDcf: boolean }) {
@@ -38,11 +39,17 @@ function StockSearch({ isDcf }: StockSearchProps) {
   const fromPath = pathname.match(/^\/stock\/([^/]+)/i)?.[1]?.trim().toUpperCase() ?? "";
   const fromUrl = searchParams.get("ticker")?.trim() ?? "";
   const [query, setQuery] = useState(() => fromPath || fromUrl || "AAPL");
+  const [symbolError, setSymbolError] = useState(false);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const sym = query.trim().toUpperCase();
     if (!sym) return;
+    if (!isValidStockSymbolInput(sym)) {
+      setSymbolError(true);
+      return;
+    }
+    setSymbolError(false);
     if (isDcf) {
       router.push(`/dcf-calculator?ticker=${encodeURIComponent(sym)}`);
     } else {
@@ -60,7 +67,10 @@ function StockSearch({ isDcf }: StockSearchProps) {
         <Input
           name="ticker"
           value={query}
-          onChange={(e) => setQuery(e.target.value.toUpperCase())}
+          onChange={(e) => {
+            setSymbolError(false);
+            setQuery(e.target.value.toUpperCase());
+          }}
           placeholder={t("search.placeholder")}
           className="min-h-9 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-8 sm:text-sm"
           autoComplete="off"
@@ -76,6 +86,11 @@ function StockSearch({ isDcf }: StockSearchProps) {
       >
         {t("search.submit")}
       </Button>
+      {symbolError ? (
+        <p className="w-full text-xs text-red-400" role="alert">
+          {t("errors.invalidTickerSymbol")}
+        </p>
+      ) : null}
     </form>
   );
 }
