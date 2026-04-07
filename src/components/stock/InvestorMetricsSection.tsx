@@ -28,22 +28,26 @@ function MetricTable({ title, rows, t }: { title: string; rows: Row[]; t: TFn })
   if (visible.length === 0) return null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
       <Table>
         <TableHeader>
           <TableRow className="border-white/10 hover:bg-transparent">
-            <TableHead className="text-muted-foreground">{t("investor.colMetric")}</TableHead>
-            <TableHead className="text-right text-muted-foreground">{t("investor.colValue")}</TableHead>
+            <TableHead className="h-11 px-4 py-3 text-left text-muted-foreground">
+              {t("investor.colMetric")}
+            </TableHead>
+            <TableHead className="h-11 px-4 py-3 text-right text-muted-foreground">
+              {t("investor.colValue")}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {visible.map((row) => (
             <TableRow key={row.label} className="border-white/10">
-              <TableCell className="max-w-[min(100%,220px)] text-sm text-muted-foreground">
+              <TableCell className="max-w-[min(100%,260px)] px-4 py-3.5 text-sm leading-relaxed text-muted-foreground">
                 {row.label}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm tabular-nums text-foreground">
+              <TableCell className="px-4 py-3.5 text-right font-mono text-sm tabular-nums leading-snug text-foreground">
                 {row.value}
               </TableCell>
             </TableRow>

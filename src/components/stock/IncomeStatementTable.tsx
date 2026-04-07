@@ -43,18 +43,23 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
-      <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+      <div className="space-y-2 border-b border-white/10 px-4 py-5 sm:px-6">
         <h2 className="text-lg font-semibold tracking-tight">{t("income.title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("income.subtitle")}</p>
-        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">{t("income.subtitle")}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-1 py-1">
         <Table className="min-w-[520px]">
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="w-[200px] text-muted-foreground">{t("income.metricCol")}</TableHead>
+              <TableHead className="h-12 min-w-[10rem] px-4 py-3 text-left text-muted-foreground">
+                {t("income.metricCol")}
+              </TableHead>
               {years.map((y) => (
-                <TableHead key={y} className="text-right font-mono text-muted-foreground tabular-nums">
+                <TableHead
+                  key={y}
+                  className="h-12 px-3 py-3 text-right font-mono text-muted-foreground tabular-nums"
+                >
                   {t("chart.fyYear", { y })}
                 </TableHead>
               ))}
@@ -69,11 +74,16 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
                   idx % 2 === 1 && "bg-white/[0.02]",
                 )}
               >
-                <TableCell className="font-medium">{t(`income.${key}`)}</TableCell>
+                <TableCell className="px-4 py-3.5 align-middle font-medium leading-snug">
+                  {t(`income.${key}`)}
+                </TableCell>
                 {years.map((y) => {
                   const r = incByFy.get(y);
                   return (
-                    <TableCell key={y + key} className="text-right font-mono text-sm tabular-nums">
+                    <TableCell
+                      key={y + key}
+                      className="px-3 py-3.5 text-right font-mono text-sm tabular-nums leading-snug"
+                    >
                       {r == null || isEmptyIncomeStatementCore(r)
                         ? "—"
                         : formatCurrencyCompact(r[key])}

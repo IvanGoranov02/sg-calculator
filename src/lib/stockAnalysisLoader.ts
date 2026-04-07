@@ -6,6 +6,7 @@ import {
   isValidStockSymbolInput,
   normalizeStockSymbol,
 } from "@/lib/stockSymbol";
+import { appendCalendarAnnualFromQuarterly } from "@/lib/annualFromQuarterlyBackfill";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { enrichBundleFundamentalsFromYahoo } from "@/lib/yahooFundamentalsMerge";
 import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
@@ -21,7 +22,7 @@ export type StockAnalysisResult = {
  * Bump this whenever the normalizer or prompt changes significantly
  * so stale caches (produced by older normalisation) are discarded.
  */
-const CACHE_SCHEMA_VERSION = 5;
+const CACHE_SCHEMA_VERSION = 7;
 
 type CachePayload = StockAnalysisBundle & { __cacheVersion?: number };
 
@@ -70,8 +71,29 @@ export async function loadStockAnalysis(
       if (row && cacheIsFreshForMonth(row.payload as CachePayload, row.updatedAt)) {
         const bundle = row.payload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
+        opts?.onProgress?.({ kind: "yahoo_fundamentals" });
+        await enrichBundleFundamentalsFromYahoo(bundle);
+        appendCalendarAnnualFromQuarterly(bundle);
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
+        // #region agent log
+        {
+          const fiscalYears = bundle.income.map((r) => r.fiscalYear);
+          fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
+            body: JSON.stringify({
+              sessionId: "94f4c7",
+              location: "stockAnalysisLoader.ts:cache-hit-return",
+              message: "Annual income fiscal years after cache + Yahoo enrich",
+              data: { sym, source: "db_cache_fresh_month", fiscalYears },
+              timestamp: Date.now(),
+              hypothesisId: "H4",
+              runId: "post-prompt-v6",
+            }),
+          }).catch(() => {});
+        }
+        // #endregion
         return { bundle, error: null };
       }
     }
@@ -81,6 +103,7 @@ export async function loadStockAnalysis(
     });
     opts?.onProgress?.({ kind: "yahoo_fundamentals" });
     await enrichBundleFundamentalsFromYahoo(bundle);
+    appendCalendarAnnualFromQuarterly(bundle);
 
     const plain = JSON.parse(JSON.stringify({ ...bundle, __cacheVersion: CACHE_SCHEMA_VERSION })) as object;
     try {
@@ -95,6 +118,24 @@ export async function loadStockAnalysis(
 
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
+    // #region agent log
+    {
+      const fiscalYears = bundle.income.map((r) => r.fiscalYear);
+      fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
+        body: JSON.stringify({
+          sessionId: "94f4c7",
+          location: "stockAnalysisLoader.ts:fresh-after-yahoo",
+          message: "Annual income fiscal years after Gemini + Yahoo fundamentals enrich",
+          data: { sym, source: "after_yahoo_fundamentals", fiscalYears },
+          timestamp: Date.now(),
+          hypothesisId: "H5",
+          runId: "post-prompt-v6",
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     return { bundle, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load stock data.";

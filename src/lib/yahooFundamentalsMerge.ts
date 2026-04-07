@@ -1,18 +1,20 @@
 /**
  * After Gemini builds the bundle, fill null / zero gaps using Yahoo fundamentalsTimeSeries.
- * Server-only; does not replace Gemini rows — only patches missing fields.
+ * Also appends quarter rows Yahoo has but Gemini/cache omitted (same dates as Yahoo quarterly financials).
  */
 
 import YahooFinance from "yahoo-finance2";
 
-import type {
-  BalanceSheetAnnual,
-  BalanceSheetQuarter,
-  CashFlowAnnual,
-  CashFlowQuarter,
-  IncomeStatementAnnual,
-  IncomeStatementQuarter,
-  StockAnalysisBundle,
+import { alignQuarterlyToIncome, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
+import {
+  sortQuarterlyByDateAsc,
+  type BalanceSheetAnnual,
+  type BalanceSheetQuarter,
+  type CashFlowAnnual,
+  type CashFlowQuarter,
+  type IncomeStatementAnnual,
+  type IncomeStatementQuarter,
+  type StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -212,6 +214,51 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
       longTermDebt: mergeNullable(row.longTermDebt, bs.longTermDebt),
     };
   });
+
+  const MAX_QUARTERS_IN_BUNDLE = 48;
+  const quarterEndsSeen = new Set(bundle.incomeQuarterly.map((r) => r.date.slice(0, 10)));
+  const yahooOnlyQuarters: IncomeStatementQuarter[] = [];
+  for (const fin of finQ) {
+    const d = iso(fin.date);
+    if (quarterEndsSeen.has(d)) continue;
+    const rev = pickNum(fin.totalRevenue);
+    const gp = pickNum(fin.grossProfit);
+    const ni = pickNum(fin.netIncome);
+    const oi = pickNum(fin.operatingIncome);
+    if (rev == null && gp == null && ni == null && oi == null) continue;
+    yahooOnlyQuarters.push({
+      date: d,
+      symbol: symU,
+      revenue: rev ?? 0,
+      grossProfit: gp ?? 0,
+      operatingExpenses: pickNum(fin.operatingExpense) ?? 0,
+      netIncome: ni ?? 0,
+      operatingIncome: oi ?? undefined,
+      ebitda: pickNum(fin.EBITDA) ?? undefined,
+      dilutedEps: pickNum(fin.dilutedEPS) ?? undefined,
+      dilutedAverageShares: pickNum(fin.dilutedAverageShares) ?? undefined,
+    });
+    quarterEndsSeen.add(d);
+  }
+
+  if (yahooOnlyQuarters.length > 0) {
+    bundle.incomeQuarterly = trimQuarterlyToMax(
+      sortQuarterlyByDateAsc([...bundle.incomeQuarterly, ...yahooOnlyQuarters]),
+      MAX_QUARTERS_IN_BUNDLE,
+    );
+    const aligned = alignQuarterlyToIncome(
+      symU,
+      bundle.incomeQuarterly,
+      bundle.cashFlowQuarterly,
+      bundle.balanceSheetQuarterly,
+      bundle.dividendQuarterly,
+    );
+    bundle.cashFlowQuarterly = aligned.cashFlowQuarterly;
+    bundle.balanceSheetQuarterly = aligned.balanceSheetQuarterly;
+    bundle.dividendQuarterly = aligned.dividendQuarterly;
+  } else {
+    bundle.incomeQuarterly = sortQuarterlyByDateAsc(bundle.incomeQuarterly);
+  }
 
   bundle.incomeQuarterly = bundle.incomeQuarterly.map((row): IncomeStatementQuarter => {
     const d = row.date.slice(0, 10);

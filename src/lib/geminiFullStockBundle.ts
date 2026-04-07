@@ -4,6 +4,7 @@
  */
 
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+import { alignAnnualToIncome, alignQuarterlyToIncome } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type BalanceSheetAnnual,
@@ -19,121 +20,8 @@ import {
   type StockQuote,
 } from "@/lib/stockAnalysisTypes";
 
-function stubCashFlowQuarter(sym: string, dateIso: string, netIncome: number): CashFlowQuarter {
-  const ni = Number(netIncome);
-  const fcf = Number.isFinite(ni) ? Math.max(0, ni * 0.85) : 0;
-  return {
-    date: dateIso,
-    symbol: sym,
-    freeCashFlow: fcf,
-    operatingCashFlow: null,
-    capitalExpenditure: null,
-    investingCashFlow: null,
-    financingCashFlow: null,
-    dividendsPaid: null,
-    stockRepurchase: null,
-  };
-}
-
-function stubBalanceQuarter(sym: string, dateIso: string): BalanceSheetQuarter {
-  return {
-    date: dateIso,
-    symbol: sym,
-    totalAssets: null,
-    totalDebt: null,
-    netDebt: null,
-    stockholdersEquity: null,
-    cashAndCashEquivalents: null,
-    totalCurrentAssets: null,
-    totalCurrentLiabilities: null,
-    inventory: null,
-    accountsReceivable: null,
-    goodwill: null,
-    longTermDebt: null,
-  };
-}
-
-/** Gemini often returns fewer CF/BS/div rows than income quarters — align by period-end date. */
-function alignQuarterlyToIncome(
-  sym: string,
-  incomeSorted: IncomeStatementQuarter[],
-  cfRaw: CashFlowQuarter[],
-  bsRaw: BalanceSheetQuarter[],
-  divRaw: DividendQuarterlyPoint[],
-): Pick<StockAnalysisBundle, "cashFlowQuarterly" | "balanceSheetQuarterly" | "dividendQuarterly"> {
-  const cfBy = new Map(cfRaw.map((r) => [r.date.slice(0, 10), r]));
-  const bsBy = new Map(bsRaw.map((r) => [r.date.slice(0, 10), r]));
-  const divBy = new Map(divRaw.map((r) => [r.date.slice(0, 10), r]));
-
-  const cashFlowQuarterly: CashFlowQuarter[] = [];
-  const balanceSheetQuarterly: BalanceSheetQuarter[] = [];
-  const dividendQuarterly: DividendQuarterlyPoint[] = [];
-
-  for (const inc of incomeSorted) {
-    const d = inc.date.slice(0, 10);
-    cashFlowQuarterly.push(cfBy.get(d) ?? stubCashFlowQuarter(sym, d, inc.netIncome));
-    balanceSheetQuarterly.push(bsBy.get(d) ?? stubBalanceQuarter(sym, d));
-    const dv = divBy.get(d);
-    dividendQuarterly.push(dv ?? { date: d, dividendPerShare: null });
-  }
-
-  return { cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly };
-}
-
 function sortAnnualByFy<T extends { fiscalYear: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-}
-
-/** Ensure cashFlow and balanceSheet have a row for every income fiscalYear. */
-function alignAnnualToIncome(
-  sym: string,
-  income: StockAnalysisBundle["income"],
-  cf: StockAnalysisBundle["cashFlow"],
-  bs: StockAnalysisBundle["balanceSheet"],
-): Pick<StockAnalysisBundle, "cashFlow" | "balanceSheet"> {
-  const cfBy = new Map(cf.map((r) => [r.fiscalYear, r]));
-  const bsBy = new Map(bs.map((r) => [r.fiscalYear, r]));
-
-  const cashFlow: StockAnalysisBundle["cashFlow"] = [];
-  const balanceSheet: StockAnalysisBundle["balanceSheet"] = [];
-
-  for (const inc of income) {
-    const fy = inc.fiscalYear;
-    cashFlow.push(
-      cfBy.get(fy) ?? {
-        date: inc.date,
-        symbol: sym,
-        fiscalYear: fy,
-        freeCashFlow: 0,
-        operatingCashFlow: null,
-        capitalExpenditure: null,
-        investingCashFlow: null,
-        financingCashFlow: null,
-        dividendsPaid: null,
-        stockRepurchase: null,
-      },
-    );
-    balanceSheet.push(
-      bsBy.get(fy) ?? {
-        date: inc.date,
-        symbol: sym,
-        fiscalYear: fy,
-        totalAssets: null,
-        totalDebt: null,
-        netDebt: null,
-        stockholdersEquity: null,
-        cashAndCashEquivalents: null,
-        totalCurrentAssets: null,
-        totalCurrentLiabilities: null,
-        inventory: null,
-        accountsReceivable: null,
-        goodwill: null,
-        longTermDebt: null,
-      },
-    );
-  }
-
-  return { cashFlow, balanceSheet };
 }
 
 function parseJsonFromGemini(text: string): unknown {
@@ -459,7 +347,10 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
 
 
 const MAX_HISTORY_YEARS = 10;
-const MAX_QUARTERS = 40;
+/** Matches Yahoo merge cap so Gemini can fill the whole quarterly window when filings allow. */
+const MAX_QUARTERS = 48;
+/** Quarterly JSON is large; extra headroom reduces truncated responses (few bars in UI). */
+const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 32_768;
 
 function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
@@ -514,11 +405,22 @@ async function callGeminiJson(
   return parseJsonFromGemini(text);
 }
 
+function utcTodayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function buildAnnualPrompt(sym: string): string {
+  const today = utcTodayIso();
+  const y = new Date().getUTCFullYear();
+  const latestTypical = String(y - 1);
+  const priorTypical = String(y - 2);
+
   return `You output ONE JSON object (no markdown, no code fences) for ticker ${sym}.
 
 **CRITICAL: Do NOT include historical/intraday price data. Only fundamentals.**
 All numeric values in reporting currency at company scale (actual dollars, not thousands).
+
+**Calendar anchor (UTC): today is ${today}.** Use filing-accurate consolidated annual figures (10-K / annual report / 20-F / equivalent) as they exist in the real world today — **not** an internal knowledge cutoff. The ${MAX_HISTORY_YEARS} rows must be the ${MAX_HISTORY_YEARS} **most recently completed fiscal years** for ${sym} under **that company's own fiscal calendar**, **oldest first**, and the **last** row in each of "income", "cashFlow", and "balanceSheet" must be the **newest filed full-year period** (often FY${priorTypical} and/or FY${latestTypical} or later when already published). **Do not truncate the annual series at FY2023** (or any stale year) if newer annual filings exist.
 
 Provide data for the last ${MAX_HISTORY_YEARS} fiscal years, oldest first.
 
@@ -566,55 +468,69 @@ Every field on every row — null when unavailable, never omit.`;
 }
 
 function buildQuarterlyIncomeCfPrompt(sym: string): string {
-  return `You output ONE JSON object (no markdown, no code fences) with quarterly income + cash flow for ticker ${sym}.
-
-**CRITICAL: No price data. Only quarterly income statements and cash flow statements.**
-All numeric values in reporting currency at company scale (actual dollars, not thousands).
-
-Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:
-
-{
-  "incomeQuarterly": [
-    { "date": "YYYY-MM-DD", "symbol": "${sym}",
-      "revenue": N, "grossProfit": N, "operatingExpenses": N, "netIncome": N,
-      "operatingIncome": N, "ebitda": N, "dilutedEps": N, "dilutedAverageShares": N }
-  ],
-
-  "cashFlowQuarterly": [
-    { "date": "YYYY-MM-DD", "symbol": "${sym}",
-      "freeCashFlow": N, "operatingCashFlow": N, "capitalExpenditure": N,
-      "investingCashFlow": N, "financingCashFlow": N, "dividendsPaid": N, "stockRepurchase": N }
-  ]
-}
-
-N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).
-Use 10-Q figures. Every field on every row — null when unavailable, never omit.`;
+  const today = utcTodayIso();
+  return [
+    `You output ONE JSON object (no markdown, no code fences) with quarterly income + cash flow for ticker ${sym}.`,
+    "",
+    "**CRITICAL: No price data. Only quarterly income statements and cash flow statements.**",
+    "All numeric values in reporting currency at company scale (actual dollars, not thousands).",
+    "",
+    `**Calendar anchor (UTC): today is ${today}.** Include the most recent filed quarters through the latest available 10-Q / quarterly report — do not stop at an outdated year if newer quarters are published.`,
+    "",
+    `**Row count (critical):** Each object in the arrays is one fiscal quarter (one bar or column in charts). For a normal listed company you MUST output up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years) whenever that many historical quarters exist in public filings — oldest first. Do not return only the last 4–8 quarters unless the issuer truly has no older quarterly data.`,
+    "",
+    `Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:`,
+    "",
+    "{",
+    '  "incomeQuarterly": [',
+    `    { "date": "YYYY-MM-DD", "symbol": "${sym}",`,
+    '      "revenue": N, "grossProfit": N, "operatingExpenses": N, "netIncome": N,',
+    '      "operatingIncome": N, "ebitda": N, "dilutedEps": N, "dilutedAverageShares": N }',
+    "  ],",
+    "",
+    '  "cashFlowQuarterly": [',
+    `    { "date": "YYYY-MM-DD", "symbol": "${sym}",`,
+    '      "freeCashFlow": N, "operatingCashFlow": N, "capitalExpenditure": N,',
+    '      "investingCashFlow": N, "financingCashFlow": N, "dividendsPaid": N, "stockRepurchase": N }',
+    "  ]",
+    "}",
+    "",
+    'N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).',
+    "Use 10-Q figures. Every field on every row — null when unavailable, never omit.",
+  ].join("\n");
 }
 
 function buildQuarterlyBsDivPrompt(sym: string): string {
-  return `You output ONE JSON object (no markdown, no code fences) with quarterly balance sheet + dividends for ticker ${sym}.
-
-**CRITICAL: No price data. Only quarterly balance sheet and dividend data.**
-All numeric values in reporting currency at company scale (actual dollars, not thousands).
-
-Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:
-
-{
-  "balanceSheetQuarterly": [
-    { "date": "YYYY-MM-DD", "symbol": "${sym}",
-      "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,
-      "cashAndCashEquivalents": N, "totalCurrentAssets": N, "totalCurrentLiabilities": N,
-      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N }
-  ],
-
-  "dividendQuarterly": [
-    { "date": "YYYY-MM-DD", "dividendPerShare": N }
-  ]
-}
-
-N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).
-Use 10-Q figures. dividendPerShare = per-share dividend for that quarter, null if none.
-Every field on every row — null when unavailable, never omit.`;
+  const today = utcTodayIso();
+  return [
+    `You output ONE JSON object (no markdown, no code fences) with quarterly balance sheet + dividends for ticker ${sym}.`,
+    "",
+    "**CRITICAL: No price data. Only quarterly balance sheet and dividend data.**",
+    "All numeric values in reporting currency at company scale (actual dollars, not thousands).",
+    "",
+    `**Calendar anchor (UTC): today is ${today}.** Include the most recent filed quarters through the latest available reporting — do not stop at an outdated year if newer quarters are published.`,
+    "",
+    `**Row count (critical):** Provide one balance sheet row per quarter-end for up to ${MAX_QUARTERS} quarters when available. Use the same span and order (oldest first) as the income and cash flow quarterly series. The dividendQuarterly array must use the same quarter-end dates (null dividend when none).`,
+    "",
+    `Provide up to ${MAX_QUARTERS} quarters (~${MAX_HISTORY_YEARS} years), oldest first:`,
+    "",
+    "{",
+    '  "balanceSheetQuarterly": [',
+    `    { "date": "YYYY-MM-DD", "symbol": "${sym}",`,
+    '      "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,',
+    '      "cashAndCashEquivalents": N, "totalCurrentAssets": N, "totalCurrentLiabilities": N,',
+    '      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N }',
+    "  ],",
+    "",
+    '  "dividendQuarterly": [',
+    '    { "date": "YYYY-MM-DD", "dividendPerShare": N }',
+    "  ]",
+    "}",
+    "",
+    'N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).',
+    "Use 10-Q figures. dividendPerShare = per-share dividend for that quarter, null if none.",
+    "Every field on every row — null when unavailable, never omit.",
+  ].join("\n");
 }
 
 export type GeminiBundlePart = 1 | 2 | 3;
@@ -622,8 +538,8 @@ export type GeminiBundlePart = 1 | 2 | 3;
 /**
  * Fetches stock data from Gemini in 3 sequential requests to avoid overwhelming the model:
  * 1) Quote + investor + annual statements (10 years)
- * 2) Quarterly income + cash flow (~40 quarters)
- * 3) Quarterly balance sheet + dividends (~40 quarters)
+ * 2) Quarterly income + cash flow (up to 48 quarters)
+ * 3) Quarterly balance sheet + dividends (up to 48 quarters)
  */
 export async function fetchStockBundleFromGemini(
   symbol: string,
@@ -643,16 +559,42 @@ export async function fetchStockBundleFromGemini(
     apiKey, model, buildAnnualPrompt(sym), 16384,
   )) as Record<string, unknown>;
 
+  // #region agent log
+  {
+    const rawInc = Array.isArray(part1.income) ? part1.income : [];
+    const fiscalYears = rawInc
+      .map((r: unknown) => {
+        if (!r || typeof r !== "object") return "";
+        const fy = (r as Record<string, unknown>).fiscalYear;
+        return fy != null && fy !== "" ? String(fy) : "";
+      })
+      .filter(Boolean);
+    fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
+      body: JSON.stringify({
+        sessionId: "94f4c7",
+        location: "geminiFullStockBundle.ts:part1-raw",
+        message: "Gemini part1 raw income fiscal years (before normalize)",
+        data: { sym, rowCount: rawInc.length, fiscalYears },
+        timestamp: Date.now(),
+        hypothesisId: "H1",
+        runId: "post-prompt-v6",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   opts?.onPartStart?.(2);
   console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
   const part2 = (await callGeminiJson(
-    apiKey, model, buildQuarterlyIncomeCfPrompt(sym), 16384,
+    apiKey, model, buildQuarterlyIncomeCfPrompt(sym), GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(3);
   console.log(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
   const part3 = (await callGeminiJson(
-    apiKey, model, buildQuarterlyBsDivPrompt(sym), 16384,
+    apiKey, model, buildQuarterlyBsDivPrompt(sym), GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
   )) as Record<string, unknown>;
 
   const merged = {
@@ -667,5 +609,26 @@ export async function fetchStockBundleFromGemini(
     dividendQuarterly: part3.dividendQuarterly,
   };
 
-  return normalizeGeminiStockBundleJson(sym, merged);
+  const normalized = normalizeGeminiStockBundleJson(sym, merged);
+
+  // #region agent log
+  {
+    const fiscalYears = normalized.income.map((r) => r.fiscalYear);
+    fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
+      body: JSON.stringify({
+        sessionId: "94f4c7",
+        location: "geminiFullStockBundle.ts:after-normalize",
+        message: "Bundle annual income fiscal years after normalizeGeminiStockBundleJson",
+        data: { sym, rowCount: normalized.income.length, fiscalYears },
+        timestamp: Date.now(),
+        hypothesisId: "H3",
+        runId: "post-prompt-v6",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
+  return normalized;
 }

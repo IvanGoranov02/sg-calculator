@@ -49,17 +49,22 @@ function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null): string
 export function FiscalMetricTable({ title, subtitle, metricCol, years, rows, yearLabel }: FiscalMetricTableProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
-      <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+      <div className="space-y-2 border-b border-white/10 px-4 py-5 sm:px-6">
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? <p className="text-sm leading-relaxed text-muted-foreground">{subtitle}</p> : null}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto px-1 py-1">
         <Table className="min-w-[520px]">
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="w-[200px] text-muted-foreground">{metricCol}</TableHead>
+              <TableHead className="h-12 min-w-[10rem] px-4 py-3 text-left text-muted-foreground">
+                {metricCol}
+              </TableHead>
               {years.map((y) => (
-                <TableHead key={y} className="text-right font-mono text-muted-foreground tabular-nums">
+                <TableHead
+                  key={y}
+                  className="h-12 px-3 py-3 text-right font-mono text-muted-foreground tabular-nums"
+                >
                   {yearLabel(y)}
                 </TableHead>
               ))}
@@ -74,9 +79,12 @@ export function FiscalMetricTable({ title, subtitle, metricCol, years, rows, yea
                   idx % 2 === 1 && "bg-white/[0.02]",
                 )}
               >
-                <TableCell className="font-medium">{row.label}</TableCell>
+                <TableCell className="px-4 py-3.5 align-middle font-medium leading-snug">{row.label}</TableCell>
                 {row.values.map((v, i) => (
-                  <TableCell key={`${row.label}-${years[i] ?? i}`} className="text-right font-mono text-sm tabular-nums">
+                  <TableCell
+                    key={`${row.label}-${years[i] ?? i}`}
+                    className="px-3 py-3.5 text-right font-mono text-sm tabular-nums leading-snug"
+                  >
                     {formatCell(row.format, v)}
                   </TableCell>
                 ))}

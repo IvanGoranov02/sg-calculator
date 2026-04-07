@@ -6,13 +6,15 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 
 type StockAiSectionProps = {
   symbol: string;
 };
 
 export function StockAiSection({ symbol }: StockAiSectionProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { timeRange, freq, customFromYear, customToYear } = useStockAnalysisPeriod();
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,14 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
         const res = await fetch("/api/ai-analysis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticker: sym }),
+          body: JSON.stringify({
+            ticker: sym,
+            timeRange,
+            freq,
+            customFromYear,
+            customToYear,
+            locale,
+          }),
         });
         const data = (await res.json()) as { markdown?: string; error?: string };
         if (cancelled) return;
@@ -50,14 +59,17 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [symbol, t]);
+  }, [symbol, timeRange, freq, customFromYear, customToYear, locale, t]);
 
   if (loading && !markdown) {
     return (
       <Card className="border-white/10 bg-zinc-900/40">
         <CardHeader className="flex flex-row items-center gap-2">
           <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
-          <CardTitle className="text-base">{t("ai.loading")}</CardTitle>
+          <div>
+            <CardTitle className="text-base">{t("ai.loading")}</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">{t("ai.loadingFiltersHint")}</CardDescription>
+          </div>
         </CardHeader>
       </Card>
     );
@@ -86,9 +98,15 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
           <Sparkles className="size-3.5 opacity-80" aria-hidden />
           {t("ai.badge")}
         </Badge>
+        {loading ? (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            {t("ai.refreshing")}
+          </span>
+        ) : null}
       </div>
       <Card className="border-white/10 bg-zinc-900/40">
-        <CardContent className="prose prose-invert prose-sm max-w-none pt-6 prose-p:my-2 prose-ul:my-2 prose-headings:text-foreground prose-strong:text-foreground">
+        <CardContent className="prose prose-invert prose-sm max-w-none px-5 pb-6 pt-6 prose-p:my-3 prose-p:leading-relaxed prose-ul:my-3 prose-ul:space-y-2 prose-li:my-0.5 prose-headings:text-foreground prose-headings:mt-6 prose-headings:mb-2 prose-headings:scroll-mt-20 prose-strong:text-foreground">
           <AiMarkdown html={simpleMarkdownToHtml(markdown)} />
         </CardContent>
       </Card>
@@ -108,13 +126,13 @@ function simpleMarkdownToHtml(md: string): string {
         out.push("</ul>");
         inList = false;
       }
-      out.push(`<h3 class="text-base font-semibold mt-4 mb-2">${escapeHtml(h3[1])}</h3>`);
+      out.push(`<h3 class="text-base font-semibold mt-6 mb-3">${escapeHtml(h3[1])}</h3>`);
       continue;
     }
     const li = line.match(/^[-*]\s+(.+)$/);
     if (li) {
       if (!inList) {
-        out.push("<ul class='list-disc pl-5 space-y-1'>");
+        out.push("<ul class='list-disc pl-5 space-y-2 my-3'>");
         inList = true;
       }
       out.push(`<li>${escapeHtml(li[1])}</li>`);
@@ -127,7 +145,7 @@ function simpleMarkdownToHtml(md: string): string {
       out.push("</ul>");
       inList = false;
     }
-    out.push(`<p>${escapeHtml(line)}</p>`);
+    out.push(`<p class="my-3 leading-relaxed">${escapeHtml(line)}</p>`);
   }
   if (inList) out.push("</ul>");
   return out.join("");
