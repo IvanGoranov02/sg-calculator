@@ -22,7 +22,7 @@ export type StockAnalysisResult = {
  * Bump this whenever the normalizer or prompt changes significantly
  * so stale caches (produced by older normalisation) are discarded.
  */
-const CACHE_SCHEMA_VERSION = 8;
+const CACHE_SCHEMA_VERSION = 9;
 
 type CachePayload = StockAnalysisBundle & { __cacheVersion?: number };
 

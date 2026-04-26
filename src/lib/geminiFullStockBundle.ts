@@ -28,7 +28,48 @@ function parseJsonFromGemini(text: string): unknown {
   const t = text.trim();
   const fence = /^```(?:json)?\s*([\s\S]*?)```$/m.exec(t);
   const raw = fence ? fence[1].trim() : t;
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const extracted = extractFirstJsonObject(raw);
+    if (!extracted) throw new Error("Gemini response did not contain a complete JSON object.");
+    return JSON.parse(extracted);
+  }
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === "{") depth++;
+    if (ch === "}") {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+
+  return null;
 }
 
 function num(v: unknown, fallback = 0): number {
