@@ -14,6 +14,8 @@ import type { ChartTimeRange, FundamentalsFreq } from "@/lib/stockPeriodCore";
 export const maxDuration = 60;
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+const AI_CONTEXT_MAX_CHARS = 1_800;
+const AI_TABLE_MAX_CHARS = 7_000;
 
 function parseTimeRange(v: unknown): ChartTimeRange {
   const s = String(v ?? "3y");
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
       (x): x is string => typeof x === "string" && x.length > 0,
     );
     if (parts.length > 0) {
-      businessContext = parts.join("\n\n").slice(0, 6000);
+      businessContext = parts.join("\n\n").slice(0, AI_CONTEXT_MAX_CHARS);
     }
   } catch {
     /* optional */
@@ -109,23 +111,28 @@ export async function POST(request: Request) {
   ].join("\n");
 
   const periodDesc = describePeriodForAi(timeRange, freq, customFromYear, customToYear);
-  const fundamentalsTable = buildAiFundamentalsTableText(bundle, {
-    freq,
-    timeRange,
-    customFromYear,
-    customToYear,
-  });
+  const fundamentalsTable = buildAiFundamentalsTableText(
+    bundle,
+    {
+      freq,
+      timeRange,
+      customFromYear,
+      customToYear,
+    },
+    AI_TABLE_MAX_CHARS,
+  );
 
   const langLine =
     locale === "bg"
       ? "Write the entire report in Bulgarian."
       : "Write the entire report in English.";
 
-  const prompt = `You are an equity research assistant. Produce a short markdown report for ${bundle.quote.name} (${bundle.quote.symbol}).
+  const prompt = `You are an equity research assistant. Produce a concise markdown note for ${bundle.quote.name} (${bundle.quote.symbol}).
 
 ${langLine}
 
 **Critical:** Base numerical commentary ONLY on the "Fundamentals table" and live quote below. Those rows match the user's screen filters (${periodDesc}). Do not invent fiscal periods or figures that are not in the table. If the table is short or sparse, say so.
+Be specific and brief. No generic filler. Total response target: 90-140 words.
 
 ## Live quote
 - Price: ${q.price}, change: ${q.change} (${q.changesPercentage}%)
@@ -143,23 +150,20 @@ ${fundamentalsTable}
 
 Respond in markdown with EXACTLY these sections and headings:
 ### Summary
-2–4 sentences.
+2 short sentences max.
 
-### What the filtered data shows
-3–6 bullets referencing specific periods/labels from the table (e.g. FY 2023, Mar 24).
+### Key points
+3 bullets max, one sentence each, referencing specific periods/labels from the table where possible.
 
-### Risks and data caveats
-2–4 bullets (missing periods, possible restatements, currency, model-generated fundamentals disclaimer).
+### Caveats
+2 bullets max: missing data, currency, or model-generated fundamentals only when relevant.
 
-### Competitive positioning
-2–4 bullets tied to the business context only where grounded; no fabricated numbers.
-
-No other top-level sections. One sentence per bullet. Not investment advice.`;
+No other sections. No competitive essay. Not investment advice.`;
 
   if (geminiKey) {
     const g = await geminiGenerateText({
       prompt,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 768,
       temperature: 0.35,
       timeoutMs: 55_000,
     });
@@ -191,7 +195,7 @@ No other top-level sections. One sentence per bullet. Not investment advice.`;
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 1200,
+        max_tokens: 700,
         temperature: 0.35,
       });
       const text = completion.choices[0]?.message?.content?.trim() ?? "";

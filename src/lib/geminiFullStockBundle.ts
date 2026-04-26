@@ -346,11 +346,11 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
 }
 
 
-const MAX_HISTORY_YEARS = 10;
-/** Matches Yahoo merge cap so Gemini can fill the whole quarterly window when filings allow. */
-const MAX_QUARTERS = 48;
+const MAX_HISTORY_YEARS = 5;
+/** Five years keeps Gemini responses small enough to reduce truncation and stale hallucinated rows. */
+const MAX_QUARTERS = 20;
 /** Quarterly JSON is large; extra headroom reduces truncated responses (few bars in UI). */
-const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 32_768;
+const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 16_384;
 
 function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
@@ -537,9 +537,9 @@ export type GeminiBundlePart = 1 | 2 | 3;
 
 /**
  * Fetches stock data from Gemini in 3 sequential requests to avoid overwhelming the model:
- * 1) Quote + investor + annual statements (10 years)
- * 2) Quarterly income + cash flow (up to 48 quarters)
- * 3) Quarterly balance sheet + dividends (up to 48 quarters)
+ * 1) Quote + investor + annual statements (5 years)
+ * 2) Quarterly income + cash flow (up to 20 quarters)
+ * 3) Quarterly balance sheet + dividends (up to 20 quarters)
  */
 export async function fetchStockBundleFromGemini(
   symbol: string,
@@ -556,34 +556,8 @@ export async function fetchStockBundleFromGemini(
   opts?.onPartStart?.(1);
   console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
   const part1 = (await callGeminiJson(
-    apiKey, model, buildAnnualPrompt(sym), 16384,
+    apiKey, model, buildAnnualPrompt(sym), 8192,
   )) as Record<string, unknown>;
-
-  // #region agent log
-  {
-    const rawInc = Array.isArray(part1.income) ? part1.income : [];
-    const fiscalYears = rawInc
-      .map((r: unknown) => {
-        if (!r || typeof r !== "object") return "";
-        const fy = (r as Record<string, unknown>).fiscalYear;
-        return fy != null && fy !== "" ? String(fy) : "";
-      })
-      .filter(Boolean);
-    fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
-      body: JSON.stringify({
-        sessionId: "94f4c7",
-        location: "geminiFullStockBundle.ts:part1-raw",
-        message: "Gemini part1 raw income fiscal years (before normalize)",
-        data: { sym, rowCount: rawInc.length, fiscalYears },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-        runId: "post-prompt-v6",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   opts?.onPartStart?.(2);
   console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
@@ -610,25 +584,6 @@ export async function fetchStockBundleFromGemini(
   };
 
   const normalized = normalizeGeminiStockBundleJson(sym, merged);
-
-  // #region agent log
-  {
-    const fiscalYears = normalized.income.map((r) => r.fiscalYear);
-    fetch("http://127.0.0.1:7700/ingest/caf218e4-ba6f-426f-9a7b-1a3a27bc3ad0", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "94f4c7" },
-      body: JSON.stringify({
-        sessionId: "94f4c7",
-        location: "geminiFullStockBundle.ts:after-normalize",
-        message: "Bundle annual income fiscal years after normalizeGeminiStockBundleJson",
-        data: { sym, rowCount: normalized.income.length, fiscalYears },
-        timestamp: Date.now(),
-        hypothesisId: "H3",
-        runId: "post-prompt-v6",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   return normalized;
 }

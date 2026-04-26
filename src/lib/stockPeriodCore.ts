@@ -1,7 +1,7 @@
 import type { DividendQuarterlyPoint } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
-/** Max history in bundle is 10y; UI presets top out at 10y (no “all time”). */
+/** Gemini base bundle is 5y; Yahoo merge may add more, so 10y shows available rows when present. */
 export type ChartTimeRange = "10y" | "5y" | "3y" | "1y" | "custom";
 
 export type FundamentalsFreq = "annual" | "quarterly";

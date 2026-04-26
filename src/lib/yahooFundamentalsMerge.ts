@@ -5,7 +5,7 @@
 
 import YahooFinance from "yahoo-finance2";
 
-import { alignQuarterlyToIncome, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
+import { alignQuarterlyToIncome, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type BalanceSheetAnnual,
@@ -95,6 +95,15 @@ function indexByDate<T extends { date: Date }>(rows: T[]): Map<string, T> {
     m.set(iso(d), r);
   }
   return m;
+}
+
+function exactOrNearestYahooQuarter<T extends { date: Date }>(
+  dateIso: string,
+  byDate: Map<string, T>,
+  rows: T[],
+): T | null {
+  const d = dateIso.slice(0, 10);
+  return byDate.get(d) ?? nearestQuarterSideRow(d, rows, (r) => r.date);
 }
 
 function indexAnnualByFiscalYear(rows: Fin[] | Cf[] | Bs[], fyFromRow: (r: { date: Date }) => string): Map<string, { date: Date }> {
@@ -262,7 +271,7 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
 
   bundle.incomeQuarterly = bundle.incomeQuarterly.map((row): IncomeStatementQuarter => {
     const d = row.date.slice(0, 10);
-    const fin = finQByDate.get(d) as Fin | undefined;
+    const fin = exactOrNearestYahooQuarter(d, finQByDate, finQ) as Fin | null;
     if (!fin) return row;
     return {
       ...row,
@@ -281,7 +290,7 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
 
   bundle.cashFlowQuarterly = bundle.cashFlowQuarterly.map((row): CashFlowQuarter => {
     const d = row.date.slice(0, 10);
-    const cf = cfQByDate.get(d) as Cf | undefined;
+    const cf = exactOrNearestYahooQuarter(d, cfQByDate, cfQ) as Cf | null;
     if (!cf) return row;
     const ocf = mergeNullable(row.operatingCashFlow, cf.operatingCashFlow);
     const capex = mergeNullable(row.capitalExpenditure, cf.capitalExpenditure);
@@ -309,7 +318,7 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
 
   bundle.balanceSheetQuarterly = bundle.balanceSheetQuarterly.map((row): BalanceSheetQuarter => {
     const d = row.date.slice(0, 10);
-    const bs = bsQByDate.get(d) as Bs | undefined;
+    const bs = exactOrNearestYahooQuarter(d, bsQByDate, bsQ) as Bs | null;
     if (!bs) return row;
     return {
       ...row,
@@ -329,7 +338,7 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
   });
 
   bundle.dividendQuarterly = bundle.dividendQuarterly.map((p) => {
-    const fin = finQByDate.get(p.date.slice(0, 10)) as Fin | undefined;
+    const fin = exactOrNearestYahooQuarter(p.date.slice(0, 10), finQByDate, finQ) as Fin | null;
     if (!fin) return p;
     const dps = pickNum(fin.dividendPerShare);
     if (dps == null) return p;

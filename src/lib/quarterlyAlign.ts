@@ -7,6 +7,51 @@ import {
   type StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
 
+export const NEAREST_QUARTER_SIDE_ROW_DAYS = 45;
+
+function isoDay(d: string | Date): string | null {
+  const dt = d instanceof Date ? d : new Date(`${String(d).slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function daysBetweenIso(a: string, b: string): number {
+  const ta = new Date(`${a.slice(0, 10)}T12:00:00Z`).getTime();
+  const tb = new Date(`${b.slice(0, 10)}T12:00:00Z`).getTime();
+  return Math.abs(ta - tb) / 86400000;
+}
+
+export function nearestQuarterSideRow<T>(
+  targetIso: string,
+  rows: T[],
+  rowDate: (row: T) => string | Date,
+  maxDays = NEAREST_QUARTER_SIDE_ROW_DAYS,
+): T | null {
+  const target = isoDay(targetIso);
+  if (!target) return null;
+  let best: T | null = null;
+  let bestDays = maxDays + 1;
+  for (const row of rows) {
+    const d = isoDay(rowDate(row));
+    if (!d) continue;
+    const days = daysBetweenIso(target, d);
+    if (days < bestDays && days <= maxDays) {
+      bestDays = days;
+      best = row;
+    }
+  }
+  return best;
+}
+
+function exactOrNearestSideRow<T extends { date: string }>(
+  targetIso: string,
+  byDate: Map<string, T>,
+  rows: T[],
+): T | null {
+  const d = targetIso.slice(0, 10);
+  return byDate.get(d) ?? nearestQuarterSideRow(d, rows, (r) => r.date);
+}
+
 /** Ensure cashFlow and balanceSheet have a row for every income fiscalYear. */
 export function alignAnnualToIncome(
   sym: string,
@@ -111,9 +156,9 @@ export function alignQuarterlyToIncome(
 
   for (const inc of incomeSorted) {
     const d = inc.date.slice(0, 10);
-    cashFlowQuarterly.push(cfBy.get(d) ?? stubCashFlowQuarter(sym, d, inc.netIncome));
-    balanceSheetQuarterly.push(bsBy.get(d) ?? stubBalanceQuarter(sym, d));
-    const dv = divBy.get(d);
+    cashFlowQuarterly.push(exactOrNearestSideRow(d, cfBy, cfRaw) ?? stubCashFlowQuarter(sym, d, inc.netIncome));
+    balanceSheetQuarterly.push(exactOrNearestSideRow(d, bsBy, bsRaw) ?? stubBalanceQuarter(sym, d));
+    const dv = exactOrNearestSideRow(d, divBy, divRaw);
     dividendQuarterly.push(dv ?? { date: d, dividendPerShare: null });
   }
 
