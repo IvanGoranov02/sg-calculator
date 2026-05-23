@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { prisma } from "@/lib/prisma";
 
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -17,10 +18,6 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
   if (!row) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
-  if (row.source !== "manual") {
-    return Response.json({ error: "Only manual holdings can be edited here" }, { status: 400 });
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -31,6 +28,11 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
   const o = body as Record<string, unknown>;
   const data: Prisma.PortfolioHoldingUpdateInput = {};
 
+  if (o.quantity !== undefined || o.avgPrice !== undefined) {
+    if (row.source !== "manual") {
+      return Response.json({ error: "Only manual holdings can edit quantity or average price" }, { status: 400 });
+    }
+  }
   if (o.quantity !== undefined) {
     const n = typeof o.quantity === "number" ? o.quantity : typeof o.quantity === "string" ? Number(o.quantity) : NaN;
     if (!Number.isFinite(n) || n <= 0) {
@@ -46,7 +48,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     data.avgPrice = new Prisma.Decimal(n);
   }
   if (typeof o.currency === "string" && o.currency.trim().length >= 3) {
-    data.currency = o.currency.trim().toUpperCase().slice(0, 8);
+    data.currency = normalizePortfolioCurrency(o.currency);
   }
 
   if (Object.keys(data).length === 0) {

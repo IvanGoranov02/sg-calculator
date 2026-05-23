@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
+import { inferCurrencyFromSymbol, normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { normalizeTicker } from "@/lib/watchlistStorage";
 
 function parsePositiveDecimal(raw: unknown, label: string): Prisma.Decimal {
@@ -45,8 +46,8 @@ export async function POST(request: Request) {
 
   const currency =
     typeof o.currency === "string" && o.currency.trim().length >= 3
-      ? o.currency.trim().toUpperCase().slice(0, 8)
-      : "USD";
+      ? normalizePortfolioCurrency(o.currency)
+      : inferCurrencyFromSymbol(symbolYahoo);
 
   try {
     const existingManual = await prisma.portfolioHolding.findFirst({

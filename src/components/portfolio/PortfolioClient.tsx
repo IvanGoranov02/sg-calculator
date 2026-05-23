@@ -13,7 +13,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDecimalAsPercent, formatDividendYieldPercent, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
+import {
+  convertPortfolioMoney,
+  inferCurrencyFromSymbol,
+  normalizePortfolioCurrency,
+  type PortfolioFxRates,
+} from "@/lib/portfolioFx";
 import { cn } from "@/lib/utils";
+
+const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
 type HoldingApi = {
   id: string;
@@ -64,11 +72,15 @@ export function PortfolioClient() {
   const [sym, setSym] = useState("");
   const [qty, setQty] = useState("");
   const [avg, setAvg] = useState("");
+  const [manualCurrency, setManualCurrency] = useState<string>("EUR");
   const [adding, setAdding] = useState(false);
+
+  const [fx, setFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState("");
   const [editAvg, setEditAvg] = useState("");
+  const [editCurrency, setEditCurrency] = useState("EUR");
   const [savingEdit, setSavingEdit] = useState(false);
 
   /** Non-error info (e.g. per-symbol sync skip or manual replacing broker row). */
@@ -117,9 +129,11 @@ export function PortfolioClient() {
       const data = (await portfolioRes.json()) as {
         holdings?: HoldingApi[];
         quotes?: Record<string, PortfolioQuoteRow | null>;
+        fx?: PortfolioFxRates;
         trading212?: Trading212Api;
         error?: string;
       };
+      if (data.fx) setFx(data.fx);
 
       if (!portfolioRes.ok) {
         setError(data.error ?? t("portfolio.errorLoad"));
@@ -245,7 +259,12 @@ export function PortfolioClient() {
       const res = await fetch("/api/portfolio/holdings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbolYahoo: s, quantity: qty, avgPrice: avg }),
+        body: JSON.stringify({
+          symbolYahoo: s,
+          quantity: qty,
+          avgPrice: avg,
+          currency: manualCurrency,
+        }),
       });
       const data = (await res.json()) as { error?: string; replacedBrokerRow?: boolean };
       if (!res.ok) {
@@ -278,6 +297,7 @@ export function PortfolioClient() {
     setEditingId(h.id);
     setEditQty(h.quantity);
     setEditAvg(h.avgPrice);
+    setEditCurrency(normalizePortfolioCurrency(h.currency));
   }
 
   async function onSaveEdit(e: FormEvent) {
@@ -288,7 +308,11 @@ export function PortfolioClient() {
       const res = await fetch(`/api/portfolio/holdings/${editingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: editQty, avgPrice: editAvg }),
+        body: JSON.stringify({
+          quantity: editQty,
+          avgPrice: editAvg,
+          currency: editCurrency,
+        }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
@@ -307,22 +331,45 @@ export function PortfolioClient() {
       const q = quotes[h.symbolYahoo];
       const qQty = Number(h.quantity);
       const qAvg = Number(h.avgPrice);
+      const holdingCcy = normalizePortfolioCurrency(h.currency);
+      const quoteCcy = q ? normalizePortfolioCurrency(q.currency) : holdingCcy;
       const hasValidQuote = q != null && Number.isFinite(q.price) && q.price > 0;
-      const mv = hasValidQuote ? q.price * qQty : null;
+      const priceInHolding =
+        hasValidQuote && q
+          ? convertPortfolioMoney(q.price, quoteCcy, holdingCcy, fx)
+          : null;
+      const mv =
+        priceInHolding != null && Number.isFinite(priceInHolding) ? priceInHolding * qQty : null;
       const cost = qAvg * qQty;
       const pl = mv != null ? mv - cost : null;
       const plPct = cost > 0 && pl != null ? (pl / cost) * 100 : null;
+      const fxMismatch = hasValidQuote && quoteCcy !== holdingCcy && priceInHolding == null;
       let estAnnual: number | null = null;
       if (hasValidQuote && q) {
         if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
-          estAnnual = q.dividendRate * qQty;
+          const rateInHolding = convertPortfolioMoney(q.dividendRate, quoteCcy, holdingCcy, fx);
+          estAnnual = (rateInHolding ?? q.dividendRate) * qQty;
         } else if (q.dividendYield != null && Number.isFinite(q.dividendYield) && mv != null && mv > 0) {
           estAnnual = mv * q.dividendYield;
         }
       }
-      return { h, q, qQty, qAvg, mv, cost, pl, plPct, estAnnual };
+      return {
+        h,
+        q,
+        qQty,
+        qAvg,
+        holdingCcy,
+        quoteCcy,
+        priceInHolding,
+        mv,
+        cost,
+        pl,
+        plPct,
+        estAnnual,
+        fxMismatch,
+      };
     });
-  }, [holdings, quotes]);
+  }, [holdings, quotes, fx]);
 
   /** Sums est. annual dividend by holding currency (same basis as table column). */
   const dividendTotalsByCurrency = useMemo(() => {
@@ -425,13 +472,20 @@ export function PortfolioClient() {
         <CardHeader className="space-y-1 pb-2 sm:pb-6">
           <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
         </CardHeader>
-        <form onSubmit={onAddManual} className="grid grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+        <form
+          onSubmit={onAddManual}
+          className="grid grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
+        >
           <div className="grid gap-1.5">
             <Label htmlFor="m-sym">{t("portfolio.manualSymbol")}</Label>
             <Input
               id="m-sym"
               value={sym}
-              onChange={(e) => setSym(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSym(v);
+                if (v.trim()) setManualCurrency(inferCurrencyFromSymbol(v));
+              }}
               className="border-white/10 bg-zinc-950"
             />
           </div>
@@ -454,6 +508,21 @@ export function PortfolioClient() {
               onChange={(e) => setAvg(e.target.value)}
               className="border-white/10 bg-zinc-950"
             />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="m-ccy">{t("portfolio.manualCurrency")}</Label>
+            <select
+              id="m-ccy"
+              value={manualCurrency}
+              onChange={(e) => setManualCurrency(e.target.value)}
+              className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+            >
+              {MANUAL_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex items-end">
             <Button type="submit" disabled={adding} className="w-full sm:w-auto">
@@ -526,7 +595,7 @@ export function PortfolioClient() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ h, q, qQty, mv, cost, pl, plPct, estAnnual }) => (
+              {rows.map(({ h, q, qQty, holdingCcy, quoteCcy, mv, cost, pl, plPct, estAnnual, fxMismatch }) => (
                 <TableRow key={h.id} className="border-white/10">
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
                     {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
@@ -550,7 +619,7 @@ export function PortfolioClient() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {editingId === h.id ? (
+                    {editingId === h.id && h.source === "manual" ? (
                       <Input
                         className="h-8 border-white/10 bg-zinc-950"
                         value={editQty}
@@ -561,26 +630,33 @@ export function PortfolioClient() {
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {editingId === h.id ? (
+                    {editingId === h.id && h.source === "manual" ? (
                       <Input
                         className="h-8 border-white/10 bg-zinc-950"
                         value={editAvg}
                         onChange={(e) => setEditAvg(e.target.value)}
                       />
                     ) : (
-                      fmtMoney(Number(h.avgPrice), h.currency)
+                      fmtMoney(Number(h.avgPrice), holdingCcy)
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {q && Number.isFinite(q.price) && q.price > 0
-                      ? fmtMoney(q.price, q.currency)
-                      : t("portfolio.quoteMissing")}
+                    {q && Number.isFinite(q.price) && q.price > 0 ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span>{fmtMoney(q.price, quoteCcy)}</span>
+                        {quoteCcy !== holdingCcy ? (
+                          <span className="text-[10px] text-muted-foreground">{quoteCcy}</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      t("portfolio.quoteMissing")
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {mv != null ? fmtMoney(mv, h.currency) : t("portfolio.quoteMissing")}
+                    {mv != null ? fmtMoney(mv, holdingCcy) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums md:table-cell">
-                    {fmtMoney(cost, h.currency)}
+                    {fmtMoney(cost, holdingCcy)}
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -588,7 +664,7 @@ export function PortfolioClient() {
                       pl != null && pl > 0 ? "text-emerald-400" : pl != null && pl < 0 ? "text-red-400" : "",
                     )}
                   >
-                    {pl != null ? fmtMoney(pl, h.currency) : t("portfolio.quoteMissing")}
+                    {pl != null ? fmtMoney(pl, holdingCcy) : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -600,41 +676,55 @@ export function PortfolioClient() {
                           : "",
                     )}
                   >
-                    {plPct != null ? formatPercent(plPct) : t("portfolio.quoteMissing")}
+                    {fxMismatch
+                      ? t("portfolio.fxUnavailable")
+                      : plPct != null
+                        ? formatPercent(plPct)
+                        : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="hidden text-right text-muted-foreground md:table-cell">
                     {formatDividendYieldPercent(q?.dividendYield ?? null)}
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
-                    {estAnnual != null && q
-                      ? fmtMoney(estAnnual, q.currency ?? h.currency)
-                      : "—"}
+                    {estAnnual != null ? fmtMoney(estAnnual, holdingCcy) : "—"}
                   </TableCell>
                   <TableCell>
-                    {h.source === "manual" ? (
-                      <div className="flex gap-1">
-                        {editingId === h.id ? (
-                          <form onSubmit={onSaveEdit} className="flex flex-wrap items-center gap-1">
-                            <Button type="submit" size="sm" variant="secondary" disabled={savingEdit}>
-                              {savingEdit ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                              {t("portfolio.manualSave")}
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                              {t("portfolio.manualCancel")}
-                            </Button>
-                          </form>
-                        ) : (
-                          <>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="size-8"
-                              aria-label={t("portfolio.manualEdit")}
-                              onClick={() => startEdit(h)}
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
+                    <div className="flex gap-1">
+                      {editingId === h.id ? (
+                        <form onSubmit={onSaveEdit} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                          <select
+                            value={editCurrency}
+                            onChange={(e) => setEditCurrency(e.target.value)}
+                            className="h-8 rounded-md border border-white/10 bg-zinc-950 px-2 text-xs text-foreground"
+                            aria-label={t("portfolio.manualCurrency")}
+                          >
+                            {MANUAL_CURRENCIES.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                          <Button type="submit" size="sm" variant="secondary" disabled={savingEdit}>
+                            {savingEdit ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                            {t("portfolio.manualSave")}
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                            {t("portfolio.manualCancel")}
+                          </Button>
+                        </form>
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8"
+                            aria-label={t("portfolio.manualEdit")}
+                            onClick={() => startEdit(h)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          {h.source === "manual" ? (
                             <Button
                               type="button"
                               size="icon"
@@ -645,10 +735,10 @@ export function PortfolioClient() {
                             >
                               <Trash2 className="size-4" />
                             </Button>
-                          </>
-                        )}
-                      </div>
-                    ) : null}
+                          ) : null}
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

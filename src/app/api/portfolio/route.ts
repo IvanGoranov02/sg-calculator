@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { fetchPortfolioFxRates } from "@/lib/portfolioFx";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
@@ -42,16 +43,19 @@ export async function GET() {
       prisma.trading212Connection.findUnique({ where: { userId } }),
     ]);
 
-    const quotes =
+    const [quotes, fx] = await Promise.all([
       holdings.length > 0
-        ? await fetchPortfolioQuotesForHoldings(
+        ? fetchPortfolioQuotesForHoldings(
             holdings.map((h) => ({ symbolYahoo: h.symbolYahoo, symbolT212: h.symbolT212 })),
           )
-        : {};
+        : Promise.resolve({} as Record<string, import("@/lib/portfolioMarketData").PortfolioQuoteRow | null>),
+      fetchPortfolioFxRates(),
+    ]);
 
     return Response.json({
       holdings: holdings.map(serializeHolding),
       quotes,
+      fx,
       trading212: {
         encryptionConfigured: isPortfolioEncryptionConfigured(),
         connected: !!t212,

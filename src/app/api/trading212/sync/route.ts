@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException } from "@/lib/serverDebugLog";
+import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
 
@@ -73,7 +74,9 @@ export async function POST() {
         continue;
       }
       const avg = Number(p.averagePricePaid ?? 0);
-      const cur = p.instrument?.currency ?? summary?.currency ?? "USD";
+      const cur = normalizePortfolioCurrency(
+        p.walletImpact?.currency ?? p.instrument?.currency ?? summary?.currency ?? "USD",
+      );
       rows.push({
         userId,
         symbolYahoo: yahoo,
