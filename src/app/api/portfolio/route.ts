@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { fetchPortfolioFxRates } from "@/lib/portfolioFx";
+import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";

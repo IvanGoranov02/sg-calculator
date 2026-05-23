@@ -1,10 +1,6 @@
 /**
- * FX helpers for portfolio P/L — align holding cost currency with Yahoo quote currency.
+ * FX helpers for portfolio P/L (client-safe — no Node/Yahoo imports).
  */
-
-import YahooFinance from "yahoo-finance2";
-
-const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 export type PortfolioFxRates = {
   /** EUR per 1 USD (same convention as stock bundle eurPerUsd). */
@@ -28,26 +24,6 @@ export function inferCurrencyFromSymbol(symbol: string): string {
     return "EUR";
   }
   return "USD";
-}
-
-async function usdPerUnit(pairSymbol: string): Promise<number | null> {
-  try {
-    const raw = await yahooFinance.quote(pairSymbol);
-    const q = Array.isArray(raw) ? raw[0] : raw;
-    const n = Number((q as { regularMarketPrice?: unknown })?.regularMarketPrice);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Fetch spot rates used to convert quote currency ↔ holding currency. */
-export async function fetchPortfolioFxRates(): Promise<PortfolioFxRates> {
-  const [eurUsd, gbpUsd] = await Promise.all([usdPerUnit("EURUSD=X"), usdPerUnit("GBPUSD=X")]);
-  return {
-    eurPerUsd: eurUsd != null && eurUsd > 0 ? 1 / eurUsd : null,
-    gbpPerUsd: gbpUsd != null && gbpUsd > 0 ? 1 / gbpUsd : null,
-  };
 }
 
 /**
