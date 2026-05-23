@@ -108,7 +108,7 @@ model WatchlistSymbol {
   @@index([userId])
 }
 
-/** Cached Gemini stock bundle (DB first; refresh after TTL). */
+/** Cached Gemini stock bundle (DB first; refresh after ~30 days). */
 model StockAnalysisCache {
   symbol    String   @id
   payload   Json

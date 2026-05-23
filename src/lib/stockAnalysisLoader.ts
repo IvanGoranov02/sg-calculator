@@ -24,16 +24,14 @@ export type StockAnalysisResult = {
  */
 const CACHE_SCHEMA_VERSION = 9;
 
+/** Rolling window: Gemini fundamentals stay in DB this long before re-fetch. */
+const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 type CachePayload = StockAnalysisBundle & { __cacheVersion?: number };
 
-/** Fundamentals cache is fresh for the same calendar month (UTC) as `updatedAt`. */
-function cacheIsFreshForMonth(payload: CachePayload, updatedAt: Date): boolean {
+function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
   if ((payload.__cacheVersion ?? 0) < CACHE_SCHEMA_VERSION) return false;
-  const now = new Date();
-  return (
-    updatedAt.getUTCFullYear() === now.getUTCFullYear() &&
-    updatedAt.getUTCMonth() === now.getUTCMonth()
-  );
+  return Date.now() - updatedAt.getTime() < CACHE_MAX_AGE_MS;
 }
 
 export type LoadStockOptions = { forceRefresh?: boolean };
@@ -43,7 +41,7 @@ export type LoadStockAnalysisOptions = LoadStockOptions & {
 };
 
 /**
- * Stock analysis: validate ticker → **DB first** (Gemini bundle, fresh for current month) → on miss/stale:
+ * Stock analysis: validate ticker → **DB first** (Gemini bundle, fresh up to 30 days) → on miss/stale:
  * Gemini → Yahoo fundamentals merge → upsert → **always** Yahoo for live quote + history + EUR/USD.
  */
 export async function loadStockAnalysis(
@@ -68,7 +66,7 @@ export async function loadStockAnalysis(
         row = null;
       }
 
-      if (row && cacheIsFreshForMonth(row.payload as CachePayload, row.updatedAt)) {
+      if (row && cacheIsFresh(row.payload as CachePayload, row.updatedAt)) {
         const bundle = row.payload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
         opts?.onProgress?.({ kind: "yahoo_fundamentals" });
