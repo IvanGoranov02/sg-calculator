@@ -8,6 +8,8 @@ export function stockLoadProgressLabel(t: TFn, e: StockAnalysisLoadProgress): st
       return t("stock.loadProgressCache");
     case "gemini":
       return t("stock.loadProgressGemini", { step: e.step, total: e.total });
+    case "gemini_gap_fill":
+      return t("stock.loadProgressGeminiGapFill");
     case "yahoo_fundamentals":
       return t("stock.loadProgressYahooFundamentals");
     case "yahoo_prices":

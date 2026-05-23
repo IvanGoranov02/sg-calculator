@@ -4,6 +4,10 @@
  */
 
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+import {
+  FUNDAMENTALS_HISTORY_YEARS,
+  FUNDAMENTALS_MAX_QUARTERS,
+} from "@/lib/fundamentalsHistoryLimits";
 import { alignAnnualToIncome, alignQuarterlyToIncome } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
@@ -31,9 +35,56 @@ function parseJsonFromGemini(text: string): unknown {
   try {
     return JSON.parse(raw);
   } catch {
-    const extracted = extractFirstJsonObject(raw);
+    const extracted = extractFirstJsonObject(raw) ?? repairTruncatedJsonObject(raw);
     if (!extracted) throw new Error("Gemini response did not contain a complete JSON object.");
-    return JSON.parse(extracted);
+    try {
+      return JSON.parse(extracted);
+    } catch {
+      throw new Error("Gemini response did not contain a complete JSON object.");
+    }
+  }
+}
+
+/** Close unbalanced braces when the model hit maxOutputTokens mid-object. */
+function repairTruncatedJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+
+  let slice = text.slice(start).trimEnd();
+  slice = slice.replace(/,\s*("[^"]*")?\s*:\s*("[^"]*)?$/, "");
+  slice = slice.replace(/,\s*$/, "");
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < slice.length; i++) {
+    const ch = slice[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    if (ch === "}") depth--;
+  }
+
+  if (depth <= 0) return slice;
+
+  let repaired = slice;
+  for (let i = 0; i < depth; i++) repaired += "}";
+  try {
+    JSON.parse(repaired);
+    return repaired;
+  } catch {
+    return null;
   }
 }
 
@@ -387,11 +438,12 @@ export function normalizeGeminiStockBundleJson(sym: string, parsed: unknown): St
 }
 
 
-const MAX_HISTORY_YEARS = 5;
-/** Five years keeps Gemini responses small enough to reduce truncation and stale hallucinated rows. */
-const MAX_QUARTERS = 20;
+const MAX_HISTORY_YEARS = FUNDAMENTALS_HISTORY_YEARS;
+const MAX_QUARTERS = FUNDAMENTALS_MAX_QUARTERS;
 /** Quarterly JSON is large; extra headroom reduces truncated responses (few bars in UI). */
 const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 16_384;
+const GEMINI_ANNUAL_MAX_OUTPUT_TOKENS = 16_384;
+const GEMINI_JSON_MAX_RETRIES = 3;
 
 function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
@@ -399,13 +451,19 @@ function perRequestTimeoutMs(): number {
   return 120_000;
 }
 
-/** Fire a single Gemini request and return parsed JSON. No responseSchema — lite models fill zeros with it. */
-async function callGeminiJson(
+type GeminiGenerateResponse = {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+    finishReason?: string;
+  }>;
+};
+
+async function callGeminiJsonOnce(
   apiKey: string,
   model: string,
   prompt: string,
   maxTokens: number,
-): Promise<unknown> {
+): Promise<{ parsed: unknown; finishReason: string | null }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   let res: Response;
@@ -436,14 +494,44 @@ async function callGeminiJson(
     throw new Error(`Gemini HTTP ${res.status}: ${errText.slice(0, 400)}`);
   }
 
-  const raw = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text =
-    raw?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("")?.trim() ?? "";
+  const raw = (await res.json()) as GeminiGenerateResponse;
+  const candidate = raw?.candidates?.[0];
+  const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("")?.trim() ?? "";
   if (!text) throw new Error("Empty Gemini response.");
 
-  return parseJsonFromGemini(text);
+  const finishReason = candidate?.finishReason ?? null;
+  return { parsed: parseJsonFromGemini(text), finishReason };
+}
+
+/** Fire a Gemini request and return parsed JSON; retries on truncation with higher token budget. */
+export async function callGeminiJson(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  maxTokens: number,
+): Promise<unknown> {
+  let tokens = maxTokens;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < GEMINI_JSON_MAX_RETRIES; attempt++) {
+    try {
+      const { parsed, finishReason } = await callGeminiJsonOnce(apiKey, model, prompt, tokens);
+      if (finishReason === "MAX_TOKENS") {
+        throw new Error("Gemini response did not contain a complete JSON object.");
+      }
+      return parsed;
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      const retryable =
+        lastError.message.includes("complete JSON object") ||
+        lastError.message.includes("Empty Gemini");
+      if (!retryable || attempt >= GEMINI_JSON_MAX_RETRIES - 1) break;
+      tokens = Math.min(Math.floor(tokens * 1.5), 65_536);
+      console.warn(`[gemini] JSON parse/truncation — retry ${attempt + 2}/${GEMINI_JSON_MAX_RETRIES}, maxOutputTokens=${tokens}`);
+    }
+  }
+
+  throw lastError ?? new Error("Gemini request failed.");
 }
 
 function utcTodayIso(): string {
@@ -458,7 +546,7 @@ function buildAnnualPrompt(sym: string): string {
 
   return `You output ONE JSON object (no markdown, no code fences) for ticker ${sym}.
 
-**CRITICAL: Do NOT include historical/intraday price data. Only fundamentals.**
+**CRITICAL: Do NOT include historical/intraday price data, and do NOT include an "investor" key** (valuation metrics come from Yahoo Finance).
 All numeric values in reporting currency at company scale (actual dollars, not thousands).
 
 **Calendar anchor (UTC): today is ${today}.** Use filing-accurate consolidated annual figures (10-K / annual report / 20-F / equivalent) as they exist in the real world today — **not** an internal knowledge cutoff. The ${MAX_HISTORY_YEARS} rows must be the ${MAX_HISTORY_YEARS} **most recently completed fiscal years** for ${sym} under **that company's own fiscal calendar**, **oldest first**, and the **last** row in each of "income", "cashFlow", and "balanceSheet" must be the **newest filed full-year period** (often FY${priorTypical} and/or FY${latestTypical} or later when already published). **Do not truncate the annual series at FY2023** (or any stale year) if newer annual filings exist.
@@ -467,21 +555,6 @@ Provide data for the last ${MAX_HISTORY_YEARS} fiscal years, oldest first.
 
 {
   "quote": { "symbol": "${sym}", "name": "Full Company Name", "price": 123.45, "change": -1.2, "changesPercentage": -0.97 },
-
-  "investor": {
-    "currency": "USD", "marketCap": N, "enterpriseValue": N, "trailingPE": N, "forwardPE": N,
-    "pegRatio": N, "priceToSales": N, "priceToBook": N, "enterpriseToRevenue": N, "enterpriseToEbitda": N,
-    "beta": N, "fiftyTwoWeekLow": N, "fiftyTwoWeekHigh": N, "fiftyDayAverage": N, "twoHundredDayAverage": N,
-    "regularMarketVolume": N, "averageDailyVolume3Month": N,
-    "grossMargins": 0.xx, "operatingMargins": 0.xx, "profitMargins": 0.xx,
-    "returnOnEquity": 0.xx, "returnOnAssets": 0.xx, "revenueGrowth": 0.xx, "earningsGrowth": 0.xx,
-    "debtToEquity": N, "currentRatio": N, "quickRatio": N, "totalCash": N, "totalDebt": N,
-    "dividendRate": N, "dividendYield": 0.xx, "payoutRatio": 0.xx,
-    "trailingEps": N, "forwardEps": N, "bookValue": N, "revenuePerShare": N,
-    "sharesOutstanding": N, "floatShares": N,
-    "heldPercentInsiders": 0.xx, "heldPercentInstitutions": 0.xx, "shortPercentOfFloat": 0.xx,
-    "targetMeanPrice": N, "targetMedianPrice": N, "recommendationKey": "buy", "numberOfAnalystOpinions": N
-  },
 
   "income": [
     { "date": "YYYY-MM-DD", "symbol": "${sym}", "fiscalYear": "YYYY",
@@ -597,7 +670,7 @@ export async function fetchStockBundleFromGemini(
   opts?.onPartStart?.(1);
   console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
   const part1 = (await callGeminiJson(
-    apiKey, model, buildAnnualPrompt(sym), 8192,
+    apiKey, model, buildAnnualPrompt(sym), GEMINI_ANNUAL_MAX_OUTPUT_TOKENS,
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(2);
@@ -614,7 +687,7 @@ export async function fetchStockBundleFromGemini(
 
   const merged = {
     quote: part1.quote,
-    investor: part1.investor,
+    investor: part1.investor ?? {},
     income: part1.income,
     cashFlow: part1.cashFlow,
     balanceSheet: part1.balanceSheet,

@@ -1,10 +1,13 @@
 /**
- * After Gemini builds the bundle, fill null / zero gaps using Yahoo fundamentalsTimeSeries.
- * Also appends quarter rows Yahoo has but Gemini/cache omitted (same dates as Yahoo quarterly financials).
+ * Yahoo fundamentalsTimeSeries: fetch 5y window, merge into bundle with Yahoo taking priority over Gemini.
  */
 
 import YahooFinance from "yahoo-finance2";
 
+import {
+  FUNDAMENTALS_MAX_QUARTERS,
+  fundamentalsPeriod1Iso,
+} from "@/lib/fundamentalsHistoryLimits";
 import { alignQuarterlyToIncome, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
@@ -19,35 +22,7 @@ import {
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
-function iso(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function pickNum(v: unknown): number | null {
-  if (v == null) return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Replace when null, or when 0 and Yahoo has a non-zero value (common Gemini placeholder). */
-function mergeScalar(cur: number | null | undefined, yahoo: unknown): number {
-  const y = pickNum(yahoo);
-  const c = cur == null || (typeof cur === "number" && !Number.isFinite(cur)) ? null : cur;
-  if (y == null) return c ?? 0;
-  if (c == null) return y;
-  if (c === 0 && y !== 0) return y;
-  return c;
-}
-
-function mergeNullable(cur: number | null | undefined, yahoo: unknown): number | null {
-  const y = pickNum(yahoo);
-  if (y == null) return cur ?? null;
-  if (cur == null) return y;
-  if (cur === 0 && y !== 0) return y;
-  return cur;
-}
-
-type Fin = {
+export type Fin = {
   date: Date;
   totalRevenue?: number;
   grossProfit?: number;
@@ -60,7 +35,7 @@ type Fin = {
   dividendPerShare?: number;
 };
 
-type Cf = {
+export type Cf = {
   date: Date;
   freeCashFlow?: number;
   operatingCashFlow?: number;
@@ -71,7 +46,7 @@ type Cf = {
   commonStockRepurchased?: number;
 };
 
-type Bs = {
+export type Bs = {
   date: Date;
   totalAssets?: number;
   totalDebt?: number;
@@ -85,6 +60,24 @@ type Bs = {
   goodwill?: number;
   longTermDebt?: number;
 };
+
+export type YahooFundamentalsPayload = {
+  finA: Fin[];
+  finQ: Fin[];
+  cfA: Cf[];
+  cfQ: Cf[];
+  bsA: Bs[];
+  bsQ: Bs[];
+};
+
+function iso(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+import { mergeNullablePreferYahoo, mergeScalarPreferYahoo, pickNum } from "@/lib/yahooMergePolicy";
+
+const mergeScalar = mergeScalarPreferYahoo;
+const mergeNullable = mergeNullablePreferYahoo;
 
 function indexByDate<T extends { date: Date }>(rows: T[]): Map<string, T> {
   const m = new Map<string, T>();
@@ -106,7 +99,10 @@ function exactOrNearestYahooQuarter<T extends { date: Date }>(
   return byDate.get(d) ?? nearestQuarterSideRow(d, rows, (r) => r.date);
 }
 
-function indexAnnualByFiscalYear(rows: Fin[] | Cf[] | Bs[], fyFromRow: (r: { date: Date }) => string): Map<string, { date: Date }> {
+function indexAnnualByFiscalYear(
+  rows: Fin[] | Cf[] | Bs[],
+  fyFromRow: (r: { date: Date }) => string,
+): Map<string, { date: Date }> {
   const m = new Map<string, { date: Date }>();
   for (const r of rows) {
     if (!r?.date) continue;
@@ -118,17 +114,19 @@ function indexAnnualByFiscalYear(rows: Fin[] | Cf[] | Bs[], fyFromRow: (r: { dat
   return m;
 }
 
-export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBundle): Promise<void> {
-  const sym = bundle.quote.symbol.trim().toUpperCase();
-  const period2 = new Date().toISOString().slice(0, 10);
-  const period1 = "2014-01-01";
+function filterRowsSincePeriod1<T extends { date: Date }>(rows: T[], period1: string): T[] {
+  return rows.filter((r) => {
+    if (!r?.date) return false;
+    const d = r.date instanceof Date ? r.date : new Date(r.date as string);
+    if (Number.isNaN(d.getTime())) return false;
+    return iso(d) >= period1;
+  });
+}
 
-  let finA: Fin[];
-  let finQ: Fin[];
-  let cfA: Cf[];
-  let cfQ: Cf[];
-  let bsA: Bs[];
-  let bsQ: Bs[];
+export async function fetchYahooFundamentalsPayload(symbol: string): Promise<YahooFundamentalsPayload | null> {
+  const sym = symbol.trim().toUpperCase();
+  const period2 = new Date().toISOString().slice(0, 10);
+  const period1 = fundamentalsPeriod1Iso();
 
   try {
     const [a1, a2, a3, a4, a5, a6] = await Promise.all([
@@ -139,15 +137,26 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "balance-sheet" }),
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "balance-sheet" }),
     ]);
-    finA = (a1 as Fin[]) ?? [];
-    finQ = (a2 as Fin[]) ?? [];
-    cfA = (a3 as Cf[]) ?? [];
-    cfQ = (a4 as Cf[]) ?? [];
-    bsA = (a5 as Bs[]) ?? [];
-    bsQ = (a6 as Bs[]) ?? [];
+
+    return {
+      finA: filterRowsSincePeriod1((a1 as Fin[]) ?? [], period1),
+      finQ: filterRowsSincePeriod1((a2 as Fin[]) ?? [], period1),
+      cfA: filterRowsSincePeriod1((a3 as Cf[]) ?? [], period1),
+      cfQ: filterRowsSincePeriod1((a4 as Cf[]) ?? [], period1),
+      bsA: filterRowsSincePeriod1((a5 as Bs[]) ?? [], period1),
+      bsQ: filterRowsSincePeriod1((a6 as Bs[]) ?? [], period1),
+    };
   } catch {
-    return;
+    return null;
   }
+}
+
+export function applyYahooFundamentalsToBundle(
+  bundle: StockAnalysisBundle,
+  payload: YahooFundamentalsPayload,
+): void {
+  const sym = bundle.quote.symbol.trim().toUpperCase();
+  const { finA, finQ, cfA, cfQ, bsA, bsQ } = payload;
 
   const finAByFy = indexAnnualByFiscalYear(finA, ({ date }) => String(date.getUTCFullYear()));
   const cfAByFy = indexAnnualByFiscalYear(cfA, ({ date }) => String(date.getUTCFullYear()));
@@ -162,6 +171,10 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
   bundle.income = bundle.income.map((row): IncomeStatementAnnual => {
     const fin = finAByFy.get(row.fiscalYear) as Fin | undefined;
     if (!fin) return row;
+    const yOi = pickNum(fin.operatingIncome);
+    const yEbitda = pickNum(fin.EBITDA);
+    const yEps = pickNum(fin.dilutedEPS);
+    const yShares = pickNum(fin.dilutedAverageShares);
     return {
       ...row,
       symbol: symU,
@@ -169,11 +182,10 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
       grossProfit: mergeScalar(row.grossProfit, fin.grossProfit),
       operatingExpenses: mergeScalar(row.operatingExpenses, fin.operatingExpense),
       netIncome: mergeScalar(row.netIncome, fin.netIncome),
-      operatingIncome: row.operatingIncome == null ? pickNum(fin.operatingIncome) ?? undefined : row.operatingIncome,
-      ebitda: row.ebitda == null ? pickNum(fin.EBITDA) ?? undefined : row.ebitda,
-      dilutedEps: row.dilutedEps == null ? pickNum(fin.dilutedEPS) ?? undefined : row.dilutedEps,
-      dilutedAverageShares:
-        row.dilutedAverageShares == null ? pickNum(fin.dilutedAverageShares) ?? undefined : row.dilutedAverageShares,
+      operatingIncome: yOi ?? row.operatingIncome,
+      ebitda: yEbitda ?? row.ebitda,
+      dilutedEps: yEps ?? row.dilutedEps,
+      dilutedAverageShares: yShares ?? row.dilutedAverageShares,
     };
   });
 
@@ -183,13 +195,11 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
     const ocf = mergeNullable(row.operatingCashFlow, cf.operatingCashFlow);
     const capex = mergeNullable(row.capitalExpenditure, cf.capitalExpenditure);
     let fcf = row.freeCashFlow;
-    const filledOcfCapex =
-      (row.operatingCashFlow == null && ocf != null) || (row.capitalExpenditure == null && capex != null);
-    if (ocf != null && capex != null && (filledOcfCapex || row.freeCashFlow === 0)) {
+    const yFcf = pickNum(cf.freeCashFlow);
+    if (yFcf != null) {
+      fcf = yFcf;
+    } else if (ocf != null && capex != null) {
       fcf = ocf + capex;
-    } else {
-      const yFcf = pickNum(cf.freeCashFlow);
-      if (yFcf != null && (row.freeCashFlow === 0 || row.freeCashFlow == null)) fcf = yFcf;
     }
     return {
       ...row,
@@ -224,7 +234,6 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
     };
   });
 
-  const MAX_QUARTERS_IN_BUNDLE = 48;
   const quarterEndsSeen = new Set(bundle.incomeQuarterly.map((r) => r.date.slice(0, 10)));
   const yahooOnlyQuarters: IncomeStatementQuarter[] = [];
   for (const fin of finQ) {
@@ -253,7 +262,7 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
   if (yahooOnlyQuarters.length > 0) {
     bundle.incomeQuarterly = trimQuarterlyToMax(
       sortQuarterlyByDateAsc([...bundle.incomeQuarterly, ...yahooOnlyQuarters]),
-      MAX_QUARTERS_IN_BUNDLE,
+      FUNDAMENTALS_MAX_QUARTERS,
     );
     const aligned = alignQuarterlyToIncome(
       symU,
@@ -273,6 +282,10 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
     const d = row.date.slice(0, 10);
     const fin = exactOrNearestYahooQuarter(d, finQByDate, finQ) as Fin | null;
     if (!fin) return row;
+    const yOi = pickNum(fin.operatingIncome);
+    const yEbitda = pickNum(fin.EBITDA);
+    const yEps = pickNum(fin.dilutedEPS);
+    const yShares = pickNum(fin.dilutedAverageShares);
     return {
       ...row,
       symbol: symU,
@@ -280,11 +293,10 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
       grossProfit: mergeScalar(row.grossProfit, fin.grossProfit),
       operatingExpenses: mergeScalar(row.operatingExpenses, fin.operatingExpense),
       netIncome: mergeScalar(row.netIncome, fin.netIncome),
-      operatingIncome: row.operatingIncome == null ? pickNum(fin.operatingIncome) ?? undefined : row.operatingIncome,
-      ebitda: row.ebitda == null ? pickNum(fin.EBITDA) ?? undefined : row.ebitda,
-      dilutedEps: row.dilutedEps == null ? pickNum(fin.dilutedEPS) ?? undefined : row.dilutedEps,
-      dilutedAverageShares:
-        row.dilutedAverageShares == null ? pickNum(fin.dilutedAverageShares) ?? undefined : row.dilutedAverageShares,
+      operatingIncome: yOi ?? row.operatingIncome,
+      ebitda: yEbitda ?? row.ebitda,
+      dilutedEps: yEps ?? row.dilutedEps,
+      dilutedAverageShares: yShares ?? row.dilutedAverageShares,
     };
   });
 
@@ -295,13 +307,11 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
     const ocf = mergeNullable(row.operatingCashFlow, cf.operatingCashFlow);
     const capex = mergeNullable(row.capitalExpenditure, cf.capitalExpenditure);
     let fcf = row.freeCashFlow;
-    const filledOcfCapex =
-      (row.operatingCashFlow == null && ocf != null) || (row.capitalExpenditure == null && capex != null);
-    if (ocf != null && capex != null && (filledOcfCapex || row.freeCashFlow === 0)) {
+    const yFcf = pickNum(cf.freeCashFlow);
+    if (yFcf != null) {
+      fcf = yFcf;
+    } else if (ocf != null && capex != null) {
       fcf = ocf + capex;
-    } else {
-      const yFcf = pickNum(cf.freeCashFlow);
-      if (yFcf != null && (row.freeCashFlow === 0 || row.freeCashFlow == null)) fcf = yFcf;
     }
     return {
       ...row,
@@ -342,7 +352,12 @@ export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBun
     if (!fin) return p;
     const dps = pickNum(fin.dividendPerShare);
     if (dps == null) return p;
-    if (p.dividendPerShare != null && p.dividendPerShare !== 0) return p;
     return { ...p, dividendPerShare: dps };
   });
+}
+
+export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBundle): Promise<void> {
+  const sym = bundle.quote.symbol.trim().toUpperCase();
+  const payload = await fetchYahooFundamentalsPayload(sym);
+  if (payload) applyYahooFundamentalsToBundle(bundle, payload);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopHeader } from "@/components/layout/TopHeader";
@@ -14,13 +14,12 @@ type ResponsiveAppShellProps = {
 
 export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
+  );
   const { t } = useI18n();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
-  }, []);
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((c) => {

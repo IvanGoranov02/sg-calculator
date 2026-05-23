@@ -18,9 +18,10 @@ const AI_CONTEXT_MAX_CHARS = 1_800;
 const AI_TABLE_MAX_CHARS = 7_000;
 
 function parseTimeRange(v: unknown): ChartTimeRange {
-  const s = String(v ?? "3y");
-  if (s === "10y" || s === "5y" || s === "3y" || s === "1y" || s === "custom") return s;
-  return "3y";
+  const s = String(v ?? "5y");
+  if (s === "10y") return "5y";
+  if (s === "5y" || s === "3y" || s === "1y" || s === "custom") return s;
+  return "5y";
 }
 
 function parseFreq(v: unknown): FundamentalsFreq {

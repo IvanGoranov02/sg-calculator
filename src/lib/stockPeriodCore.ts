@@ -1,8 +1,8 @@
 import type { DividendQuarterlyPoint } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
-/** Gemini base bundle is 5y; Yahoo merge may add more, so 10y shows available rows when present. */
-export type ChartTimeRange = "10y" | "5y" | "3y" | "1y" | "custom";
+/** Fundamentals bundle is capped at 5 calendar years. */
+export type ChartTimeRange = "5y" | "3y" | "1y" | "custom";
 
 export type FundamentalsFreq = "annual" | "quarterly";
 
@@ -71,7 +71,7 @@ export function annualDisplayFiscalYears(
     return fiscalYearStringRangeInclusive(lo, hi);
   }
 
-  const n = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
+  const n = { "1y": 1, "3y": 3, "5y": 5 }[timeRange];
   const end = maxAnnualFiscalYearFromBundle(bundle) ?? new Date().getUTCFullYear();
   const start = end - n + 1;
   return fiscalYearStringRangeInclusive(start, end);
@@ -104,7 +104,6 @@ const PRESET_QUARTER_COUNT: Record<Exclude<ChartTimeRange, "custom">, number> = 
   "1y": 4,
   "3y": 12,
   "5y": 20,
-  "10y": 40,
 };
 
 export function filterQuarterlyChartRowsByPeriod<T extends { periodEnd?: string }>(
@@ -156,7 +155,7 @@ export function quarterlyPeriodEndInRange(
     return y >= a && y <= b;
   }
 
-  const roll = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
+  const roll = { "1y": 1, "3y": 3, "5y": 5 }[timeRange];
   const cutoff = new Date();
   cutoff.setUTCFullYear(cutoff.getUTCFullYear() - roll);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
@@ -185,7 +184,7 @@ export function filterAnnualRowsByPeriod<T extends { fiscalYear: string; date: s
     });
   }
 
-  const n = { "1y": 1, "3y": 3, "5y": 5, "10y": 10 }[timeRange];
+  const n = { "1y": 1, "3y": 3, "5y": 5 }[timeRange];
   return sorted.slice(-Math.min(n, sorted.length));
 }
 

@@ -2,6 +2,7 @@
 export type StockAnalysisLoadProgress =
   | { kind: "cache_hit" }
   | { kind: "gemini"; step: 1 | 2 | 3; total: 3 }
+  | { kind: "gemini_gap_fill" }
   | { kind: "yahoo_fundamentals" }
   | { kind: "yahoo_prices" };
 
@@ -19,6 +20,8 @@ export function stockLoadProgressPercent(e: StockAnalysisLoadProgress): number {
       return 18;
     case "gemini":
       return Math.min(99, Math.round((e.step / e.total) * 52) + 12);
+    case "gemini_gap_fill":
+      return 82;
     case "yahoo_fundamentals":
       return 74;
     case "yahoo_prices":

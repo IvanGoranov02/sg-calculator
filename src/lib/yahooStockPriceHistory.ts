@@ -5,6 +5,7 @@
 
 import YahooFinance from "yahoo-finance2";
 
+import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
@@ -98,6 +99,74 @@ function numField(v: unknown): number | null {
   if (v === undefined || v === null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+type HistRow = {
+  date: Date;
+  close?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+};
+
+function mapHistoricalRows(histArr: HistRow[]): HistoricalEodBar[] {
+  return (histArr ?? [])
+    .filter((h) => h?.date && h.close !== undefined)
+    .map((h) => {
+      const d =
+        h.date instanceof Date ? h.date.toISOString().slice(0, 10) : String(h.date).slice(0, 10);
+      return {
+        date: d,
+        close: Number(h.close),
+        high: h.high !== undefined ? Number(h.high) : undefined,
+        low: h.low !== undefined ? Number(h.low) : undefined,
+        volume: h.volume !== undefined ? Number(h.volume) : undefined,
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function mapChartQuotesToBars(
+  quotes: Array<{ date: Date; close?: number | null; high?: number | null; low?: number | null; volume?: number | null }>,
+): HistoricalEodBar[] {
+  return (quotes ?? [])
+    .filter((x) => x?.date && x.close != null && Number.isFinite(Number(x.close)))
+    .map((x) => ({
+      date: x.date instanceof Date ? x.date.toISOString().slice(0, 10) : String(x.date).slice(0, 10),
+      close: Number(x.close),
+      high: x.high != null && Number.isFinite(Number(x.high)) ? Number(x.high) : undefined,
+      low: x.low != null && Number.isFinite(Number(x.low)) ? Number(x.low) : undefined,
+      volume: x.volume != null && Number.isFinite(Number(x.volume)) ? Number(x.volume) : undefined,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+async function fetchDailyPriceBars(resolved: string, period2Str: string): Promise<HistoricalEodBar[]> {
+  const historicalResult = await yahooFinance
+    .historical(resolved, {
+      period1: DAILY_HISTORY_START,
+      period2: period2Str,
+      interval: "1d",
+    })
+    .catch(() => [] as HistRow[]);
+
+  let bars = mapHistoricalRows(historicalResult as HistRow[]);
+  if (bars.length > 0) return bars;
+
+  const chartDaily = await yahooFinance
+    .chart(resolved, {
+      period1: DAILY_HISTORY_START,
+      period2: period2Str,
+      interval: "1d",
+      return: "array",
+    })
+    .catch(() => null);
+
+  if (chartDaily && typeof chartDaily === "object" && "quotes" in chartDaily) {
+    const quotes = (chartDaily as { quotes: Parameters<typeof mapChartQuotesToBars>[0] }).quotes;
+    bars = mapChartQuotesToBars(quotes ?? []);
+  }
+  return bars;
 }
 
 /** Parse Yahoo chart `events.dividends` (array or timestamp-keyed object). */
@@ -234,14 +303,12 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     const intradayPeriod1 = new Date(period2);
     intradayPeriod1.setDate(intradayPeriod1.getDate() - 7);
 
-    const [quoteResult, historicalResult, chartIntraday, quoteSummaryResult, fxQuote, _dpsMerge] =
+    const existingHistLen = bundle.historical?.length ?? 0;
+
+    const [quoteResult, dailyBars, chartIntraday, quoteSummaryResult, fxQuote, _dpsMerge] =
       await Promise.all([
         yahooFinance.quote(resolved),
-        yahooFinance.historical(resolved, {
-          period1: DAILY_HISTORY_START,
-          period2: period2Str,
-          interval: "1d",
-        }),
+        fetchDailyPriceBars(resolved, period2Str),
         yahooFinance
           .chart(resolved, {
             period1: intradayPeriod1,
@@ -252,7 +319,13 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
           .catch(() => null),
         yahooFinance
           .quoteSummary(resolved, {
-            modules: ["calendarEvents"],
+            modules: [
+              "calendarEvents",
+              "summaryDetail",
+              "financialData",
+              "defaultKeyStatistics",
+              "price",
+            ],
           })
           .catch(() => null),
         yahooFinance.quote("EURUSD=X").catch(() => null),
@@ -260,7 +333,21 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       ]);
 
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
-    if (!q || (q as { quoteType?: string }).quoteType === "NONE") return;
+    const quoteValid = q && (q as { quoteType?: string }).quoteType !== "NONE";
+
+    if (dailyBars.length > 0) {
+      bundle.historical = dailyBars;
+    } else if (existingHistLen <= 1 && quoteValid) {
+      const rawQuote = q as Record<string, unknown>;
+      const px = Number(rawQuote.regularMarketPrice ?? 0);
+      if (px > 0) {
+        bundle.historical = [{ date: period2Str, close: px }];
+      }
+    }
+
+    if (!quoteValid) {
+      return;
+    }
 
     const rawQuote = q as Record<string, unknown>;
     const qs =
@@ -275,34 +362,9 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     }
 
     bundle.quote = quote;
+    bundle.investor = mapInvestorMetrics(rawQuote, qs);
 
-    const histArr = historicalResult as Array<{
-      date: Date;
-      close?: number;
-      high?: number;
-      low?: number;
-      volume?: number;
-    }>;
-    const historical: HistoricalEodBar[] = (histArr ?? [])
-      .filter((h) => h?.date && h.close !== undefined)
-      .map((h) => {
-        const d =
-          h.date instanceof Date
-            ? h.date.toISOString().slice(0, 10)
-            : String(h.date).slice(0, 10);
-        return {
-          date: d,
-          close: Number(h.close),
-          high: h.high !== undefined ? Number(h.high) : undefined,
-          low: h.low !== undefined ? Number(h.low) : undefined,
-          volume: h.volume !== undefined ? Number(h.volume) : undefined,
-        };
-      })
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    if (historical.length > 0) {
-      bundle.historical = historical;
-    } else if (quote.price > 0) {
+    if ((bundle.historical?.length ?? 0) === 0 && quote.price > 0) {
       bundle.historical = [{ date: period2Str, close: quote.price }];
     }
 

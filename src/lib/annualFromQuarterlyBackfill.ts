@@ -15,7 +15,9 @@ import {
   type StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
 
-const MAX_ANNUAL_ROWS = 10;
+import { FUNDAMENTALS_HISTORY_YEARS } from "@/lib/fundamentalsHistoryLimits";
+
+const MAX_ANNUAL_ROWS = FUNDAMENTALS_HISTORY_YEARS;
 
 function sortAnnualByFy<T extends { fiscalYear: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));

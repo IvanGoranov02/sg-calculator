@@ -43,7 +43,7 @@ export function StockAnalysisPeriodProvider({
 }: {
   children: ReactNode;
 }) {
-  const [timeRange, setTimeRange] = useState<ChartTimeRange>("3y");
+  const [timeRange, setTimeRange] = useState<ChartTimeRange>("5y");
   const [freq, setFreq] = useState<FundamentalsFreq>("quarterly");
   const [customFromYear, setCustomFromYear] = useState<number | null>(null);
   const [customToYear, setCustomToYear] = useState<number | null>(null);

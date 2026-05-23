@@ -1,4 +1,5 @@
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
+import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
 import { prisma } from "@/lib/prisma";
 import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 import {
@@ -7,8 +8,18 @@ import {
   normalizeStockSymbol,
 } from "@/lib/stockSymbol";
 import { appendCalendarAnnualFromQuarterly } from "@/lib/annualFromQuarterlyBackfill";
+import {
+  buildCachePayload,
+  cacheIsFresh,
+  type CachePayload,
+} from "@/lib/stockCache";
+import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
-import { enrichBundleFundamentalsFromYahoo } from "@/lib/yahooFundamentalsMerge";
+import {
+  applyYahooFundamentalsToBundle,
+  fetchYahooFundamentalsPayload,
+  type YahooFundamentalsPayload,
+} from "@/lib/yahooFundamentalsMerge";
 import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
 
 export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
@@ -18,31 +29,43 @@ export type StockAnalysisResult = {
   error: string | null;
 };
 
-/**
- * Bump this whenever the normalizer or prompt changes significantly
- * so stale caches (produced by older normalisation) are discarded.
- */
-const CACHE_SCHEMA_VERSION = 9;
-
-/** Rolling window: Gemini fundamentals stay in DB this long before re-fetch. */
-const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-
-type CachePayload = StockAnalysisBundle & { __cacheVersion?: number };
-
-function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
-  if ((payload.__cacheVersion ?? 0) < CACHE_SCHEMA_VERSION) return false;
-  return Date.now() - updatedAt.getTime() < CACHE_MAX_AGE_MS;
-}
-
 export type LoadStockOptions = { forceRefresh?: boolean };
 
 export type LoadStockAnalysisOptions = LoadStockOptions & {
   onProgress?: (e: StockAnalysisLoadProgress) => void;
 };
 
+async function enrichFundamentalsPipeline(
+  bundle: StockAnalysisBundle,
+  sym: string,
+  yahooPayload: YahooFundamentalsPayload | null | undefined,
+  onProgress?: (e: StockAnalysisLoadProgress) => void,
+): Promise<void> {
+  onProgress?.({ kind: "yahoo_fundamentals" });
+  const payload = yahooPayload ?? (await fetchYahooFundamentalsPayload(sym));
+  if (payload) applyYahooFundamentalsToBundle(bundle, payload);
+  appendCalendarAnnualFromQuarterly(bundle);
+  trimBundleToFundamentalsWindow(bundle);
+  onProgress?.({ kind: "gemini_gap_fill" });
+  await fillBundleGapsFromGemini(bundle);
+}
+
+async function persistStockCache(sym: string, bundle: StockAnalysisBundle): Promise<void> {
+  const plain = buildCachePayload(bundle);
+  try {
+    await prisma.stockAnalysisCache.upsert({
+      where: { symbol: sym },
+      create: { symbol: sym, payload: plain },
+      update: { payload: plain },
+    });
+  } catch {
+    // DB optional in some dev setups
+  }
+}
+
 /**
- * Stock analysis: validate ticker → **DB first** (Gemini bundle, fresh up to 30 days) → on miss/stale:
- * Gemini → Yahoo fundamentals merge → upsert → **always** Yahoo for live quote + history + EUR/USD.
+ * Stock analysis: validate ticker → **DB first** (fresh up to 30 days) → on miss/stale:
+ * parallel Yahoo fundamentals + Gemini x3 → merge → gap-fill → Yahoo prices → cache upsert.
  */
 export async function loadStockAnalysis(
   symbol: string,
@@ -69,35 +92,23 @@ export async function loadStockAnalysis(
       if (row && cacheIsFresh(row.payload as CachePayload, row.updatedAt)) {
         const bundle = row.payload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
-        opts?.onProgress?.({ kind: "yahoo_fundamentals" });
-        await enrichBundleFundamentalsFromYahoo(bundle);
-        appendCalendarAnnualFromQuarterly(bundle);
+        const yahooPromise = fetchYahooFundamentalsPayload(sym);
+        await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, opts?.onProgress);
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
+        await persistStockCache(sym, bundle);
         return { bundle, error: null };
       }
     }
 
+    const yahooPromise = fetchYahooFundamentalsPayload(sym);
     const bundle = await fetchStockBundleFromGemini(sym, {
       onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
     });
-    opts?.onProgress?.({ kind: "yahoo_fundamentals" });
-    await enrichBundleFundamentalsFromYahoo(bundle);
-    appendCalendarAnnualFromQuarterly(bundle);
-
-    const plain = JSON.parse(JSON.stringify({ ...bundle, __cacheVersion: CACHE_SCHEMA_VERSION })) as object;
-    try {
-      await prisma.stockAnalysisCache.upsert({
-        where: { symbol: sym },
-        create: { symbol: sym, payload: plain },
-        update: { payload: plain },
-      });
-    } catch {
-      // DB optional in some dev setups
-    }
-
+    await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, opts?.onProgress);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
+    await persistStockCache(sym, bundle);
     return { bundle, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load stock data.";

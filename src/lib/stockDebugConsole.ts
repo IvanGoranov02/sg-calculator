@@ -202,7 +202,7 @@ export function debugLogAnnualTable(symbol: string, payload: AnnualTableDebugPay
   console.log("raw annual income rows (bundle)", payload.rawAnnualIncomeRows);
   console.log("display fiscal years (columns)", payload.displayYears);
   console.log(
-    "distinct FYs in bundle income[] (not the same as table columns when period ≠ 10y)",
+    "distinct FYs in bundle income[] (not the same as table columns when period filter applies)",
     payload.loadedFiscalYears,
   );
   console.log("missing fiscal years (empty cells)", payload.missingYears);
