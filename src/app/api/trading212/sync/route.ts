@@ -91,9 +91,30 @@ export async function POST() {
     await prisma.$transaction(async (tx) => {
       await tx.portfolioHolding.deleteMany({ where: { userId, source: "t212" } });
       if (rows.length > 0) {
+        // Several T212 positions can map to one Yahoo symbol; combine them instead of dropping.
         const bySymbol = new Map<string, (typeof rows)[0]>();
         for (const r of rows) {
-          bySymbol.set(r.symbolYahoo, r);
+          const prev = bySymbol.get(r.symbolYahoo);
+          if (!prev) {
+            bySymbol.set(r.symbolYahoo, r);
+            continue;
+          }
+          const prevQty = Number(prev.quantity);
+          const qty = Number(r.quantity);
+          const totalQty = prevQty + qty;
+          const sameCurrency = prev.currency === r.currency;
+          bySymbol.set(r.symbolYahoo, {
+            ...prev,
+            quantity: new Prisma.Decimal(totalQty),
+            avgPrice:
+              sameCurrency && totalQty > 0
+                ? new Prisma.Decimal(
+                    (Number(prev.avgPrice) * prevQty + Number(r.avgPrice) * qty) / totalQty,
+                  )
+                : prevQty >= qty
+                  ? prev.avgPrice
+                  : r.avgPrice,
+          });
         }
         await tx.portfolioHolding.createMany({ data: [...bySymbol.values()] });
       }

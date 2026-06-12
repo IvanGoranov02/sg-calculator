@@ -11,6 +11,7 @@ import { appendCalendarAnnualFromQuarterly } from "@/lib/annualFromQuarterlyBack
 import {
   buildCachePayload,
   cacheIsFresh,
+  readAdminEditedAt,
   type CachePayload,
 } from "@/lib/stockCache";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
@@ -29,7 +30,11 @@ export type StockAnalysisResult = {
   error: string | null;
 };
 
-export type LoadStockOptions = { forceRefresh?: boolean };
+export type LoadStockOptions = {
+  forceRefresh?: boolean;
+  /** Only the admin refresh endpoint may discard admin-edited payloads. */
+  overwriteAdminEdits?: boolean;
+};
 
 export type LoadStockAnalysisOptions = LoadStockOptions & {
   onProgress?: (e: StockAnalysisLoadProgress) => void;
@@ -50,8 +55,12 @@ async function enrichFundamentalsPipeline(
   await fillBundleGapsFromGemini(bundle);
 }
 
-async function persistStockCache(sym: string, bundle: StockAnalysisBundle): Promise<void> {
-  const plain = buildCachePayload(bundle);
+async function persistStockCache(
+  sym: string,
+  bundle: StockAnalysisBundle,
+  adminEditedAt?: string | null,
+): Promise<void> {
+  const plain = buildCachePayload(bundle, adminEditedAt);
   try {
     await prisma.stockAnalysisCache.upsert({
       where: { symbol: sym },
@@ -78,19 +87,42 @@ export async function loadStockAnalysis(
   const sym = normalizeStockSymbol(raw);
 
   try {
-    if (!opts?.forceRefresh) {
-      let row: { payload: unknown; updatedAt: Date } | null = null;
-      try {
-        row = await prisma.stockAnalysisCache.findUnique({
-          where: { symbol: sym },
-          select: { payload: true, updatedAt: true },
-        });
-      } catch {
-        row = null;
-      }
+    let row: { payload: unknown; updatedAt: Date } | null = null;
+    try {
+      row = await prisma.stockAnalysisCache.findUnique({
+        where: { symbol: sym },
+        select: { payload: true, updatedAt: true },
+      });
+    } catch {
+      row = null;
+    }
+    const cachedPayload = row ? (row.payload as CachePayload) : null;
+    const adminEditedAt = readAdminEditedAt(cachedPayload);
 
-      if (row && cacheIsFresh(row.payload as CachePayload, row.updatedAt)) {
-        const bundle = row.payload as StockAnalysisBundle;
+    if (cachedPayload && adminEditedAt && !opts?.overwriteAdminEdits) {
+      // Admin-curated report: fundamentals, investor metrics, and quote labels are
+      // authoritative — never re-merged from Yahoo/Gemini. Only market price data refreshes.
+      const bundle = cachedPayload as StockAnalysisBundle;
+      opts?.onProgress?.({ kind: "cache_hit" });
+      const adminQuote = { ...bundle.quote };
+      const adminInvestor = { ...bundle.investor };
+      const adminDividends = bundle.dividendQuarterly;
+      opts?.onProgress?.({ kind: "yahoo_prices" });
+      await enrichBundleWithYahooPrices(bundle);
+      bundle.investor = adminInvestor;
+      bundle.dividendQuarterly = adminDividends;
+      bundle.quote = {
+        ...bundle.quote,
+        name: adminQuote.name || bundle.quote.name,
+        earningsDate: adminQuote.earningsDate ?? bundle.quote.earningsDate,
+      };
+      await persistStockCache(sym, bundle, adminEditedAt);
+      return { bundle, error: null };
+    }
+
+    if (!opts?.forceRefresh) {
+      if (row && cachedPayload && cacheIsFresh(cachedPayload, row.updatedAt)) {
+        const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
         const yahooPromise = fetchYahooFundamentalsPayload(sym);
         await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, opts?.onProgress);

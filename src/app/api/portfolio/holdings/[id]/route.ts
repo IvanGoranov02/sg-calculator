@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { prisma } from "@/lib/prisma";
+import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -55,21 +56,29 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     return Response.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  const updated = await prisma.portfolioHolding.update({
-    where: { id },
-    data,
-  });
+  try {
+    const updated = await prisma.portfolioHolding.update({
+      where: { id, userId },
+      data,
+    });
 
-  return Response.json({
-    id: updated.id,
-    symbolYahoo: updated.symbolYahoo,
-    symbolT212: updated.symbolT212,
-    quantity: updated.quantity.toString(),
-    avgPrice: updated.avgPrice.toString(),
-    currency: updated.currency,
-    source: updated.source,
-    updatedAt: updated.updatedAt.toISOString(),
-  });
+    return Response.json({
+      id: updated.id,
+      symbolYahoo: updated.symbolYahoo,
+      symbolT212: updated.symbolT212,
+      quantity: updated.quantity.toString(),
+      avgPrice: updated.avgPrice.toString(),
+      currency: updated.currency,
+      source: updated.source,
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    const { status, error } = prismaErrorToHttp(e);
+    return Response.json({ error }, { status });
+  }
 }
 
 export async function DELETE(_request: Request, ctx: RouteCtx) {
@@ -88,6 +97,14 @@ export async function DELETE(_request: Request, ctx: RouteCtx) {
     return Response.json({ error: "Only manual holdings can be deleted here; clear Trading 212 or resync" }, { status: 400 });
   }
 
-  await prisma.portfolioHolding.delete({ where: { id } });
-  return Response.json({ ok: true });
+  try {
+    await prisma.portfolioHolding.delete({ where: { id, userId } });
+    return Response.json({ ok: true });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    const { status, error } = prismaErrorToHttp(e);
+    return Response.json({ error }, { status });
+  }
 }

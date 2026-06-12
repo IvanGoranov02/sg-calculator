@@ -240,6 +240,8 @@ export function PortfolioClient() {
     try {
       await fetch("/api/trading212/settings", { method: "DELETE" });
       await load();
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
     } finally {
       setSavingCreds(false);
     }
@@ -278,19 +280,25 @@ export function PortfolioClient() {
       if (data.replacedBrokerRow) {
         setPortfolioInfo(t("portfolio.manualReplacedBroker"));
       }
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
     } finally {
       setAdding(false);
     }
   }
 
   async function onDelete(id: string) {
-    const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
-    const data = (await res.json()) as { error?: string };
-    if (!res.ok) {
-      setError(data.error ?? "Delete failed");
-      return;
+    try {
+      const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Delete failed");
+        return;
+      }
+      await load();
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
     }
-    await load();
   }
 
   function startEdit(h: HoldingApi) {
@@ -321,6 +329,8 @@ export function PortfolioClient() {
       }
       setEditingId(null);
       await load();
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
     } finally {
       setSavingEdit(false);
     }
@@ -347,9 +357,17 @@ export function PortfolioClient() {
       let estAnnual: number | null = null;
       if (hasValidQuote && q) {
         if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
+          // Without FX rates the raw rate would be in the quote currency — show nothing instead.
           const rateInHolding = convertPortfolioMoney(q.dividendRate, quoteCcy, holdingCcy, fx);
-          estAnnual = (rateInHolding ?? q.dividendRate) * qQty;
-        } else if (q.dividendYield != null && Number.isFinite(q.dividendYield) && mv != null && mv > 0) {
+          if (rateInHolding != null) estAnnual = rateInHolding * qQty;
+        }
+        if (
+          estAnnual == null &&
+          q.dividendYield != null &&
+          Number.isFinite(q.dividendYield) &&
+          mv != null &&
+          mv > 0
+        ) {
           estAnnual = mv * q.dividendYield;
         }
       }

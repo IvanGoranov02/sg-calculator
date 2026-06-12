@@ -16,7 +16,7 @@
     "db:studio": "prisma studio",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/yahooMergePolicy.test.ts"
+    "test": "node --import tsx --test src/lib/yahooMergePolicy.test.ts src/lib/stockCache.test.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

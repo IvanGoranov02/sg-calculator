@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 type Props = { symbol: string };
 
-type Meta = { createdAt: string; updatedAt: string };
+type Meta = { createdAt: string; updatedAt: string; adminEditedAt: string | null };
 
 const incomeAnnualCols: AdminColumnDef<AdminEditableBundle["income"][number]>[] = [
   { key: "fiscalYear", label: "FY", type: "text" },
@@ -124,6 +124,8 @@ const INVESTOR_KEYS = [
 export function CacheEditorClient({ symbol }: Props) {
   const { t } = useI18n();
   const [bundle, setBundle] = useState<AdminEditableBundle | null>(null);
+  // Raw text being typed into numeric quote fields, so partial input ("-", "1.") isn't clobbered.
+  const [quoteDrafts, setQuoteDrafts] = useState<Record<string, string>>({});
   const [meta, setMeta] = useState<Meta | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -142,6 +144,7 @@ export function CacheEditorClient({ symbol }: Props) {
         bundle?: AdminEditableBundle;
         createdAt?: string;
         updatedAt?: string;
+        adminEditedAt?: string | null;
         error?: string;
       };
       if (!res.ok) {
@@ -149,9 +152,16 @@ export function CacheEditorClient({ symbol }: Props) {
         setBundle(null);
         return;
       }
-      if (data.bundle) setBundle(data.bundle);
+      if (data.bundle) {
+        setBundle(data.bundle);
+        setQuoteDrafts({});
+      }
       if (data.createdAt && data.updatedAt) {
-        setMeta({ createdAt: data.createdAt, updatedAt: data.updatedAt });
+        setMeta({
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          adminEditedAt: data.adminEditedAt ?? null,
+        });
       }
     } catch {
       setError(t("admin.errLoad"));
@@ -179,6 +189,7 @@ export function CacheEditorClient({ symbol }: Props) {
         bundle?: AdminEditableBundle;
         updatedAt?: string;
         createdAt?: string;
+        adminEditedAt?: string | null;
         error?: string;
       };
       if (!res.ok) {
@@ -187,7 +198,11 @@ export function CacheEditorClient({ symbol }: Props) {
       }
       if (data.bundle) setBundle(data.bundle);
       if (data.createdAt && data.updatedAt) {
-        setMeta({ createdAt: data.createdAt, updatedAt: data.updatedAt });
+        setMeta({
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          adminEditedAt: data.adminEditedAt ?? null,
+        });
       }
       setSavedMsg(t("admin.saved"));
     } catch {
@@ -209,15 +224,23 @@ export function CacheEditorClient({ symbol }: Props) {
         bundle?: AdminEditableBundle;
         updatedAt?: string;
         createdAt?: string;
+        adminEditedAt?: string | null;
         error?: string;
       };
       if (!res.ok) {
         setError(data.error ?? t("admin.errRefresh"));
         return;
       }
-      if (data.bundle) setBundle(data.bundle);
+      if (data.bundle) {
+        setBundle(data.bundle);
+        setQuoteDrafts({});
+      }
       if (data.createdAt && data.updatedAt) {
-        setMeta({ createdAt: data.createdAt, updatedAt: data.updatedAt });
+        setMeta({
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          adminEditedAt: data.adminEditedAt ?? null,
+        });
       }
       setSavedMsg(t("admin.refreshed"));
     } catch {
@@ -262,7 +285,17 @@ export function CacheEditorClient({ symbol }: Props) {
           >
             ← {t("admin.backToList")}
           </Button>
-          <h1 className="font-mono text-2xl font-semibold">{sym}</h1>
+          <h1 className="font-mono text-2xl font-semibold">
+            {sym}
+            {meta?.adminEditedAt ? (
+              <span
+                className="ml-3 align-middle rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-sans text-[10px] uppercase tracking-wide text-amber-400"
+                title={new Date(meta.adminEditedAt).toLocaleString()}
+              >
+                {t("admin.editedBadge")}
+              </span>
+            ) : null}
+          </h1>
           <p className="text-sm text-muted-foreground">{bundle.quote.name}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -320,25 +353,38 @@ export function CacheEditorClient({ symbol }: Props) {
                 <Label className="text-xs text-muted-foreground">{key}</Label>
                 <Input
                   className="border-white/10 bg-zinc-900/80"
-                  type={kind}
+                  type="text"
+                  inputMode={kind === "number" ? "decimal" : undefined}
                   value={
-                    bundle.quote[key] == null
-                      ? ""
-                      : String(bundle.quote[key as keyof typeof bundle.quote] ?? "")
+                    kind === "number" && quoteDrafts[key] != null
+                      ? quoteDrafts[key]
+                      : bundle.quote[key] == null
+                        ? ""
+                        : String(bundle.quote[key as keyof typeof bundle.quote] ?? "")
                   }
                   onChange={(e) => {
                     const raw = e.target.value;
+                    if (kind === "number") {
+                      setQuoteDrafts((prev) => ({ ...prev, [key]: raw }));
+                      const n = Number(raw);
+                      if (raw.trim() === "" || !Number.isFinite(n)) return;
+                      setBundle({ ...bundle, quote: { ...bundle.quote, [key]: n } });
+                      return;
+                    }
                     setBundle({
                       ...bundle,
                       quote: {
                         ...bundle.quote,
-                        [key]:
-                          kind === "number"
-                            ? Number(raw) || 0
-                            : key === "earningsDate"
-                              ? raw || null
-                              : raw,
+                        [key]: key === "earningsDate" ? raw || null : raw,
                       },
+                    });
+                  }}
+                  onBlur={() => {
+                    if (kind !== "number") return;
+                    setQuoteDrafts((prev) => {
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
                     });
                   }}
                 />
@@ -539,6 +585,12 @@ export function CacheEditorClient({ symbol }: Props) {
                 <span className="text-muted-foreground">{t("admin.updated")}: </span>
                 {new Date(meta.updatedAt).toLocaleString()}
               </p>
+              {meta.adminEditedAt ? (
+                <p>
+                  <span className="text-muted-foreground">{t("admin.adminEdited")}: </span>
+                  {new Date(meta.adminEditedAt).toLocaleString()}
+                </p>
+              ) : null}
             </>
           ) : null}
           <p className="text-muted-foreground">{t("admin.metaHint")}</p>

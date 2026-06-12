@@ -329,7 +329,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
           })
           .catch(() => null),
         yahooFinance.quote("EURUSD=X").catch(() => null),
-        mergeYahooExDividendsIntoQuarterly(bundle, resolved),
+        mergeYahooExDividendsIntoQuarterly(bundle, resolved).catch(() => undefined),
       ]);
 
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
