@@ -21,7 +21,10 @@ export async function POST(_request: Request, ctx: RouteCtx) {
   }
   const sym = normalizeStockSymbol(raw);
 
-  const { bundle, error } = await loadStockAnalysis(sym, { forceRefresh: true });
+  const { bundle, error } = await loadStockAnalysis(sym, {
+    forceRefresh: true,
+    overwriteAdminEdits: true,
+  });
   if (!bundle || error) {
     return Response.json({ error: error ?? "Refresh failed." }, { status: 502 });
   }
@@ -36,6 +39,7 @@ export async function POST(_request: Request, ctx: RouteCtx) {
     symbol: row.symbol,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    adminEditedAt: null,
     bundle: editable,
   });
 }

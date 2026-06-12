@@ -41,6 +41,10 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   const [shares, setShares] = useState(seed?.sharesOutstanding ?? 0);
 
   const result = useMemo(() => {
+    const inputsFinite = [baseFcf, growthPct, discountPct, terminalMultiple, netDebt, shares].every(
+      (n) => Number.isFinite(n),
+    );
+    if (!inputsFinite) return null;
     if (baseFcf <= 0 || shares <= 0 || terminalMultiple <= 0) return null;
     try {
       const input: SimpleDcfInputs = {

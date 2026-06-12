@@ -5,7 +5,11 @@ import {
   editableToStockBundle,
   payloadToEditableBundle,
 } from "@/lib/adminCacheApi";
-import { buildCachePayload, mergeAdminEditableIntoCache } from "@/lib/stockCache";
+import {
+  buildCachePayload,
+  mergeAdminEditableIntoCache,
+  readAdminEditedAt,
+} from "@/lib/stockCache";
 import { prisma } from "@/lib/prisma";
 import { isValidStockSymbolInput, normalizeStockSymbol } from "@/lib/stockSymbol";
 
@@ -44,6 +48,7 @@ export async function GET(_request: Request, ctx: RouteCtx) {
     symbol: row.symbol,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    adminEditedAt: readAdminEditedAt(asCachePayload(row.payload)),
     bundle,
   });
 }
@@ -81,7 +86,8 @@ export async function PUT(request: Request, ctx: RouteCtx) {
   const merged = mergeAdminEditableIntoCache(editableToStockBundle(edited), existingPayload);
   merged.quote.symbol = sym;
 
-  const plain = buildCachePayload(merged);
+  const adminEditedAt = new Date().toISOString();
+  const plain = buildCachePayload(merged, adminEditedAt);
   const row = await prisma.stockAnalysisCache.upsert({
     where: { symbol: sym },
     create: { symbol: sym, payload: plain },
@@ -93,6 +99,7 @@ export async function PUT(request: Request, ctx: RouteCtx) {
     symbol: row.symbol,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    adminEditedAt,
     bundle,
   });
 }

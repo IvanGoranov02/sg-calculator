@@ -62,7 +62,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       refreshGemini: "Refresh from Gemini",
       deleteCache: "Delete cache",
       confirmDelete: "Delete cache for {symbol}? Next load will call Gemini again.",
-      confirmRefresh: "Re-fetch {symbol} from Gemini? This may take a minute.",
+      confirmRefresh:
+        "Re-fetch {symbol} from Gemini? This discards any admin edits and may take a minute.",
       errLoad: "Could not load admin data.",
       errDelete: "Could not delete cache.",
       errRefresh: "Could not refresh from Gemini.",
@@ -87,7 +88,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       addRow: "Add row",
       created: "Created",
       updated: "Updated",
-      metaHint: "Price history is not edited here; Yahoo updates quotes when users open the stock page.",
+      adminEdited: "Admin edited",
+      editedBadge: "Edited",
+      metaHint:
+        "Price history is not edited here; Yahoo still refreshes prices on each view. Saved fundamentals and investor metrics are locked to your edits until you refresh from Gemini.",
       viewAsUser: "View as user",
     },
     search: {
@@ -690,7 +694,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       refreshGemini: "Обнови от Gemini",
       deleteCache: "Изтрий кеша",
       confirmDelete: "Изтрий кеша за {symbol}? Следващото зареждане ще вика Gemini отново.",
-      confirmRefresh: "Повторно изтегляне на {symbol} от Gemini? Може да отнеме минута.",
+      confirmRefresh:
+        "Повторно изтегляне на {symbol} от Gemini? Това изтрива админ редакциите и може да отнеме минута.",
       errLoad: "Неуспешно зареждане на админ данни.",
       errDelete: "Неуспешно изтриване на кеша.",
       errRefresh: "Неуспешно обновяване от Gemini.",
@@ -715,8 +720,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       addRow: "Добави ред",
       created: "Създадено",
       updated: "Обновено",
+      adminEdited: "Редактирано от админ",
+      editedBadge: "Редактирано",
       metaHint:
-        "Историята на цените не се редактира тук; Yahoo опреснява котировките при отваряне на страницата.",
+        "Историята на цените не се редактира тук; Yahoo продължава да опреснява цените при преглед. Запазените фундаментали и инвестор метрики остават по вашите редакции, докато не обновите от Gemini.",
       viewAsUser: "Виж като потребител",
     },
     search: {

@@ -1,5 +1,6 @@
 import { requireAdminSession } from "@/lib/admin";
-import { readQuoteName } from "@/lib/adminCacheApi";
+import { asCachePayload, readQuoteName } from "@/lib/adminCacheApi";
+import { readAdminEditedAt } from "@/lib/stockCache";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function GET() {
         name: readQuoteName(r.payload),
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
+        adminEditedAt: readAdminEditedAt(asCachePayload(r.payload)),
       })),
     });
   } catch {

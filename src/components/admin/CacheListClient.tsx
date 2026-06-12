@@ -22,6 +22,7 @@ type CacheItem = {
   name: string | null;
   createdAt: string;
   updatedAt: string;
+  adminEditedAt?: string | null;
 };
 
 export function CacheListClient() {
@@ -64,6 +65,7 @@ export function CacheListClient() {
   const handleDelete = async (symbol: string) => {
     if (!window.confirm(t("admin.confirmDelete", { symbol }))) return;
     setBusySymbol(symbol);
+    setError(null);
     try {
       const res = await fetch(`/api/admin/cache/${encodeURIComponent(symbol)}`, {
         method: "DELETE",
@@ -74,6 +76,8 @@ export function CacheListClient() {
         return;
       }
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
+    } catch {
+      setError(t("admin.errDelete"));
     } finally {
       setBusySymbol(null);
     }
@@ -93,6 +97,8 @@ export function CacheListClient() {
         return;
       }
       await load();
+    } catch {
+      setError(t("admin.errRefresh"));
     } finally {
       setBusySymbol(null);
     }
@@ -164,6 +170,14 @@ export function CacheListClient() {
                       >
                         {it.symbol}
                       </Link>
+                      {it.adminEditedAt ? (
+                        <span
+                          className="ml-2 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-sans text-[10px] uppercase tracking-wide text-amber-400"
+                          title={new Date(it.adminEditedAt).toLocaleString()}
+                        >
+                          {t("admin.editedBadge")}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-sm">{it.name ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
