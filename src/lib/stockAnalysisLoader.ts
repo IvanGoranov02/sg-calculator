@@ -1,6 +1,10 @@
 import { fetchStockBundleFromEdgar } from "@/lib/edgar/client";
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
 import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
+import {
+  backfillQuarterlyHistoryFromGemini,
+  quarterlyHistoryIsThin,
+} from "@/lib/geminiQuarterlyBackfill";
 import { prisma } from "@/lib/prisma";
 import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 import {
@@ -66,6 +70,12 @@ async function enrichFundamentalsPipeline(
   trimBundleToFundamentalsWindow(bundle);
   if (runGapFill) {
     onProgress?.({ kind: "gemini_gap_fill" });
+    // 20-F/ADR filers: EDGAR+Yahoo leave only a handful of quarters; propose older
+    // ones via Gemini but keep only fiscal years that reconcile with SEC annuals.
+    if (mergeMode === "fill-gaps" && quarterlyHistoryIsThin(bundle)) {
+      await backfillQuarterlyHistoryFromGemini(bundle);
+      trimBundleToFundamentalsWindow(bundle);
+    }
     await fillBundleGapsFromGemini(bundle);
     markGapFillAttempt(bundle);
   }

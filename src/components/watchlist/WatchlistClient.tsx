@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { useVisibleInterval } from "@/lib/useVisibleInterval";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 import { cn } from "@/lib/utils";
+
+const QUOTES_REFRESH_MS = 60_000;
 
 import { WatchlistDipChart } from "./WatchlistDipChart";
 import { useWatchlist } from "./WatchlistProvider";
@@ -25,41 +28,53 @@ export function WatchlistClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadQuotes = useCallback(async () => {
-    if (symbols.length === 0) {
-      setQuotes([]);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const q = `/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`;
-      const res = await fetch(q);
-      const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
-      if (!res.ok) {
-        setError(data.error ?? t("watchlist.errRefresh"));
+  const loadQuotes = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true;
+      if (symbols.length === 0) {
         setQuotes([]);
+        setError(null);
         return;
       }
-      const bySym = new Map((data.quotes ?? []).map((r) => [r.symbol.toUpperCase(), r]));
-      const ordered: WatchlistQuoteRow[] = [];
-      for (const s of symbols) {
-        const row = bySym.get(s);
-        if (row) ordered.push(row);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
       }
-      setQuotes(ordered);
-    } catch {
-      setError(t("watchlist.errNetwork"));
-      setQuotes([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [symbols, t]);
+      try {
+        const q = `/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`;
+        const res = await fetch(q);
+        const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
+        if (!res.ok) {
+          // Background refresh failures keep the last good quotes on screen.
+          if (silent) return;
+          setError(data.error ?? t("watchlist.errRefresh"));
+          setQuotes([]);
+          return;
+        }
+        const bySym = new Map((data.quotes ?? []).map((r) => [r.symbol.toUpperCase(), r]));
+        const ordered: WatchlistQuoteRow[] = [];
+        for (const s of symbols) {
+          const row = bySym.get(s);
+          if (row) ordered.push(row);
+        }
+        setQuotes(ordered);
+        setError(null);
+      } catch {
+        if (silent) return;
+        setError(t("watchlist.errNetwork"));
+        setQuotes([]);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [symbols, t],
+  );
 
   useEffect(() => {
     void loadQuotes();
   }, [loadQuotes]);
+
+  useVisibleInterval(() => void loadQuotes({ silent: true }), QUOTES_REFRESH_MS, symbols.length > 0);
 
   const quoteMap = useMemo(
     () => new Map(quotes.map((q) => [q.symbol.toUpperCase(), q])),

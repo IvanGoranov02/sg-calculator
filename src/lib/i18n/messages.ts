@@ -146,6 +146,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     stock: {
       couldNotLoad: "Could not load {symbol}",
+      tryAgain: "Try again",
       noData: "No data",
       searchValid: "Search for a valid ticker symbol.",
       loadingSections: "Loading quote, history, and fundamentals…",
@@ -155,6 +156,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       preMarket: "Pre-market",
       refreshData: "Refresh data",
       refreshing: "Refreshing…",
+      sourceEdgar: "SEC EDGAR",
+      sourceEdgarHint: "Fundamentals from official SEC filings, as reported by the company.",
+      sourceGemini: "AI data",
+      sourceGeminiHint:
+        "Fundamentals partially AI-generated (Gemini) and merged with Yahoo — verify key figures independently.",
+      sourceAdmin: "Curated",
+      sourceAdminHint: "Fundamentals reviewed and curated manually.",
       priceCurrencyGroup: "Quote currency",
       eurUnavailable: "EUR rate unavailable",
       eurFxNote: "Approximate EUR from Yahoo EURUSD (spot). Percent change is still in USD terms.",
@@ -779,6 +787,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     stock: {
       couldNotLoad: "Неуспешно зареждане на {symbol}",
+      tryAgain: "Опитай отново",
       noData: "Няма данни",
       searchValid: "Въведете валиден тикер.",
       loadingSections: "Зареждане на котировка, история и фундаменти…",
@@ -788,6 +797,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       preMarket: "Предпазар",
       refreshData: "Обнови данните",
       refreshing: "Обновяване…",
+      sourceEdgar: "SEC EDGAR",
+      sourceEdgarHint: "Фундаментали от официалните SEC отчети, както са докладвани от компанията.",
+      sourceGemini: "AI данни",
+      sourceGeminiHint:
+        "Фундаменталите са частично генерирани от AI (Gemini) и допълнени от Yahoo — проверявайте ключовите числа независимо.",
+      sourceAdmin: "Курирано",
+      sourceAdminHint: "Фундаменталите са прегледани и коригирани ръчно.",
       priceCurrencyGroup: "Валута на котировката",
       eurUnavailable: "Няма курс EUR",
       eurFxNote: "Приблизителен EUR от Yahoo EURUSD (спот). Промяната в % е в USD.",
