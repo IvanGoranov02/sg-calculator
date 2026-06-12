@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,21 @@ function StockSearch({ isDcf }: StockSearchProps) {
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // "/" focuses the ticker search from anywhere (unless already typing somewhere).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const suggestions = useMemo(() => (open ? suggestCompanies(query) : []), [open, query]);
 
@@ -100,6 +115,7 @@ function StockSearch({ isDcf }: StockSearchProps) {
       <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2">
         <Search className="size-4 shrink-0 text-zinc-500" aria-hidden />
         <Input
+          ref={inputRef}
           name="ticker"
           value={query}
           onChange={(e) => {

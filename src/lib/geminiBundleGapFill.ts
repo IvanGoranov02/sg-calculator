@@ -196,6 +196,7 @@ Return JSON only with these keys (arrays may be partial — include only rows yo
 - dividendQuarterly (date + dividendPerShare)
 
 Use filing-accurate consolidated figures. Do NOT change fields that already have real non-zero values.
+If you are not confident in a figure exactly as publicly reported, OMIT it — never estimate or interpolate.
 
 Annual fiscal years to cover: ${displayYears.join(", ")}
 Quarter dates in bundle: ${qDates}

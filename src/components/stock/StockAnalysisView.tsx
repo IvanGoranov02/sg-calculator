@@ -16,6 +16,7 @@ import { translateStockError } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import { readBundleDataSource } from "@/lib/stockCache";
 
 type StockAnalysisViewProps = {
   ticker: string;
@@ -24,7 +25,38 @@ type StockAnalysisViewProps = {
   loading?: boolean;
   loadProgress?: StockAnalysisPageLoadProgress | null;
   onForceRefresh?: () => void;
+  onRetry?: () => void;
 };
+
+function DataSourceBadge({ bundle }: { bundle: StockAnalysisBundle }) {
+  const { t } = useI18n();
+  const source = readBundleDataSource(bundle);
+  const styles = {
+    edgar: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+    admin: "border-sky-500/40 bg-sky-500/10 text-sky-400",
+    gemini: "border-amber-500/40 bg-amber-500/10 text-amber-400",
+  } as const;
+  return (
+    <span
+      className={`shrink-0 cursor-help rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${styles[source]}`}
+      title={t(
+        source === "edgar"
+          ? "stock.sourceEdgarHint"
+          : source === "admin"
+            ? "stock.sourceAdminHint"
+            : "stock.sourceGeminiHint",
+      )}
+    >
+      {t(
+        source === "edgar"
+          ? "stock.sourceEdgar"
+          : source === "admin"
+            ? "stock.sourceAdmin"
+            : "stock.sourceGemini",
+      )}
+    </span>
+  );
+}
 
 export function StockAnalysisView({
   ticker,
@@ -33,6 +65,7 @@ export function StockAnalysisView({
   loading = false,
   loadProgress = null,
   onForceRefresh,
+  onRetry,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
   const symbol = ticker.trim().toUpperCase() || "AAPL";
@@ -75,6 +108,18 @@ export function StockAnalysisView({
         <CardHeader>
           <CardTitle>{t("stock.couldNotLoad", { symbol })}</CardTitle>
           <CardDescription className="text-red-300/90">{errorText}</CardDescription>
+          {onRetry ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 w-fit"
+              onClick={onRetry}
+              disabled={loading}
+            >
+              {loading ? t("stock.refreshing") : t("stock.tryAgain")}
+            </Button>
+          ) : null}
         </CardHeader>
       </Card>
     );
@@ -109,6 +154,7 @@ export function StockAnalysisView({
           <div className="flex-1 min-w-0">
             <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
           </div>
+          <DataSourceBadge bundle={bundle} />
           {onForceRefresh && (
             <Button
               type="button"

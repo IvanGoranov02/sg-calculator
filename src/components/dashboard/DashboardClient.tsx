@@ -9,8 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { useVisibleInterval } from "@/lib/useVisibleInterval";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { cn } from "@/lib/utils";
+
+const QUOTES_REFRESH_MS = 60_000;
 
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 
@@ -22,44 +25,56 @@ export function DashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
-  const loadQuotes = useCallback(async () => {
-    if (symbols.length === 0) {
-      setQuotes([]);
-      setError(null);
-      setLastUpdatedAt(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
-      const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
-      if (!res.ok) {
+  const loadQuotes = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent === true;
+      if (symbols.length === 0) {
         setQuotes([]);
-        setError(data.error ?? t("dashboard.watchlistError"));
+        setError(null);
         setLastUpdatedAt(null);
         return;
       }
-      const bySym = new Map((data.quotes ?? []).map((r) => [r.symbol.toUpperCase(), r]));
-      const ordered: WatchlistQuoteRow[] = [];
-      for (const s of symbols) {
-        const row = bySym.get(s);
-        if (row) ordered.push(row);
+      if (!silent) {
+        setLoading(true);
+        setError(null);
       }
-      setQuotes(ordered);
-      setLastUpdatedAt(Date.now());
-    } catch {
-      setQuotes([]);
-      setError(t("watchlist.errNetwork"));
-      setLastUpdatedAt(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [symbols, t]);
+      try {
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
+        const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
+        if (!res.ok) {
+          // Background refresh failures keep the last good quotes on screen.
+          if (silent) return;
+          setQuotes([]);
+          setError(data.error ?? t("dashboard.watchlistError"));
+          setLastUpdatedAt(null);
+          return;
+        }
+        const bySym = new Map((data.quotes ?? []).map((r) => [r.symbol.toUpperCase(), r]));
+        const ordered: WatchlistQuoteRow[] = [];
+        for (const s of symbols) {
+          const row = bySym.get(s);
+          if (row) ordered.push(row);
+        }
+        setQuotes(ordered);
+        setError(null);
+        setLastUpdatedAt(Date.now());
+      } catch {
+        if (silent) return;
+        setQuotes([]);
+        setError(t("watchlist.errNetwork"));
+        setLastUpdatedAt(null);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [symbols, t],
+  );
 
   useEffect(() => {
     void loadQuotes();
   }, [loadQuotes]);
+
+  useVisibleInterval(() => void loadQuotes({ silent: true }), QUOTES_REFRESH_MS, symbols.length > 0);
 
   const timeLocale = locale === "bg" ? "bg-BG" : "en-US";
   const updatedLabel =

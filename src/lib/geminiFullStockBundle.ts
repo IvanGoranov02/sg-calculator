@@ -578,7 +578,8 @@ Provide data for the last ${MAX_HISTORY_YEARS} fiscal years, oldest first.
 
 N = number or null. Dates ISO "YYYY-MM-DD" (fiscal period end).
 Provide ${MAX_HISTORY_YEARS} years of annual data. Use 10-K figures.
-Every field on every row — null when unavailable, never omit.`;
+Every field on every row — null when unavailable, never omit.
+Accuracy over coverage: every value must match the publicly reported figure; when unsure, use null instead of estimating.`;
 }
 
 function buildQuarterlyIncomeCfPrompt(sym: string): string {
@@ -611,6 +612,7 @@ function buildQuarterlyIncomeCfPrompt(sym: string): string {
     "",
     'N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).',
     "Use 10-Q figures. Every field on every row — null when unavailable, never omit.",
+    "Accuracy over coverage: a value must match the publicly reported figure; when unsure, use null instead of estimating.",
   ].join("\n");
 }
 
@@ -644,6 +646,7 @@ function buildQuarterlyBsDivPrompt(sym: string): string {
     'N = number or null. Dates ISO "YYYY-MM-DD" (quarter period end).',
     "Use 10-Q figures. dividendPerShare = per-share dividend for that quarter, null if none.",
     "Every field on every row — null when unavailable, never omit.",
+    "Accuracy over coverage: a value must match the publicly reported figure; when unsure, use null instead of estimating.",
   ].join("\n");
 }
 

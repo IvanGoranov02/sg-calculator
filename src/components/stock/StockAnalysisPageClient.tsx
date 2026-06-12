@@ -116,6 +116,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
   }, [fetchData]);
 
   const handleForceRefresh = useCallback(() => fetchData(true), [fetchData]);
+  const handleRetry = useCallback(() => fetchData(false), [fetchData]);
 
   useEffect(() => {
     if (loading) return;
@@ -131,6 +132,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       loading={loading}
       loadProgress={loadProgress}
       onForceRefresh={sessionStatus === "authenticated" ? handleForceRefresh : undefined}
+      onRetry={handleRetry}
     />
   );
 }
