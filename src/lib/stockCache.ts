@@ -17,10 +17,22 @@ export type CachePayload = StockAnalysisBundle & {
   __adminEditedAt?: string;
   /** Last Gemini gap-fill attempt; carried through persist via the bundle object itself. */
   __gapFillAt?: string;
+  /** Where the fundamentals came from; EDGAR data is authoritative over Yahoo on re-merge. */
+  __fundamentalsSource?: FundamentalsSource;
   historical?: StockAnalysisBundle["historical"];
   intraday?: StockAnalysisBundle["intraday"];
   eurPerUsd?: StockAnalysisBundle["eurPerUsd"];
 };
+
+export type FundamentalsSource = "edgar" | "gemini";
+
+export function markFundamentalsSource(bundle: StockAnalysisBundle, source: FundamentalsSource): void {
+  (bundle as CachePayload).__fundamentalsSource = source;
+}
+
+export function readFundamentalsSource(payload: CachePayload | null | undefined): FundamentalsSource {
+  return payload?.__fundamentalsSource === "edgar" ? "edgar" : "gemini";
+}
 
 export function buildCachePayload(
   bundle: StockAnalysisBundle,

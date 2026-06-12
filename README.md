@@ -1,6 +1,14 @@
 # StockGauge
 
-Next.js stock analysis UI with [yahoo-finance2](https://github.com/gadicc/yahoo-finance2) for quotes, historical prices, and annual fundamentals — **no third-party API key**.
+Next.js stock analysis UI. Fundamentals come from **SEC EDGAR XBRL** (as-reported filings, free, no API key) for all SEC filers — US companies plus foreign issuers with US listings/ADRs. Quotes, price history, and fundamentals gap-filling come from [yahoo-finance2](https://github.com/gadicc/yahoo-finance2); **Gemini** is only a fallback for symbols not covered by EDGAR (e.g. Europe-only listings).
+
+### Data sources & precedence
+
+1. **SEC EDGAR** (`data.sec.gov` companyfacts) — authoritative when the symbol is an SEC filer; Yahoo only fills what EDGAR lacks (quarterlies for 20-F filers, EBITDA, dividends per share).
+2. **Yahoo Finance** — live quotes, OHLCV history, investor metrics; primary fundamentals source for non-SEC symbols.
+3. **Gemini** — full fundamentals only when EDGAR has nothing; plus a once-per-24h gap-fill pass.
+
+Set **SEC_EDGAR_USER_AGENT** (e.g. `MyApp (you@example.com)`) — the SEC fair-access policy expects a contact in the User-Agent.
 
 ## Setup
 

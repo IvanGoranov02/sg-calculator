@@ -1,3 +1,4 @@
+import { fetchStockBundleFromEdgar } from "@/lib/edgar/client";
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
 import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
 import { prisma } from "@/lib/prisma";
@@ -12,8 +13,10 @@ import {
   buildCachePayload,
   cacheIsFresh,
   gapFillIsDue,
+  markFundamentalsSource,
   markGapFillAttempt,
   readAdminEditedAt,
+  readFundamentalsSource,
   type CachePayload,
 } from "@/lib/stockCache";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
@@ -22,6 +25,7 @@ import {
   applyYahooFundamentalsToBundle,
   fetchYahooFundamentalsPayload,
   type YahooFundamentalsPayload,
+  type YahooMergeMode,
 } from "@/lib/yahooFundamentalsMerge";
 import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
 
@@ -42,16 +46,22 @@ export type LoadStockAnalysisOptions = LoadStockOptions & {
   onProgress?: (e: StockAnalysisLoadProgress) => void;
 };
 
+type EnrichOptions = {
+  onProgress?: (e: StockAnalysisLoadProgress) => void;
+  runGapFill?: boolean;
+  /** "fill-gaps" for EDGAR-sourced bundles (as-reported data wins over Yahoo). */
+  mergeMode?: YahooMergeMode;
+};
+
 async function enrichFundamentalsPipeline(
   bundle: StockAnalysisBundle,
   sym: string,
   yahooPayload: YahooFundamentalsPayload | null | undefined,
-  onProgress?: (e: StockAnalysisLoadProgress) => void,
-  runGapFill = true,
+  { onProgress, runGapFill = true, mergeMode = "prefer-yahoo" }: EnrichOptions,
 ): Promise<void> {
   onProgress?.({ kind: "yahoo_fundamentals" });
   const payload = yahooPayload ?? (await fetchYahooFundamentalsPayload(sym));
-  if (payload) applyYahooFundamentalsToBundle(bundle, payload);
+  if (payload) applyYahooFundamentalsToBundle(bundle, payload, mergeMode);
   appendCalendarAnnualFromQuarterly(bundle);
   trimBundleToFundamentalsWindow(bundle);
   if (runGapFill) {
@@ -80,7 +90,8 @@ async function persistStockCache(
 
 /**
  * Stock analysis: validate ticker → **DB first** (fresh up to 30 days) → on miss/stale:
- * parallel Yahoo fundamentals + Gemini x3 → merge → gap-fill → Yahoo prices → cache upsert.
+ * SEC EDGAR (as-reported, free) or Gemini x3 for non-SEC symbols → Yahoo merge
+ * (fill-gaps for EDGAR, prefer-Yahoo for Gemini) → gap-fill → Yahoo prices → cache upsert.
  */
 export async function loadStockAnalysis(
   symbol: string,
@@ -131,13 +142,11 @@ export async function loadStockAnalysis(
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
         const yahooPromise = fetchYahooFundamentalsPayload(sym);
-        await enrichFundamentalsPipeline(
-          bundle,
-          sym,
-          await yahooPromise,
-          opts?.onProgress,
-          gapFillIsDue(cachedPayload),
-        );
+        await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
+          onProgress: opts?.onProgress,
+          runGapFill: gapFillIsDue(cachedPayload),
+          mergeMode: readFundamentalsSource(cachedPayload) === "edgar" ? "fill-gaps" : "prefer-yahoo",
+        });
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
         await persistStockCache(sym, bundle);
@@ -145,11 +154,21 @@ export async function loadStockAnalysis(
       }
     }
 
+    // SEC EDGAR first (as-reported filings, free); Gemini only for non-SEC symbols.
     const yahooPromise = fetchYahooFundamentalsPayload(sym);
-    const bundle = await fetchStockBundleFromGemini(sym, {
-      onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+    opts?.onProgress?.({ kind: "edgar" });
+    let bundle = await fetchStockBundleFromEdgar(sym);
+    const source = bundle ? ("edgar" as const) : ("gemini" as const);
+    if (!bundle) {
+      bundle = await fetchStockBundleFromGemini(sym, {
+        onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+      });
+    }
+    await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
+      onProgress: opts?.onProgress,
+      mergeMode: source === "edgar" ? "fill-gaps" : "prefer-yahoo",
     });
-    await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, opts?.onProgress);
+    markFundamentalsSource(bundle, source);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
     await persistStockCache(sym, bundle);
