@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { auth } from "@/auth";
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
+
+/** Per client: each request is a paid Gemini completion. */
+const INSIGHT_LIMIT = 10;
+const INSIGHT_WINDOW_MS = 5 * 60_000;
 
 /**
  * Short Gemini context when Yahoo quarterly DPS is missing in the UI.
@@ -11,6 +17,13 @@ export async function GET(req: Request) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     return NextResponse.json({ ok: false, error: "no_key" as const }, { status: 503 });
+  }
+
+  const session = await auth();
+  const clientKey = clientKeyFromRequest(req, session?.user?.id ?? null);
+  const limited = checkRateLimit("dividend-insight", clientKey, INSIGHT_LIMIT, INSIGHT_WINDOW_MS);
+  if (!limited.ok) {
+    return rateLimitResponse(limited.retryAfterSec);
   }
 
   const { searchParams } = new URL(req.url);

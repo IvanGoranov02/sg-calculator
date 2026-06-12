@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import aaplFacts from "@/lib/edgar/__fixtures__/aapl-companyfacts.json";
+import {
+  buildFlowSeries,
+  buildInstantSeries,
+  bundleFromCompanyFacts,
+  detectReportingCurrency,
+  type EdgarCompanyFacts,
+  type EdgarFactPoint,
+} from "@/lib/edgar/normalize";
+
+const facts = aaplFacts as unknown as EdgarCompanyFacts;
+
+describe("bundleFromCompanyFacts (real AAPL filing data)", () => {
+  const bundle = bundleFromCompanyFacts("aapl", facts);
+
+  it("builds a usable bundle with the entity name and uppercased symbol", () => {
+    assert.ok(bundle);
+    assert.equal(bundle?.quote.symbol, "AAPL");
+    assert.equal(bundle?.quote.name, "Apple Inc.");
+  });
+
+  it("maps fiscal-year income as reported (FY2024 revenue = $391.035B)", () => {
+    const fy24 = bundle?.income.find((r) => r.fiscalYear === "2024");
+    assert.equal(fy24?.revenue, 391_035_000_000);
+    assert.equal(fy24?.date, "2024-09-28");
+  });
+
+  it("derives Q4 income from FY minus the 9-month YTD chain", () => {
+    const q4 = bundle?.incomeQuarterly.find((r) => r.date === "2025-09-27");
+    assert.equal(q4?.revenue, 102_466_000_000);
+  });
+
+  it("derives quarterly cash flow from cumulative YTD filings", () => {
+    const q4 = bundle?.cashFlowQuarterly.find((r) => r.date === "2025-09-27");
+    assert.equal(q4?.operatingCashFlow, 29_728_000_000);
+  });
+
+  it("stores payments as negative outflows and FCF = OCF + capex", () => {
+    const fy25 = bundle?.cashFlow.find((r) => r.fiscalYear === "2025");
+    assert.equal(fy25?.capitalExpenditure, -12_715_000_000);
+    assert.ok((fy25?.dividendsPaid ?? 0) < 0);
+    assert.ok((fy25?.stockRepurchase ?? 0) < 0);
+    assert.equal(
+      fy25?.freeCashFlow,
+      (fy25?.operatingCashFlow ?? 0) + (fy25?.capitalExpenditure ?? 0),
+    );
+  });
+
+  it("keeps annual balance-sheet rows even when comparatives re-file in 10-Qs", () => {
+    const fy25 = bundle?.balanceSheet.find((r) => r.date === "2025-09-27");
+    assert.ok(fy25, "FY2025 balance row present");
+    assert.ok((fy25?.totalAssets ?? 0) > 0);
+    assert.ok((fy25?.stockholdersEquity ?? 0) > 0);
+  });
+
+  it("computes EBITDA from operating income plus D&A", () => {
+    const fy24 = bundle?.income.find((r) => r.fiscalYear === "2024");
+    assert.ok((fy24?.ebitda ?? 0) > (fy24?.operatingIncome ?? 0));
+  });
+
+  it("detects the filing currency", () => {
+    assert.equal(detectReportingCurrency(facts), "USD");
+  });
+});
+
+describe("buildFlowSeries", () => {
+  it("returns nothing useful for too-thin input", () => {
+    const s = buildFlowSeries([]);
+    assert.equal(s.annual.size, 0);
+    assert.equal(s.quarterly.size, 0);
+  });
+
+  it("prefers the latest filed value for a re-reported period", () => {
+    const points: EdgarFactPoint[] = [
+      { start: "2024-01-01", end: "2024-12-31", val: 100, form: "10-K", filed: "2025-02-01" },
+      { start: "2024-01-01", end: "2024-12-31", val: 110, form: "10-K/A", filed: "2025-06-01" },
+    ];
+    assert.equal(buildFlowSeries(points).annual.get("2024-12-31"), 110);
+  });
+});
+
+describe("buildInstantSeries", () => {
+  it("marks a date annual when any filing reported it in a 10-K, even if a 10-Q comparative filed later", () => {
+    const points: EdgarFactPoint[] = [
+      { end: "2024-12-31", val: 500, form: "10-K", filed: "2025-02-01" },
+      { end: "2024-12-31", val: 500, form: "10-Q", filed: "2025-05-01" },
+      { end: "2025-03-31", val: 520, form: "10-Q", filed: "2025-05-01" },
+    ];
+    const s = buildInstantSeries(points);
+    assert.equal(s.annual.get("2024-12-31"), 500);
+    assert.equal(s.annual.has("2025-03-31"), false);
+    assert.equal(s.quarterly.get("2025-03-31"), 520);
+  });
+});
+
+describe("bundleFromCompanyFacts guards", () => {
+  it("returns null when there is no usable annual income data", () => {
+    const empty: EdgarCompanyFacts = { cik: 1, entityName: "X", facts: { "us-gaap": {} } };
+    assert.equal(bundleFromCompanyFacts("X", empty), null);
+  });
+});

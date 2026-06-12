@@ -1,6 +1,7 @@
-/** Emitted during stock analysis load (Gemini + Yahoo) for progress UI. */
+/** Emitted during stock analysis load (EDGAR/Gemini + Yahoo) for progress UI. */
 export type StockAnalysisLoadProgress =
   | { kind: "cache_hit" }
+  | { kind: "edgar" }
   | { kind: "gemini"; step: 1 | 2 | 3; total: 3 }
   | { kind: "gemini_gap_fill" }
   | { kind: "yahoo_fundamentals" }
@@ -18,6 +19,8 @@ export function stockLoadProgressPercent(e: StockAnalysisLoadProgress): number {
   switch (e.kind) {
     case "cache_hit":
       return 18;
+    case "edgar":
+      return 30;
     case "gemini":
       return Math.min(99, Math.round((e.step / e.total) * 52) + 12);
     case "gemini_gap_fill":

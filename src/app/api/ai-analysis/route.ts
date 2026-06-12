@@ -2,7 +2,9 @@ import OpenAI from "openai";
 import YahooFinance from "yahoo-finance2";
 import { NextResponse } from "next/server";
 
+import { auth } from "@/auth";
 import { geminiGenerateText, getGeminiApiKey } from "@/lib/geminiClient";
+import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
 import {
   buildAiFundamentalsTableText,
@@ -37,6 +39,10 @@ type AiBody = {
   locale?: unknown;
 };
 
+/** Per client: each request is a paid LLM completion. */
+const AI_LIMIT = 10;
+const AI_WINDOW_MS = 5 * 60_000;
+
 export async function POST(request: Request) {
   const openaiKey = process.env.OPENAI_API_KEY?.trim();
   const geminiKey = getGeminiApiKey();
@@ -46,6 +52,13 @@ export async function POST(request: Request) {
       { error: "Configure OPENAI_API_KEY or GEMINI_API_KEY for AI analysis." },
       { status: 503 },
     );
+  }
+
+  const session = await auth();
+  const clientKey = clientKeyFromRequest(request, session?.user?.id ?? null);
+  const limited = checkRateLimit("ai-analysis", clientKey, AI_LIMIT, AI_WINDOW_MS);
+  if (!limited.ok) {
+    return rateLimitResponse(limited.retryAfterSec);
   }
 
   let body: AiBody;

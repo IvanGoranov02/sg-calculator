@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { mergeNullablePreferYahoo, mergeScalarPreferYahoo } from "@/lib/yahooMergePolicy";
+import {
+  mergeNullableFillGaps,
+  mergeNullablePreferYahoo,
+  mergeScalarFillGaps,
+  mergeScalarPreferYahoo,
+} from "@/lib/yahooMergePolicy";
 import { FUNDAMENTALS_MAX_QUARTERS, trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
@@ -22,6 +27,23 @@ describe("mergeNullablePreferYahoo", () => {
 
   it("does not replace existing non-null", () => {
     assert.equal(mergeNullablePreferYahoo(10, 99), 99);
+  });
+});
+
+describe("fill-gaps merge (EDGAR-sourced bundles)", () => {
+  it("keeps the existing value over Yahoo", () => {
+    assert.equal(mergeScalarFillGaps(100, 95), 100);
+    assert.equal(mergeNullableFillGaps(10, 99), 10);
+  });
+
+  it("fills missing values from Yahoo (0 counts as missing for scalars)", () => {
+    assert.equal(mergeScalarFillGaps(0, 95), 95);
+    assert.equal(mergeNullableFillGaps(null, 42), 42);
+  });
+
+  it("falls back safely when Yahoo has nothing either", () => {
+    assert.equal(mergeScalarFillGaps(0, null), 0);
+    assert.equal(mergeNullableFillGaps(null, null), null);
   });
 });
 

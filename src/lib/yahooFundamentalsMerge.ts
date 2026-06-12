@@ -74,10 +74,19 @@ function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-import { mergeNullablePreferYahoo, mergeScalarPreferYahoo, pickNum } from "@/lib/yahooMergePolicy";
+import {
+  mergeNullableFillGaps,
+  mergeNullablePreferYahoo,
+  mergeScalarFillGaps,
+  mergeScalarPreferYahoo,
+  pickNum,
+} from "@/lib/yahooMergePolicy";
 
-const mergeScalar = mergeScalarPreferYahoo;
-const mergeNullable = mergeNullablePreferYahoo;
+/**
+ * "prefer-yahoo": Yahoo overrides existing values (Gemini-sourced bundles).
+ * "fill-gaps": existing values are authoritative (EDGAR-sourced bundles); Yahoo fills holes.
+ */
+export type YahooMergeMode = "prefer-yahoo" | "fill-gaps";
 
 function indexByDate<T extends { date: Date }>(rows: T[]): Map<string, T> {
   const m = new Map<string, T>();
@@ -154,7 +163,13 @@ export async function fetchYahooFundamentalsPayload(symbol: string): Promise<Yah
 export function applyYahooFundamentalsToBundle(
   bundle: StockAnalysisBundle,
   payload: YahooFundamentalsPayload,
+  mode: YahooMergeMode = "prefer-yahoo",
 ): void {
+  const fillOnly = mode === "fill-gaps";
+  const mergeScalar = fillOnly ? mergeScalarFillGaps : mergeScalarPreferYahoo;
+  const mergeNullable = fillOnly ? mergeNullableFillGaps : mergeNullablePreferYahoo;
+  const mergeOptional = (cur: number | undefined, yahoo: number | null): number | undefined =>
+    fillOnly ? (cur ?? yahoo ?? undefined) : (yahoo ?? cur);
   const sym = bundle.quote.symbol.trim().toUpperCase();
   const { finA, finQ, cfA, cfQ, bsA, bsQ } = payload;
 
@@ -167,6 +182,14 @@ export function applyYahooFundamentalsToBundle(
   const bsQByDate = indexByDate(bsQ);
 
   const symU = sym;
+
+  const mergeFcf = (cur: number, yahoo: unknown, ocf: number | null, capex: number | null): number => {
+    if (fillOnly && Number.isFinite(cur) && cur !== 0) return cur;
+    const yFcf = pickNum(yahoo);
+    if (yFcf != null) return yFcf;
+    if (ocf != null && capex != null) return ocf + capex;
+    return cur;
+  };
 
   bundle.income = bundle.income.map((row): IncomeStatementAnnual => {
     const fin = finAByFy.get(row.fiscalYear) as Fin | undefined;
@@ -182,10 +205,10 @@ export function applyYahooFundamentalsToBundle(
       grossProfit: mergeScalar(row.grossProfit, fin.grossProfit),
       operatingExpenses: mergeScalar(row.operatingExpenses, fin.operatingExpense),
       netIncome: mergeScalar(row.netIncome, fin.netIncome),
-      operatingIncome: yOi ?? row.operatingIncome,
-      ebitda: yEbitda ?? row.ebitda,
-      dilutedEps: yEps ?? row.dilutedEps,
-      dilutedAverageShares: yShares ?? row.dilutedAverageShares,
+      operatingIncome: mergeOptional(row.operatingIncome, yOi),
+      ebitda: mergeOptional(row.ebitda, yEbitda),
+      dilutedEps: mergeOptional(row.dilutedEps, yEps),
+      dilutedAverageShares: mergeOptional(row.dilutedAverageShares, yShares),
     };
   });
 
@@ -194,13 +217,7 @@ export function applyYahooFundamentalsToBundle(
     if (!cf) return row;
     const ocf = mergeNullable(row.operatingCashFlow, cf.operatingCashFlow);
     const capex = mergeNullable(row.capitalExpenditure, cf.capitalExpenditure);
-    let fcf = row.freeCashFlow;
-    const yFcf = pickNum(cf.freeCashFlow);
-    if (yFcf != null) {
-      fcf = yFcf;
-    } else if (ocf != null && capex != null) {
-      fcf = ocf + capex;
-    }
+    const fcf = mergeFcf(row.freeCashFlow, cf.freeCashFlow, ocf, capex);
     return {
       ...row,
       symbol: symU,
@@ -293,10 +310,10 @@ export function applyYahooFundamentalsToBundle(
       grossProfit: mergeScalar(row.grossProfit, fin.grossProfit),
       operatingExpenses: mergeScalar(row.operatingExpenses, fin.operatingExpense),
       netIncome: mergeScalar(row.netIncome, fin.netIncome),
-      operatingIncome: yOi ?? row.operatingIncome,
-      ebitda: yEbitda ?? row.ebitda,
-      dilutedEps: yEps ?? row.dilutedEps,
-      dilutedAverageShares: yShares ?? row.dilutedAverageShares,
+      operatingIncome: mergeOptional(row.operatingIncome, yOi),
+      ebitda: mergeOptional(row.ebitda, yEbitda),
+      dilutedEps: mergeOptional(row.dilutedEps, yEps),
+      dilutedAverageShares: mergeOptional(row.dilutedAverageShares, yShares),
     };
   });
 
@@ -306,13 +323,7 @@ export function applyYahooFundamentalsToBundle(
     if (!cf) return row;
     const ocf = mergeNullable(row.operatingCashFlow, cf.operatingCashFlow);
     const capex = mergeNullable(row.capitalExpenditure, cf.capitalExpenditure);
-    let fcf = row.freeCashFlow;
-    const yFcf = pickNum(cf.freeCashFlow);
-    if (yFcf != null) {
-      fcf = yFcf;
-    } else if (ocf != null && capex != null) {
-      fcf = ocf + capex;
-    }
+    const fcf = mergeFcf(row.freeCashFlow, cf.freeCashFlow, ocf, capex);
     return {
       ...row,
       symbol: symU,
@@ -348,6 +359,7 @@ export function applyYahooFundamentalsToBundle(
   });
 
   bundle.dividendQuarterly = bundle.dividendQuarterly.map((p) => {
+    if (fillOnly && p.dividendPerShare != null) return p;
     const fin = exactOrNearestYahooQuarter(p.date.slice(0, 10), finQByDate, finQ) as Fin | null;
     if (!fin) return p;
     const dps = pickNum(fin.dividendPerShare);

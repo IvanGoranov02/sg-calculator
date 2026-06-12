@@ -8,14 +8,31 @@ export const CACHE_SCHEMA_VERSION = 10;
 /** Rolling window: Gemini fundamentals stay in DB this long before re-fetch. */
 export const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Unfillable gaps stay gappy; don't retry the paid Gemini gap-fill on every view. */
+export const GAP_FILL_RETRY_MS = 24 * 60 * 60 * 1000;
+
 export type CachePayload = StockAnalysisBundle & {
   __cacheVersion?: number;
   /** Set when an admin saved this payload; protects fundamentals from automatic re-fetch/merge. */
   __adminEditedAt?: string;
+  /** Last Gemini gap-fill attempt; carried through persist via the bundle object itself. */
+  __gapFillAt?: string;
+  /** Where the fundamentals came from; EDGAR data is authoritative over Yahoo on re-merge. */
+  __fundamentalsSource?: FundamentalsSource;
   historical?: StockAnalysisBundle["historical"];
   intraday?: StockAnalysisBundle["intraday"];
   eurPerUsd?: StockAnalysisBundle["eurPerUsd"];
 };
+
+export type FundamentalsSource = "edgar" | "gemini";
+
+export function markFundamentalsSource(bundle: StockAnalysisBundle, source: FundamentalsSource): void {
+  (bundle as CachePayload).__fundamentalsSource = source;
+}
+
+export function readFundamentalsSource(payload: CachePayload | null | undefined): FundamentalsSource {
+  return payload?.__fundamentalsSource === "edgar" ? "edgar" : "gemini";
+}
 
 export function buildCachePayload(
   bundle: StockAnalysisBundle,
@@ -28,6 +45,18 @@ export function buildCachePayload(
       __adminEditedAt: adminEditedAt || undefined,
     }),
   ) as object;
+}
+
+export function gapFillIsDue(payload: CachePayload | null | undefined): boolean {
+  const at = payload?.__gapFillAt;
+  if (!at) return true;
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return true;
+  return Date.now() - t >= GAP_FILL_RETRY_MS;
+}
+
+export function markGapFillAttempt(bundle: StockAnalysisBundle): void {
+  (bundle as CachePayload).__gapFillAt = new Date().toISOString();
 }
 
 export function readAdminEditedAt(payload: CachePayload | null | undefined): string | null {
