@@ -11,6 +11,8 @@ import { appendCalendarAnnualFromQuarterly } from "@/lib/annualFromQuarterlyBack
 import {
   buildCachePayload,
   cacheIsFresh,
+  gapFillIsDue,
+  markGapFillAttempt,
   readAdminEditedAt,
   type CachePayload,
 } from "@/lib/stockCache";
@@ -45,14 +47,18 @@ async function enrichFundamentalsPipeline(
   sym: string,
   yahooPayload: YahooFundamentalsPayload | null | undefined,
   onProgress?: (e: StockAnalysisLoadProgress) => void,
+  runGapFill = true,
 ): Promise<void> {
   onProgress?.({ kind: "yahoo_fundamentals" });
   const payload = yahooPayload ?? (await fetchYahooFundamentalsPayload(sym));
   if (payload) applyYahooFundamentalsToBundle(bundle, payload);
   appendCalendarAnnualFromQuarterly(bundle);
   trimBundleToFundamentalsWindow(bundle);
-  onProgress?.({ kind: "gemini_gap_fill" });
-  await fillBundleGapsFromGemini(bundle);
+  if (runGapFill) {
+    onProgress?.({ kind: "gemini_gap_fill" });
+    await fillBundleGapsFromGemini(bundle);
+    markGapFillAttempt(bundle);
+  }
 }
 
 async function persistStockCache(
@@ -125,7 +131,13 @@ export async function loadStockAnalysis(
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
         const yahooPromise = fetchYahooFundamentalsPayload(sym);
-        await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, opts?.onProgress);
+        await enrichFundamentalsPipeline(
+          bundle,
+          sym,
+          await yahooPromise,
+          opts?.onProgress,
+          gapFillIsDue(cachedPayload),
+        );
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
         await persistStockCache(sym, bundle);

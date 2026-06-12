@@ -6,6 +6,9 @@ import {
   CACHE_MAX_AGE_MS,
   CACHE_SCHEMA_VERSION,
   cacheIsFresh,
+  GAP_FILL_RETRY_MS,
+  gapFillIsDue,
+  markGapFillAttempt,
   mergeAdminEditableIntoCache,
   readAdminEditedAt,
   type CachePayload,
@@ -86,6 +89,28 @@ describe("cacheIsFresh", () => {
     const payload = buildCachePayload(makeBundle(), "2026-06-12T10:00:00.000Z") as CachePayload;
     payload.__cacheVersion = CACHE_SCHEMA_VERSION - 1;
     assert.equal(cacheIsFresh(payload, new Date()), false);
+  });
+});
+
+describe("gap-fill cooldown", () => {
+  it("is due when never attempted", () => {
+    const payload = buildCachePayload(makeBundle()) as CachePayload;
+    assert.equal(gapFillIsDue(payload), true);
+    assert.equal(gapFillIsDue(null), true);
+  });
+
+  it("is not due right after an attempt and survives persist", () => {
+    const bundle = makeBundle();
+    markGapFillAttempt(bundle);
+    const persisted = buildCachePayload(bundle) as CachePayload;
+    assert.equal(typeof persisted.__gapFillAt, "string");
+    assert.equal(gapFillIsDue(persisted), false);
+  });
+
+  it("becomes due again after the retry window", () => {
+    const payload = buildCachePayload(makeBundle()) as CachePayload;
+    payload.__gapFillAt = new Date(Date.now() - GAP_FILL_RETRY_MS - 1000).toISOString();
+    assert.equal(gapFillIsDue(payload), true);
   });
 });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
@@ -20,6 +21,7 @@ type NdjsonLine =
   | { type: "done"; bundle: StockAnalysisBundle | null; error: string | null };
 
 export function StockAnalysisPageClient({ ticker }: Props) {
+  const { status: sessionStatus } = useSession();
   const [bundle, setBundle] = useState<StockAnalysisBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +130,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       error={error}
       loading={loading}
       loadProgress={loadProgress}
-      onForceRefresh={handleForceRefresh}
+      onForceRefresh={sessionStatus === "authenticated" ? handleForceRefresh : undefined}
     />
   );
 }
