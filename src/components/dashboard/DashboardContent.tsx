@@ -248,7 +248,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
       <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
         <Link
           href="/stock/AAPL"
-          className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
             <CardHeader className="gap-3">
@@ -262,7 +262,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
         </Link>
         <Link
           href="/dcf-calculator?ticker=AAPL"
-          className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
             <CardHeader className="gap-3">
@@ -276,7 +276,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
         </Link>
         <Link
           href="/watchlist"
-          className="group block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
             <CardHeader className="gap-3">

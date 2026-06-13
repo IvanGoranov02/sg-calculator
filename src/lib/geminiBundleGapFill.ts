@@ -61,6 +61,12 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
           ? (pickNum(g.operatingIncome) ?? undefined)
           : row.operatingIncome,
       ebitda: row.ebitda == null ? (pickNum(g.ebitda ?? g.EBITDA) ?? undefined) : row.ebitda,
+      dilutedEps:
+        row.dilutedEps == null ? (pickNum(g.dilutedEps ?? g.eps) ?? undefined) : row.dilutedEps,
+      dilutedAverageShares:
+        row.dilutedAverageShares == null
+          ? (pickNum(g.dilutedAverageShares ?? g.dilutedShares) ?? undefined)
+          : row.dilutedAverageShares,
     };
   });
 
@@ -131,6 +137,12 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
       grossProfit: mergeGapScalar(row.grossProfit, g.grossProfit),
       operatingExpenses: mergeGapScalar(row.operatingExpenses, g.operatingExpenses),
       netIncome: mergeGapScalar(row.netIncome, g.netIncome),
+      dilutedEps:
+        row.dilutedEps == null ? (pickNum(g.dilutedEps ?? g.eps) ?? undefined) : row.dilutedEps,
+      dilutedAverageShares:
+        row.dilutedAverageShares == null
+          ? (pickNum(g.dilutedAverageShares ?? g.dilutedShares) ?? undefined)
+          : row.dilutedAverageShares,
     };
   });
 
@@ -188,10 +200,10 @@ function buildGapFillPrompt(
 Today (UTC): ${today}.${extra}
 
 Return JSON only with these keys (arrays may be partial — include only rows you are filling):
-- income (annual, fiscalYear + revenue, grossProfit, operatingExpenses, netIncome, operatingIncome, ebitda)
+- income (annual, fiscalYear + revenue, grossProfit, operatingExpenses, netIncome, operatingIncome, ebitda, dilutedEps, dilutedShares)
 - cashFlow (annual, fiscalYear + freeCashFlow, operatingCashFlow, capitalExpenditure)
 - balanceSheet (annual, fiscalYear + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory)
-- incomeQuarterly (date YYYY-MM-DD + revenue, grossProfit, operatingExpenses, netIncome)
+- incomeQuarterly (date YYYY-MM-DD + revenue, grossProfit, operatingExpenses, netIncome, dilutedEps, dilutedShares)
 - cashFlowQuarterly (date + operatingCashFlow, freeCashFlow)
 - dividendQuarterly (date + dividendPerShare)
 

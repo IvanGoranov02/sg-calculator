@@ -54,7 +54,10 @@ const CONCEPTS: Record<string, string[]> = {
   netIncome: ["NetIncomeLoss", "ProfitLoss", "ProfitLossAttributableToOwnersOfParent"],
   depreciationAmortization: [
     "DepreciationDepletionAndAmortization",
+    "DepreciationAndAmortization",
     "DepreciationAmortizationAndAccretionNet",
+    "DepreciationDepletionAndAmortizationNonproduction",
+    "CostsAndExpensesDepreciationAndAmortization",
     "DepreciationAndAmortisationExpense",
   ],
   dilutedEps: ["EarningsPerShareDiluted", "DilutedEarningsLossPerShare"],
@@ -174,7 +177,10 @@ export function buildFlowSeries(rawPoints: EdgarFactPoint[]): FlowSeries {
 
   for (const p of points) {
     const days = daysBetween(p.start as string, p.end);
-    if (days >= 330 && days <= 390 && (ANNUAL_FORMS.has(p.form ?? "") || days >= 350)) {
+    // Annual figures live only in annual filings (10-K / 20-F / 40-F). Requiring an
+    // annual form rejects ~365-day trailing-twelve-month facts that 10-Qs sometimes
+    // carry, which would otherwise masquerade as fiscal years at quarter-end dates.
+    if (days >= 330 && days <= 390 && ANNUAL_FORMS.has(p.form ?? "")) {
       annual.set(p.end, p.val);
     } else if (days >= 75 && days <= 105) {
       quarterly.set(p.end, p.val);
