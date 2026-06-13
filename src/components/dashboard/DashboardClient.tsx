@@ -91,7 +91,15 @@ export function DashboardClient() {
     <Card className="border-white/10 bg-zinc-900/40">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
         <div>
-          <CardTitle>{t("dashboard.watchlistTitle")}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            {t("dashboard.watchlistTitle")}
+            {symbols.length > 0 ? (
+              <span className="relative flex size-2" title={updatedLabel ?? undefined} aria-hidden>
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/70" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+              </span>
+            ) : null}
+          </CardTitle>
           <CardDescription>{t("dashboard.watchlistDesc")}</CardDescription>
           {updatedLabel ? (
             <p className="mt-2 text-xs text-muted-foreground">{updatedLabel}</p>
