@@ -10,25 +10,32 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 import usCompanies from "@/data/usCompanies.json";
 
+type SearchTarget = "stock" | "dcf" | "dividend";
+
 /** Remount when the synced ticker changes so the input matches the URL without effects. */
-export function StockSearchContainer({ isDcf }: { isDcf: boolean }) {
+export function StockSearchContainer({ target }: { target: SearchTarget }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pathTicker = pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "";
-  const dcfTicker = searchParams.get("ticker") ?? "";
-  const syncKey = isDcf ? `dcf-${dcfTicker}-${searchParams.toString()}` : `stock-${pathTicker}`;
-  return <StockSearch key={syncKey} isDcf={isDcf} />;
+  const queryTicker = searchParams.get("ticker") ?? "";
+  const syncKey =
+    target === "stock" ? `stock-${pathTicker}` : `${target}-${queryTicker}-${searchParams.toString()}`;
+  return <StockSearch key={syncKey} target={target} />;
 }
 
-/** Uses DCF vs stock ticker route from the current path. */
+/** Picks the route (stock / DCF / dividend calculator) from the current path. */
 export function StockSearchWithRoute() {
   const pathname = usePathname();
-  const isDcf = pathname.startsWith("/dcf-calculator");
-  return <StockSearchContainer isDcf={isDcf} />;
+  const target: SearchTarget = pathname.startsWith("/dcf-calculator")
+    ? "dcf"
+    : pathname.startsWith("/dividend-calculator")
+      ? "dividend"
+      : "stock";
+  return <StockSearchContainer target={target} />;
 }
 
 type StockSearchProps = {
-  isDcf: boolean;
+  target: SearchTarget;
 };
 
 type CompanyEntry = { s: string; n: string };
@@ -50,7 +57,7 @@ function suggestCompanies(query: string): CompanyEntry[] {
   return [...byTicker, ...byName].slice(0, MAX_SUGGESTIONS);
 }
 
-function StockSearch({ isDcf }: StockSearchProps) {
+function StockSearch({ target }: StockSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
@@ -91,8 +98,10 @@ function StockSearch({ isDcf }: StockSearchProps) {
     setOpen(false);
     setHighlighted(-1);
     setQuery(sym);
-    if (isDcf) {
+    if (target === "dcf") {
       router.push(`/dcf-calculator?ticker=${encodeURIComponent(sym)}`);
+    } else if (target === "dividend") {
+      router.push(`/dividend-calculator?ticker=${encodeURIComponent(sym)}`);
     } else {
       router.push(`/stock/${encodeURIComponent(sym)}`);
     }

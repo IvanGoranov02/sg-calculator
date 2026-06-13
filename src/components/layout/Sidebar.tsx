@@ -4,6 +4,7 @@ import {
   Briefcase,
   Calculator,
   ChevronRight,
+  Coins,
   LayoutDashboard,
   LineChart,
   ListPlus,
@@ -29,6 +30,7 @@ const nav = [
   { href: "/dashboard", labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
   { href: "/stock/AAPL", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
   { href: "/dcf-calculator", labelKey: "nav.dcfCalculator" as const, icon: Calculator },
+  { href: "/dividend-calculator", labelKey: "nav.dividendCalculator" as const, icon: Coins },
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
   { href: "/portfolio", labelKey: "nav.portfolio" as const, icon: Briefcase },
 ];
