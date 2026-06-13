@@ -54,8 +54,25 @@ function fmtMoney(n: number, currency: string) {
   }
 }
 
+/** True when an earnings date is within the next ~14 days (worth flagging). */
+function isEarningsSoon(iso: string): boolean {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return false;
+  const days = (t - Date.now()) / 86_400_000;
+  return days >= -1 && days <= 14;
+}
+
+function formatEarnings(iso: string, locale: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function PortfolioClient() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { status } = useSession();
   const [holdings, setHoldings] = useState<HoldingApi[]>([]);
   const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
@@ -609,6 +626,8 @@ export function PortfolioClient() {
                 <TableHead className="text-right">{t("portfolio.colPlPct")}</TableHead>
                 <TableHead className="hidden text-right md:table-cell">{t("portfolio.colDivYld")}</TableHead>
                 <TableHead className="hidden text-right md:table-cell">{t("portfolio.colExpDiv")}</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">{t("portfolio.colDip")}</TableHead>
+                <TableHead className="hidden text-right lg:table-cell">{t("portfolio.colEarnings")}</TableHead>
                 <TableHead className="w-[100px] sm:w-[120px]" />
               </TableRow>
             </TableHeader>
@@ -705,6 +724,30 @@ export function PortfolioClient() {
                   </TableCell>
                   <TableCell className="hidden text-right tabular-nums text-muted-foreground md:table-cell">
                     {estAnnual != null ? fmtMoney(estAnnual, holdingCcy) : "—"}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "hidden text-right font-mono text-xs tabular-nums lg:table-cell",
+                      q?.dipVsSma200Pct != null && q.dipVsSma200Pct < 0
+                        ? "text-red-400"
+                        : q?.dipVsSma200Pct != null && q.dipVsSma200Pct > 0
+                          ? "text-emerald-400"
+                          : "text-muted-foreground",
+                    )}
+                    title={t("portfolio.dipHint")}
+                  >
+                    {q?.dipVsSma200Pct != null && Number.isFinite(q.dipVsSma200Pct)
+                      ? formatPercent(q.dipVsSma200Pct)
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="hidden text-right text-xs tabular-nums lg:table-cell">
+                    {q?.nextEarnings ? (
+                      <span className={cn(isEarningsSoon(q.nextEarnings) ? "text-amber-400" : "text-muted-foreground")}>
+                        {formatEarnings(q.nextEarnings, locale)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">

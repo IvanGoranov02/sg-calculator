@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -20,6 +21,7 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
       window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
   );
   const { t } = useI18n();
+  const pathname = usePathname();
 
   const toggleSidebarCollapsed = useCallback(() => {
     setSidebarCollapsed((c) => {
@@ -62,7 +64,10 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6">
-          {children}
+          {/* Keyed by route so content gently animates in on each navigation. */}
+          <div key={pathname} className="animate-page-in">
+            {children}
+          </div>
         </main>
       </div>
     </div>

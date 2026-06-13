@@ -23,7 +23,29 @@ export type PortfolioQuoteRow = {
   dividendYield: number | null;
   dividendRate: number | null;
   changePercent: number;
+  /** 200-day moving average from Yahoo, when available. */
+  twoHundredDayAverage: number | null;
+  /** (price - sma200) / sma200 * 100; null if SMA missing. Negative = trading below trend (a dip). */
+  dipVsSma200Pct: number | null;
+  /** Next earnings date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
+  nextEarnings: string | null;
 };
+
+/** Next upcoming (or most recent) earnings date from a Yahoo quoteSummary calendarEvents block. */
+function pickNextEarnings(qs: Record<string, unknown> | null): string | null {
+  if (!qs) return null;
+  const ce = qs.calendarEvents as { earnings?: { earningsDate?: Array<Date | string> } } | undefined;
+  const dates = ce?.earnings?.earningsDate;
+  if (!Array.isArray(dates) || dates.length === 0) return null;
+  const parsed = dates
+    .map((x) => (x instanceof Date ? x : new Date(x)))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (parsed.length === 0) return null;
+  const t0 = Date.now() - 86_400_000;
+  const upcoming = parsed.filter((d) => d.getTime() >= t0).sort((a, b) => a.getTime() - b.getTime());
+  const pick = upcoming[0] ?? parsed[parsed.length - 1];
+  return pick.toISOString().slice(0, 10);
+}
 
 /** Build candidate Yahoo tickers for a stored portfolio symbol (often T212-derived). */
 function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
@@ -103,6 +125,9 @@ function rawQuoteToRow(
   const metrics = mapInvestorMetrics(raw, qs);
   const pct = Number(raw.regularMarketChangePercent ?? 0);
   const yieldDec = normalizeYahooDividendYieldToDecimal(metrics.dividendYield);
+  const sma = metrics.twoHundredDayAverage;
+  const dipVsSma200Pct =
+    sma != null && sma !== 0 && Number.isFinite(price) ? ((price - sma) / sma) * 100 : null;
   return {
     symbol: portfolioKey,
     resolvedYahooSymbol: resolvedYahoo,
@@ -112,6 +137,9 @@ function rawQuoteToRow(
     dividendYield: yieldDec,
     dividendRate: metrics.dividendRate,
     changePercent: Number.isFinite(pct) ? pct : 0,
+    twoHundredDayAverage: sma,
+    dipVsSma200Pct,
+    nextEarnings: pickNextEarnings(qs),
   };
 }
 
@@ -121,7 +149,7 @@ async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<P
       yahooFinance.quote(yahooSym),
       yahooFinance
         .quoteSummary(yahooSym, {
-          modules: ["summaryDetail", "financialData", "defaultKeyStatistics", "price"],
+          modules: ["summaryDetail", "financialData", "defaultKeyStatistics", "price", "calendarEvents"],
         })
         .catch(() => null),
     ]);
