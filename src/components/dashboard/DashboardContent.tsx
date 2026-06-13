@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Calculator, ListPlus } from "lucide-react";
+import { BarChart3, Calculator, ListPlus, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
@@ -62,29 +62,40 @@ function MarketQuoteCard({
   emphasized?: boolean;
 }) {
   const time = formatQuoteTime(quote);
+  const up = quote.changesPercentage >= 0;
+  const TrendIcon = up ? TrendingUp : TrendingDown;
 
   return (
     <div
       className={cn(
-        "min-w-0 flex-1 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-2.5",
+        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-zinc-950/50 px-3.5 py-3 transition-colors hover:border-white/20",
         emphasized && "border-amber-400/25 bg-amber-950/10",
       )}
     >
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{quote.symbol}</p>
-      <p className="truncate text-xs text-muted-foreground">{quote.name}</p>
-      <div className="mt-1 flex flex-wrap items-baseline gap-2">
-        <span className="font-mono text-base font-medium tabular-nums text-foreground">
-          {formatQuoteValue(quote, valueKind)}
-        </span>
+      {/* Direction accent rail */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-y-0 left-0 w-0.5",
+          up ? "bg-emerald-500/70" : "bg-red-500/70",
+        )}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">{quote.symbol}</p>
         <span
           className={cn(
-            "font-mono text-sm tabular-nums",
-            quote.changesPercentage >= 0 ? "text-emerald-400" : "text-red-400",
+            "flex items-center gap-0.5 font-mono text-xs font-medium tabular-nums",
+            up ? "text-emerald-400" : "text-red-400",
           )}
         >
+          <TrendIcon className="size-3" aria-hidden />
           {formatPercent(quote.changesPercentage)}
         </span>
       </div>
+      <p className="truncate text-xs text-muted-foreground">{quote.name}</p>
+      <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-foreground">
+        {formatQuoteValue(quote, valueKind)}
+      </p>
       <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{hint}</p>
       {time ? (
         <p className="mt-1 text-[10px] leading-snug text-muted-foreground/80">
@@ -167,11 +178,15 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div>
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/10 via-zinc-900/30 to-zinc-900/10 px-5 py-6 sm:px-7 sm:py-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl"
+        />
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dashboard.title")}
         </h1>
-        <p className="mt-2 text-muted-foreground">{t("dashboard.welcome")}</p>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{t("dashboard.welcome")}</p>
       </div>
 
       <section aria-label={t("dashboard.marketAria")} className="space-y-2">
