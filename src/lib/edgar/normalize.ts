@@ -104,6 +104,13 @@ const CONCEPTS: Record<string, string[]> = {
   accountsReceivable: ["AccountsReceivableNetCurrent", "TradeAndOtherCurrentReceivables"],
   goodwill: ["Goodwill"],
   longTermDebt: ["LongTermDebtNoncurrent", "LongTermDebt"],
+  // Debt components, used to derive total debt and net debt (EDGAR has no single
+  // "total debt" tag). LongTermDebt (all-in, incl. current maturities) is preferred;
+  // otherwise sum the noncurrent + current pieces. Short-term borrowings add on top.
+  longTermDebtAllIn: ["LongTermDebt"],
+  longTermDebtNoncurrent: ["LongTermDebtNoncurrent"],
+  longTermDebtCurrent: ["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"],
+  shortTermBorrowings: ["ShortTermBorrowings", "CommercialPaper", "DebtCurrent"],
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -351,6 +358,10 @@ export function bundleFromCompanyFacts(
     "accountsReceivable",
     "goodwill",
     "longTermDebt",
+    "longTermDebtAllIn",
+    "longTermDebtNoncurrent",
+    "longTermDebtCurrent",
+    "shortTermBorrowings",
   ]) {
     instant[key] = buildInstantSeries(conceptPoints(facts, CONCEPTS[key]));
   }
@@ -424,19 +435,34 @@ export function bundleFromCompanyFacts(
     }))
     .reverse();
 
-  const buildBalance = (map: "annual" | "quarterly", end: string) => ({
-    totalAssets: instant.totalAssets[map].get(end) ?? null,
-    totalDebt: null,
-    netDebt: null,
-    stockholdersEquity: instant.stockholdersEquity[map].get(end) ?? null,
-    cashAndCashEquivalents: instant.cash[map].get(end) ?? null,
-    totalCurrentAssets: instant.currentAssets[map].get(end) ?? null,
-    totalCurrentLiabilities: instant.currentLiabilities[map].get(end) ?? null,
-    inventory: instant.inventory[map].get(end) ?? null,
-    accountsReceivable: instant.accountsReceivable[map].get(end) ?? null,
-    goodwill: instant.goodwill[map].get(end) ?? null,
-    longTermDebt: instant.longTermDebt[map].get(end) ?? null,
-  });
+  const buildBalance = (map: "annual" | "quarterly", end: string) => {
+    const cash = instant.cash[map].get(end) ?? null;
+    // Total debt = all-in long-term debt (incl. current maturities) when tagged,
+    // else noncurrent + current pieces; plus short-term borrowings. Only when a real
+    // debt figure exists — never fabricate 0.
+    const ltdAllIn = instant.longTermDebtAllIn[map].get(end) ?? null;
+    const ltdNon = instant.longTermDebtNoncurrent[map].get(end) ?? null;
+    const ltdCur = instant.longTermDebtCurrent[map].get(end) ?? null;
+    const shortTerm = instant.shortTermBorrowings[map].get(end) ?? null;
+    let coreDebt: number | null = null;
+    if (ltdAllIn != null) coreDebt = ltdAllIn;
+    else if (ltdNon != null || ltdCur != null) coreDebt = (ltdNon ?? 0) + (ltdCur ?? 0);
+    const totalDebt = coreDebt != null ? coreDebt + (shortTerm ?? 0) : null;
+    const netDebt = totalDebt != null && cash != null ? totalDebt - cash : null;
+    return {
+      totalAssets: instant.totalAssets[map].get(end) ?? null,
+      totalDebt,
+      netDebt,
+      stockholdersEquity: instant.stockholdersEquity[map].get(end) ?? null,
+      cashAndCashEquivalents: cash,
+      totalCurrentAssets: instant.currentAssets[map].get(end) ?? null,
+      totalCurrentLiabilities: instant.currentLiabilities[map].get(end) ?? null,
+      inventory: instant.inventory[map].get(end) ?? null,
+      accountsReceivable: instant.accountsReceivable[map].get(end) ?? null,
+      goodwill: instant.goodwill[map].get(end) ?? null,
+      longTermDebt: instant.longTermDebt[map].get(end) ?? null,
+    };
+  };
 
   const balanceEnds = sortedDatesDesc(instant.totalAssets.annual, instant.stockholdersEquity.annual);
   const balanceSheet: BalanceSheetAnnual[] = balanceEnds

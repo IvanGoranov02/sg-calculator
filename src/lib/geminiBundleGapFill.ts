@@ -162,7 +162,35 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
     return {
       ...row,
       operatingCashFlow: mergeGapNullable(row.operatingCashFlow, g.operatingCashFlow),
+      capitalExpenditure: mergeGapNullable(row.capitalExpenditure, g.capitalExpenditure),
       freeCashFlow: mergeGapScalar(row.freeCashFlow, g.freeCashFlow),
+    };
+  });
+
+  const bsQByDate = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(b.balanceSheetQuarterly)) {
+    for (const raw of b.balanceSheetQuarterly) {
+      if (!raw || typeof raw !== "object") continue;
+      const o = raw as Record<string, unknown>;
+      const d = String(o.date ?? o.periodEnd ?? "").slice(0, 10);
+      if (d.length >= 10) bsQByDate.set(d, o);
+    }
+  }
+
+  bundle.balanceSheetQuarterly = bundle.balanceSheetQuarterly.map((row) => {
+    const g = bsQByDate.get(row.date.slice(0, 10));
+    if (!g) return row;
+    return {
+      ...row,
+      totalAssets: mergeGapNullable(row.totalAssets, g.totalAssets),
+      totalDebt: mergeGapNullable(row.totalDebt, g.totalDebt),
+      stockholdersEquity: mergeGapNullable(row.stockholdersEquity, g.stockholdersEquity),
+      totalCurrentAssets: mergeGapNullable(row.totalCurrentAssets, g.totalCurrentAssets ?? g.currentAssets),
+      totalCurrentLiabilities: mergeGapNullable(
+        row.totalCurrentLiabilities,
+        g.totalCurrentLiabilities ?? g.currentLiabilities,
+      ),
+      inventory: mergeGapNullable(row.inventory, g.inventory),
     };
   });
 
@@ -204,7 +232,8 @@ Return JSON only with these keys (arrays may be partial — include only rows yo
 - cashFlow (annual, fiscalYear + freeCashFlow, operatingCashFlow, capitalExpenditure)
 - balanceSheet (annual, fiscalYear + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory)
 - incomeQuarterly (date YYYY-MM-DD + revenue, grossProfit, operatingExpenses, netIncome, dilutedEps, dilutedShares)
-- cashFlowQuarterly (date + operatingCashFlow, freeCashFlow)
+- cashFlowQuarterly (date + operatingCashFlow, capitalExpenditure, freeCashFlow)
+- balanceSheetQuarterly (date + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory)
 - dividendQuarterly (date + dividendPerShare)
 
 Use filing-accurate consolidated figures. Do NOT change fields that already have real non-zero values.

@@ -73,10 +73,13 @@ export function bundleHasYahooSecDataGaps(
   const inc = bundle.incomeQuarterly;
   if (cf.length === inc.length && cf.length >= 4) {
     let nullOcf = 0;
+    let nullCapex = 0;
     for (let i = 0; i < cf.length; i++) {
       if (cf[i].operatingCashFlow == null) nullOcf++;
+      if (cf[i].capitalExpenditure == null) nullCapex++;
     }
-    if (nullOcf / cf.length > 0.25) return true;
+    // Capex powers the "capex intensity" chart; flag when a chunk of quarters lack it.
+    if (nullOcf / cf.length > 0.25 || nullCapex / cf.length > 0.25) return true;
   }
 
   const divTail = bundle.dividendQuarterly.slice(-12);
