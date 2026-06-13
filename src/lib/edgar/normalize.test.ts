@@ -80,6 +80,18 @@ describe("buildFlowSeries", () => {
     ];
     assert.equal(buildFlowSeries(points).annual.get("2024-12-31"), 110);
   });
+
+  it("does not treat a ~365-day trailing-twelve-month fact from a 10-Q as a fiscal year", () => {
+    const points: EdgarFactPoint[] = [
+      // Real fiscal year from the annual filing.
+      { start: "2024-01-01", end: "2024-12-31", val: 1000, form: "10-K", filed: "2025-02-01" },
+      // TTM ending at a quarter-end, carried in a 10-Q — must be ignored, not annual.
+      { start: "2024-04-01", end: "2025-03-31", val: 1100, form: "10-Q", filed: "2025-05-01" },
+    ];
+    const s = buildFlowSeries(points);
+    assert.deepEqual([...s.annual.keys()], ["2024-12-31"]);
+    assert.equal(s.annual.has("2025-03-31"), false);
+  });
 });
 
 describe("buildInstantSeries", () => {

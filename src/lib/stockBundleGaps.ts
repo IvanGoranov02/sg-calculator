@@ -30,6 +30,21 @@ function bundleHasBalanceSheetOrDividendGaps(bundle: StockAnalysisBundle): boole
   return pays;
 }
 
+/** Per-share figures EDGAR omits for dimensional (multi-class) filers like Visa. */
+function bundleHasEpsGaps(bundle: StockAnalysisBundle, displayFiscalYears: string[]): boolean {
+  const incByFy = new Map(bundle.income.map((r) => [r.fiscalYear, r]));
+  for (const y of displayFiscalYears) {
+    const row = incByFy.get(y);
+    if (row && row.netIncome !== 0 && row.dilutedEps == null) return true;
+  }
+  const recent = bundle.incomeQuarterly.slice(-12).filter((q) => q.netIncome !== 0);
+  if (recent.length >= 4) {
+    const missing = recent.filter((q) => q.dilutedEps == null).length;
+    if (missing / recent.length > 0.25) return true;
+  }
+  return false;
+}
+
 /**
  * True when data still looks incomplete for the fundamentals UI: empty fiscal slots,
  * sparse rows, many null cash-flow fields, or BS/DPS gaps after Gemini + Yahoo merge.
@@ -41,6 +56,8 @@ export function bundleHasYahooSecDataGaps(
   const loadedSet = new Set(bundle.income.map((r) => r.fiscalYear));
   const missingYears = displayFiscalYears.filter((y) => !loadedSet.has(y));
   if (missingYears.length > 0) return true;
+
+  if (bundleHasEpsGaps(bundle, displayFiscalYears)) return true;
 
   const incByFy = new Map(bundle.income.map((r) => [r.fiscalYear, r]));
   for (const y of displayFiscalYears) {
