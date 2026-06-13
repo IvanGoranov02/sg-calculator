@@ -398,6 +398,11 @@ export const messages: Record<AppLocale, MessageDict> = {
         "No numeric values for this metric in the loaded series (Yahoo may omit line items for some filings).",
       chartMetricNoDataDetail:
         "Why: Yahoo’s fundamentalsTimeSeries often returns nulls for balance-sheet lines (IFRS vs US labels, period-end mismatches, or API gaps). Income and cash-flow may still load.",
+      chartNoDataTitle: "Nothing to plot here",
+      chartCoverageNote: "Data from {from} · {n} of {total} periods",
+      chartCoverageTitle:
+        "This metric reports a value for {n} of {total} periods in view. Earlier periods simply had no figure to plot (e.g. negligible debt or non-meaningful ratio) — not a loading error.",
+      chartSinglePoint: "Only one period in view has a value for this metric.",
       loadAgainGemini: "Fill null balance sheet & dividend fields (Gemini)",
       loadAgainGeminiBusy: "Filling…",
       geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
@@ -1095,6 +1100,11 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Няма числени стойности за тази метрика в заредената серия (Yahoo понякога не подава редове за част от отчетите).",
       chartMetricNoDataDetail:
         "Защо: fundamentalsTimeSeries на Yahoo често връща null за редове от баланс (IFRS срещу US етикети, разминаване на край на период или пропуски в API). Приходите и паричният поток може да са наред.",
+      chartNoDataTitle: "Няма какво да се покаже тук",
+      chartCoverageNote: "Данни от {from} · {n} от {total} периода",
+      chartCoverageTitle:
+        "Тази метрика има стойност за {n} от {total} периода в изгледа. По-ранните периоди просто нямат стойност за показване (напр. нищожен дълг или незначимо съотношение) — не е грешка при зареждане.",
+      chartSinglePoint: "Само един период в изгледа има стойност за тази метрика.",
       loadAgainGemini: "Попълни null баланс и дивидент на акция (Gemini)",
       loadAgainGeminiBusy: "Попълване…",
       geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",

@@ -13,10 +13,12 @@ import {
   YAxis,
 } from "recharts";
 
+import { CircleOff } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { seriesHasAnyPoint } from "@/lib/chartSeriesUtils";
+import { seriesCoverage } from "@/lib/chartSeriesUtils";
 import { cn } from "@/lib/utils";
 
 export type FundamentalSeries = {
@@ -90,7 +92,17 @@ export function FundamentalChartCard({
   const { t } = useI18n();
   const manyTicks = data.length > 10;
   const keys = series.map((s) => s.dataKey);
-  const hasPoints = data.length === 0 ? false : seriesHasAnyPoint(data, keys);
+  const coverage = seriesCoverage(data, keys, xKey);
+  const hasPoints = coverage.pointCount > 0;
+  // Flag as sparse only when the emptiness is visually confusing: very few points,
+  // or under half the visible range covered (e.g. a metric that only becomes
+  // meaningful recently). A single missing period stays clean / un-flagged.
+  const isSparse =
+    hasPoints &&
+    coverage.pointCount < coverage.total &&
+    (coverage.pointCount <= 3 || coverage.pointCount / coverage.total < 0.5);
+  // Larger dots so 1–2 points stay visible instead of a near-invisible mark.
+  const dotRadius = coverage.pointCount <= 3 ? 4 : 2;
 
   function formatTooltipValueRaw(value: unknown): string {
     const v = Array.isArray(value) ? value[0] : value;
@@ -182,8 +194,8 @@ export function FundamentalChartCard({
               name={s.label}
               stroke={s.color}
               strokeWidth={2}
-              dot={{ r: 2, strokeWidth: 0 }}
-              activeDot={{ r: 4 }}
+              dot={{ r: dotRadius, strokeWidth: 0 }}
+              activeDot={{ r: dotRadius + 2 }}
               connectNulls
             />
           ))}
@@ -195,22 +207,49 @@ export function FundamentalChartCard({
   return (
     <Card className={cn("min-w-0 border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">{title}</CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          {isSparse ? (
+            <span
+              className="shrink-0 cursor-help rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] tabular-nums text-amber-300"
+              title={t("chartsFund.chartCoverageTitle", {
+                n: coverage.pointCount,
+                total: coverage.total,
+              })}
+            >
+              {coverage.pointCount}/{coverage.total}
+            </span>
+          ) : null}
+        </div>
         {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
       </CardHeader>
       <CardContent className="h-[220px] min-h-0 min-w-0 pt-0">
-        {data.length === 0 ? (
-          <p className="text-sm text-muted-foreground">—</p>
-        ) : !hasPoints ? (
-          <div className="flex h-full flex-col gap-2">
-            <p className="text-sm text-muted-foreground">{t("chartsFund.chartMetricNoData")}</p>
-            <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
+        {!hasPoints ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
+            <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
+            <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground/80">
+              {t("chartsFund.chartMetricNoDataDetail")}
+            </p>
           </div>
         ) : (
           <div className="relative h-full min-h-0 min-w-0 w-full">
             <div className="absolute inset-0 min-h-0 min-w-0">{chart}</div>
           </div>
         )}
+        {hasPoints && isSparse ? (
+          <p className="mt-2 text-[11px] leading-snug text-amber-300/80">
+            {coverage.pointCount === 1
+              ? t("chartsFund.chartSinglePoint")
+              : coverage.firstLabel
+                ? t("chartsFund.chartCoverageNote", {
+                    from: coverage.firstLabel,
+                    n: coverage.pointCount,
+                    total: coverage.total,
+                  })
+                : null}
+          </p>
+        ) : null}
         {growthNote ? (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
         ) : null}
