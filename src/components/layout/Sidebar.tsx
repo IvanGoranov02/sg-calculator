@@ -2,6 +2,7 @@
 
 import {
   Briefcase,
+  CalendarClock,
   Calculator,
   ChevronRight,
   Coins,
@@ -33,6 +34,7 @@ const nav = [
   { href: "/dividend-calculator", labelKey: "nav.dividendCalculator" as const, icon: Coins },
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
   { href: "/portfolio", labelKey: "nav.portfolio" as const, icon: Briefcase },
+  { href: "/calendar", labelKey: "nav.calendar" as const, icon: CalendarClock },
 ];
 
 export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNavigate }: SidebarProps) {
