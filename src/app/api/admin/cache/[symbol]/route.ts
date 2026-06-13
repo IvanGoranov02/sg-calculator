@@ -87,7 +87,13 @@ export async function PUT(request: Request, ctx: RouteCtx) {
   merged.quote.symbol = sym;
 
   const adminEditedAt = new Date().toISOString();
-  const plain = buildCachePayload(merged, adminEditedAt);
+  // Persist the approved fields as an overlay so later auto-refreshes (new earnings
+  // reports) never overwrite them; anchor the earnings clock at the edit time.
+  const plain = buildCachePayload(merged, {
+    adminEditedAt,
+    adminOverlay: edited,
+    lastFullFetchAt: adminEditedAt,
+  });
   const row = await prisma.stockAnalysisCache.upsert({
     where: { symbol: sym },
     create: { symbol: sym, payload: plain },

@@ -13,14 +13,19 @@ import {
   normalizeStockSymbol,
 } from "@/lib/stockSymbol";
 import { appendCalendarAnnualFromQuarterly } from "@/lib/annualFromQuarterlyBackfill";
+import { payloadToEditableBundle } from "@/lib/adminCacheApi";
 import {
+  applyAdminOverlay,
   buildCachePayload,
   cacheIsFresh,
+  earningsReportDue,
   gapFillIsDue,
   markFundamentalsSource,
   markGapFillAttempt,
   readAdminEditedAt,
+  readAdminOverlay,
   readFundamentalsSource,
+  type BuildCachePayloadOptions,
   type CachePayload,
 } from "@/lib/stockCache";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
@@ -84,9 +89,9 @@ async function enrichFundamentalsPipeline(
 async function persistStockCache(
   sym: string,
   bundle: StockAnalysisBundle,
-  adminEditedAt?: string | null,
+  opts?: BuildCachePayloadOptions,
 ): Promise<void> {
-  const plain = buildCachePayload(bundle, adminEditedAt);
+  const plain = buildCachePayload(bundle, opts);
   try {
     await prisma.stockAnalysisCache.upsert({
       where: { symbol: sym },
@@ -96,6 +101,28 @@ async function persistStockCache(
   } catch {
     // DB optional in some dev setups
   }
+}
+
+/** Fresh fundamentals from SEC EDGAR (preferred) or Gemini, then Yahoo merge + gap-fill. */
+async function fetchFreshFundamentals(
+  sym: string,
+  opts: LoadStockAnalysisOptions | undefined,
+): Promise<{ bundle: StockAnalysisBundle; source: "edgar" | "gemini" }> {
+  const yahooPromise = fetchYahooFundamentalsPayload(sym);
+  opts?.onProgress?.({ kind: "edgar" });
+  let bundle = await fetchStockBundleFromEdgar(sym);
+  const source = bundle ? ("edgar" as const) : ("gemini" as const);
+  if (!bundle) {
+    bundle = await fetchStockBundleFromGemini(sym, {
+      onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+    });
+  }
+  await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
+    onProgress: opts?.onProgress,
+    mergeMode: source === "edgar" ? "fill-gaps" : "prefer-yahoo",
+  });
+  markFundamentalsSource(bundle, source);
+  return { bundle, source };
 }
 
 /**
@@ -127,28 +154,45 @@ export async function loadStockAnalysis(
     const adminEditedAt = readAdminEditedAt(cachedPayload);
 
     if (cachedPayload && adminEditedAt && !opts?.overwriteAdminEdits) {
-      // Admin-curated report: fundamentals, investor metrics, and quote labels are
-      // authoritative — never re-merged from Yahoo/Gemini. Only market price data refreshes.
-      const bundle = cachedPayload as StockAnalysisBundle;
+      // Admin-curated report. Curated values win forever via the overlay. We only
+      // re-fetch fundamentals when a new earnings report is known to have dropped
+      // (earningsReportDue); otherwise just refresh live prices. Either way the admin
+      // overlay is re-applied last, so curated fields are never overwritten.
       opts?.onProgress?.({ kind: "cache_hit" });
-      const adminQuote = { ...bundle.quote };
-      const adminInvestor = { ...bundle.investor };
-      const adminDividends = bundle.dividendQuarterly;
+      // Migration: rows curated before overlays existed reconstruct it from the bundle.
+      const overlay = readAdminOverlay(cachedPayload) ?? payloadToEditableBundle(cachedPayload);
+      const due = !opts?.forceRefresh ? earningsReportDue(cachedPayload) : true;
+
+      let working: StockAnalysisBundle;
+      let lastFullFetchAt = cachedPayload.__lastFullFetchAt ?? adminEditedAt;
+      if (due && overlay) {
+        const fresh = await fetchFreshFundamentals(sym, opts);
+        working = fresh.bundle;
+        lastFullFetchAt = new Date().toISOString();
+      } else {
+        working = cachedPayload as StockAnalysisBundle;
+      }
+
       opts?.onProgress?.({ kind: "yahoo_prices" });
-      await enrichBundleWithYahooPrices(bundle);
-      bundle.investor = adminInvestor;
-      bundle.dividendQuarterly = adminDividends;
-      bundle.quote = {
-        ...bundle.quote,
-        name: adminQuote.name || bundle.quote.name,
-        earningsDate: adminQuote.earningsDate ?? bundle.quote.earningsDate,
-      };
-      await persistStockCache(sym, bundle, adminEditedAt);
-      return { bundle, error: null };
+      await enrichBundleWithYahooPrices(working);
+      if (overlay) applyAdminOverlay(working, overlay);
+      await persistStockCache(sym, working, {
+        adminEditedAt,
+        adminOverlay: overlay ?? undefined,
+        lastFullFetchAt,
+      });
+      return { bundle: working, error: null };
     }
 
     if (!opts?.forceRefresh) {
-      if (row && cachedPayload && cacheIsFresh(cachedPayload, row.updatedAt)) {
+      // Serve cache while fresh, UNLESS a new earnings report has dropped since the
+      // last full fetch — then fall through and re-fetch from source.
+      if (
+        row &&
+        cachedPayload &&
+        cacheIsFresh(cachedPayload, row.updatedAt) &&
+        !earningsReportDue(cachedPayload)
+      ) {
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
         const yahooPromise = fetchYahooFundamentalsPayload(sym);
@@ -159,29 +203,17 @@ export async function loadStockAnalysis(
         });
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
-        await persistStockCache(sym, bundle);
+        await persistStockCache(sym, bundle, {
+          lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? undefined,
+        });
         return { bundle, error: null };
       }
     }
 
-    // SEC EDGAR first (as-reported filings, free); Gemini only for non-SEC symbols.
-    const yahooPromise = fetchYahooFundamentalsPayload(sym);
-    opts?.onProgress?.({ kind: "edgar" });
-    let bundle = await fetchStockBundleFromEdgar(sym);
-    const source = bundle ? ("edgar" as const) : ("gemini" as const);
-    if (!bundle) {
-      bundle = await fetchStockBundleFromGemini(sym, {
-        onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
-      });
-    }
-    await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
-      onProgress: opts?.onProgress,
-      mergeMode: source === "edgar" ? "fill-gaps" : "prefer-yahoo",
-    });
-    markFundamentalsSource(bundle, source);
+    const { bundle } = await fetchFreshFundamentals(sym, opts);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
-    await persistStockCache(sym, bundle);
+    await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
     return { bundle, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load stock data.";
