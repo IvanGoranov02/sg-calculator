@@ -399,6 +399,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartMetricNoDataDetail:
         "Why: Yahoo’s fundamentalsTimeSeries often returns nulls for balance-sheet lines (IFRS vs US labels, period-end mismatches, or API gaps). Income and cash-flow may still load.",
       chartNoDataTitle: "Nothing to plot here",
+      chartExpand: "Expand chart",
+      chartTablePeriod: "Period",
       chartCoverageNote: "Data from {from} · {n} of {total} periods",
       chartCoverageTitle:
         "This metric reports a value for {n} of {total} periods in view. Earlier periods simply had no figure to plot (e.g. negligible debt or non-meaningful ratio) — not a loading error.",
@@ -1101,6 +1103,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartMetricNoDataDetail:
         "Защо: fundamentalsTimeSeries на Yahoo често връща null за редове от баланс (IFRS срещу US етикети, разминаване на край на период или пропуски в API). Приходите и паричният поток може да са наред.",
       chartNoDataTitle: "Няма какво да се покаже тук",
+      chartExpand: "Разгъни графиката",
+      chartTablePeriod: "Период",
       chartCoverageNote: "Данни от {from} · {n} от {total} периода",
       chartCoverageTitle:
         "Тази метрика има стойност за {n} от {total} периода в изгледа. По-ранните периоди просто нямат стойност за показване (напр. нищожен дълг или незначимо съотношение) — не е грешка при зареждане.",

@@ -40,16 +40,31 @@ type StockSearchProps = {
 
 type CompanyEntry = { s: string; n: string };
 
-const COMPANIES = usCompanies as CompanyEntry[];
+const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
 const MAX_SUGGESTIONS = 8;
 
+/**
+ * Full company index (~6k SEC filers) is lazy-loaded from /public on first use so
+ * it never bloats the shared JS bundle. Until it arrives the bundled top-500
+ * gives instant results. Cached at module scope across remounts.
+ */
+let fullCompaniesPromise: Promise<CompanyEntry[]> | null = null;
+function loadFullCompanies(): Promise<CompanyEntry[]> {
+  if (!fullCompaniesPromise) {
+    fullCompaniesPromise = fetch("/us-companies.json")
+      .then((r) => (r.ok ? (r.json() as Promise<CompanyEntry[]>) : INSTANT_COMPANIES))
+      .catch(() => INSTANT_COMPANIES);
+  }
+  return fullCompaniesPromise;
+}
+
 /** Ticker prefix matches first (exact ticker on top), then company-name substring matches. */
-function suggestCompanies(query: string): CompanyEntry[] {
+function suggestCompanies(companies: CompanyEntry[], query: string): CompanyEntry[] {
   const q = query.trim().toUpperCase();
   if (!q) return [];
   const byTicker: CompanyEntry[] = [];
   const byName: CompanyEntry[] = [];
-  for (const c of COMPANIES) {
+  for (const c of companies) {
     if (c.s.startsWith(q)) byTicker.push(c);
     else if (c.n.toUpperCase().includes(q)) byName.push(c);
     if (byTicker.length >= MAX_SUGGESTIONS) break;
@@ -69,7 +84,19 @@ function StockSearch({ target }: StockSearchProps) {
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
+  const [companies, setCompanies] = useState<CompanyEntry[]>(INSTANT_COMPANIES);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Pull in the full ~6k company index once (cached); falls back to the bundled set.
+  useEffect(() => {
+    let active = true;
+    void loadFullCompanies().then((list) => {
+      if (active && list.length > INSTANT_COMPANIES.length) setCompanies(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // "/" focuses the ticker search from anywhere (unless already typing somewhere).
   useEffect(() => {
@@ -85,7 +112,10 @@ function StockSearch({ target }: StockSearchProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const suggestions = useMemo(() => (open ? suggestCompanies(query) : []), [open, query]);
+  const suggestions = useMemo(
+    () => (open ? suggestCompanies(companies, query) : []),
+    [open, query, companies],
+  );
 
   function go(rawSym: string) {
     const sym = rawSym.trim().toUpperCase();
