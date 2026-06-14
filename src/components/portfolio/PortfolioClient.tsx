@@ -20,6 +20,7 @@ import {
   type PortfolioFxRates,
 } from "@/lib/portfolioFx";
 import { cn } from "@/lib/utils";
+import { PortfolioAnalytics, type AnalyticsRow } from "@/components/portfolio/PortfolioAnalytics";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -406,6 +407,20 @@ export function PortfolioClient() {
     });
   }, [holdings, quotes, fx]);
 
+  const analyticsRows = useMemo<AnalyticsRow[]>(
+    () =>
+      rows.map(({ h, q, mv, cost, pl, estAnnual, holdingCcy }) => ({
+        symbol: h.symbolYahoo,
+        sector: q?.sector ?? null,
+        holdingCcy,
+        mv,
+        cost,
+        pl,
+        estAnnual,
+      })),
+    [rows],
+  );
+
   /** Sums est. annual dividend by holding currency (same basis as table column). */
   const dividendTotalsByCurrency = useMemo(() => {
     const map = new Map<string, number>();
@@ -611,6 +626,8 @@ export function PortfolioClient() {
           </CardHeader>
         </Card>
       ) : (
+        <>
+        <PortfolioAnalytics rows={analyticsRows} fx={fx} />
         <div className="-mx-4 rounded-lg border border-white/10 sm:mx-0">
           <Table className="min-w-[36rem] sm:min-w-[44rem] md:min-w-full">
             <TableHeader>
@@ -806,6 +823,7 @@ export function PortfolioClient() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       <details className="group rounded-xl border border-white/10 bg-zinc-900/50 [&_summary::-webkit-details-marker]:hidden">

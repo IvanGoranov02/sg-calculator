@@ -29,6 +29,8 @@ export type PortfolioQuoteRow = {
   dipVsSma200Pct: number | null;
   /** Next earnings date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
   nextEarnings: string | null;
+  /** GICS-style sector from Yahoo assetProfile, when available. */
+  sector: string | null;
 };
 
 /** Next upcoming (or most recent) earnings date from a Yahoo quoteSummary calendarEvents block. */
@@ -140,7 +142,14 @@ function rawQuoteToRow(
     twoHundredDayAverage: sma,
     dipVsSma200Pct,
     nextEarnings: pickNextEarnings(qs),
+    sector: pickSector(qs),
   };
+}
+
+function pickSector(qs: Record<string, unknown> | null): string | null {
+  const ap = (qs as { assetProfile?: { sector?: unknown } } | null)?.assetProfile;
+  const s = ap?.sector;
+  return typeof s === "string" && s.trim() ? s.trim() : null;
 }
 
 async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<PortfolioQuoteRow | null> {
@@ -149,7 +158,14 @@ async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<P
       yahooFinance.quote(yahooSym),
       yahooFinance
         .quoteSummary(yahooSym, {
-          modules: ["summaryDetail", "financialData", "defaultKeyStatistics", "price", "calendarEvents"],
+          modules: [
+            "summaryDetail",
+            "financialData",
+            "defaultKeyStatistics",
+            "price",
+            "calendarEvents",
+            "assetProfile",
+          ],
         })
         .catch(() => null),
     ]);
