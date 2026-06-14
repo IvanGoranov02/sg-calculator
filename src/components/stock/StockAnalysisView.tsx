@@ -9,6 +9,7 @@ import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
+import { StockNewsSection } from "@/components/stock/StockNewsSection";
 import type { StockAnalysisPageLoadProgress } from "@/lib/stockLoadProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -177,6 +178,7 @@ export function StockAnalysisView({
         <AnnualFundamentalsSection data={bundle} />
         <IncomeStatementTable bundle={bundle} />
         <InvestorMetricsSection data={bundle.investor} />
+        <StockNewsSection symbol={symbol} name={bundle.quote.name} />
       </div>
     </StockAnalysisPeriodProvider>
   );
