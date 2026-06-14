@@ -13,8 +13,15 @@ import {
   YAxis,
 } from "recharts";
 
-import { CircleOff } from "lucide-react";
+import { CircleOff, Maximize2 } from "lucide-react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -111,7 +118,7 @@ export function FundamentalChartCard({
     return formatTooltipValue(valueFormat, n);
   }
 
-  const chart = (
+  const renderChart = () => (
     <ResponsiveContainer width="100%" height="100%">
       {chartType === "bar" ? (
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: manyTicks ? 24 : 4 }}>
@@ -204,56 +211,126 @@ export function FundamentalChartCard({
     </ResponsiveContainer>
   );
 
+  const coverageNote =
+    hasPoints && isSparse
+      ? coverage.pointCount === 1
+        ? t("chartsFund.chartSinglePoint")
+        : coverage.firstLabel
+          ? t("chartsFund.chartCoverageNote", {
+              from: coverage.firstLabel,
+              n: coverage.pointCount,
+              total: coverage.total,
+            })
+          : null
+      : null;
+
+  // Rows that actually carry a value — drives the modal's data table.
+  const tableRows = data.filter((row) =>
+    keys.some((k) => {
+      const v = row[k];
+      return v != null && Number.isFinite(typeof v === "number" ? v : Number(v));
+    }),
+  );
+
+  const sparseBadge = isSparse ? (
+    <span
+      className="shrink-0 cursor-help rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] tabular-nums text-amber-300"
+      title={t("chartsFund.chartCoverageTitle", {
+        n: coverage.pointCount,
+        total: coverage.total,
+      })}
+    >
+      {coverage.pointCount}/{coverage.total}
+    </span>
+  ) : null;
+
   return (
-    <Card className={cn("min-w-0 border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">{title}</CardTitle>
-          {isSparse ? (
-            <span
-              className="shrink-0 cursor-help rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] tabular-nums text-amber-300"
-              title={t("chartsFund.chartCoverageTitle", {
-                n: coverage.pointCount,
-                total: coverage.total,
-              })}
-            >
-              {coverage.pointCount}/{coverage.total}
-            </span>
+    <Dialog>
+      <Card className={cn("min-w-0 border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
+        <CardHeader className="pb-2">
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="text-base">{title}</CardTitle>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {sparseBadge}
+              {hasPoints ? (
+                <DialogTrigger
+                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                  aria-label={t("chartsFund.chartExpand")}
+                  title={t("chartsFund.chartExpand")}
+                >
+                  <Maximize2 className="size-3.5" aria-hidden />
+                </DialogTrigger>
+              ) : null}
+            </div>
+          </div>
+          {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
+        </CardHeader>
+        <CardContent className="h-[220px] min-h-0 min-w-0 pt-0">
+          {!hasPoints ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
+              <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
+              <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground/80">
+                {t("chartsFund.chartMetricNoDataDetail")}
+              </p>
+            </div>
+          ) : (
+            <div className="relative h-full min-h-0 min-w-0 w-full">
+              <div className="absolute inset-0 min-h-0 min-w-0">{renderChart()}</div>
+            </div>
+          )}
+          {coverageNote ? (
+            <p className="mt-2 text-[11px] leading-snug text-amber-300/80">{coverageNote}</p>
           ) : null}
+          {growthNote ? (
+            <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <DialogContent>
+        <div className="pr-8">
+          <DialogTitle>{title}</DialogTitle>
+          {description ? <DialogDescription className="mt-1">{description}</DialogDescription> : null}
+          {coverageNote ? <p className="mt-1 text-xs text-amber-300/80">{coverageNote}</p> : null}
+          {growthNote ? <p className="mt-1 text-xs text-muted-foreground">{growthNote}</p> : null}
         </div>
-        {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
-      </CardHeader>
-      <CardContent className="h-[220px] min-h-0 min-w-0 pt-0">
-        {!hasPoints ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
-            <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
-            <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
-            <p className="text-xs leading-relaxed text-muted-foreground/80">
-              {t("chartsFund.chartMetricNoDataDetail")}
-            </p>
+        <div className="flex min-h-0 flex-col gap-4">
+          <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart()}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-zinc-950/95 text-xs text-muted-foreground">
+                <tr className="border-b border-white/10">
+                  <th className="px-3 py-2 text-left font-medium">{t("chartsFund.chartTablePeriod")}</th>
+                  {series.map((s) => (
+                    <th key={s.dataKey} className="px-3 py-2 text-right font-medium" style={{ color: s.color }}>
+                      {s.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row, i) => (
+                  <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/5">
+                    <td className="px-3 py-1.5 text-left font-mono text-xs text-muted-foreground">
+                      {String(row[xKey] ?? "")}
+                    </td>
+                    {series.map((s) => {
+                      const v = row[s.dataKey];
+                      const n = v == null ? NaN : typeof v === "number" ? v : Number(v);
+                      return (
+                        <td key={s.dataKey} className="px-3 py-1.5 text-right font-mono tabular-nums">
+                          {Number.isFinite(n) ? formatTooltipValue(valueFormat, n) : "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : (
-          <div className="relative h-full min-h-0 min-w-0 w-full">
-            <div className="absolute inset-0 min-h-0 min-w-0">{chart}</div>
-          </div>
-        )}
-        {hasPoints && isSparse ? (
-          <p className="mt-2 text-[11px] leading-snug text-amber-300/80">
-            {coverage.pointCount === 1
-              ? t("chartsFund.chartSinglePoint")
-              : coverage.firstLabel
-                ? t("chartsFund.chartCoverageNote", {
-                    from: coverage.firstLabel,
-                    n: coverage.pointCount,
-                    total: coverage.total,
-                  })
-                : null}
-          </p>
-        ) : null}
-        {growthNote ? (
-          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
-        ) : null}
-      </CardContent>
-    </Card>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
