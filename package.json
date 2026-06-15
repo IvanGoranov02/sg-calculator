@@ -16,7 +16,7 @@
     "db:studio": "prisma studio",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/yahooMergePolicy.test.ts src/lib/stockCache.test.ts src/lib/rateLimit.test.ts src/lib/edgar/normalize.test.ts src/lib/geminiQuarterlyBackfill.test.ts src/lib/dividendGrowth.test.ts src/lib/chartSeriesUtils.test.ts"
+    "test": "node --import tsx --test src/lib/yahooMergePolicy.test.ts src/lib/stockCache.test.ts src/lib/rateLimit.test.ts src/lib/edgar/normalize.test.ts src/lib/geminiQuarterlyBackfill.test.ts src/lib/dividendGrowth.test.ts src/lib/chartSeriesUtils.test.ts src/lib/annualFromQuarterlyBackfill.test.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

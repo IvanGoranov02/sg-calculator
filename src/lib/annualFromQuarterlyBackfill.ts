@@ -122,6 +122,20 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
       ebitda = qs.reduce((s, q) => s + (q.ebitda as number), 0);
     }
 
+    // Annual diluted EPS ≈ sum of the four quarterly figures (standard for full-year EPS);
+    // annual weighted-average shares ≈ mean of the quarterly weighted averages.
+    let dilutedEps: number | undefined;
+    if (qs.every((q) => q.dilutedEps != null && Number.isFinite(q.dilutedEps))) {
+      dilutedEps = qs.reduce((s, q) => s + (q.dilutedEps as number), 0);
+    }
+    let dilutedAverageShares: number | undefined;
+    const finiteShares = qs
+      .map((q) => q.dilutedAverageShares)
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    if (finiteShares.length > 0) {
+      dilutedAverageShares = finiteShares.reduce((a, b) => a + b, 0) / finiteShares.length;
+    }
+
     syntheticIncome.push({
       date: lastD,
       symbol: sym,
@@ -132,6 +146,8 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
       netIncome,
       operatingIncome,
       ebitda,
+      dilutedEps,
+      dilutedAverageShares,
     });
 
     const cfs = qs.map((q) => cfByDate.get(q.date.slice(0, 10)));
