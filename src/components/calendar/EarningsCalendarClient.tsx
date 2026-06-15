@@ -54,12 +54,15 @@ export function EarningsCalendarClient() {
   }, [load]);
 
   const { upcoming, undated } = useMemo(() => {
-    const withDate = rows
-      .filter((r) => r.earningsDate)
-      .map((r) => ({ ...r, days: daysUntil(r.earningsDate as string) }))
-      .filter((r) => r.days != null && r.days >= -2)
-      .sort((a, b) => (a.days as number) - (b.days as number));
-    const without = rows.filter((r) => !r.earningsDate || (daysUntil(r.earningsDate) ?? -99) < -2);
+    // Single pass with one daysUntil() per row so a row can never land in both lists.
+    const withDate: (EarningsRow & { days: number })[] = [];
+    const without: EarningsRow[] = [];
+    for (const r of rows) {
+      const days = r.earningsDate ? daysUntil(r.earningsDate) : null;
+      if (days != null && days >= -2) withDate.push({ ...r, days });
+      else without.push(r);
+    }
+    withDate.sort((a, b) => a.days - b.days);
     return { upcoming: withDate, undated: without };
   }, [rows]);
 
@@ -118,7 +121,7 @@ export function EarningsCalendarClient() {
           ) : (
             <ul className="divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10">
               {upcoming.map((r) => {
-                const days = r.days as number;
+                const days = r.days;
                 const soon = days <= 14;
                 return (
                   <li
