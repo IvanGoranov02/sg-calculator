@@ -40,7 +40,9 @@ async function fetchOne(symbol: string): Promise<CompareRow | null> {
     let pct = Number(rec.regularMarketChangePercent ?? NaN);
     if (!Number.isFinite(pct)) pct = 0;
     return {
-      symbol: String(rec.symbol ?? sym).toUpperCase(),
+      // Keep the requested symbol so client lookup/order stays stable even when
+      // Yahoo normalizes it (e.g. BRK.B → BRK-B), otherwise the row gets dropped.
+      symbol: sym,
       name: String(rec.longName ?? rec.shortName ?? sym),
       price,
       changesPercentage: pct,

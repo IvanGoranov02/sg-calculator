@@ -47,7 +47,14 @@ const METRICS: MetricDef[] = [
   { key: "returnOnEquity", labelKey: "compare.roe", get: (i) => i.returnOnEquity, fmt: pct1, better: "high" },
   { key: "revenueGrowth", labelKey: "compare.revGrowth", get: (i) => i.revenueGrowth, fmt: pct1, better: "high" },
   { key: "earningsGrowth", labelKey: "compare.earnGrowth", get: (i) => i.earningsGrowth, fmt: pct1, better: "high" },
-  { key: "debtToEquity", labelKey: "compare.debtEquity", get: (i) => i.debtToEquity, fmt: formatRatio, better: "low" },
+  {
+    key: "debtToEquity",
+    labelKey: "compare.debtEquity",
+    // Yahoo reports debt/equity as a percentage (e.g. 150.5 = 1.5x); show the ratio.
+    get: (i) => (i.debtToEquity != null && Number.isFinite(i.debtToEquity) ? i.debtToEquity / 100 : null),
+    fmt: formatRatio,
+    better: "low",
+  },
   { key: "beta", labelKey: "compare.beta", get: (i) => i.beta, fmt: (v) => v.toFixed(2), better: "none" },
 ];
 
@@ -112,6 +119,18 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
     setSymbols((prev) => prev.filter((x) => x !== s));
   }
 
+  // Only show metric rows where at least one company has a real value (no all-empty rows).
+  const visibleMetrics = METRICS.filter((m) =>
+    rows.some((r) => {
+      const v = m.get(r.investor);
+      return v != null && Number.isFinite(v);
+    }),
+  );
+
+  // Tickers the user asked for that Yahoo couldn't resolve — surfaced, not silently dropped.
+  const loadedSet = new Set(rows.map((r) => r.symbol.toUpperCase()));
+  const unresolved = symbols.filter((s) => !loadedSet.has(s));
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6">
       <div>
@@ -157,6 +176,12 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         </p>
       ) : null}
 
+      {!loading && unresolved.length > 0 ? (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300" role="status">
+          {t("compare.unresolved", { symbols: unresolved.join(", ") })}
+        </p>
+      ) : null}
+
       {rows.length === 0 && !loading ? (
         <p className="text-sm text-muted-foreground">{t("compare.empty")}</p>
       ) : rows.length > 0 ? (
@@ -185,7 +210,7 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
               </tr>
             </thead>
             <tbody>
-              {METRICS.map((m) => {
+              {visibleMetrics.map((m) => {
                 const vals = rows.map((r) => m.get(r.investor));
                 const best = bestIndex(vals, m.better);
                 return (
