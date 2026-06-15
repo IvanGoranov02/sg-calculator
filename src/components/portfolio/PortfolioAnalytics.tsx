@@ -91,9 +91,11 @@ export function PortfolioAnalytics({ rows, fx }: Props) {
     const portfolioYield = totalValue > 0 ? (totalIncome / totalValue) * 100 : null;
 
     holdings.sort((x, y) => y.value - x.value);
+    const unknownLabel = t("portfolioAnalytics.unknownSector");
     const sectors = [...sectorMap.entries()]
       .map(([name, value]) => ({ name, value }))
       .sort((x, y) => y.value - x.value);
+    const hasRealSectors = sectors.some((s) => s.name !== unknownLabel);
     movers.sort((x, y) => y.plPct - x.plPct);
 
     return {
@@ -107,6 +109,7 @@ export function PortfolioAnalytics({ rows, fx }: Props) {
       unconverted,
       holdings,
       sectors,
+      hasRealSectors,
       best: movers.slice(0, 3),
       worst: movers.slice(-3).reverse(),
     };
@@ -145,7 +148,7 @@ export function PortfolioAnalytics({ rows, fx }: Props) {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={cn("grid gap-4", a.hasRealSectors && "lg:grid-cols-2")}>
         <Card className="border-white/10 bg-zinc-900/40">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
@@ -158,23 +161,25 @@ export function PortfolioAnalytics({ rows, fx }: Props) {
           </CardContent>
         </Card>
 
-        <Card className="border-white/10 bg-zinc-900/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
-            <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {a.sectors.map((s, i) => (
-              <BarRow
-                key={s.name}
-                label={s.name}
-                pct={pctOf(s.value)}
-                value={`${pctOf(s.value).toFixed(0)}%`}
-                color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-              />
-            ))}
-          </CardContent>
-        </Card>
+        {a.hasRealSectors ? (
+          <Card className="border-white/10 bg-zinc-900/40">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
+              <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {a.sectors.map((s, i) => (
+                <BarRow
+                  key={s.name}
+                  label={s.name}
+                  pct={pctOf(s.value)}
+                  value={`${pctOf(s.value).toFixed(0)}%`}
+                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
 
       {a.best.length > 0 ? (
