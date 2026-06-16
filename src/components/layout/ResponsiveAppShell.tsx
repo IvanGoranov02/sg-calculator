@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -62,14 +63,16 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
       ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6">
+        <TopHeader />
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6 lg:pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Keyed by route so content gently animates in on each navigation. */}
           <div key={pathname} className="animate-page-in">
             {children}
           </div>
         </main>
       </div>
+
+      <MobileTabBar onMore={() => setMobileNavOpen(true)} />
     </div>
   );
 }
