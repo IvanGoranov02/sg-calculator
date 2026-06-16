@@ -106,56 +106,37 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
         </CardTitle>
         <CardDescription>{t("valuation.subtitle")}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <p className="text-sm">
-          <span className={cn("font-mono text-xl font-semibold", tone.text)}>{headline}</span>{" "}
-          <span className="text-muted-foreground">
-            {t("valuation.estimateRange", { low: formatCurrency(low), high: formatCurrency(high) })}
-          </span>
-        </p>
-
-        <div className="space-y-2">
-          <div className="relative h-7">
-            {/* fair-value band */}
-            <div
-              className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-full", tone.bar, "opacity-40")}
-              style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
-            />
-            <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-white/10" />
-            {/* current price marker */}
-            <div
-              className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
-              style={{ left: `${priceLeft}%` }}
-            >
-              <span className="h-5 w-0.5 bg-foreground" />
-              <span className="mt-0.5 whitespace-nowrap font-mono text-[10px] text-foreground">
-                {formatCurrency(price)}
-              </span>
-            </div>
-          </div>
-          <div className="flex justify-between font-mono text-[10px] text-muted-foreground">
-            <span>{t("valuation.fairValueLabel")}: {formatCurrency(low)}</span>
-            <span>{formatCurrency(high)}</span>
-          </div>
+      <CardContent className="space-y-4">
+        <div className="space-y-0.5">
+          <p className={cn("font-mono text-2xl font-semibold", tone.text)}>{headline}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {formatCurrency(price)} · {formatCurrency(low)}–{formatCurrency(high)}
+          </p>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="relative h-6">
+          {/* fair-value band */}
+          <div
+            className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-full opacity-40", tone.bar)}
+            style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
+          />
+          <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-white/10" />
+          {/* current price marker (label lives in the caption above, so it can't clip) */}
+          <div
+            className="absolute top-1/2 h-5 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-foreground"
+            style={{ left: `${priceLeft}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
           <Method label={t("valuation.methodDcf")} value={dcf != null ? formatCurrency(dcf) : "—"} />
           <Method label={t("valuation.methodMultiples")} value={multiples != null ? formatCurrency(multiples) : "—"} />
           <Method
             label={t("valuation.impliedGrowth")}
-            value={result.impliedGrowthPct != null ? `${result.impliedGrowthPct.toFixed(1)}%/yr` : "—"}
+            value={result.impliedGrowthPct != null ? `${result.impliedGrowthPct.toFixed(1)}%` : "—"}
           />
         </div>
 
-        {result.impliedGrowthPct != null ? (
-          <p className="text-xs text-muted-foreground">
-            {t("valuation.impliedGrowthNote", {
-              symbol: data.quote.symbol,
-              pct: result.impliedGrowthPct.toFixed(1),
-            })}
-          </p>
-        ) : null}
         <p className="text-[11px] text-muted-foreground/80">{t("valuation.disclaimer")}</p>
       </CardContent>
     </Card>

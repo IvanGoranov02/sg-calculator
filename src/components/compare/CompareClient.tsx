@@ -186,10 +186,10 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         <p className="text-sm text-muted-foreground">{t("compare.empty")}</p>
       ) : rows.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-white/10">
-          <table className="w-full min-w-[34rem] text-sm">
+          <table className="w-full min-w-[30rem] text-sm">
             <thead>
               <tr className="border-b border-white/10 bg-zinc-900/60">
-                <th className="px-3 py-3 text-left font-medium text-muted-foreground">{t("compare.metric")}</th>
+                <th className="sticky left-0 z-10 bg-zinc-900 px-3 py-3 text-left font-medium text-muted-foreground">{t("compare.metric")}</th>
                 {rows.map((r) => (
                   <th key={r.symbol} className="px-3 py-3 text-right">
                     <Link href={`/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-emerald-400 hover:underline">
@@ -215,7 +215,7 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
                 const best = bestIndex(vals, m.better);
                 return (
                   <tr key={m.key} className="border-b border-white/5 last:border-0 hover:bg-white/5">
-                    <td className="px-3 py-2 text-left text-muted-foreground">{t(m.labelKey)}</td>
+                    <td className="sticky left-0 z-10 bg-zinc-950/95 px-3 py-2 text-left text-muted-foreground">{t(m.labelKey)}</td>
                     {vals.map((v, i) => (
                       <td
                         key={i}

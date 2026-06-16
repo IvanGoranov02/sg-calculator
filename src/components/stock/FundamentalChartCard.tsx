@@ -297,8 +297,8 @@ export function FundamentalChartCard({
         </div>
         <div className="flex min-h-0 flex-col gap-4">
           <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart()}</div>
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10">
-            <table className="w-full text-sm">
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10">
+            <table className="w-full min-w-[18rem] text-sm">
               <thead className="sticky top-0 bg-zinc-950/95 text-xs text-muted-foreground">
                 <tr className="border-b border-white/10">
                   <th className="px-3 py-2 text-left font-medium">{t("chartsFund.chartTablePeriod")}</th>
