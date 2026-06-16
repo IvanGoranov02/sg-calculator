@@ -52,7 +52,7 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
         <Table className="min-w-[520px]">
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="h-12 min-w-[10rem] px-4 py-3 text-left text-muted-foreground">
+              <TableHead className="sticky left-0 z-20 h-12 min-w-[9rem] bg-zinc-900 px-4 py-3 text-left text-muted-foreground">
                 {t("income.metricCol")}
               </TableHead>
               {years.map((y) => (
@@ -74,7 +74,7 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
                   idx % 2 === 1 && "bg-white/[0.02]",
                 )}
               >
-                <TableCell className="px-4 py-3.5 align-middle font-medium leading-snug">
+                <TableCell className="sticky left-0 z-10 bg-zinc-900 px-4 py-3.5 align-middle text-sm font-medium leading-snug">
                   {t(`income.${key}`)}
                 </TableCell>
                 {years.map((y) => {

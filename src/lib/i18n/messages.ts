@@ -27,6 +27,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       brand: "Stelian Petrov",
       footer: "Data · Yahoo Finance",
     },
+    mobileNav: {
+      home: "Home",
+      stocks: "Stocks",
+      portfolio: "Portfolio",
+      watchlist: "Watchlist",
+      more: "More",
+    },
     header: {
       tagline: "Markets · Analysis workspace",
       language: "Language",
@@ -797,6 +804,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       portfolio: "Портфолио",
       brand: "Stelian Petrov",
       footer: "Данни · Yahoo Finance",
+    },
+    mobileNav: {
+      home: "Начало",
+      stocks: "Акции",
+      portfolio: "Портфейл",
+      watchlist: "Списък",
+      more: "Още",
     },
     header: {
       tagline: "Пазари · Работно пространство",
