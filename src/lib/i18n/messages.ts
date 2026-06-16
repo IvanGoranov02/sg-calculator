@@ -181,6 +181,26 @@ export const messages: Record<AppLocale, MessageDict> = {
       title: "Latest news · {symbol}",
       subtitle: "Recent headlines from Yahoo Finance. Opens the source in a new tab.",
     },
+    valuation: {
+      title: "Valuation",
+      subtitle: "A fair-value estimate from a DCF and the company's own historical P/E, vs the current price.",
+      verdict: {
+        undervalued: "Undervalued",
+        fair: "Fairly valued",
+        overvalued: "Overvalued",
+        unknown: "—",
+      },
+      belowEstimate: "{pct}% below estimate",
+      aboveEstimate: "{pct}% above estimate",
+      estimateRange: "Fair-value range {low} – {high}",
+      fairValueLabel: "Fair value",
+      methodDcf: "DCF fair value",
+      methodMultiples: "Historical P/E",
+      impliedGrowth: "Market-implied growth",
+      impliedGrowthNote:
+        "At today's price the market is pricing in ≈{pct}%/yr free-cash-flow growth for {symbol} over the next decade.",
+      disclaimer: "Model estimate from assumptions — not a recommendation or audited fair value.",
+    },
     income: {
       title: "Income statement",
       subtitle: "Annual figures (USD) · up to 15 years where available (Yahoo Finance).",
@@ -931,6 +951,26 @@ export const messages: Record<AppLocale, MessageDict> = {
     stockNews: {
       title: "Последни новини · {symbol}",
       subtitle: "Скорошни заглавия от Yahoo Finance. Отварят се в нов раздел.",
+    },
+    valuation: {
+      title: "Оценка на стойността",
+      subtitle: "Оценка на справедлива стойност от DCF и историческото P/E на компанията, спрямо текущата цена.",
+      verdict: {
+        undervalued: "Подценена",
+        fair: "Честно оценена",
+        overvalued: "Надценена",
+        unknown: "—",
+      },
+      belowEstimate: "{pct}% под оценката",
+      aboveEstimate: "{pct}% над оценката",
+      estimateRange: "Диапазон на справедлива стойност {low} – {high}",
+      fairValueLabel: "Справедлива стойност",
+      methodDcf: "DCF стойност",
+      methodMultiples: "Историческо P/E",
+      impliedGrowth: "Заложен от пазара растеж",
+      impliedGrowthNote:
+        "При текущата цена пазарът залага ≈{pct}%/год. растеж на свободния паричен поток за {symbol} през следващото десетилетие.",
+      disclaimer: "Моделна оценка от допускания — не е препоръка или одитирана стойност.",
     },
     income: {
       title: "Отчет за приходите",
