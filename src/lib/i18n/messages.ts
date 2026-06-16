@@ -179,11 +179,11 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     stockNews: {
       title: "Latest news · {symbol}",
-      subtitle: "Recent headlines from Yahoo Finance. Opens the source in a new tab.",
+      subtitle: "From Yahoo Finance.",
     },
     valuation: {
       title: "Valuation",
-      subtitle: "A fair-value estimate from a DCF and the company's own historical P/E, vs the current price.",
+      subtitle: "Fair-value estimate vs the current price.",
       verdict: {
         undervalued: "Undervalued",
         fair: "Fairly valued",
@@ -194,12 +194,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       aboveEstimate: "{pct}% above estimate",
       estimateRange: "Fair-value range {low} – {high}",
       fairValueLabel: "Fair value",
-      methodDcf: "DCF fair value",
+      methodDcf: "DCF",
       methodMultiples: "Historical P/E",
-      impliedGrowth: "Market-implied growth",
+      impliedGrowth: "Implied growth",
       impliedGrowthNote:
         "At today's price the market is pricing in ≈{pct}%/yr free-cash-flow growth for {symbol} over the next decade.",
-      disclaimer: "Model estimate from assumptions — not a recommendation or audited fair value.",
+      disclaimer: "Model estimate — not a recommendation.",
     },
     income: {
       title: "Income statement",
@@ -727,14 +727,14 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     compare: {
       title: "Compare stocks",
-      intro: "Put up to {max} tickers side by side — valuation, margins, growth and dividends. Best value in each row is highlighted.",
+      intro: "Up to {max} tickers side by side. Best value per row is highlighted.",
       addPlaceholder: "Add ticker",
       remove: "Remove {symbol}",
       metric: "Metric",
       empty: "Add tickers above to compare them.",
       error: "Could not load comparison data.",
       unresolved: "Couldn't load: {symbols}. Check the ticker (use the Yahoo symbol, e.g. BRK-B).",
-      footnote: "Metrics from Yahoo Finance (live quote + summary). Best-in-row highlight ignores ties and negative ratios.",
+      footnote: "Metrics from Yahoo Finance.",
       marketCap: "Market cap",
       trailingPE: "P/E (trailing)",
       forwardPE: "P/E (forward)",
@@ -950,11 +950,11 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     stockNews: {
       title: "Последни новини · {symbol}",
-      subtitle: "Скорошни заглавия от Yahoo Finance. Отварят се в нов раздел.",
+      subtitle: "От Yahoo Finance.",
     },
     valuation: {
       title: "Оценка на стойността",
-      subtitle: "Оценка на справедлива стойност от DCF и историческото P/E на компанията, спрямо текущата цена.",
+      subtitle: "Справедлива стойност спрямо текущата цена.",
       verdict: {
         undervalued: "Подценена",
         fair: "Честно оценена",
@@ -965,12 +965,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       aboveEstimate: "{pct}% над оценката",
       estimateRange: "Диапазон на справедлива стойност {low} – {high}",
       fairValueLabel: "Справедлива стойност",
-      methodDcf: "DCF стойност",
+      methodDcf: "DCF",
       methodMultiples: "Историческо P/E",
-      impliedGrowth: "Заложен от пазара растеж",
+      impliedGrowth: "Заложен растеж",
       impliedGrowthNote:
         "При текущата цена пазарът залага ≈{pct}%/год. растеж на свободния паричен поток за {symbol} през следващото десетилетие.",
-      disclaimer: "Моделна оценка от допускания — не е препоръка или одитирана стойност.",
+      disclaimer: "Моделна оценка — не е препоръка.",
     },
     income: {
       title: "Отчет за приходите",
@@ -1500,14 +1500,14 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     compare: {
       title: "Сравнение на акции",
-      intro: "Сложи до {max} тикера един до друг — оценка, маржове, растеж и дивиденти. Най-добрата стойност на всеки ред е откроена.",
+      intro: "До {max} тикера един до друг. Най-добрата стойност на ред е откроена.",
       addPlaceholder: "Добави тикер",
       remove: "Премахни {symbol}",
       metric: "Метрика",
       empty: "Добави тикери по-горе, за да ги сравниш.",
       error: "Неуспешно зареждане на данните за сравнение.",
       unresolved: "Неуспешно зареждане: {symbols}. Провери тикера (ползвай Yahoo символ, напр. BRK-B).",
-      footnote: "Метрики от Yahoo Finance (котировка + резюме). Открояването пропуска равенства и отрицателни съотношения.",
+      footnote: "Метрики от Yahoo Finance.",
       marketCap: "Пазарна капитализация",
       trailingPE: "P/E (текущо)",
       forwardPE: "P/E (прогнозно)",

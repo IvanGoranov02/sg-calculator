@@ -231,12 +231,12 @@ function SummaryCard({
 
 function BarRow({ label, pct, value, color }: { label: string; pct: number; value: string; color: string }) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-28 shrink-0 truncate font-mono text-xs text-foreground/90">{label}</span>
+    <div className="flex items-center gap-2 sm:gap-3">
+      <span className="w-20 shrink-0 truncate font-mono text-xs text-foreground/90 sm:w-28">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>
-      <span className="w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{value}</span>
+      <span className="w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:w-20">{value}</span>
     </div>
   );
 }
