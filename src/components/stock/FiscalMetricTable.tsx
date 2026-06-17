@@ -53,45 +53,48 @@ export function FiscalMetricTable({ title, subtitle, metricCol, years, rows, yea
         <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         {subtitle ? <p className="text-sm leading-relaxed text-muted-foreground">{subtitle}</p> : null}
       </div>
-      <div className="overflow-x-auto px-1 py-1">
-        <Table className="min-w-[520px]">
-          <TableHeader>
-            <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="sticky left-0 z-20 h-12 min-w-[9rem] bg-zinc-900 px-4 py-3 text-left text-muted-foreground">
-                {metricCol}
-              </TableHead>
-              {years.map((y) => (
-                <TableHead
-                  key={y}
-                  className="h-12 px-3 py-3 text-right font-mono text-muted-foreground tabular-nums"
-                >
-                  {yearLabel(y)}
+      <div className="relative">
+        <div className="overflow-x-auto px-1 py-1">
+          <Table className="min-w-[26rem]">
+            <TableHeader>
+              <TableRow className="border-white/10 hover:bg-transparent">
+                <TableHead className="sticky left-0 z-20 h-12 min-w-[8rem] bg-zinc-900 px-3 py-3 text-left text-muted-foreground sm:px-4">
+                  {metricCol}
                 </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row, idx) => (
-              <TableRow
-                key={row.label}
-                className={cn(
-                  "border-white/10 transition-colors hover:bg-white/[0.04]",
-                  idx % 2 === 1 && "bg-white/[0.02]",
-                )}
-              >
-                <TableCell className="sticky left-0 z-10 bg-zinc-900 px-4 py-3.5 align-middle text-sm font-medium leading-snug">{row.label}</TableCell>
-                {row.values.map((v, i) => (
-                  <TableCell
-                    key={`${row.label}-${years[i] ?? i}`}
-                    className="px-3 py-3.5 text-right font-mono text-sm tabular-nums leading-snug"
+                {years.map((y) => (
+                  <TableHead
+                    key={y}
+                    className="h-12 px-2.5 py-3 text-right font-mono text-muted-foreground tabular-nums sm:px-3"
                   >
-                    {formatCell(row.format, v)}
-                  </TableCell>
+                    {yearLabel(y)}
+                  </TableHead>
                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row, idx) => (
+                <TableRow
+                  key={row.label}
+                  className={cn(
+                    "border-white/10 transition-colors hover:bg-white/[0.04]",
+                    idx % 2 === 1 && "bg-white/[0.02]",
+                  )}
+                >
+                  <TableCell className="sticky left-0 z-10 bg-zinc-900 px-3 py-3.5 align-middle text-sm font-medium leading-snug sm:px-4">{row.label}</TableCell>
+                  {row.values.map((v, i) => (
+                    <TableCell
+                      key={`${row.label}-${years[i] ?? i}`}
+                      className="px-2.5 py-3.5 text-right font-mono text-sm tabular-nums leading-snug sm:px-3"
+                    >
+                      {formatCell(row.format, v)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-zinc-950 to-transparent lg:hidden" aria-hidden />
       </div>
     </div>
   );
