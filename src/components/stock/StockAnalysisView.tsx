@@ -152,32 +152,36 @@ export function StockAnalysisView({
             />
           </div>
         ) : null}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 min-w-0">
+        <div className="space-y-2 sm:flex sm:items-start sm:gap-3 sm:space-y-0">
+          <div className="flex items-center justify-end gap-2 sm:order-2">
+            <DataSourceBadge bundle={bundle} />
+            {onForceRefresh && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0 text-xs"
+                onClick={onForceRefresh}
+                disabled={loading}
+              >
+                {loading ? t("stock.refreshing") : t("stock.refreshData")}
+              </Button>
+            )}
+          </div>
+          <div className="min-w-0 flex-1 sm:order-1">
             <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
           </div>
-          <DataSourceBadge bundle={bundle} />
-          {onForceRefresh && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="shrink-0 text-xs"
-              onClick={onForceRefresh}
-              disabled={loading}
-            >
-              {loading ? t("stock.refreshing") : t("stock.refreshData")}
-            </Button>
-          )}
         </div>
 
         <StockAiSection symbol={symbol} />
 
-        <ValuationVerdictSection data={bundle} />
-
         <StockMetricChart data={bundle} />
         <FundamentalsChartsSection data={bundle} symbol={symbol} />
         <DividendChartsSection data={bundle} />
+
+        {/* Valuation sits after the charts and before the reference tables. */}
+        <ValuationVerdictSection data={bundle} />
+
         <AnnualFundamentalsSection data={bundle} />
         <IncomeStatementTable bundle={bundle} />
         <InvestorMetricsSection data={bundle.investor} />
