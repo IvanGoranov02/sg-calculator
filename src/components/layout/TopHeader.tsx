@@ -28,17 +28,6 @@ function HeaderAuth() {
   if (session?.user) {
     return (
       <div className="flex shrink-0 items-center gap-2">
-        {session.user.isAdmin ? (
-          <Button
-            nativeButton={false}
-            variant="ghost"
-            size="sm"
-            className="hidden text-xs text-amber-400/90 hover:text-amber-300 sm:inline-flex"
-            render={<Link href="/admin/cache" />}
-          >
-            {t("admin.link")}
-          </Button>
-        ) : null}
         {session.user.image ? (
           <Image
             src={session.user.image}

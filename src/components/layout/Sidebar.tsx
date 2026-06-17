@@ -11,9 +11,11 @@ import {
   LineChart,
   ListPlus,
   PanelLeftClose,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
   const pathname = usePathname();
   const { symbols } = useWatchlist();
   const { t } = useI18n();
+  const { data: session } = useSession();
+  const isAdmin = !!session?.user?.isAdmin;
 
   return (
     <aside
@@ -141,6 +145,21 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
             </Link>
           );
         })}
+        {isAdmin ? (
+          <Link
+            href="/admin/cache"
+            title={collapsed ? t("admin.link") : undefined}
+            onClick={() => onNavigate?.()}
+            className={cn(
+              "mt-1 flex min-h-10 items-center rounded-lg py-2.5 text-sm font-medium text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300",
+              collapsed ? "justify-center px-0" : "gap-3 px-3",
+              pathname.startsWith("/admin") && "bg-amber-500/10 text-amber-300",
+            )}
+          >
+            <ShieldCheck className="size-4 shrink-0 opacity-90" aria-hidden />
+            {!collapsed ? <span className="flex-1 truncate">{t("admin.link")}</span> : null}
+          </Link>
+        ) : null}
       </nav>
       {!collapsed ? (
         <div className="border-t border-white/10 p-4 text-xs text-muted-foreground">{t("nav.footer")}</div>

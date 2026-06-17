@@ -1,14 +1,6 @@
 "use client";
 
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   formatCurrency,
   formatCurrencyCompact,
   formatDecimalAsPercent,
@@ -21,39 +13,21 @@ import type { InvestorMetrics } from "@/lib/stockAnalysisTypes";
 
 type Row = { label: string; value: string };
 
-type TFn = (key: string, vars?: Record<string, string | number>) => string;
-
-function MetricTable({ title, rows, t }: { title: string; rows: Row[]; t: TFn }) {
+function MetricTable({ title, rows }: { title: string; rows: Row[] }) {
   const visible = rows.filter((r) => r.value !== "—");
   if (visible.length === 0) return null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
-      <Table>
-        <TableHeader>
-          <TableRow className="border-white/10 hover:bg-transparent">
-            <TableHead className="h-11 px-4 py-3 text-left text-muted-foreground">
-              {t("investor.colMetric")}
-            </TableHead>
-            <TableHead className="h-11 px-4 py-3 text-right text-muted-foreground">
-              {t("investor.colValue")}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {visible.map((row) => (
-            <TableRow key={row.label} className="border-white/10">
-              <TableCell className="max-w-[min(100%,260px)] px-4 py-3.5 text-sm leading-relaxed text-muted-foreground">
-                {row.label}
-              </TableCell>
-              <TableCell className="px-4 py-3.5 text-right font-mono text-sm tabular-nums leading-snug text-foreground">
-                {row.value}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <dl className="divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
+        {visible.map((row) => (
+          <div key={row.label} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+            <dt className="min-w-0 flex-1 text-sm leading-snug text-muted-foreground">{row.label}</dt>
+            <dd className="shrink-0 text-right font-mono text-sm tabular-nums text-foreground">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -171,18 +145,18 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
       </div>
       <div className="space-y-8 px-5 py-6">
         <div className="grid gap-8 lg:grid-cols-2">
-          <MetricTable title={t("investor.secValuation")} rows={valuationRows} t={t} />
-          <MetricTable title={t("investor.secProfitability")} rows={profitRows} t={t} />
+          <MetricTable title={t("investor.secValuation")} rows={valuationRows} />
+          <MetricTable title={t("investor.secProfitability")} rows={profitRows} />
         </div>
         <div className="grid gap-8 lg:grid-cols-2">
-          <MetricTable title={t("investor.secBalance")} rows={balanceRows} t={t} />
-          <MetricTable title={t("investor.secDividends")} rows={divRows} t={t} />
+          <MetricTable title={t("investor.secBalance")} rows={balanceRows} />
+          <MetricTable title={t("investor.secDividends")} rows={divRows} />
         </div>
         <div className="grid gap-8 lg:grid-cols-2">
-          <MetricTable title={t("investor.secPerShare")} rows={perShareRows} t={t} />
-          <MetricTable title={t("investor.secOwnership")} rows={ownRows} t={t} />
+          <MetricTable title={t("investor.secPerShare")} rows={perShareRows} />
+          <MetricTable title={t("investor.secOwnership")} rows={ownRows} />
         </div>
-        <MetricTable title={t("investor.secAnalysts")} rows={analystRows} t={t} />
+        <MetricTable title={t("investor.secAnalysts")} rows={analystRows} />
       </div>
     </div>
   );
