@@ -36,7 +36,10 @@ import {
   type YahooFundamentalsPayload,
   type YahooMergeMode,
 } from "@/lib/yahooFundamentalsMerge";
-import { enrichBundleWithYahooPrices } from "@/lib/yahooStockPriceHistory";
+import {
+  enrichBundleWithYahooPrices,
+  reconcileFundamentalsCurrency,
+} from "@/lib/yahooStockPriceHistory";
 
 export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 
@@ -206,6 +209,8 @@ export async function loadStockAnalysis(
         await persistStockCache(sym, bundle, {
           lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? undefined,
         });
+        // Persisted in native currency; convert to the quote currency for display.
+        await reconcileFundamentalsCurrency(bundle);
         return { bundle, error: null };
       }
     }
@@ -214,6 +219,7 @@ export async function loadStockAnalysis(
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await enrichBundleWithYahooPrices(bundle);
     await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
+    await reconcileFundamentalsCurrency(bundle);
     return { bundle, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load stock data.";

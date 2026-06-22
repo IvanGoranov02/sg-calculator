@@ -5,6 +5,7 @@
 
 import YahooFinance from "yahoo-finance2";
 
+import { convertBundleFundamentals } from "@/lib/bundleCurrency";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
@@ -364,6 +365,13 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     bundle.quote = quote;
     bundle.investor = mapInvestorMetrics(rawQuote, qs);
 
+    // Currency the financial statements are reported in (may differ from the quote
+    // currency for ADRs, e.g. ASML reports EUR but the ADR quotes USD).
+    const finCcy = rawQuote.financialCurrency;
+    if (typeof finCcy === "string" && /^[A-Z]{3}$/.test(finCcy)) {
+      (bundle as { __financialCurrency?: string }).__financialCurrency = finCcy;
+    }
+
     if ((bundle.historical?.length ?? 0) === 0 && quote.price > 0) {
       bundle.historical = [{ date: period2Str, close: quote.price }];
     }
@@ -394,5 +402,29 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     bundle.eurPerUsd = eurPerUsd;
   } catch {
     // Keep Gemini/cache OHLCV and quote if Yahoo is unavailable.
+  }
+}
+
+/**
+ * If the fundamentals are reported in a different currency than the live quote
+ * (ADRs — e.g. ASML reports EUR, the NASDAQ ADR quotes USD), scale the monetary
+ * fundamentals into the quote currency with a current FX rate so charts, P/E and
+ * valuation are all consistent. Display-only: call AFTER persisting the
+ * native-currency bundle. Mutates `bundle`.
+ */
+export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle): Promise<void> {
+  const finCcy = (bundle as { __financialCurrency?: string }).__financialCurrency;
+  const quoteCcy = bundle.investor?.currency;
+  if (!finCcy || !quoteCcy || finCcy === quoteCcy) return;
+  if (!/^[A-Z]{3}$/.test(finCcy) || !/^[A-Z]{3}$/.test(quoteCcy)) return;
+  try {
+    const fx = await yahooFinance.quote(`${finCcy}${quoteCcy}=X`);
+    const f = Array.isArray(fx) ? fx[0] : fx;
+    const rate = Number((f as { regularMarketPrice?: unknown })?.regularMarketPrice);
+    if (!Number.isFinite(rate) || rate <= 0) return;
+    convertBundleFundamentals(bundle, rate); // rate = quote ccy per 1 financial ccy
+    bundle.investor = { ...bundle.investor, currency: quoteCcy };
+  } catch {
+    /* keep native-currency fundamentals if the FX fetch fails */
   }
 }
