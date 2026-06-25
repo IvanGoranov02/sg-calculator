@@ -13,6 +13,65 @@ import {
 
 const facts = aaplFacts as unknown as EdgarCompanyFacts;
 
+describe("bundleFromCompanyFacts: tag switches + non-annual latest filing (Uber case)", () => {
+  const a = (start: string, end: string, val: number, form: string, filed: string): EdgarFactPoint => ({
+    start,
+    end,
+    val,
+    form,
+    filed,
+  });
+  const uberLike: EdgarCompanyFacts = {
+    cik: 1,
+    entityName: "TagSwitch Co",
+    facts: {
+      "us-gaap": {
+        // Preferred revenue tag is sparse (only FY2018); the company reports the
+        // rest of its history under the fallback `Revenues` tag.
+        RevenueFromContractWithCustomerExcludingAssessedTax: {
+          units: { USD: [a("2018-01-01", "2018-12-31", 200, "10-K", "2019-02-01")] },
+        },
+        Revenues: {
+          units: {
+            USD: [
+              a("2018-01-01", "2018-12-31", 999, "10-K", "2019-02-01"), // conflict — preferred wins
+              a("2019-01-01", "2019-12-31", 300, "10-K", "2020-02-01"),
+              a("2020-01-01", "2020-12-31", 400, "10-K", "2021-02-01"),
+            ],
+          },
+        },
+        NetIncomeLoss: {
+          units: {
+            USD: [
+              a("2018-01-01", "2018-12-31", 20, "10-K", "2019-02-01"),
+              a("2019-01-01", "2019-12-31", 30, "10-K", "2020-02-01"),
+              // Latest-filed instance of FY2019 is a proxy statement (non-annual form).
+              a("2019-01-01", "2019-12-31", 30, "DEFR14A", "2021-04-01"),
+              a("2020-01-01", "2020-12-31", 40, "10-K", "2021-02-01"),
+            ],
+          },
+        },
+      },
+    },
+  };
+
+  const b = bundleFromCompanyFacts("TS", uberLike);
+
+  it("fills revenue history from the fallback tag where the preferred one is missing", () => {
+    assert.ok(b);
+    assert.equal(b?.income.find((r) => r.fiscalYear === "2019")?.revenue, 300);
+    assert.equal(b?.income.find((r) => r.fiscalYear === "2020")?.revenue, 400);
+  });
+
+  it("prefers the higher-priority tag for a period both report", () => {
+    assert.equal(b?.income.find((r) => r.fiscalYear === "2018")?.revenue, 200); // not 999
+  });
+
+  it("keeps a fiscal year whose latest-filed instance is a non-annual (proxy) form", () => {
+    assert.equal(b?.income.find((r) => r.fiscalYear === "2019")?.netIncome, 30);
+  });
+});
+
 describe("bundleFromCompanyFacts (real AAPL filing data)", () => {
   const bundle = bundleFromCompanyFacts("aapl", facts);
 

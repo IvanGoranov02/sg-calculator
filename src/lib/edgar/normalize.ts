@@ -128,21 +128,47 @@ function preferredUnit(units: Record<string, EdgarFactPoint[]>): string | null {
   return keys.reduce((a, b) => ((units[a]?.length ?? 0) >= (units[b]?.length ?? 0) ? a : b));
 }
 
-/** First concept from the priority list that has facts, searching all taxonomies. */
+/**
+ * Merge facts across the priority list. For each reporting period, the
+ * highest-priority concept (earliest in the list) that reports it wins, and ALL
+ * of that concept's filed instances for the period are returned — so downstream
+ * (buildFlowSeries / buildInstantSeries) can still see the annual-form instances
+ * when deduping. This handles companies that switch XBRL tags over time (e.g. Uber
+ * reports revenue under `Revenues`, while the preferred `RevenueFromContract…` tag
+ * exists but only sparsely): picking a single concept would drop most of the
+ * history, and collapsing to one filed instance would hide the 10-K form.
+ */
 function conceptPoints(facts: EdgarCompanyFacts, concepts: string[]): EdgarFactPoint[] {
-  for (const concept of concepts) {
+  const collected: EdgarFactPoint[][] = [];
+  const winnerPriority = new Map<string, number>();
+
+  concepts.forEach((concept, priority) => {
+    const pts: EdgarFactPoint[] = [];
     for (const ns of Object.keys(facts.facts)) {
       if (ns === "dei") continue;
       const entry = facts.facts[ns]?.[concept];
       if (!entry?.units) continue;
       const unit = preferredUnit(entry.units);
-      const pts = unit ? entry.units[unit] : null;
-      if (pts && pts.length > 0) {
-        return pts.filter((p) => p?.end && typeof p.val === "number" && Number.isFinite(p.val));
+      const list = unit ? entry.units[unit] : null;
+      if (!list) continue;
+      for (const p of list) {
+        if (!p?.end || typeof p.val !== "number" || !Number.isFinite(p.val)) continue;
+        pts.push(p);
+        const key = `${p.start ?? ""}|${p.end}`;
+        const w = winnerPriority.get(key);
+        if (w === undefined || priority < w) winnerPriority.set(key, priority);
       }
     }
-  }
-  return [];
+    collected[priority] = pts;
+  });
+
+  const out: EdgarFactPoint[] = [];
+  concepts.forEach((_, priority) => {
+    for (const p of collected[priority] ?? []) {
+      if (winnerPriority.get(`${p.start ?? ""}|${p.end}`) === priority) out.push(p);
+    }
+  });
+  return out;
 }
 
 /** Filing currency from the revenue concept's unit (20-F filers often report in EUR etc.). */
@@ -178,16 +204,27 @@ export type FlowSeries = {
 };
 
 export function buildFlowSeries(rawPoints: EdgarFactPoint[]): FlowSeries {
-  const points = dedupeByPeriod(rawPoints.filter((p) => p.start));
+  const durations = rawPoints.filter((p) => p.start);
+  // A period is a fiscal year if ANY filing of it used an annual form (10-K/20-F/…),
+  // even when a later non-annual filing (e.g. an 8-K/S-1 comparative) is the most
+  // recent one — otherwise dedupe-by-latest would silently drop recent years.
+  // Annual figures live only in annual filings, so trailing-twelve-month facts that
+  // 10-Qs sometimes carry at quarter-end are correctly excluded.
+  const annualKeys = new Set(
+    durations
+      .filter((p) => {
+        const d = daysBetween(p.start as string, p.end);
+        return d >= 330 && d <= 390 && ANNUAL_FORMS.has(p.form ?? "");
+      })
+      .map((p) => `${p.start}|${p.end}`),
+  );
+  const points = dedupeByPeriod(durations);
   const annual = new Map<string, number>();
   const quarterly = new Map<string, number>();
 
   for (const p of points) {
     const days = daysBetween(p.start as string, p.end);
-    // Annual figures live only in annual filings (10-K / 20-F / 40-F). Requiring an
-    // annual form rejects ~365-day trailing-twelve-month facts that 10-Qs sometimes
-    // carry, which would otherwise masquerade as fiscal years at quarter-end dates.
-    if (days >= 330 && days <= 390 && ANNUAL_FORMS.has(p.form ?? "")) {
+    if (days >= 330 && days <= 390 && annualKeys.has(`${p.start}|${p.end}`)) {
       annual.set(p.end, p.val);
     } else if (days >= 75 && days <= 105) {
       quarterly.set(p.end, p.val);
