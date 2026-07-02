@@ -125,6 +125,7 @@ async function fetchFreshFundamentals(
     opts?.onProgress?.({ kind: "fmp" });
     bundle = await fetchStockBundleFromFmp(sym);
     if (bundle) source = "fmp";
+    else console.warn(`[fundamentals] ${sym}: FMP key set but no usable data — falling back`);
   }
   if (!bundle) {
     opts?.onProgress?.({ kind: "edgar" });
@@ -136,6 +137,7 @@ async function fetchFreshFundamentals(
       onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
     });
   }
+  console.log(`[fundamentals] ${sym}: source=${source}`);
   await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
     onProgress: opts?.onProgress,
     mergeMode: source === "gemini" ? "prefer-yahoo" : "fill-gaps",

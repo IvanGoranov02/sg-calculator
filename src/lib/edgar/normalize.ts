@@ -407,7 +407,8 @@ export function bundleFromCompanyFacts(
   const usableAnnualEnds = annualEnds.filter(
     (end) => at(flow, "revenue", "annual", end) != null || at(flow, "netIncome", "annual", end) != null,
   );
-  if (usableAnnualEnds.length < 2) return null;
+  // One filed annual is enough (recent IPOs) — far better than the Gemini fallback.
+  if (usableAnnualEnds.length < 1) return null;
 
   const buildIncome = (map: "annual" | "quarterly", end: string) => {
     const revenue = at(flow, "revenue", map, end) ?? 0;

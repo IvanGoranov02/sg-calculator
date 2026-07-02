@@ -787,6 +787,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       invalidTickerSymbol: "Use Latin letters, numbers, dot or hyphen only (e.g. AAPL).",
       tickerNotFound: 'Ticker "{sym}" was not found. Use a Yahoo symbol (e.g. NVDA for NVIDIA).',
       tickerNotFoundShort: 'Ticker "{sym}" was not found.',
+      upstreamBusy: "The data provider is temporarily overloaded. Try again in a minute.",
       noIncome: 'No annual income statement data for "{sym}".',
       loadFailed: "Could not load stock data.",
     },
@@ -1570,6 +1571,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       invalidTickerSymbol: "Само латиница, цифри, точка или тире (напр. AAPL).",
       tickerNotFound: 'Тикерът "{sym}" не е намерен. Ползвайте Yahoo символ (напр. NVDA за NVIDIA).',
       tickerNotFoundShort: 'Тикерът "{sym}" не е намерен.',
+      upstreamBusy: "Източникът на данни е временно претоварен. Опитай отново след минута.",
       noIncome: 'Няма годишни приходни отчети за "{sym}".',
       loadFailed: "Неуспешно зареждане на данни.",
     },
@@ -1610,5 +1612,9 @@ export function translateStockError(t: TFn, message: string): string {
   if (shortForm) return t("errors.tickerNotFoundShort", { sym: shortForm[1] });
   const noInc = /^No annual income statement data for "([^"]+)"\.$/.exec(m);
   if (noInc) return t("errors.noIncome", { sym: noInc[1] });
+  // Raw upstream AI errors (e.g. Gemini 503 JSON) are unreadable — show a human message.
+  if (/^Gemini HTTP|Gemini request failed|Empty Gemini response|"UNAVAILABLE"|RESOURCE_EXHAUSTED/.test(m)) {
+    return t("errors.upstreamBusy");
+  }
   return message;
 }
