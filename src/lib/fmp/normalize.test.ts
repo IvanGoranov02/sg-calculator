@@ -151,10 +151,12 @@ describe("bundleFromFmpStatements (stable field names)", () => {
 });
 
 describe("bundleFromFmpStatements guards", () => {
-  it("returns null when annual income is too thin", () => {
+  it("accepts a single filed annual (recent IPOs)", () => {
     const st = v3Statements();
     st.incomeAnnual = st.incomeAnnual.slice(0, 1);
-    assert.equal(bundleFromFmpStatements("UBER", st), null);
+    const b = bundleFromFmpStatements("UBER", st);
+    assert.ok(b);
+    assert.equal(b?.income.length, 1);
   });
 
   it("returns null for empty statements", () => {

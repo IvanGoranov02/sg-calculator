@@ -154,7 +154,8 @@ export function bundleFromFmpStatements(
     income.push({ date, symbol: sym, fiscalYear: fyOf(date), ...m });
   }
   const usable = income.filter((r) => r.revenue !== 0 || r.netIncome !== 0);
-  if (usable.length < 2) return null;
+  // One filed annual is enough (recent IPOs) — far better than the Gemini fallback.
+  if (usable.length < 1) return null;
 
   const cashFlow: CashFlowAnnual[] = recs(statements.cashFlowAnnual).map(({ date, rec }) => ({
     date,
