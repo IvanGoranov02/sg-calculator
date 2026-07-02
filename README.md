@@ -4,9 +4,10 @@ Next.js stock analysis UI. Fundamentals come from **SEC EDGAR XBRL** (as-reporte
 
 ### Data sources & precedence
 
-1. **SEC EDGAR** (`data.sec.gov` companyfacts) — authoritative when the symbol is an SEC filer; Yahoo only fills what EDGAR lacks (quarterlies for 20-F filers, EBITDA, dividends per share).
-2. **Yahoo Finance** — live quotes, OHLCV history, investor metrics; primary fundamentals source for non-SEC symbols.
-3. **Gemini** — full fundamentals only when EDGAR has nothing; plus a once-per-24h gap-fill pass.
+1. **Financial Modeling Prep** (optional, recommended) — professionally normalized statements built from official filings. Enabled when **FMP_API_KEY** is set (free tier at financialmodelingprep.com). Removes the raw-XBRL edge cases (tag switches, YTD differencing, multi-class EPS, debt derivation).
+2. **SEC EDGAR** (`data.sec.gov` companyfacts) — as-reported fallback when FMP is not configured or doesn't cover the symbol.
+3. **Yahoo Finance** — live quotes, OHLCV history, investor metrics; fills whatever the curated source lacks.
+4. **Gemini** — full fundamentals only as a last resort; plus a once-per-24h validated gap-fill pass.
 
 Set **SEC_EDGAR_USER_AGENT** (e.g. `MyApp (you@example.com)`) — the SEC fair-access policy expects a contact in the User-Agent.
 

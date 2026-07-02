@@ -6,6 +6,8 @@ export function stockLoadProgressLabel(t: TFn, e: StockAnalysisLoadProgress): st
   switch (e.kind) {
     case "cache_hit":
       return t("stock.loadProgressCache");
+    case "fmp":
+      return t("stock.loadProgressFmp");
     case "edgar":
       return t("stock.loadProgressEdgar");
     case "gemini":

@@ -34,28 +34,23 @@ function DataSourceBadge({ bundle }: { bundle: StockAnalysisBundle }) {
   const { t } = useI18n();
   const source = readBundleDataSource(bundle);
   const styles = {
+    fmp: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
     edgar: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
     admin: "border-sky-500/40 bg-sky-500/10 text-sky-400",
     gemini: "border-amber-500/40 bg-amber-500/10 text-amber-400",
   } as const;
+  const keys = {
+    fmp: ["stock.sourceFmp", "stock.sourceFmpHint"],
+    edgar: ["stock.sourceEdgar", "stock.sourceEdgarHint"],
+    admin: ["stock.sourceAdmin", "stock.sourceAdminHint"],
+    gemini: ["stock.sourceGemini", "stock.sourceGeminiHint"],
+  } as const;
   return (
     <span
       className={`shrink-0 cursor-help rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${styles[source]}`}
-      title={t(
-        source === "edgar"
-          ? "stock.sourceEdgarHint"
-          : source === "admin"
-            ? "stock.sourceAdminHint"
-            : "stock.sourceGeminiHint",
-      )}
+      title={t(keys[source][1])}
     >
-      {t(
-        source === "edgar"
-          ? "stock.sourceEdgar"
-          : source === "admin"
-            ? "stock.sourceAdmin"
-            : "stock.sourceGemini",
-      )}
+      {t(keys[source][0])}
     </span>
   );
 }
