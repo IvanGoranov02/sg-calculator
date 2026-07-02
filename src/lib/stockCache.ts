@@ -44,21 +44,25 @@ export type CachePayload = StockAnalysisBundle & {
   eurPerUsd?: StockAnalysisBundle["eurPerUsd"];
 };
 
-export type FundamentalsSource = "edgar" | "gemini";
+export type FundamentalsSource = "fmp" | "edgar" | "gemini";
 
 export function markFundamentalsSource(bundle: StockAnalysisBundle, source: FundamentalsSource): void {
   (bundle as CachePayload).__fundamentalsSource = source;
 }
 
 export function readFundamentalsSource(payload: CachePayload | null | undefined): FundamentalsSource {
-  return payload?.__fundamentalsSource === "edgar" ? "edgar" : "gemini";
+  const s = payload?.__fundamentalsSource;
+  return s === "fmp" || s === "edgar" ? s : "gemini";
 }
 
 /** Where the displayed report data comes from (admin curation wins); safe on any bundle. */
-export function readBundleDataSource(bundle: StockAnalysisBundle): "admin" | "edgar" | "gemini" {
+export function readBundleDataSource(
+  bundle: StockAnalysisBundle,
+): "admin" | FundamentalsSource {
   const p = bundle as CachePayload;
   if (p.__adminEditedAt) return "admin";
-  return p.__fundamentalsSource === "edgar" ? "edgar" : "gemini";
+  const s = p.__fundamentalsSource;
+  return s === "fmp" || s === "edgar" ? s : "gemini";
 }
 
 export type BuildCachePayloadOptions = {

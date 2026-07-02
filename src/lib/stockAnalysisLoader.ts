@@ -1,4 +1,5 @@
 import { fetchStockBundleFromEdgar } from "@/lib/edgar/client";
+import { fetchStockBundleFromFmp, fmpApiKey } from "@/lib/fmp/client";
 import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
 import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
 import {
@@ -27,6 +28,7 @@ import {
   readFundamentalsSource,
   type BuildCachePayloadOptions,
   type CachePayload,
+  type FundamentalsSource,
 } from "@/lib/stockCache";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -106,15 +108,29 @@ async function persistStockCache(
   }
 }
 
-/** Fresh fundamentals from SEC EDGAR (preferred) or Gemini, then Yahoo merge + gap-fill. */
+/**
+ * Fresh fundamentals: FMP (pre-normalized, when FMP_API_KEY is set) → SEC EDGAR
+ * (as-reported) → Gemini (last resort). Then Yahoo merge + gap-fill; curated
+ * sources are authoritative over Yahoo (fill-gaps mode).
+ */
 async function fetchFreshFundamentals(
   sym: string,
   opts: LoadStockAnalysisOptions | undefined,
-): Promise<{ bundle: StockAnalysisBundle; source: "edgar" | "gemini" }> {
+): Promise<{ bundle: StockAnalysisBundle; source: FundamentalsSource }> {
   const yahooPromise = fetchYahooFundamentalsPayload(sym);
-  opts?.onProgress?.({ kind: "edgar" });
-  let bundle = await fetchStockBundleFromEdgar(sym);
-  const source = bundle ? ("edgar" as const) : ("gemini" as const);
+  let source: FundamentalsSource = "gemini";
+  let bundle: StockAnalysisBundle | null = null;
+
+  if (fmpApiKey()) {
+    opts?.onProgress?.({ kind: "fmp" });
+    bundle = await fetchStockBundleFromFmp(sym);
+    if (bundle) source = "fmp";
+  }
+  if (!bundle) {
+    opts?.onProgress?.({ kind: "edgar" });
+    bundle = await fetchStockBundleFromEdgar(sym);
+    if (bundle) source = "edgar";
+  }
   if (!bundle) {
     bundle = await fetchStockBundleFromGemini(sym, {
       onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
@@ -122,7 +138,7 @@ async function fetchFreshFundamentals(
   }
   await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
     onProgress: opts?.onProgress,
-    mergeMode: source === "edgar" ? "fill-gaps" : "prefer-yahoo",
+    mergeMode: source === "gemini" ? "prefer-yahoo" : "fill-gaps",
   });
   markFundamentalsSource(bundle, source);
   return { bundle, source };
@@ -202,7 +218,7 @@ export async function loadStockAnalysis(
         await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
           onProgress: opts?.onProgress,
           runGapFill: gapFillIsDue(cachedPayload),
-          mergeMode: readFundamentalsSource(cachedPayload) === "edgar" ? "fill-gaps" : "prefer-yahoo",
+          mergeMode: readFundamentalsSource(cachedPayload) === "gemini" ? "prefer-yahoo" : "fill-gaps",
         });
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await enrichBundleWithYahooPrices(bundle);
