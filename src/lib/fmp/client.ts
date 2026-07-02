@@ -21,6 +21,17 @@ const FETCH_TIMEOUT_MS = 20_000;
 export const FMP_ANNUAL_LIMIT = 5;
 export const FMP_QUARTER_LIMIT = 20;
 
+/** Ring buffer of recent FMP failures (key-redacted) for /api/health diagnostics. */
+const recentFailures: string[] = [];
+function noteFmpFailure(msg: string): void {
+  console.warn(`[fmp] ${msg}`);
+  recentFailures.push(`${new Date().toISOString()} ${msg}`);
+  if (recentFailures.length > 10) recentFailures.shift();
+}
+export function fmpRecentFailures(): string[] {
+  return [...recentFailures];
+}
+
 export function fmpApiKey(): string | null {
   const k = process.env.FMP_API_KEY?.trim();
   return k || null;
@@ -34,7 +45,7 @@ async function fetchJsonArray(url: string): Promise<unknown[] | null> {
     });
     if (!res.ok) {
       // Never log the key. Plan-limit rejections (402) land here — visible in logs.
-      console.warn(`[fmp] http ${res.status}: ${url.replace(/apikey=[^&]+/, "apikey=***")}`);
+      noteFmpFailure(`http ${res.status}: ${url.replace(/apikey=[^&]+/, "apikey=***")}`);
       return null;
     }
     const data = (await res.json()) as unknown;
