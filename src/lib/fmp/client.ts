@@ -13,9 +13,13 @@ const STABLE_BASE = "https://financialmodelingprep.com/stable";
 const V3_BASE = "https://financialmodelingprep.com/api/v3";
 const FETCH_TIMEOUT_MS = 20_000;
 
-/** Annual rows beyond the 5y window get trimmed anyway; quarters cover ~6 years. */
-const ANNUAL_LIMIT = 7;
-const QUARTER_LIMIT = 26;
+/**
+ * The free plan caps history at 5 years; asking for more gets the whole request
+ * rejected (payment-required error), not a truncated response. 5 annual rows and
+ * 20 quarters is exactly what the UI shows anyway.
+ */
+export const FMP_ANNUAL_LIMIT = 5;
+export const FMP_QUARTER_LIMIT = 20;
 
 export function fmpApiKey(): string | null {
   const k = process.env.FMP_API_KEY?.trim();
@@ -28,7 +32,11 @@ async function fetchJsonArray(url: string): Promise<unknown[] | null> {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Never log the key. Plan-limit rejections (402) land here — visible in logs.
+      console.warn(`[fmp] http ${res.status}: ${url.replace(/apikey=[^&]+/, "apikey=***")}`);
+      return null;
+    }
     const data = (await res.json()) as unknown;
     return Array.isArray(data) && data.length > 0 ? data : null;
   } catch {
@@ -44,12 +52,21 @@ async function fetchStatement(
   kind: StatementKind,
   period: "annual" | "quarter",
 ): Promise<unknown[]> {
-  const limit = period === "annual" ? ANNUAL_LIMIT : QUARTER_LIMIT;
-  const stable = `${STABLE_BASE}/${kind}?symbol=${encodeURIComponent(sym)}&period=${period}&limit=${limit}&apikey=${apiKey}`;
-  const fromStable = await fetchJsonArray(stable);
-  if (fromStable) return fromStable;
-  const v3 = `${V3_BASE}/${kind}/${encodeURIComponent(sym)}?period=${period}&limit=${limit}&apikey=${apiKey}`;
-  return (await fetchJsonArray(v3)) ?? [];
+  const limit = period === "annual" ? FMP_ANNUAL_LIMIT : FMP_QUARTER_LIMIT;
+  const s = encodeURIComponent(sym);
+  // Stable and legacy bases, each with the plan-safe limit and (as insurance
+  // against plan-cap quirks) without a limit param at all.
+  const candidates = [
+    `${STABLE_BASE}/${kind}?symbol=${s}&period=${period}&limit=${limit}&apikey=${apiKey}`,
+    `${V3_BASE}/${kind}/${s}?period=${period}&limit=${limit}&apikey=${apiKey}`,
+    `${STABLE_BASE}/${kind}?symbol=${s}&period=${period}&apikey=${apiKey}`,
+    `${V3_BASE}/${kind}/${s}?period=${period}&apikey=${apiKey}`,
+  ];
+  for (const url of candidates) {
+    const data = await fetchJsonArray(url);
+    if (data) return data;
+  }
+  return [];
 }
 
 /**

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { fmpApiKey } from "@/lib/fmp/client";
+import { FMP_ANNUAL_LIMIT, fmpApiKey } from "@/lib/fmp/client";
 import { getGeminiApiKey } from "@/lib/geminiClient";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
@@ -13,10 +13,11 @@ async function probeFmp(): Promise<string> {
   if (!key) return "not_configured";
   try {
     const res = await fetch(
-      `https://financialmodelingprep.com/stable/income-statement?symbol=AAPL&period=annual&limit=1&apikey=${key}`,
+      `https://financialmodelingprep.com/stable/income-statement?symbol=AAPL&period=annual&limit=${FMP_ANNUAL_LIMIT}&apikey=${key}`,
       { signal: AbortSignal.timeout(15_000) },
     );
-    if (res.status === 401 || res.status === 403) return `invalid_key (http ${res.status})`;
+    if (res.status === 401) return "invalid_key (http 401)";
+    if (res.status === 402 || res.status === 403) return `plan_limited (http ${res.status})`;
     if (!res.ok) return `error (http ${res.status})`;
     const data = (await res.json()) as unknown;
     return Array.isArray(data) && data.length > 0 ? "ok" : "ok_but_empty";
