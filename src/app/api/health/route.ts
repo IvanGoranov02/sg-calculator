@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { FMP_ANNUAL_LIMIT, fmpApiKey } from "@/lib/fmp/client";
+import { FMP_ANNUAL_LIMIT, fetchStockBundleFromFmp, fmpApiKey, fmpRecentFailures } from "@/lib/fmp/client";
 import { getGeminiApiKey } from "@/lib/geminiClient";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
@@ -37,8 +37,17 @@ export async function GET(request: Request) {
     db = "error";
   }
 
+  // Exercise the exact code path the loader uses, not just a single request.
+  let fmpBundle = "not_configured";
+  if (fmpApiKey()) {
+    const b = await fetchStockBundleFromFmp("AAPL");
+    fmpBundle = b ? `ok (annual=${b.income.length}, quarters=${b.incomeQuarterly.length})` : "null";
+  }
+
   return NextResponse.json({
     fmp: await probeFmp(),
+    fmpBundle,
+    fmpRecentFailures: fmpRecentFailures(),
     gemini: getGeminiApiKey() ? "configured" : "not_configured",
     edgarUserAgent: process.env.SEC_EDGAR_USER_AGENT?.trim() ? "configured" : "default",
     db,
