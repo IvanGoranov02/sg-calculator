@@ -104,9 +104,14 @@ export async function fetchStockBundleFromFmp(symbol: string): Promise<StockAnal
   if (!sym) return null;
 
   try {
-    const [incomeAnnual, incomeQuarter, balanceAnnual, balanceQuarter, cashFlowAnnual, cashFlowQuarter] =
+    // Annual income first: the normalizer requires it anyway, and symbols outside
+    // the plan's coverage 402 on it — bailing here saves the other ~14 quota calls
+    // per uncovered symbol (free plans cover mostly US listings).
+    const incomeAnnual = await fetchStatement(apiKey, sym, "income-statement", "annual");
+    if (incomeAnnual.length === 0) return null;
+
+    const [incomeQuarter, balanceAnnual, balanceQuarter, cashFlowAnnual, cashFlowQuarter] =
       await Promise.all([
-        fetchStatement(apiKey, sym, "income-statement", "annual"),
         fetchStatement(apiKey, sym, "income-statement", "quarter"),
         fetchStatement(apiKey, sym, "balance-sheet-statement", "annual"),
         fetchStatement(apiKey, sym, "balance-sheet-statement", "quarter"),
