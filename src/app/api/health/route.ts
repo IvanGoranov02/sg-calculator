@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { FMP_ANNUAL_LIMIT, fetchStockBundleFromFmp, fmpApiKey, fmpRecentFailures } from "@/lib/fmp/client";
 import { getGeminiApiKey } from "@/lib/geminiClient";
 import { prisma } from "@/lib/prisma";
+import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -38,10 +39,16 @@ export async function GET(request: Request) {
   }
 
   // Exercise the exact code path the loader uses, not just a single request.
+  // ?symbol=XYZ probes a specific ticker (e.g. to check FMP plan coverage).
+  const { searchParams } = new URL(request.url);
+  const rawSym = (searchParams.get("symbol") ?? "AAPL").trim().toUpperCase();
+  const probeSym = isValidStockSymbolInput(rawSym) ? rawSym : "AAPL";
   let fmpBundle = "not_configured";
   if (fmpApiKey()) {
-    const b = await fetchStockBundleFromFmp("AAPL");
-    fmpBundle = b ? `ok (annual=${b.income.length}, quarters=${b.incomeQuarterly.length})` : "null";
+    const b = await fetchStockBundleFromFmp(probeSym);
+    fmpBundle = b
+      ? `ok ${probeSym} (annual=${b.income.length}, quarters=${b.incomeQuarterly.length})`
+      : `null (${probeSym})`;
   }
 
   return NextResponse.json({
