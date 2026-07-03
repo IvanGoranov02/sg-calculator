@@ -167,6 +167,54 @@ describe("buildInstantSeries", () => {
   });
 });
 
+describe("bundleFromCompanyFacts: foreign filer with sparse USD convenience translation (SAP case)", () => {
+  const a = (start: string, end: string, val: number): EdgarFactPoint => ({
+    start,
+    end,
+    val,
+    form: "20-F",
+    filed: end.slice(0, 4) + "-02-28",
+  });
+  const dual: EdgarCompanyFacts = {
+    cik: 2,
+    entityName: "Dual Unit AG",
+    facts: {
+      "ifrs-full": {
+        Revenue: {
+          units: {
+            // Full history in the reporting currency…
+            EUR: [
+              a("2022-01-01", "2022-12-31", 100),
+              a("2023-01-01", "2023-12-31", 110),
+              a("2024-01-01", "2024-12-31", 120),
+            ],
+            // …USD present only as a one-off convenience translation.
+            USD: [a("2023-01-01", "2023-12-31", 118)],
+          },
+        },
+        ProfitLoss: {
+          units: {
+            EUR: [
+              a("2022-01-01", "2022-12-31", 10),
+              a("2023-01-01", "2023-12-31", 11),
+              a("2024-01-01", "2024-12-31", 12),
+            ],
+            USD: [a("2023-01-01", "2023-12-31", 11.8)],
+          },
+        },
+      },
+    },
+  };
+
+  it("keeps the full reporting-currency history instead of the sparse USD set", () => {
+    const b = bundleFromCompanyFacts("DUAG", dual);
+    assert.ok(b);
+    assert.equal(b?.income.length, 3);
+    assert.equal(b?.income.find((r) => r.fiscalYear === "2024")?.revenue, 120);
+    assert.equal(detectReportingCurrency(dual), "EUR");
+  });
+});
+
 describe("bundleFromCompanyFacts guards", () => {
   it("returns null when there is no usable annual income data", () => {
     const empty: EdgarCompanyFacts = { cik: 1, entityName: "X", facts: { "us-gaap": {} } };

@@ -119,13 +119,22 @@ function daysBetween(startIso: string, endIso: string): number {
   return Math.round((Date.parse(endIso) - Date.parse(startIso)) / DAY_MS);
 }
 
+/**
+ * The unit with the MOST facts is the filer's reporting currency; a blind USD
+ * preference is wrong for foreign filers (e.g. SAP reports EUR with full history
+ * and includes USD only as a one-off convenience translation — preferring USD
+ * would truncate the series to that single point). USD only breaks ties.
+ */
 function preferredUnit(units: Record<string, EdgarFactPoint[]>): string | null {
   const keys = Object.keys(units);
   if (keys.length === 0) return null;
-  for (const want of ["USD", "USD/shares", "shares"]) {
-    if (keys.includes(want)) return want;
-  }
-  return keys.reduce((a, b) => ((units[a]?.length ?? 0) >= (units[b]?.length ?? 0) ? a : b));
+  return keys.reduce((a, b) => {
+    const na = units[a]?.length ?? 0;
+    const nb = units[b]?.length ?? 0;
+    if (nb > na) return b;
+    if (nb === na && b.startsWith("USD")) return b;
+    return a;
+  });
 }
 
 /**

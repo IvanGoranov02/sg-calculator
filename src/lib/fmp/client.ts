@@ -37,25 +37,32 @@ export function fmpApiKey(): string | null {
   return k || null;
 }
 
-async function fetchJsonArray(url: string): Promise<unknown[] | null> {
+async function fetchJsonArray(url: string): Promise<{ data: unknown[] | null; status: number }> {
   try {
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok) {
-      // Never log the key. Plan-limit rejections (402) land here — visible in logs.
+      // Never log the key. Plan-limit rejections (402/403) land here — visible in logs.
       noteFmpFailure(`http ${res.status}: ${url.replace(/apikey=[^&]+/, "apikey=***")}`);
-      return null;
+      return { data: null, status: res.status };
     }
     const data = (await res.json()) as unknown;
-    return Array.isArray(data) && data.length > 0 ? data : null;
+    return { data: Array.isArray(data) && data.length > 0 ? data : null, status: res.status };
   } catch {
-    return null;
+    return { data: null, status: 0 };
   }
 }
 
 type StatementKind = "income-statement" | "balance-sheet-statement" | "cash-flow-statement";
+
+/**
+ * Free plans reject `limit` values above the plan cap outright (402/403) instead
+ * of truncating. Remember that per warm instance so subsequent symbols skip the
+ * doomed limit-bearing requests — they'd burn 6 quota calls per symbol otherwise.
+ */
+let planRejectsQuarterLimit = false;
 
 async function fetchStatement(
   apiKey: string,
@@ -65,17 +72,23 @@ async function fetchStatement(
 ): Promise<unknown[]> {
   const limit = period === "annual" ? FMP_ANNUAL_LIMIT : FMP_QUARTER_LIMIT;
   const s = encodeURIComponent(sym);
-  // Stable and legacy bases, each with the plan-safe limit and (as insurance
-  // against plan-cap quirks) without a limit param at all.
-  const candidates = [
+  const withLimit = [
     `${STABLE_BASE}/${kind}?symbol=${s}&period=${period}&limit=${limit}&apikey=${apiKey}`,
     `${V3_BASE}/${kind}/${s}?period=${period}&limit=${limit}&apikey=${apiKey}`,
+  ];
+  const withoutLimit = [
     `${STABLE_BASE}/${kind}?symbol=${s}&period=${period}&apikey=${apiKey}`,
     `${V3_BASE}/${kind}/${s}?period=${period}&apikey=${apiKey}`,
   ];
+  const skipLimit = period === "quarter" && planRejectsQuarterLimit;
+  const candidates = skipLimit ? withoutLimit : [...withLimit, ...withoutLimit];
+
   for (const url of candidates) {
-    const data = await fetchJsonArray(url);
+    const { data, status } = await fetchJsonArray(url);
     if (data) return data;
+    if (period === "quarter" && url.includes("limit=") && (status === 402 || status === 403)) {
+      planRejectsQuarterLimit = true;
+    }
   }
   return [];
 }
