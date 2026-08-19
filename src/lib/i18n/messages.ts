@@ -13,7 +13,7 @@ export const messages: Record<AppLocale, MessageDict> = {
   en: {
     meta: {
       title: "Stelian Petrov · Stock analysis",
-      description: "Stock analysis, DCF, and watchlist — Yahoo Finance data.",
+      description: "Stock analysis, DCF, and watchlist.",
     },
     nav: {
       dashboard: "Dashboard",
@@ -25,7 +25,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       watchlist: "Watchlist",
       portfolio: "Portfolio",
       brand: "Stelian Petrov",
-      footer: "Data · Yahoo Finance",
+      footer: "Data for illustration only",
     },
     mobileNav: {
       home: "Home",
@@ -59,7 +59,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       backToApp: "Back to app",
       cacheTitle: "Stock data cache",
       cacheSubtitle:
-        "Edit Gemini fundamentals saved in the database (prices refresh from Yahoo on each view). Click a symbol or Edit to open the editor.",
+        "Edit fundamentals saved in the database (prices refresh on each view). Click a symbol or Edit to open the editor.",
       edit: "Edit data",
       filterPlaceholder: "Filter symbol or name…",
       reloadList: "Reload list",
@@ -71,12 +71,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       colActions: "Actions",
       refreshGemini: "Re-fetch source data",
       deleteCache: "Delete cache",
-      confirmDelete: "Delete cache for {symbol}? Next load fetches fresh data (EDGAR/Gemini).",
+      confirmDelete: "Delete cache for {symbol}? Next load fetches fresh data.",
       confirmRefresh:
-        "Re-fetch {symbol} from the data sources (FMP / SEC EDGAR, or Gemini as last resort)? This discards any admin edits and may take a minute.",
+        "Re-fetch {symbol} from the data sources? This discards any admin edits and may take a minute.",
       errLoad: "Could not load admin data.",
       errDelete: "Could not delete cache.",
-      errRefresh: "Could not refresh from Gemini.",
+      errRefresh: "Could not refresh source data.",
       errSave: "Could not save changes.",
       backToList: "Back to list",
       notFound: "Cache entry not found.",
@@ -101,7 +101,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       adminEdited: "Admin edited",
       editedBadge: "Edited",
       metaHint:
-        "Price history is not edited here; Yahoo still refreshes prices on each view. Saved fundamentals and investor metrics are locked to your edits until you refresh from Gemini.",
+        "Price history is not edited here; prices still refresh on each view. Saved fundamentals and investor metrics are locked to your edits until you re-fetch source data.",
       viewAsUser: "View as user",
     },
     search: {
@@ -111,7 +111,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     dashboard: {
       title: "Dashboard",
       welcome:
-        "Use the search bar for any ticker, or jump to a tool below. Data from Yahoo Finance (yahoo-finance2, no API key).",
+        "Use the search bar for any ticker, or jump to a tool below.",
       marketTitle: "Market pulse",
       marketSpyHint: "S&P 500 ETF — broad US equities benchmark.",
       marketQqqHint: "Nasdaq-100 ETF — tech-heavy benchmark.",
@@ -160,36 +160,36 @@ export const messages: Record<AppLocale, MessageDict> = {
       noData: "No data",
       searchValid: "Search for a valid ticker symbol.",
       loadingSections: "Loading quote, history, and fundamentals…",
-      subtitle: "Fundamentals + live Yahoo prices.",
+      subtitle: "Fundamentals + live prices.",
       nextEarnings: "Next earnings",
       afterHours: "After hours",
       preMarket: "Pre-market",
       refreshData: "Refresh data",
       refreshing: "Refreshing…",
-      sourceFmp: "FMP",
-      sourceFmpHint: "Fundamentals from Financial Modeling Prep — professionally normalized from official filings.",
-      sourceEdgar: "SEC EDGAR",
-      sourceEdgarHint: "Fundamentals from official SEC filings, as reported by the company.",
+      sourceFmp: "Filings",
+      sourceFmpHint: "Fundamentals normalized from official filings.",
+      sourceEdgar: "Filings",
+      sourceEdgarHint: "Fundamentals from official company filings, as reported.",
       sourceGemini: "AI data",
       sourceGeminiHint:
-        "Fundamentals partially AI-generated (Gemini) and merged with Yahoo — verify key figures independently.",
+        "Some fields may be estimated — verify key figures independently.",
       sourceAdmin: "Curated",
       sourceAdminHint: "Fundamentals reviewed and curated manually.",
       priceCurrencyGroup: "Quote currency",
       eurUnavailable: "EUR rate unavailable",
-      eurFxNote: "Approximate EUR from Yahoo EURUSD (spot). Percent change is still in USD terms.",
+      eurFxNote: "Approximate EUR from the EURUSD spot rate. Percent change is still in USD terms.",
       loadProgressConnect: "Connecting…",
       loadProgressCache: "Loading cached fundamentals…",
-      loadProgressFmp: "Fetching fundamentals (FMP)…",
-      loadProgressEdgar: "Fetching SEC filings (EDGAR)…",
-      loadProgressGemini: "Fundamentals request {step} of {total} (Gemini)…",
-      loadProgressGeminiGapFill: "Filling remaining gaps (Gemini)…",
-      loadProgressYahooFundamentals: "Merging Yahoo fundamentals…",
+      loadProgressFmp: "Fetching fundamentals…",
+      loadProgressEdgar: "Fetching filings…",
+      loadProgressGemini: "Fundamentals request {step} of {total}…",
+      loadProgressGeminiGapFill: "Filling remaining gaps…",
+      loadProgressYahooFundamentals: "Merging fundamentals…",
       loadProgressYahooPrices: "Updating live prices and charts…",
     },
     stockNews: {
       title: "Latest news · {symbol}",
-      subtitle: "From Yahoo Finance.",
+      subtitle: "Recent headlines.",
     },
     valuation: {
       title: "Valuation",
@@ -213,7 +213,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     income: {
       title: "Income statement",
-      subtitle: "Annual figures (USD) · up to 15 years where available (Yahoo Finance).",
+      subtitle: "Annual figures (USD) · up to 15 years where available.",
       metricCol: "Metric",
       revenue: "Revenue",
       grossProfit: "Gross profit",
@@ -223,9 +223,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     annual: {
       sectionTitle: "Annual fundamentals (tables)",
       sectionSubtitle:
-        "Year-over-year growth, margins, balance sheet, cash flow, and ratios — same fiscal years as the income statement above (Yahoo Finance).",
+        "Year-over-year growth, margins, balance sheet, cash flow, and ratios — same fiscal years as the income statement above.",
       perShareTitle: "Per share & dilution",
-      perShareSubtitle: "Diluted EPS and weighted average diluted shares when Yahoo reports them.",
+      perShareSubtitle: "Diluted EPS and weighted average diluted shares when reported.",
       incomeExtraTitle: "Income — operating income & EBITDA",
       incomeExtraSubtitle: "Extra income-statement lines when reported.",
       yoyTitle: "Year-over-year growth",
@@ -273,13 +273,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (net income / equity)",
       roa: "ROA (net income / assets)",
       geminiStripBody:
-        "Yahoo or SEC left gaps in this view — e.g. {missing} of {total} fiscal years without a full annual row, empty line items, balance sheet nulls, or missing dividend per share. A second Gemini pass can fill some null fields (server API key).",
-      fillGapsGemini: "Fill null fields (Gemini)",
+        "This view has gaps — e.g. {missing} of {total} fiscal years without a full annual row, empty line items, balance sheet nulls, or missing dividend per share. A second pass can fill some null fields.",
+      fillGapsGemini: "Fill null fields",
     },
     investor: {
       title: "Key investor metrics",
       subtitle:
-        "Snapshot from the loaded analysis bundle (often Gemini-derived in cache). Not investment advice.",
+        "Snapshot from the loaded analysis. Not investment advice.",
       currencyNote: "Reporting currency: {currency}",
       colMetric: "Metric",
       colValue: "Value",
@@ -337,7 +337,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     chart: {
       performance: "Performance",
       performanceDesc:
-        "Toggle metrics and time range. Price uses Yahoo daily history (1D uses 5m intraday when available). Revenue and cash flows use fiscal years — shorter ranges show fewer FY columns.",
+        "Toggle metrics and time range. Price uses daily history (1D uses 5m intraday when available). Revenue and cash flows use fiscal years — shorter ranges show fewer FY columns.",
       metricPrice: "Price",
       metricRevenue: "Revenue",
       metricNetIncome: "Net income",
@@ -360,7 +360,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     chartsFund: {
       title: "Fundamental charts",
       subtitle:
-        "Defaults to quarterly (denser charts). Switch to annual if you prefer fiscal years. Data from Yahoo fundamentals — use with the tables below.",
+        "Defaults to quarterly (denser charts). Switch to annual if you prefer fiscal years. Use with the tables below.",
       annual: "Annual",
       quarterly: "Quarterly",
       quarterlyUnavailable: "No quarterly series loaded",
@@ -381,7 +381,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterUnitYears: "fiscal years",
       filterUnitQuarters: "quarters",
       loadedDataSpan:
-        "Yahoo fundamentals in this view span {fromYear}–{toYear} ({n} {unit}). Depth varies by symbol — not an app chart cap.",
+        "Fundamentals in this view span {fromYear}–{toYear} ({n} {unit}). Depth varies by symbol — not an app chart cap.",
       filterPresetNoNarrow:
         "This preset shows every period that fits the preset window — nothing extra is filtered out.",
       filterPresetShorterThanRequestedAnnual:
@@ -396,17 +396,17 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartNetIncomeSolo: "Net income",
       chartNetIncomeSoloDesc: "Bottom-line profit (as reported).",
       chartDilutedEps: "Diluted EPS",
-      chartDilutedEpsDesc: "Diluted earnings per share by period (Yahoo fundamentals).",
+      chartDilutedEpsDesc: "Diluted earnings per share by period.",
       chartDilutedShares: "Diluted shares outstanding",
       chartDilutedSharesDesc: "Weighted average diluted shares (fundamentals time series).",
       chartOperatingIncomeSolo: "Operating income",
-      chartOperatingIncomeSoloDesc: "Operating profit when Yahoo reports this line.",
+      chartOperatingIncomeSoloDesc: "Operating profit when this line is reported.",
       chartOpexSolo: "Operating expenses",
-      chartOpexSoloDesc: "Opex as reported or derived per Yahoo.",
+      chartOpexSoloDesc: "Opex as reported or derived.",
       chartNetOpIncome: "Net income & operating income",
       chartNetOpIncomeDesc: "Profitability; operating income when reported.",
       chartGpOpex: "Gross profit vs operating expenses",
-      chartGpOpexDesc: "Operating expenses are derived or reported per Yahoo.",
+      chartGpOpexDesc: "Operating expenses as reported or derived.",
       chartMargins: "Margins",
       chartMarginsDesc: "Gross, operating, and net margin as % of revenue.",
       chartEbitdaNi: "EBITDA & net income",
@@ -430,9 +430,9 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCurrentRatio: "Current ratio",
       chartCurrentRatioDesc: "Current assets / current liabilities.",
       chartMetricNoData:
-        "No numeric values for this metric in the loaded series (Yahoo may omit line items for some filings).",
+        "No numeric values for this metric in the loaded series (some filings omit line items).",
       chartMetricNoDataDetail:
-        "Why: Yahoo’s fundamentalsTimeSeries often returns nulls for balance-sheet lines (IFRS vs US labels, period-end mismatches, or API gaps). Income and cash-flow may still load.",
+        "Why: balance-sheet lines are often missing (IFRS vs US labels, period-end mismatches, or source gaps). Income and cash-flow may still load.",
       chartNoDataTitle: "Nothing to plot here",
       chartExpand: "Expand chart",
       chartTablePeriod: "Period",
@@ -440,20 +440,20 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCoverageTitle:
         "This metric reports a value for {n} of {total} periods in view. Earlier periods simply had no figure to plot (e.g. negligible debt or non-meaningful ratio) — not a loading error.",
       chartSinglePoint: "Only one period in view has a value for this metric.",
-      loadAgainGemini: "Fill null balance sheet & dividend fields (Gemini)",
+      loadAgainGemini: "Fill null balance sheet & dividend fields",
       loadAgainGeminiBusy: "Filling…",
-      geminiRetryDisclaimer: "Illustrative only — not audited data. Requires GEMINI_API_KEY on the server.",
+      geminiRetryDisclaimer: "Illustrative only — not audited data.",
       geminiFillNoChange:
-        "Gemini did not add values (missing API key, parse error, or nothing to fill). Balance-sheet gaps need inventory for quick ratio; dividend gaps need quarterly DPS for TTM.",
-      loadValuationGemini: "Fill missing P/E & P/S (Gemini)",
+        "Could not fill extra values. Balance-sheet gaps need inventory for quick ratio; dividend gaps need quarterly DPS for TTM.",
+      loadValuationGemini: "Fill missing P/E & P/S",
       valuationGeminiDisclaimer:
-        "Illustrative valuation only — uses price history × TTM fundamentals when possible; Gemini fills gaps. Not audited. Requires GEMINI_API_KEY.",
-      geminiValuationNoChange: "Gemini did not add P/E or P/S (missing key, parse error, or nothing to fill).",
+        "Illustrative valuation only — uses price history × TTM fundamentals when possible. Not audited.",
+      geminiValuationNoChange: "Could not add P/E or P/S (nothing to fill, or a parse error).",
       growthYoy: "YoY",
       growthQoq: "QoQ",
       growthFooterLine: "{tag}: {value}",
       chartPeTtm: "Trailing P/E",
-      chartPeTtmDesc: "Share price at period end ÷ trailing EPS (annual: FY EPS; quarterly: sum of last four diluted EPS). From Yahoo price history and fundamentals.",
+      chartPeTtmDesc: "Share price at period end ÷ trailing EPS (annual: FY EPS; quarterly: sum of last four diluted EPS).",
       chartPsTtm: "Trailing P/S",
       chartPsTtmDesc: "Price × diluted shares ÷ trailing revenue (annual: FY; quarterly: sum of last four quarters).",
       seriesPeTtm: "Trailing P/E",
@@ -468,25 +468,25 @@ export const messages: Record<AppLocale, MessageDict> = {
       seriesRevPop: "Revenue growth",
       seriesNiPop: "Net income growth",
       chartShareholder: "Dividends & share repurchase",
-      chartShareholderDesc: "Absolute cash amounts (bars point up). From Yahoo cash-flow lines when reported.",
+      chartShareholderDesc: "Absolute cash amounts (bars point up), from cash-flow lines when reported.",
       chartDebtPctCapital: "Debt as % of capital",
       chartDebtPctCapitalDesc: "Total debt ÷ (total debt + stockholders’ equity) — capital structure, not raw debt/equity ratio.",
       debtPctCapitalLabel: "Debt % of (debt + equity)",
       dividendSectionTitle: "Dividends (quarterly)",
       dividendSectionSubtitle:
-        "Dividend per share from Yahoo financials; TTM = sum of last four quarters. Growth tags compare TTM to prior periods.",
+        "Dividend per share as reported; TTM = sum of last four quarters. Growth tags compare TTM to prior periods.",
       dividendNoData: "No dividend per share is reported for this symbol in the loaded series (e.g. many growth stocks).",
       dividendNonPayer:
         "This company does not pay a regular cash dividend on common stock — reinvestment / growth profile (e.g. AMZN). Dividend metrics in “Key investor metrics” may still show 0.",
       dividendDataIncomplete:
-        "Yahoo lists a dividend yield, but quarterly dividend-per-share lines are missing in the loaded fundamentals window. Try another time range or confirm on Yahoo Finance.",
+        "A dividend yield is listed, but quarterly dividend-per-share lines are missing in this window. Try another time range or check the issuer filings.",
       dividendAiContextTitle: "Context (AI summary)",
       dividendAiLoading: "Loading a short summary…",
       dividendAiDisclaimer: "AI-generated context, not financial advice. Verify on issuer or exchange filings.",
-      dividendRefreshData: "Refresh Yahoo data",
+      dividendRefreshData: "Refresh data",
       dividendRefreshAi: "New AI summary",
       dividendRefreshHint:
-        "Refresh reloads prices and fundamentals from Yahoo (server). AI only regenerates the explanatory text — it does not replace Yahoo numbers.",
+        "Refresh reloads prices and fundamentals from the server. AI only regenerates the explanatory text — it does not replace the numbers.",
       dividendTtmPartialNote:
         "Orange bars may sum fewer than four quarters when per-quarter DPS is missing for some periods (partial trailing sum).",
       dividendTtmPartialShort: "partial",
@@ -520,9 +520,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     watchlist: {
       title: "Watchlist",
-      intro: "Saved locally in this browser (up to {max} symbols). Quotes refresh from Yahoo Finance.",
+      intro: "Saved locally in this browser (up to {max} symbols). Quotes refresh automatically.",
       introCloud:
-        "Synced to your account (up to {max} symbols). Quotes refresh from Yahoo Finance. Sign out to use local-only list again.",
+        "Synced to your account (up to {max} symbols). Quotes refresh automatically. Sign out to use local-only list again.",
       addLabel: "Add symbol",
       placeholder: "e.g. NVDA",
       addButton: "Add to watchlist",
@@ -550,7 +550,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       fullTitle: "Watchlist full ({max} max)",
       colDip: "vs 200 SMA",
       dipTitle: "Dip finder (vs 200-day average)",
-      dipSubtitle: "Red bars: price below 200 SMA. Green: above. Yahoo delayed data.",
+      dipSubtitle: "Red bars: price below 200 SMA. Green: above. Delayed data.",
       dipVsSma: "vs 200 SMA",
       sma200: "200 SMA",
       dipNoData: "200-day average not available for these quotes.",
@@ -558,7 +558,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     portfolio: {
       title: "Portfolio",
       subtitle:
-        "Add positions manually below — Trading 212 is optional and only syncs open positions if you connect it. Quotes and dividend hints are from Yahoo Finance — illustrative only, not investment advice.",
+        "Add positions manually below — Trading 212 is optional and only syncs open positions if you connect it. Quotes and dividend hints are illustrative only, not investment advice.",
       signInTitle: "Sign in required",
       signInDesc: "Your saved positions are stored per account. Sign in to continue.",
       signInCta: "Sign in",
@@ -584,19 +584,19 @@ export const messages: Record<AppLocale, MessageDict> = {
       sourceT212: "Trading 212",
       quoteMissing: "—",
       divDisclaimer:
-        "Estimated from Yahoo trailing dividend rate or yield × your shares. Actual payments vary.",
+        "Estimated from trailing dividend rate or yield × your shares. Actual payments vary.",
       dividendSummaryTitle: "Estimated annual dividend (full portfolio)",
       dividendSummaryHint:
-        "Sum of per-position estimates (~next 12 months from Yahoo trailing figures). Multiple currencies are shown separately. Not tax or broker advice.",
+        "Sum of per-position estimates (~next 12 months from trailing figures). Multiple currencies are shown separately. Not tax or broker advice.",
       dividendNoData:
-        "No dividend rate/yield from Yahoo for your symbols yet — try Refresh data or check tickers.",
+        "No dividend rate/yield for your symbols yet — try Refresh data or check tickers.",
       dividendPerYearLabel: "per year",
       t212Title: "Trading 212 (optional)",
       t212Desc:
         "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
       t212Docs: "Trading 212 API key (Help Centre)",
       encryptionOff:
-        "Your Trading 212 keys are encrypted before being saved to the database. The server uses AUTH_SECRET (already set for login) or optionally a dedicated PORTFOLIO_ENCRYPTION_KEY. Not your per-user broker keys, and not the Gemini key. You can press Save to see a server error if something is missing.",
+        "Your Trading 212 keys are encrypted before being saved to the database. The server uses AUTH_SECRET (already set for login) or optionally a dedicated PORTFOLIO_ENCRYPTION_KEY. Not your per-user broker keys. You can press Save to see a server error if something is missing.",
       saveFailed: "Could not save connection.",
       saveNetworkError: "Network error while saving. Try again.",
       syncNetworkError: "Network error during Trading 212 sync. Try again.",
@@ -620,7 +620,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       neverSynced: "Never synced",
       syncError: "Last error: {msg}",
       manualTitle: "Add manual position",
-      manualSymbol: "Symbol (Yahoo ticker)",
+      manualSymbol: "Symbol (ticker)",
       manualQty: "Quantity",
       manualAvg: "Average price (in selected currency)",
       manualCurrency: "Currency",
@@ -646,7 +646,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     dcf: {
       title: "DCF Calculator",
       intro:
-        "Simplified model: 5-year growth of free cash flow (FCF), discounted at one rate, terminal multiple on year-5 FCF — typical spreadsheet style. FCF here is the standard Yahoo line (operating cash flow minus capex), not a separate “FCFF” label.",
+        "Simplified model: 5-year growth of free cash flow (FCF), discounted at one rate, terminal multiple on year-5 FCF — typical spreadsheet style. FCF here is operating cash flow minus capex, not a separate “FCFF” label.",
       seedLine: "{symbol} · {name} · market {price}",
       noSeed: "No data for {ticker}. Enter manually or pick another ticker.",
       snapshotTitle: "Financial snapshot (latest year)",
@@ -657,12 +657,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       snapNetIncome: "Net income",
       snapEbitda: "EBITDA",
       snapFcf: "Free cash flow",
-      snapFcfSub: "Yahoo annual free cash flow",
+      snapFcfSub: "Annual free cash flow",
       assumptionsTitle: "DCF assumptions",
       assumptionsDesc: "Enter percents as numbers: 10 = 10%.",
       baseFcf: "Starting FCF (USD)",
       baseFcfHint:
-        "Forecast base; defaults from Yahoo when available. This is the standard FCF line, not a custom abbreviation.",
+        "Forecast base; filled from latest reported FCF when available. This is the standard FCF line, not a custom abbreviation.",
       growth: "Annual FCF growth (years 1–5) %",
       discount: "Discount / required return %",
       discountHint: "Single rate to discount future cash flows.",
@@ -743,8 +743,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       metric: "Metric",
       empty: "Add tickers above to compare them.",
       error: "Could not load comparison data.",
-      unresolved: "Couldn't load: {symbols}. Check the ticker (use the Yahoo symbol, e.g. BRK-B).",
-      footnote: "Metrics from Yahoo Finance.",
+      unresolved: "Couldn't load: {symbols}. Check the ticker (e.g. BRK-B).",
+      footnote: "Illustrative metrics only.",
       marketCap: "Market cap",
       trailingPE: "P/E (trailing)",
       forwardPE: "P/E (forward)",
@@ -785,7 +785,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     errors: {
       emptyTicker: "Empty ticker.",
       invalidTickerSymbol: "Use Latin letters, numbers, dot or hyphen only (e.g. AAPL).",
-      tickerNotFound: 'Ticker "{sym}" was not found. Use a Yahoo symbol (e.g. NVDA for NVIDIA).',
+      tickerNotFound: 'Ticker "{sym}" was not found. Use the listing ticker (e.g. NVDA for NVIDIA).',
       tickerNotFoundShort: 'Ticker "{sym}" was not found.',
       upstreamBusy: "The data provider is temporarily overloaded. Try again in a minute.",
       noIncome: 'No annual income statement data for "{sym}".',
@@ -795,7 +795,7 @@ export const messages: Record<AppLocale, MessageDict> = {
   bg: {
     meta: {
       title: "Stelian Petrov · Анализ на акции",
-      description: "Анализ на акции, DCF и списък за наблюдение — данни от Yahoo Finance.",
+      description: "Анализ на акции, DCF и списък за наблюдение.",
     },
     nav: {
       dashboard: "Табло",
@@ -807,7 +807,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       watchlist: "Списък",
       portfolio: "Портфолио",
       brand: "Stelian Petrov",
-      footer: "Данни · Yahoo Finance",
+      footer: "Данни само за илюстрация",
     },
     mobileNav: {
       home: "Начало",
@@ -841,7 +841,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       backToApp: "Към приложението",
       cacheTitle: "Кеш на данни за акции",
       cacheSubtitle:
-        "Редакция на Gemini фундаментали в базата (котировките се опресняват от Yahoo при преглед). Кликни символа или Edit за редактора.",
+        "Редакция на фундаментали в базата (котировките се опресняват при преглед). Кликни символа или Edit за редактора.",
       edit: "Редактирай",
       filterPlaceholder: "Филтър по символ или име…",
       reloadList: "Презареди списъка",
@@ -853,12 +853,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       colActions: "Действия",
       refreshGemini: "Обнови от източника",
       deleteCache: "Изтрий кеша",
-      confirmDelete: "Изтрий кеша за {symbol}? Следващото зареждане тегли нови данни (EDGAR/Gemini).",
+      confirmDelete: "Изтрий кеша за {symbol}? Следващото зареждане тегли нови данни.",
       confirmRefresh:
-        "Повторно изтегляне на {symbol} от източниците (FMP / SEC EDGAR, или Gemini като краен вариант)? Това изтрива админ редакциите и може да отнеме минута.",
+        "Повторно изтегляне на {symbol} от източниците? Това изтрива админ редакциите и може да отнеме минута.",
       errLoad: "Неуспешно зареждане на админ данни.",
       errDelete: "Неуспешно изтриване на кеша.",
-      errRefresh: "Неуспешно обновяване от Gemini.",
+      errRefresh: "Неуспешно обновяване на данните.",
       errSave: "Неуспешен запис.",
       backToList: "Към списъка",
       notFound: "Няма запис в кеша.",
@@ -883,7 +883,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       adminEdited: "Редактирано от админ",
       editedBadge: "Редактирано",
       metaHint:
-        "Историята на цените не се редактира тук; Yahoo продължава да опреснява цените при преглед. Запазените фундаментали и инвестор метрики остават по вашите редакции, докато не обновите от Gemini.",
+        "Историята на цените не се редактира тук; цените продължават да се опресняват при преглед. Запазените фундаментали и инвестор метрики остават по вашите редакции, докато не изтеглите данните наново.",
       viewAsUser: "Виж като потребител",
     },
     search: {
@@ -893,7 +893,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     dashboard: {
       title: "Табло",
       welcome:
-        "Ползвайте търсенето за тикер или преминете към инструмент по-долу. Данни от Yahoo Finance (yahoo-finance2, без API ключ).",
+        "Ползвайте търсенето за тикер или преминете към инструмент по-долу.",
       marketTitle: "Пазарен пулс",
       marketSpyHint: "ETF на S&P 500 — широк US пазарен ориентир.",
       marketQqqHint: "ETF Nasdaq-100 — технологичен ориентир.",
@@ -948,30 +948,30 @@ export const messages: Record<AppLocale, MessageDict> = {
       preMarket: "Предпазар",
       refreshData: "Обнови данните",
       refreshing: "Обновяване…",
-      sourceFmp: "FMP",
-      sourceFmpHint: "Фундаментали от Financial Modeling Prep — професионално нормализирани от официалните отчети.",
-      sourceEdgar: "SEC EDGAR",
-      sourceEdgarHint: "Фундаментали от официалните SEC отчети, както са докладвани от компанията.",
+      sourceFmp: "Отчети",
+      sourceFmpHint: "Фундаментали, нормализирани от официалните отчети.",
+      sourceEdgar: "Отчети",
+      sourceEdgarHint: "Фундаментали от официалните отчети, както са докладвани от компанията.",
       sourceGemini: "AI данни",
       sourceGeminiHint:
-        "Фундаменталите са частично генерирани от AI (Gemini) и допълнени от Yahoo — проверявайте ключовите числа независимо.",
+        "Някои полета може да са ориентировъчни — проверявайте ключовите числа независимо.",
       sourceAdmin: "Курирано",
       sourceAdminHint: "Фундаменталите са прегледани и коригирани ръчно.",
       priceCurrencyGroup: "Валута на котировката",
       eurUnavailable: "Няма курс EUR",
-      eurFxNote: "Приблизителен EUR от Yahoo EURUSD (спот). Промяната в % е в USD.",
+      eurFxNote: "Приблизителен EUR от спот курса EURUSD. Промяната в % е в USD.",
       loadProgressConnect: "Свързване…",
       loadProgressCache: "Зареждане на кеширани фундаментали…",
-      loadProgressFmp: "Изтегляне на фундаментали (FMP)…",
-      loadProgressEdgar: "Изтегляне на SEC отчети (EDGAR)…",
-      loadProgressGemini: "Заявка {step} от {total} към Gemini (фундаментали)…",
-      loadProgressGeminiGapFill: "Попълване на останали липси (Gemini)…",
-      loadProgressYahooFundamentals: "Сливане с Yahoo фундаментали…",
+      loadProgressFmp: "Изтегляне на фундаментали…",
+      loadProgressEdgar: "Изтегляне на отчети…",
+      loadProgressGemini: "Заявка {step} от {total} за фундаментали…",
+      loadProgressGeminiGapFill: "Попълване на останали липси…",
+      loadProgressYahooFundamentals: "Сливане на фундаментали…",
       loadProgressYahooPrices: "Обновяване на котировки и графики…",
     },
     stockNews: {
       title: "Последни новини · {symbol}",
-      subtitle: "От Yahoo Finance.",
+      subtitle: "Последни заглавия.",
     },
     valuation: {
       title: "Оценка на стойността",
@@ -995,7 +995,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     income: {
       title: "Отчет за приходите",
-      subtitle: "Годишни стойности (USD) · до 15 години при налични данни (Yahoo Finance).",
+      subtitle: "Годишни стойности (USD) · до 15 години при налични данни.",
       metricCol: "Показател",
       revenue: "Приходи",
       grossProfit: "Брутна печалба",
@@ -1005,9 +1005,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     annual: {
       sectionTitle: "Годишни фундаменти (таблици)",
       sectionSubtitle:
-        "Ръст г/г, маржове, баланс, паричен поток и съотношения — същите фискални години като отчета за приходите (Yahoo Finance).",
+        "Ръст г/г, маржове, баланс, паричен поток и съотношения — същите фискални години като отчета за приходите.",
       perShareTitle: "На акция и разводняване",
-      perShareSubtitle: "Разводнен EPS и среднопретеглени разводнени акции, когато Yahoo ги подава.",
+      perShareSubtitle: "Разводнен EPS и среднопретеглени разводнени акции, когато са налични.",
       incomeExtraTitle: "Приходи — оперативна печалба и EBITDA",
       incomeExtraSubtitle: "Допълнителни редове от отчета за приходите, когато са налични.",
       yoyTitle: "Ръст година спрямо година",
@@ -1056,13 +1056,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       roe: "ROE (нетна печалба / капитал)",
       roa: "ROA (нетна печалба / активи)",
       geminiStripBody:
-        "Yahoo или SEC са оставили празнини — напр. {missing} от {total} фискални години без пълен годишен ред, липсващи редове, null в баланса или липсващ дивидент на акция. Второ извикване към Gemini може да попълни част от null полетата (API ключ на сървъра).",
-      fillGapsGemini: "Попълни null полета (Gemini)",
+        "Има празнини — напр. {missing} от {total} фискални години без пълен годишен ред, липсващи редове, null в баланса или липсващ дивидент на акция. Втори пас може да попълни част от null полетата.",
+      fillGapsGemini: "Попълни null полета",
     },
     investor: {
       title: "Ключови метрики за инвеститори",
       subtitle:
-        "Снимка от заредения анализ (често от Gemini в кеш). Не е инвестиционен съвет.",
+        "Снимка от заредения анализ. Не е инвестиционен съвет.",
       currencyNote: "Отчетна валута: {currency}",
       colMetric: "Показател",
       colValue: "Стойност",
@@ -1120,7 +1120,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     chart: {
       performance: "Представяне",
       performanceDesc:
-        "Превключвайте показатели и период. Цената ползва дневна история от Yahoo (1D — 5m интрадей при наличност). Приходите и паричните потоци са по фискални години — по-късите периоди показват по-малко колони.",
+        "Превключвайте показатели и период. Цената ползва дневна история (1D — 5m интрадей при наличност). Приходите и паричните потоци са по фискални години — по-късите периоди показват по-малко колони.",
       metricPrice: "Цена",
       metricRevenue: "Приходи",
       metricNetIncome: "Нетна печалба",
@@ -1143,7 +1143,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     chartsFund: {
       title: "Фундаментални графики",
       subtitle:
-        "По подразбиране тримесечни (по-пълни графики). Превключете към годишни при нужда. Данни от Yahoo — ползвайте заедно с таблиците по-долу.",
+        "По подразбиране тримесечни (по-пълни графики). Превключете към годишни при нужда. Ползвайте заедно с таблиците по-долу.",
       annual: "Годишни",
       quarterly: "Тримесечни",
       quarterlyUnavailable: "Няма заредени тримесечни серии",
@@ -1164,7 +1164,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       filterUnitYears: "фискални години",
       filterUnitQuarters: "тримесечия",
       loadedDataSpan:
-        "Фундаментите от Yahoo: {fromYear}–{toYear} ({n} {unit}). Дълбочината зависи от символа — не е таван на графиките.",
+        "Фундаменти в този изглед: {fromYear}–{toYear} ({n} {unit}). Дълбочината зависи от символа — не е таван на графиките.",
       filterPresetNoNarrow:
         "Този пресет показва всички периоди в прозореца на пресета — без допълнително отрязване.",
       filterPresetShorterThanRequestedAnnual:
@@ -1179,17 +1179,17 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartNetIncomeSolo: "Нетна печалба",
       chartNetIncomeSoloDesc: "Печалба след всички разходи (както са отчетени).",
       chartDilutedEps: "Разводнен EPS",
-      chartDilutedEpsDesc: "Печалба на акция (разводнена) по период (Yahoo).",
+      chartDilutedEpsDesc: "Печалба на акция (разводнена) по период.",
       chartDilutedShares: "Разводнени акции в обращение",
       chartDilutedSharesDesc: "Среднопретеглени разводнени акции (фундаментална серия).",
       chartOperatingIncomeSolo: "Оперативна печалба",
-      chartOperatingIncomeSoloDesc: "Оперативна печалба, когато Yahoo я подава.",
+      chartOperatingIncomeSoloDesc: "Оперативна печалба, когато редът е наличен.",
       chartOpexSolo: "Оперативни разходи",
-      chartOpexSoloDesc: "Opex по Yahoo (отчетени или изведени).",
+      chartOpexSoloDesc: "Opex (отчетени или изведени).",
       chartNetOpIncome: "Нетна и оперативна печалба",
       chartNetOpIncomeDesc: "Рентабилност; оперативна печалба при налични данни.",
       chartGpOpex: "Брутна печалба срещу оперативни разходи",
-      chartGpOpexDesc: "Оперативните разходи са по Yahoo (отчетени или изведени).",
+      chartGpOpexDesc: "Оперативните разходи са отчетени или изведени.",
       chartMargins: "Маржове",
       chartMarginsDesc: "Брутна, оперативна и нетна маржа като % от приходите.",
       chartEbitdaNi: "EBITDA и нетна печалба",
@@ -1213,9 +1213,9 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCurrentRatio: "Текущо съотношение",
       chartCurrentRatioDesc: "Текущи активи / текущи пасиви.",
       chartMetricNoData:
-        "Няма числени стойности за тази метрика в заредената серия (Yahoo понякога не подава редове за част от отчетите).",
+        "Няма числени стойности за тази метрика в заредената серия (някои отчети пропускат редове).",
       chartMetricNoDataDetail:
-        "Защо: fundamentalsTimeSeries на Yahoo често връща null за редове от баланс (IFRS срещу US етикети, разминаване на край на период или пропуски в API). Приходите и паричният поток може да са наред.",
+        "Защо: редовете от баланса често липсват (IFRS срещу US етикети, разминаване на край на период или пропуски в източника). Приходите и паричният поток може да са наред.",
       chartNoDataTitle: "Няма какво да се покаже тук",
       chartExpand: "Разгъни графиката",
       chartTablePeriod: "Период",
@@ -1223,21 +1223,21 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartCoverageTitle:
         "Тази метрика има стойност за {n} от {total} периода в изгледа. По-ранните периоди просто нямат стойност за показване (напр. нищожен дълг или незначимо съотношение) — не е грешка при зареждане.",
       chartSinglePoint: "Само един период в изгледа има стойност за тази метрика.",
-      loadAgainGemini: "Попълни null баланс и дивидент на акция (Gemini)",
+      loadAgainGemini: "Попълни null баланс и дивидент на акция",
       loadAgainGeminiBusy: "Попълване…",
-      geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни. Изисква GEMINI_API_KEY на сървъра.",
+      geminiRetryDisclaimer: "Ориентировъчно — не е одитирани данни.",
       geminiFillNoChange:
-        "Gemini не добави стойности (липсва ключ, грешка при отговор или няма какво да се попълни). За quick ratio са нужни запаси (inventory); за TTM дивидент — тримесечен DPS.",
-      loadValuationGemini: "Попълни липсващи P/E и P/S (Gemini)",
+        "Не се попълниха допълнителни стойности. За quick ratio са нужни запаси (inventory); за TTM дивидент — тримесечен DPS.",
+      loadValuationGemini: "Попълни липсващи P/E и P/S",
       valuationGeminiDisclaimer:
-        "Ориентировъчна оценка — при възможност цена × TTM фундаменти; Gemini за празнини. Не е одитирано. Изисква GEMINI_API_KEY.",
-      geminiValuationNoChange: "Gemini не добави P/E или P/S (липсва ключ, грешка или няма какво да се попълни).",
+        "Ориентировъчна оценка — при възможност цена × TTM фундаменти. Не е одитирано.",
+      geminiValuationNoChange: "Не се добавиха P/E или P/S (няма какво да се попълни или грешка при отговор).",
       growthYoy: "Г/г",
       growthQoq: "Т/т",
       growthFooterLine: "{tag}: {value}",
       chartPeTtm: "P/E (TTM)",
       chartPeTtmDesc:
-        "Цена при край на периода ÷ трейлинг EPS (годишно: FY EPS; тримесечно: сума от последните четири разводнени EPS). От Yahoo цени и фундаменти.",
+        "Цена при край на периода ÷ трейлинг EPS (годишно: FY EPS; тримесечно: сума от последните четири разводнени EPS).",
       chartPsTtm: "P/S (TTM)",
       chartPsTtmDesc: "Цена × разводнени акции ÷ трейлинг приходи (годишно: FY; тримесечно: сума от последните четири тримесечия).",
       seriesPeTtm: "P/E (TTM)",
@@ -1252,27 +1252,27 @@ export const messages: Record<AppLocale, MessageDict> = {
       seriesRevPop: "Ръст на приходите",
       seriesNiPop: "Ръст на нетната печалба",
       chartShareholder: "Дивиденти и изкупуване на акции",
-      chartShareholderDesc: "Абсолютни суми (стълбовете нагоре). От Yahoo парични потоци при налични данни.",
+      chartShareholderDesc: "Абсолютни суми (стълбовете нагоре), от паричните потоци при налични данни.",
       chartDebtPctCapital: "Дълг като % от капитала",
       chartDebtPctCapitalDesc:
         "Общ дълг ÷ (дълг + собствен капитал) — структура на капитала, не сурово съотношение дълг/капитал.",
       debtPctCapitalLabel: "Дълг % от (дълг + капитал)",
       dividendSectionTitle: "Дивиденти (тримесечни)",
       dividendSectionSubtitle:
-        "Дивидент на акция от Yahoo; TTM = сума от последните четири тримесечия. Процентите сравняват TTM с по-ранни периоди.",
+        "Дивидент на акция според отчета; TTM = сума от последните четири тримесечия. Процентите сравняват TTM с по-ранни периоди.",
       dividendNoData: "Няма отчетен дивидент на акция в заредената серия (напр. при много растежни компании).",
       dividendNonPayer:
         "Компанията не изплаща редовен паричен дивидент по обикновените акции — често реинвестиране / растеж (напр. AMZN). В „Ключови метрики“ доходността може да е 0.",
       dividendDataIncomplete:
-        "Yahoo показва дивидентна доходност, но тримесечните редове за дивидент/акция липсват в заредения прозорец. Опитайте друг период или проверете в Yahoo Finance.",
+        "Има дивидентна доходност, но тримесечните редове за дивидент/акция липсват в този прозорец. Опитайте друг период или проверете отчетите на емитента.",
       dividendAiContextTitle: "Контекст (AI обобщение)",
       dividendAiLoading: "Зареждане на кратко обобщение…",
       dividendAiDisclaimer:
         "Текстът е генериран от AI и не е финансов съвет. Проверете при емитента или в отчетите.",
-      dividendRefreshData: "Обнови Yahoo данни",
+      dividendRefreshData: "Обнови данните",
       dividendRefreshAi: "Нов AI текст",
       dividendRefreshHint:
-        "Обновяването зарежда наново котировки и фундаментали от Yahoo (сървър). AI само прегенерира обяснителния текст — не подменя числата от Yahoo.",
+        "Обновяването зарежда наново котировки и фундаментали от сървъра. AI само прегенерира обяснителния текст — не подменя числата.",
       dividendTtmPartialNote:
         "Оранжевите стълбове могат да сумират по-малко от четири тримесечия, когато липсва DPS за някои периоди (частична сума).",
       dividendTtmPartialShort: "частично",
@@ -1306,9 +1306,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     watchlist: {
       title: "Списък за наблюдение",
-      intro: "Запазено локално в този браузър (до {max} символа). Котировки от Yahoo Finance.",
+      intro: "Запазено локално в този браузър (до {max} символа). Котировките се опресняват автоматично.",
       introCloud:
-        "Синхронизирано с акаунта ви (до {max} символа). Котировки от Yahoo Finance. При изход отново е локален списък.",
+        "Синхронизирано с акаунта ви (до {max} символа). Котировките се опресняват автоматично. При изход отново е локален списък.",
       addLabel: "Добави символ",
       placeholder: "напр. NVDA",
       addButton: "Добави в списъка",
@@ -1336,7 +1336,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       fullTitle: "Списъкът е пълен (макс. {max})",
       colDip: "спр. 200 SMA",
       dipTitle: "Dip finder (спрямо 200-дневна средна)",
-      dipSubtitle: "Червено: цена под 200 SMA. Зелено: над. Данни Yahoo със закъснение.",
+      dipSubtitle: "Червено: цена под 200 SMA. Зелено: над. Данни със закъснение.",
       dipVsSma: "спр. 200 SMA",
       sma200: "200 SMA",
       dipNoData: "Няма налична 200-дневна средна за тези котировки.",
@@ -1344,7 +1344,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     portfolio: {
       title: "Портфолио",
       subtitle:
-        "Добавяй позиции ръчно по-долу — Trading 212 е по избор и синхронизира отворени позиции само ако го свържеш. Котировки и дивидентни подсказки са от Yahoo Finance — ориентировъчни, не са инвестиционен съвет.",
+        "Добавяй позиции ръчно по-долу — Trading 212 е по избор и синхронизира отворени позиции само ако го свържеш. Котировки и дивидентни подсказки са ориентировъчни, не са инвестиционен съвет.",
       signInTitle: "Нужна е идентификация",
       signInDesc: "Запазените позиции са по акаунт. Влезте, за да продължите.",
       signInCta: "Вход",
@@ -1367,19 +1367,19 @@ export const messages: Record<AppLocale, MessageDict> = {
       sourceT212: "Trading 212",
       quoteMissing: "—",
       divDisclaimer:
-        "Оценка от Yahoo (trailing дивидент rate или yield × брой акции). Реалните плащания варират.",
+        "Оценка от trailing дивидент rate или yield × брой акции. Реалните плащания варират.",
       dividendSummaryTitle: "Очакван годишен дивидент (цяло портфолио)",
       dividendSummaryHint:
-        "Сума от редовете (~следващи 12 месеца по trailing данни от Yahoo). Различни валути — отделно. Не е данъчен или брокерски съвет.",
+        "Сума от редовете (~следващи 12 месеца по trailing данни). Различни валути — отделно. Не е данъчен или брокерски съвет.",
       dividendNoData:
-        "Няма дивидент rate/yield от Yahoo за тези символи — опитай „Опресни данните“ или провери тикерите.",
+        "Няма дивидент rate/yield за тези символи — опитай „Опресни данните“ или провери тикерите.",
       dividendPerYearLabel: "годишно",
       t212Title: "Trading 212 (по избор)",
       t212Desc:
         "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
       t212Docs: "API ключ на Trading 212 (Help Centre)",
       encryptionOff:
-        "Ключовете към Trading 212 се криптират преди запис в базата. Сървърът ползва AUTH_SECRET (вече за вход) или по желание отделен PORTFOLIO_ENCRYPTION_KEY. Това не са твоите брокерски ключове и не е Gemini. Натисни Save за грешка от сървъра, ако нещо липсва.",
+        "Ключовете към Trading 212 се криптират преди запис в базата. Сървърът ползва AUTH_SECRET (вече за вход) или по желание отделен PORTFOLIO_ENCRYPTION_KEY. Това не са твоите брокерски ключове. Натисни Save за грешка от сървъра, ако нещо липсва.",
       saveFailed: "Неуспешно запазване на връзката.",
       saveNetworkError: "Мрежова грешка при запазване. Опитай отново.",
       syncNetworkError: "Мрежова грешка при синхронизация с Trading 212. Опитай отново.",
@@ -1403,7 +1403,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       neverSynced: "Никога не е синхронизирано",
       syncError: "Последна грешка: {msg}",
       manualTitle: "Добави ръчна позиция",
-      manualSymbol: "Символ (Yahoo тикер)",
+      manualSymbol: "Символ (тикер)",
       manualQty: "Количество",
       manualAvg: "Средна цена (в избраната валута)",
       manualCurrency: "Валута",
@@ -1429,7 +1429,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     dcf: {
       title: "DCF калкулатор",
       intro:
-        "Опростен модел: 5-годишен ръст на свободния паричен поток (FCF), дисконтиране с една ставка, терминален мултипликатор спрямо FCF в година 5. FCF тук е стандартният ред от Yahoo (оперативен поток минус капекс).",
+        "Опростен модел: 5-годишен ръст на свободния паричен поток (FCF), дисконтиране с една ставка, терминален мултипликатор спрямо FCF в година 5. FCF тук е оперативен поток минус капекс.",
       seedLine: "{symbol} · {name} · пазар {price}",
       noSeed: "Няма данни за {ticker}. Въведете ръчно или изберете друг тикер.",
       snapshotTitle: "Финансова снимка (последна година)",
@@ -1441,12 +1441,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       snapNetIncome: "Нетна печалба",
       snapEbitda: "EBITDA",
       snapFcf: "Свободен паричен поток (FCF)",
-      snapFcfSub: "Yahoo — годишен FCF",
+      snapFcfSub: "Годишен FCF",
       assumptionsTitle: "Допускания за DCF",
       assumptionsDesc: "Процентите са като числа: 10 = 10%.",
       baseFcf: "Стартиращ FCF (USD)",
       baseFcfHint:
-        "База за прогноза; по подразбиране от Yahoo. Стандартен FCF ред, не отделна абревиатура.",
+        "База за прогноза; по подразбиране от последния отчетен FCF. Стандартен FCF ред, не отделна абревиатура.",
       growth: "Годишен ръст на FCF (години 1–5) %",
       discount: "Дисконт / изискана доходност %",
       discountHint: "Едно число за дисконтиране на бъдещите потоци.",
@@ -1527,8 +1527,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       metric: "Метрика",
       empty: "Добави тикери по-горе, за да ги сравниш.",
       error: "Неуспешно зареждане на данните за сравнение.",
-      unresolved: "Неуспешно зареждане: {symbols}. Провери тикера (ползвай Yahoo символ, напр. BRK-B).",
-      footnote: "Метрики от Yahoo Finance.",
+      unresolved: "Неуспешно зареждане: {symbols}. Провери тикера (напр. BRK-B).",
+      footnote: "Метриките са само илюстративни.",
       marketCap: "Пазарна капитализация",
       trailingPE: "P/E (текущо)",
       forwardPE: "P/E (прогнозно)",
@@ -1569,7 +1569,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     errors: {
       emptyTicker: "Празен тикер.",
       invalidTickerSymbol: "Само латиница, цифри, точка или тире (напр. AAPL).",
-      tickerNotFound: 'Тикерът "{sym}" не е намерен. Ползвайте Yahoo символ (напр. NVDA за NVIDIA).',
+      tickerNotFound: 'Тикерът "{sym}" не е намерен. Ползвайте борсовия символ (напр. NVDA за NVIDIA).',
       tickerNotFoundShort: 'Тикерът "{sym}" не е намерен.',
       upstreamBusy: "Източникът на данни е временно претоварен. Опитай отново след минута.",
       noIncome: 'Няма годишни приходни отчети за "{sym}".',
@@ -1599,7 +1599,7 @@ export function interpolate(template: string, vars: Record<string, string | numb
 
 type TFn = (path: string, vars?: Record<string, string | number>) => string;
 
-/** Map Yahoo loader error strings to localized messages. */
+/** Map loader error strings to localized messages. */
 export function translateStockError(t: TFn, message: string): string {
   const m = message.trim();
   if (m === INVALID_TICKER_SYMBOL_MESSAGE) return t("errors.invalidTickerSymbol");

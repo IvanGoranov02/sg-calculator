@@ -130,7 +130,7 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
       <Card className="border-white/10 bg-zinc-900/40">
         <CardHeader>
           <CardTitle className="text-lg">Фундаменти във времето</CardTitle>
-          <CardDescription>Няма достатъчно годишни/тримесечни данни от Yahoo за този символ.</CardDescription>
+          <CardDescription>Няма достатъчно годишни/тримесечни данни за този символ.</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -143,7 +143,7 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
           <div>
             <CardTitle className="text-lg">Фундаменти във времето</CardTitle>
             <CardDescription>
-              Годишни (FY) и тримесечни периоди от Yahoo. <strong className="text-foreground/90">Оперативната марж</strong> е в проценти
+              Годишни (FY) и тримесечни периоди. <strong className="text-foreground/90">Оперативната марж</strong> е в проценти
               (оперативна печалба / приходи) — отделна скала и форматиране от сумите в долари.
             </CardDescription>
           </div>

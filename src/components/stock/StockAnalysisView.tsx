@@ -18,7 +18,6 @@ import { translateStockError } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
-import { readBundleDataSource } from "@/lib/stockCache";
 
 type StockAnalysisViewProps = {
   ticker: string;
@@ -29,31 +28,6 @@ type StockAnalysisViewProps = {
   onForceRefresh?: () => void;
   onRetry?: () => void;
 };
-
-function DataSourceBadge({ bundle }: { bundle: StockAnalysisBundle }) {
-  const { t } = useI18n();
-  const source = readBundleDataSource(bundle);
-  const styles = {
-    fmp: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-    edgar: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-    admin: "border-sky-500/40 bg-sky-500/10 text-sky-400",
-    gemini: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-  } as const;
-  const keys = {
-    fmp: ["stock.sourceFmp", "stock.sourceFmpHint"],
-    edgar: ["stock.sourceEdgar", "stock.sourceEdgarHint"],
-    admin: ["stock.sourceAdmin", "stock.sourceAdminHint"],
-    gemini: ["stock.sourceGemini", "stock.sourceGeminiHint"],
-  } as const;
-  return (
-    <span
-      className={`shrink-0 cursor-help rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${styles[source]}`}
-      title={t(keys[source][1])}
-    >
-      {t(keys[source][0])}
-    </span>
-  );
-}
 
 export function StockAnalysisView({
   ticker,
@@ -149,7 +123,6 @@ export function StockAnalysisView({
         ) : null}
         <div className="space-y-2 sm:flex sm:items-start sm:gap-3 sm:space-y-0">
           <div className="flex items-center justify-end gap-2 sm:order-2">
-            <DataSourceBadge bundle={bundle} />
             {onForceRefresh && (
               <Button
                 type="button"

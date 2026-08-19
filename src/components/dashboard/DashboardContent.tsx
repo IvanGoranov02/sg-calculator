@@ -135,17 +135,7 @@ function OilNews({ items }: { items: MarketNewsItem[] }) {
   const { t } = useI18n();
   if (items.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        {t("dashboard.oilNewsFallback")}{" "}
-        <a
-          href="https://finance.yahoo.com/quote/CL=F"
-          target="_blank"
-          rel="noreferrer"
-          className="text-emerald-300 underline-offset-4 hover:underline"
-        >
-          Yahoo Finance
-        </a>
-      </p>
+      <p className="text-xs text-muted-foreground">{t("dashboard.oilNewsFallback")}</p>
     );
   }
 
