@@ -74,6 +74,7 @@ function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+import { isPlausibleShareCount } from "@/lib/shareCountSanity";
 import {
   mergeNullableFillGaps,
   mergeNullablePreferYahoo,
@@ -170,6 +171,13 @@ export function applyYahooFundamentalsToBundle(
   const mergeNullable = fillOnly ? mergeNullableFillGaps : mergeNullablePreferYahoo;
   const mergeOptional = (cur: number | undefined, yahoo: number | null): number | undefined =>
     fillOnly ? (cur ?? yahoo ?? undefined) : (yahoo ?? cur);
+  const mergeShares = (cur: number | undefined, yahoo: number | null): number | undefined => {
+    if (!fillOnly) return yahoo ?? cur;
+    if (cur != null && Number.isFinite(cur) && cur > 0 && isPlausibleShareCount(cur, yahoo)) {
+      return cur;
+    }
+    return yahoo ?? (cur != null && Number.isFinite(cur) && cur > 0 ? cur : undefined);
+  };
   const sym = bundle.quote.symbol.trim().toUpperCase();
   const { finA, finQ, cfA, cfQ, bsA, bsQ } = payload;
 
@@ -208,7 +216,7 @@ export function applyYahooFundamentalsToBundle(
       operatingIncome: mergeOptional(row.operatingIncome, yOi),
       ebitda: mergeOptional(row.ebitda, yEbitda),
       dilutedEps: mergeOptional(row.dilutedEps, yEps),
-      dilutedAverageShares: mergeOptional(row.dilutedAverageShares, yShares),
+      dilutedAverageShares: mergeShares(row.dilutedAverageShares, yShares),
     };
   });
 
@@ -313,7 +321,7 @@ export function applyYahooFundamentalsToBundle(
       operatingIncome: mergeOptional(row.operatingIncome, yOi),
       ebitda: mergeOptional(row.ebitda, yEbitda),
       dilutedEps: mergeOptional(row.dilutedEps, yEps),
-      dilutedAverageShares: mergeOptional(row.dilutedAverageShares, yShares),
+      dilutedAverageShares: mergeShares(row.dilutedAverageShares, yShares),
     };
   });
 

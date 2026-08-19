@@ -30,6 +30,7 @@ import {
   type CachePayload,
   type FundamentalsSource,
 } from "@/lib/stockCache";
+import { sanitizeBundleDilutedShares } from "@/lib/shareCountSanity";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import {
@@ -76,6 +77,7 @@ async function enrichFundamentalsPipeline(
   onProgress?.({ kind: "yahoo_fundamentals" });
   const payload = yahooPayload ?? (await fetchYahooFundamentalsPayload(sym));
   if (payload) applyYahooFundamentalsToBundle(bundle, payload, mergeMode);
+  sanitizeBundleDilutedShares(bundle);
   appendCalendarAnnualFromQuarterly(bundle);
   trimBundleToFundamentalsWindow(bundle);
   if (runGapFill) {
@@ -89,6 +91,7 @@ async function enrichFundamentalsPipeline(
     await fillBundleGapsFromGemini(bundle);
     markGapFillAttempt(bundle);
   }
+  sanitizeBundleDilutedShares(bundle);
 }
 
 async function persistStockCache(

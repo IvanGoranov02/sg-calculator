@@ -212,7 +212,20 @@ export type FlowSeries = {
   quarterly: Map<string, number>;
 };
 
-export function buildFlowSeries(rawPoints: EdgarFactPoint[]): FlowSeries {
+export type BuildFlowSeriesOptions = {
+  /**
+   * Recover missing quarters by differencing the YTD chain (3mo → 6mo → 9mo → FY).
+   * Correct for additive flows (revenue, cash flow). Wrong for weighted-average
+   * share counts: those are levels, so FY − 9mo is a few million, not WASO.
+   */
+  differenceYtd?: boolean;
+};
+
+export function buildFlowSeries(
+  rawPoints: EdgarFactPoint[],
+  opts?: BuildFlowSeriesOptions,
+): FlowSeries {
+  const differenceYtd = opts?.differenceYtd !== false;
   const durations = rawPoints.filter((p) => p.start);
   // A period is a fiscal year if ANY filing of it used an annual form (10-K/20-F/…),
   // even when a later non-annual filing (e.g. an 8-K/S-1 comparative) is the most
@@ -238,6 +251,14 @@ export function buildFlowSeries(rawPoints: EdgarFactPoint[]): FlowSeries {
     } else if (days >= 75 && days <= 105) {
       quarterly.set(p.end, p.val);
     }
+  }
+
+  if (!differenceYtd) {
+    // Level metrics: never subtract YTD averages. Missing Q4 → annual WASO.
+    for (const [fyEnd, fyVal] of annual) {
+      if (!quarterly.has(fyEnd)) quarterly.set(fyEnd, fyVal);
+    }
+    return { annual, quarterly };
   }
 
   // Difference the YTD chain (3mo → 6mo → 9mo → FY from the same fiscal-year start)
@@ -382,7 +403,6 @@ export function bundleFromCompanyFacts(
     "netIncome",
     "depreciationAmortization",
     "dilutedEps",
-    "dilutedShares",
     "operatingCashFlow",
     "capitalExpenditure",
     "investingCashFlow",
@@ -392,6 +412,9 @@ export function bundleFromCompanyFacts(
   ]) {
     flow[key] = buildFlowSeries(conceptPoints(facts, CONCEPTS[key]));
   }
+  flow.dilutedShares = buildFlowSeries(conceptPoints(facts, CONCEPTS.dilutedShares), {
+    differenceYtd: false,
+  });
 
   const instant: Record<string, InstantSeries> = {};
   for (const key of [

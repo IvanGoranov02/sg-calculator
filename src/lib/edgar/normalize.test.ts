@@ -120,6 +120,16 @@ describe("bundleFromCompanyFacts (real AAPL filing data)", () => {
     assert.ok((fy24?.ebitda ?? 0) > (fy24?.operatingIncome ?? 0));
   });
 
+  it("keeps Q4 diluted shares on the same scale as the annual WASO", () => {
+    const fy25 = bundle?.income.find((r) => r.date === "2025-09-27");
+    const q4 = bundle?.incomeQuarterly.find((r) => r.date === "2025-09-27");
+    const annual = fy25?.dilutedAverageShares;
+    const qShares = q4?.dilutedAverageShares;
+    assert.ok(annual != null && annual > 1_000_000_000);
+    assert.ok(qShares != null && qShares > 1_000_000_000);
+    assert.ok(Math.abs(qShares! - annual!) / annual! < 0.2);
+  });
+
   it("detects the filing currency", () => {
     assert.equal(detectReportingCurrency(facts), "USD");
   });
@@ -150,6 +160,35 @@ describe("buildFlowSeries", () => {
     const s = buildFlowSeries(points);
     assert.deepEqual([...s.annual.keys()], ["2024-12-31"]);
     assert.equal(s.annual.has("2025-03-31"), false);
+  });
+
+  it("recovers Q4 additive flows by YTD differencing", () => {
+    const points: EdgarFactPoint[] = [
+      { start: "2024-01-01", end: "2024-03-31", val: 100, form: "10-Q", filed: "2024-05-01" },
+      { start: "2024-01-01", end: "2024-06-30", val: 210, form: "10-Q", filed: "2024-08-01" },
+      { start: "2024-01-01", end: "2024-09-30", val: 330, form: "10-Q", filed: "2024-11-01" },
+      { start: "2024-01-01", end: "2024-12-31", val: 500, form: "10-K", filed: "2025-02-01" },
+    ];
+    const s = buildFlowSeries(points);
+    assert.equal(s.quarterly.get("2024-12-31"), 170);
+  });
+
+  it("does not YTD-difference weighted-average share counts", () => {
+    const points: EdgarFactPoint[] = [
+      { start: "2024-01-01", end: "2024-03-31", val: 330_000_000, form: "10-Q", filed: "2024-05-01" },
+      { start: "2024-04-01", end: "2024-06-30", val: 331_000_000, form: "10-Q", filed: "2024-08-01" },
+      { start: "2024-01-01", end: "2024-06-30", val: 330_500_000, form: "10-Q", filed: "2024-08-01" },
+      { start: "2024-07-01", end: "2024-09-30", val: 332_000_000, form: "10-Q", filed: "2024-11-01" },
+      { start: "2024-01-01", end: "2024-09-30", val: 331_000_000, form: "10-Q", filed: "2024-11-01" },
+      { start: "2024-01-01", end: "2024-12-31", val: 333_000_000, form: "10-K", filed: "2025-02-01" },
+    ];
+    const s = buildFlowSeries(points, { differenceYtd: false });
+    assert.equal(s.quarterly.get("2024-03-31"), 330_000_000);
+    assert.equal(s.quarterly.get("2024-06-30"), 331_000_000);
+    assert.equal(s.quarterly.get("2024-09-30"), 332_000_000);
+    // Missing 3-month Q4 → annual WASO, not FY − 9mo (≈ 2M).
+    assert.equal(s.quarterly.get("2024-12-31"), 333_000_000);
+    assert.notEqual(s.quarterly.get("2024-12-31"), 333_000_000 - 331_000_000);
   });
 });
 

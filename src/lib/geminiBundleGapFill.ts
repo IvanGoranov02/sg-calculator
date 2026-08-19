@@ -4,6 +4,7 @@
 
 import { callGeminiJson } from "@/lib/geminiFullStockBundle";
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
+import { isPlausibleShareCount, medianPositive } from "@/lib/shareCountSanity";
 import { bundleHasYahooSecDataGaps } from "@/lib/stockBundleGaps";
 import { annualDisplayFiscalYears } from "@/lib/stockPeriodCore";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -33,6 +34,18 @@ function mergeGapNullable(cur: number | null | undefined, incoming: unknown): nu
   return cur;
 }
 
+function mergeGapShares(
+  cur: number | undefined,
+  incoming: unknown,
+  anchor: number | null,
+): number | undefined {
+  if (cur != null && Number.isFinite(cur) && cur > 0) return cur;
+  const n = pickNum(incoming);
+  if (n == null || n <= 0) return cur;
+  if (!isPlausibleShareCount(n, anchor)) return cur;
+  return n;
+}
+
 function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): void {
   if (!parsed || typeof parsed !== "object") return;
   const b = parsed as Record<string, unknown>;
@@ -46,6 +59,8 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
       if (fy) incByFy.set(fy, o);
     }
   }
+
+  const incomeShareAnchor = medianPositive(bundle.income.map((r) => r.dilutedAverageShares));
 
   bundle.income = bundle.income.map((row) => {
     const g = incByFy.get(row.fiscalYear);
@@ -63,10 +78,11 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
       ebitda: row.ebitda == null ? (pickNum(g.ebitda ?? g.EBITDA) ?? undefined) : row.ebitda,
       dilutedEps:
         row.dilutedEps == null ? (pickNum(g.dilutedEps ?? g.eps) ?? undefined) : row.dilutedEps,
-      dilutedAverageShares:
-        row.dilutedAverageShares == null
-          ? (pickNum(g.dilutedAverageShares ?? g.dilutedShares) ?? undefined)
-          : row.dilutedAverageShares,
+      dilutedAverageShares: mergeGapShares(
+        row.dilutedAverageShares,
+        g.dilutedAverageShares ?? g.dilutedShares,
+        incomeShareAnchor,
+      ),
     };
   });
 
@@ -128,6 +144,9 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
     }
   }
 
+  const qShareAnchor =
+    medianPositive(bundle.incomeQuarterly.map((r) => r.dilutedAverageShares)) ?? incomeShareAnchor;
+
   bundle.incomeQuarterly = bundle.incomeQuarterly.map((row) => {
     const g = incQByDate.get(row.date.slice(0, 10));
     if (!g) return row;
@@ -139,10 +158,11 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
       netIncome: mergeGapScalar(row.netIncome, g.netIncome),
       dilutedEps:
         row.dilutedEps == null ? (pickNum(g.dilutedEps ?? g.eps) ?? undefined) : row.dilutedEps,
-      dilutedAverageShares:
-        row.dilutedAverageShares == null
-          ? (pickNum(g.dilutedAverageShares ?? g.dilutedShares) ?? undefined)
-          : row.dilutedAverageShares,
+      dilutedAverageShares: mergeGapShares(
+        row.dilutedAverageShares,
+        g.dilutedAverageShares ?? g.dilutedShares,
+        qShareAnchor,
+      ),
     };
   });
 
