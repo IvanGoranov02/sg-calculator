@@ -579,7 +579,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartRevenueDesc")}
             data={chartRows}
             series={series.revenue}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "revenue", freq, t)}
           />
@@ -588,7 +587,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartGrossProfitSoloDesc")}
             data={chartRows}
             series={series.grossSolo}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "grossProfit", freq, t)}
           />
@@ -597,7 +595,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartNetIncomeSoloDesc")}
             data={chartRows}
             series={series.netIncomeSolo}
-            chartType="line"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "netIncome", freq, t)}
           />
@@ -607,7 +604,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartDilutedEpsDesc")}
               data={chartRows}
               series={series.dilutedEpsSolo}
-              chartType="line"
               valueFormat="perShare"
               growthNote={growthFooterLine(chartRows, "dilutedEps", freq, t)}
             />
@@ -618,7 +614,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartDilutedSharesDesc")}
               data={chartRows}
               series={series.dilutedSharesSolo}
-              chartType="line"
               valueFormat="compactCount"
               growthNote={growthFooterLine(chartRows, "dilutedShares", freq, t)}
             />
@@ -628,7 +623,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartPeTtmDesc")}
             data={chartRows}
             series={series.peTtm}
-            chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "peTtm", freq, t)}
           />
@@ -637,7 +631,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartPsTtmDesc")}
             data={chartRows}
             series={series.psTtm}
-            chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "psTtm", freq, t)}
           />
@@ -647,7 +640,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartOperatingIncomeSoloDesc")}
               data={chartRows}
               series={series.operatingIncomeSolo}
-              chartType="line"
               valueFormat="currency"
               growthNote={growthFooterLine(chartRows, "operatingIncome", freq, t)}
             />
@@ -657,7 +649,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartOpexSoloDesc")}
             data={chartRows}
             series={series.opexSolo}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "operatingExpenses", freq, t)}
           />
@@ -666,7 +657,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartMarginsDesc")}
             data={chartRows}
             series={series.margins}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterMulti(chartRows, ["grossMargin", "operatingMargin", "netMargin"], freq, t)}
           />
@@ -676,7 +666,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartEbitdaNiDesc")}
               data={chartRows}
               series={series.ebitdaNi}
-              chartType="line"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["ebitda", "netIncome"], freq, t)}
             />
@@ -687,7 +676,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartEbitdaSoloDesc")}
               data={chartRows}
               series={series.ebitdaSolo}
-              chartType="bar"
               valueFormat="currency"
               growthNote={growthFooterLine(chartRows, "ebitda", freq, t)}
             />
@@ -697,7 +685,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartOcfSoloDesc")}
             data={chartRows}
             series={series.ocfSolo}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "ocf", freq, t)}
           />
@@ -706,7 +693,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartFcfSoloDesc")}
             data={chartRows}
             series={series.fcfSolo}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "fcf", freq, t)}
           />
@@ -715,7 +701,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartCapexSoloDesc")}
             data={chartRows}
             series={series.capexSolo}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "capex", freq, t)}
           />
@@ -724,7 +709,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartInvestFinanceDesc")}
             data={chartRows}
             series={series.investFinance}
-            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterMulti(chartRows, ["investCf", "financeCf"], freq, t)}
           />
@@ -733,7 +717,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartBalanceDesc")}
             data={chartRows}
             series={series.balance3}
-            chartType="line"
             valueFormat="currency"
             growthNote={growthFooterMulti(chartRows, ["totalAssets", "totalDebt", "equity"], freq, t)}
           />
@@ -742,7 +725,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartCashNetDebtDesc")}
             data={chartRows}
             series={series.cashDebt}
-            chartType="line"
             valueFormat="currency"
             growthNote={growthFooterMulti(chartRows, ["cash", "netDebt"], freq, t)}
           />
@@ -751,7 +733,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartRoeRoaDesc")}
             data={chartRows}
             series={series.roeRoa}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterMulti(chartRows, ["roe", "roa"], freq, t)}
           />
@@ -760,7 +741,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartCurrentRatioDesc")}
             data={chartRows}
             series={series.currentRatio}
-            chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "currentRatio", freq, t)}
           />
@@ -769,7 +749,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartFcfMarginDesc")}
             data={chartRows}
             series={series.fcfMargin}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterLine(chartRows, "fcfMargin", freq, t)}
           />
@@ -778,7 +757,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={freq === "annual" ? t("chartsFund.chartPopGrowthDescAnnual") : t("chartsFund.chartPopGrowthDescQ")}
             data={chartRows}
             series={series.popGrowth}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterMulti(chartRows, ["revPopGrowth", "niPopGrowth"], freq, t)}
           />
@@ -788,7 +766,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartShareholderDesc")}
               data={chartRows}
               series={series.shareholder}
-              chartType="bar"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["dividendsPaidPos", "stockRepurchasePos"], freq, t)}
             />
@@ -799,7 +776,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartArInvDesc")}
               data={chartRows}
               series={series.arInv}
-              chartType="line"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["ar", "inventory"], freq, t)}
             />
@@ -810,7 +786,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartGwLtDesc")}
               data={chartRows}
               series={series.gwLt}
-              chartType="line"
               valueFormat="currency"
               growthNote={growthFooterMulti(chartRows, ["goodwill", "longTermDebt"], freq, t)}
             />
@@ -821,7 +796,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartEbitdaOcfMarginDesc")}
               data={chartRows}
               series={series.ebitdaOcfMargin}
-              chartType="line"
               valueFormat="percent"
               growthNote={growthFooterMulti(chartRows, ["ebitdaMargin", "ocfMargin"], freq, t)}
             />
@@ -831,7 +805,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartDebtPctCapitalDesc")}
             data={chartRows}
             series={series.debtPctCapital}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterLine(chartRows, "debtPctCapital", freq, t)}
           />
@@ -841,7 +814,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               description={t("chartsFund.chartNetDebtEbitdaDesc")}
               data={chartRows}
               series={series.netDebtEbitda}
-              chartType="line"
               valueFormat="ratio"
               growthNote={growthFooterLine(chartRows, "netDebtToEbitda", freq, t)}
             />
@@ -851,7 +823,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartQuickRatioDesc")}
             data={chartRows}
             series={series.quickRatio}
-            chartType="line"
             valueFormat="ratio"
             growthNote={growthFooterLine(chartRows, "quickRatio", freq, t)}
           />
@@ -860,7 +831,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartCapexIntensityDesc")}
             data={chartRows}
             series={series.capexIntensity}
-            chartType="line"
             valueFormat="percent"
             growthNote={growthFooterLine(chartRows, "capexIntensity", freq, t)}
           />

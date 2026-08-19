@@ -42,7 +42,8 @@ type FundamentalChartCardProps = {
   data: Record<string, unknown>[];
   xKey?: string;
   series: FundamentalSeries[];
-  chartType: "bar" | "line";
+  /** Defaults to columns for one series, lines when several series share the chart. */
+  chartType?: "bar" | "line";
   valueFormat: ValueFormat;
   className?: string;
   /** One-line growth vs prior period (last two points in range). */
@@ -97,6 +98,7 @@ export function FundamentalChartCard({
   growthNote,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
+  const resolvedType = chartType ?? (series.length > 1 ? "line" : "bar");
   const manyTicks = data.length > 10;
   const keys = series.map((s) => s.dataKey);
   const coverage = seriesCoverage(data, keys, xKey);
@@ -120,7 +122,7 @@ export function FundamentalChartCard({
 
   const renderChart = () => (
     <ResponsiveContainer width="100%" height="100%">
-      {chartType === "bar" ? (
+      {resolvedType === "bar" ? (
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: manyTicks ? 24 : 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
           <XAxis
