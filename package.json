@@ -8,9 +8,10 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && prisma db push && prisma db execute --file prisma/lock-supabase-api.sql --schema prisma/schema.prisma && next build",
     "build:skip-db": "prisma generate && next build",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push && prisma db execute --file prisma/lock-supabase-api.sql --schema prisma/schema.prisma",
+    "db:lock-api": "prisma db execute --file prisma/lock-supabase-api.sql --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
