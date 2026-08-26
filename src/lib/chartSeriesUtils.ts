@@ -70,3 +70,18 @@ export function seriesCoverage(
   return { total: rows.length, pointCount, firstLabel, lastLabel };
 }
 
+/**
+ * Which category-axis indexes get a label. Always first + last; stride the rest
+ * so about `maxLabels` fit. Labels stay centered on their bar — unlike Recharts
+ * `preserveStartEnd` + angled ticks, which drift onto the wrong columns.
+ */
+export function axisTickVisible(index: number, total: number, maxLabels: number): boolean {
+  if (total <= 0 || index < 0 || index >= total) return false;
+  if (total <= maxLabels) return true;
+  if (index === 0 || index === total - 1) return true;
+  const stride = Math.ceil((total - 1) / (maxLabels - 1));
+  if (index % stride !== 0) return false;
+  // Hide a stride tick that would sit on top of the last label.
+  return total - 1 - index >= Math.ceil(stride / 2);
+}
+

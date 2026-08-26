@@ -27,6 +27,15 @@ export function inferCurrencyFromSymbol(symbol: string): string {
 }
 
 /**
+ * Exchange suffix can hint EUR/GBP. A bare US ticker must not overwrite the
+ * form's EUR default — that's how "added in euros, stored as dollars" happened.
+ */
+export function listingCurrencyOverride(symbol: string): string | null {
+  const inferred = inferCurrencyFromSymbol(symbol);
+  return inferred === "USD" ? null : inferred;
+}
+
+/**
  * Convert `amount` from `from` to `to`. Returns null if cross-rate is unavailable.
  * Supports USD, EUR, GBP via USD bridge.
  */

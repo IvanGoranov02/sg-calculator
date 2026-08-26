@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { seriesCoverage } from "@/lib/chartSeriesUtils";
@@ -99,7 +100,6 @@ export function FundamentalChartCard({
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const resolvedType = chartType ?? (series.length > 1 ? "line" : "bar");
-  const manyTicks = data.length > 10;
   const keys = series.map((s) => s.dataKey);
   const coverage = seriesCoverage(data, keys, xKey);
   const hasPoints = coverage.pointCount > 0;
@@ -120,20 +120,21 @@ export function FundamentalChartCard({
     return formatTooltipValue(valueFormat, n);
   }
 
-  const renderChart = () => (
+  const renderChart = (maxLabels: number) => (
     <ResponsiveContainer width="100%" height="100%">
       {resolvedType === "bar" ? (
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: manyTicks ? 24 : 4 }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
           <XAxis
             dataKey={xKey}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            tick={(props) => (
+              <CategoryAxisTick {...props} total={data.length} maxLabels={maxLabels} />
+            )}
             tickLine={false}
             axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
-            interval={manyTicks ? "preserveStartEnd" : 0}
-            angle={manyTicks ? -40 : 0}
-            textAnchor={manyTicks ? "end" : "middle"}
-            height={manyTicks ? 56 : 28}
+            interval={0}
+            minTickGap={0}
+            height={28}
           />
           <YAxis
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
@@ -165,17 +166,18 @@ export function FundamentalChartCard({
           ))}
         </BarChart>
       ) : (
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: manyTicks ? 24 : 4 }}>
+        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
           <XAxis
             dataKey={xKey}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+            tick={(props) => (
+              <CategoryAxisTick {...props} total={data.length} maxLabels={maxLabels} />
+            )}
             tickLine={false}
             axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
-            interval={manyTicks ? "preserveStartEnd" : 0}
-            angle={manyTicks ? -40 : 0}
-            textAnchor={manyTicks ? "end" : "middle"}
-            height={manyTicks ? 56 : 28}
+            interval={0}
+            minTickGap={0}
+            height={28}
           />
           <YAxis
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
@@ -278,7 +280,7 @@ export function FundamentalChartCard({
             </div>
           ) : (
             <div className="relative h-full min-h-0 min-w-0 w-full">
-              <div className="absolute inset-0 min-h-0 min-w-0">{renderChart()}</div>
+              <div className="absolute inset-0 min-h-0 min-w-0">{renderChart(8)}</div>
             </div>
           )}
           {coverageNote ? (
@@ -298,7 +300,7 @@ export function FundamentalChartCard({
           {growthNote ? <p className="mt-1 text-xs text-muted-foreground">{growthNote}</p> : null}
         </div>
         <div className="flex min-h-0 flex-col gap-4">
-          <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart()}</div>
+          <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart(16)}</div>
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10">
             <table className="w-full min-w-[18rem] text-sm">
               <thead className="sticky top-0 bg-zinc-950/95 text-xs text-muted-foreground">

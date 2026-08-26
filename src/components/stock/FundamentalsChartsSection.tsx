@@ -343,7 +343,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
   const series = useMemo(
     () => ({
       revenue: [{ dataKey: "revenue", color: C.revenue, label: t("income.revenue") }] satisfies FundamentalSeries[],
-      grossSolo: [{ dataKey: "grossProfit", color: C.gross, label: t("income.grossProfit") }] satisfies FundamentalSeries[],
       netIncomeSolo: [{ dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") }] satisfies FundamentalSeries[],
       dilutedEpsSolo: [{ dataKey: "dilutedEps", color: "#f472b6", label: t("annual.dilutedEps") }] satisfies FundamentalSeries[],
       dilutedSharesSolo: [
@@ -581,14 +580,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             series={series.revenue}
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "revenue", freq, t)}
-          />
-          <FundamentalChartCard
-            title={t("chartsFund.chartGrossProfitSolo")}
-            description={t("chartsFund.chartGrossProfitSoloDesc")}
-            data={chartRows}
-            series={series.grossSolo}
-            valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "grossProfit", freq, t)}
           />
           <FundamentalChartCard
             title={t("chartsFund.chartNetIncomeSolo")}

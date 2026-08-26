@@ -15,7 +15,7 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import {
   convertPortfolioMoney,
-  inferCurrencyFromSymbol,
+  listingCurrencyOverride,
   normalizePortfolioCurrency,
   type PortfolioFxRates,
 } from "@/lib/portfolioFx";
@@ -355,7 +355,7 @@ export function PortfolioClient() {
   }
 
   const rows = useMemo(() => {
-    return holdings.map((h) => {
+    const mapped = holdings.map((h) => {
       const q = quotes[h.symbolYahoo];
       const qQty = Number(h.quantity);
       const qAvg = Number(h.avgPrice);
@@ -405,6 +405,7 @@ export function PortfolioClient() {
         fxMismatch,
       };
     });
+    return mapped.sort((a, b) => (b.mv ?? -1) - (a.mv ?? -1));
   }, [holdings, quotes, fx]);
 
   const analyticsRows = useMemo<AnalyticsRow[]>(
@@ -534,7 +535,8 @@ export function PortfolioClient() {
               onChange={(e) => {
                 const v = e.target.value;
                 setSym(v);
-                if (v.trim()) setManualCurrency(inferCurrencyFromSymbol(v));
+                const listing = listingCurrencyOverride(v);
+                if (listing) setManualCurrency(listing);
               }}
               className="border-white/10 bg-zinc-950"
             />
@@ -649,7 +651,7 @@ export function PortfolioClient() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ h, q, qQty, holdingCcy, quoteCcy, mv, cost, pl, plPct, estAnnual, fxMismatch }) => (
+              {rows.map(({ h, q, qQty, holdingCcy, mv, cost, pl, plPct, estAnnual, fxMismatch, priceInHolding }) => (
                 <TableRow key={h.id} className="border-white/10">
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
                     {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
@@ -663,9 +665,6 @@ export function PortfolioClient() {
                         >
                           {h.symbolYahoo}
                         </Link>
-                        {h.symbolT212 ? (
-                          <span className="ml-1 text-xs text-muted-foreground">({h.symbolT212})</span>
-                        ) : null}
                       </span>
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
@@ -695,16 +694,9 @@ export function PortfolioClient() {
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {q && Number.isFinite(q.price) && q.price > 0 ? (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span>{fmtMoney(q.price, quoteCcy)}</span>
-                        {quoteCcy !== holdingCcy ? (
-                          <span className="text-[10px] text-muted-foreground">{quoteCcy}</span>
-                        ) : null}
-                      </div>
-                    ) : (
-                      t("portfolio.quoteMissing")
-                    )}
+                    {priceInHolding != null
+                      ? fmtMoney(priceInHolding, holdingCcy)
+                      : t("portfolio.quoteMissing")}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {mv != null ? fmtMoney(mv, holdingCcy) : t("portfolio.quoteMissing")}

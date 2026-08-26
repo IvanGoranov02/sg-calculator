@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -256,15 +257,17 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
               <div className="relative h-[240px] w-full min-h-[240px] min-w-0">
                 <div className="absolute inset-0 min-h-0 min-w-0">
                   <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <BarChart data={pack.rows} margin={{ top: 8, right: 12, left: 4, bottom: 40 }}>
+                    <BarChart data={pack.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                       <XAxis
                         dataKey="label"
-                        tick={{ fill: "var(--muted-foreground)", fontSize: 9 }}
-                        interval="preserveStartEnd"
-                        angle={-32}
-                        textAnchor="end"
-                        height={44}
+                        tick={(props) => (
+                          <CategoryAxisTick {...props} total={pack.rows.length} maxLabels={8} />
+                        )}
+                        tickLine={false}
+                        interval={0}
+                        minTickGap={0}
+                        height={28}
                       />
                       <YAxis
                         tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { seriesCoverage, seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
+import { axisTickVisible, seriesCoverage, seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
 
 const rows = [
   { label: "Q1", a: null, b: null },
@@ -53,5 +53,38 @@ describe("seriesCoverage", () => {
     assert.equal(c.pointCount, 1);
     assert.equal(c.firstLabel, "Mar 26");
     assert.equal(c.lastLabel, "Mar 26");
+  });
+});
+
+describe("axisTickVisible", () => {
+  it("shows every tick when the range is short", () => {
+    for (let i = 0; i < 8; i++) {
+      assert.equal(axisTickVisible(i, 8, 8), true);
+    }
+  });
+
+  it("keeps first/last and still labels 2024 on a 5y quarterly axis", () => {
+    // 20 quarters ending Jun 2026, same window as AAPL 5Y.
+    const labels: string[] = [];
+    const start = new Date("2021-09-25T12:00:00Z");
+    for (let i = 0; i < 20; i++) {
+      const d = new Date(start);
+      d.setUTCMonth(d.getUTCMonth() + i * 3);
+      labels.push(
+        d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
+      );
+    }
+    const shown = labels.filter((_, i) => axisTickVisible(i, labels.length, 8));
+    assert.equal(axisTickVisible(0, 20, 8), true);
+    assert.equal(axisTickVisible(19, 20, 8), true);
+    assert.ok(
+      shown.some((l) => l.endsWith("24")),
+      `2024 missing from ${shown.join(", ")}`,
+    );
+    // Stride ticks must not sit on the neighboring bar of the last label.
+    const lastShown = [...Array(20).keys()].filter((i) => axisTickVisible(i, 20, 8));
+    for (let k = 1; k < lastShown.length; k++) {
+      assert.ok(lastShown[k]! - lastShown[k - 1]! >= 2);
+    }
   });
 });
