@@ -58,6 +58,10 @@ describe("resolveStockSearchQuery", () => {
     assert.equal(resolveStockSearchQuery("APPLE INC", sug, companies), "AAPL");
   });
 
+  it("resolves single-token company names like APPLE", () => {
+    assert.equal(resolveStockSearchQuery("APPLE", [], companies), "AAPL");
+  });
+
   it("passes through a valid ticker not in the US index (non-US)", () => {
     assert.equal(resolveStockSearchQuery("SAP.DE", [], companies), "SAP.DE");
   });

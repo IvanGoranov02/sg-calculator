@@ -1,6 +1,6 @@
 import { fetchStockBundleFromEdgar } from "@/lib/edgar/client";
 import { fetchStockBundleFromFmp, fmpApiKey } from "@/lib/fmp/client";
-import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
+import { fetchStockBundleFromGemini, GEMINI_FULL_BUNDLE_BUDGET_MS } from "@/lib/geminiFullStockBundle";
 import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
 import {
   backfillQuarterlyHistoryFromGemini,
@@ -222,6 +222,7 @@ async function fetchFreshFundamentals(
   if (!bundle) {
     bundle = await fetchStockBundleFromGemini(sym, {
       onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+      budgetMs: GEMINI_FULL_BUNDLE_BUDGET_MS,
     });
   }
   console.log(`[fundamentals] ${sym}: source=${source}`);

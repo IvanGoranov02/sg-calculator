@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   DIP_RANGES,
+  dipChartRowForQuote,
   dipMetricsForRange,
   dipRangeTradingDays,
   dipVsAveragePct,
@@ -72,5 +73,39 @@ describe("dipMetricsForRange", () => {
     assert.ok(m.dipVsWindowSmaPct != null);
     assert.ok(m.lookbackChangePct != null);
     assert.ok(Math.abs(m.lookbackChangePct - ((90 - 100) / 100) * 100) < 1e-9);
+  });
+});
+
+describe("dipChartRowForQuote", () => {
+  it("omits symbols without window SMA instead of falling back to 200d", () => {
+    const quote = {
+      symbol: "TEST",
+      price: 90,
+      dipVsSma200Pct: -15,
+      twoHundredDayAverage: 100,
+    };
+    const row = dipChartRowForQuote(quote, [], "1m");
+    assert.equal(row, null);
+  });
+
+  it("uses window SMA dip when history is available", () => {
+    const bars = [
+      { date: "2024-01-01", close: 100 },
+      { date: "2024-01-02", close: 102 },
+      { date: "2024-01-03", close: 101 },
+      { date: "2024-01-04", close: 99 },
+      { date: "2024-01-05", close: 90 },
+    ];
+    const quote = {
+      symbol: "TEST",
+      price: 90,
+      dipVsSma200Pct: -15,
+      twoHundredDayAverage: 100,
+    };
+    const row = dipChartRowForQuote(quote, bars, "5d");
+    assert.ok(row);
+    assert.notEqual(row!.dipPct, quote.dipVsSma200Pct);
+    assert.ok(row!.windowSma != null);
+    assert.equal(row!.dipPct, ((90 - row!.windowSma!) / row!.windowSma!) * 100);
   });
 });

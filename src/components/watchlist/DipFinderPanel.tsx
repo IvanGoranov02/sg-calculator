@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { WatchlistDipChart, type DipChartDatum } from "@/components/watchlist/WatchlistDipChart";
 import {
   DIP_RANGES,
-  closesOldestFirst,
-  dipMetricsForRange,
+  dipChartRowForQuote,
   type DipRange,
   type QuoteHistoryBar,
 } from "@/lib/dipFinder";
@@ -35,18 +34,8 @@ export function DipFinderPanel({ quotes, history, compact = false }: DipFinderPa
     const out: DipChartDatum[] = [];
     for (const q of quotes) {
       const bars = history[q.symbol] ?? history[q.symbol.toUpperCase()] ?? [];
-      const closes = closesOldestFirst(bars);
-      const m = dipMetricsForRange(closes, dipRange, q.price);
-      const dipPct = m.dipVsWindowSmaPct ?? q.dipVsSma200Pct;
-      if (dipPct == null || !Number.isFinite(dipPct)) continue;
-      out.push({
-        symbol: q.symbol,
-        dipPct,
-        dipVsSma200Pct: q.dipVsSma200Pct,
-        lookbackChangePct: m.lookbackChangePct,
-        windowSma: m.windowSma,
-        sma200: q.twoHundredDayAverage,
-      });
+      const row = dipChartRowForQuote(q, bars, dipRange);
+      if (row) out.push(row);
     }
     return out;
   }, [quotes, history, dipRange]);

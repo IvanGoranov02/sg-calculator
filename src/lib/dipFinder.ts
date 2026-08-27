@@ -105,3 +105,39 @@ export function dipMetricsForRange(
     lookbackChangePct: lookbackChangePct(closesOldestFirst, window),
   };
 }
+
+export type DipFinderQuoteInput = {
+  symbol: string;
+  price: number;
+  dipVsSma200Pct: number | null;
+  twoHundredDayAverage: number | null;
+};
+
+export type DipChartRow = {
+  symbol: string;
+  dipPct: number;
+  dipVsSma200Pct: number | null;
+  lookbackChangePct: number | null;
+  windowSma: number | null;
+  sma200: number | null;
+};
+
+/** Chart row for the selected range; omits symbols without window SMA (no 200d fallback). */
+export function dipChartRowForQuote(
+  quote: DipFinderQuoteInput,
+  bars: QuoteHistoryBar[],
+  dipRange: DipRange,
+): DipChartRow | null {
+  const closes = closesOldestFirst(bars);
+  const m = dipMetricsForRange(closes, dipRange, quote.price);
+  const dipPct = m.dipVsWindowSmaPct;
+  if (dipPct == null || !Number.isFinite(dipPct)) return null;
+  return {
+    symbol: quote.symbol,
+    dipPct,
+    dipVsSma200Pct: quote.dipVsSma200Pct,
+    lookbackChangePct: m.lookbackChangePct,
+    windowSma: m.windowSma,
+    sma200: quote.twoHundredDayAverage,
+  };
+}

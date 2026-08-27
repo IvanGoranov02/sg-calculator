@@ -65,8 +65,18 @@ export function resolveStockSearchQuery(
     if (mapped) return mapped;
   }
 
+  const resolvedSuggestions =
+    suggestions.length > 0 ? suggestions : suggestCompanies(companies, q);
+  const top = resolvedSuggestions[0];
+  if (top) {
+    const qDash = classShareYahooTicker(q);
+    const nameMatch = top.n.toUpperCase().includes(q);
+    const tickerMatch = tickerMatchesQuery(top.s, q, qDash);
+    if (nameMatch || tickerMatch) return top.s;
+  }
+
   if (!isValidStockSymbolInput(q)) {
-    return suggestions[0]?.s ?? null;
+    return resolvedSuggestions[0]?.s ?? null;
   }
 
   return q;

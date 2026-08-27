@@ -1,8 +1,17 @@
+import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 
 import { dipRangeFetchCalendarDays, type QuoteHistoryBar } from "@/lib/dipFinder";
-import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
+import { parseQuotesHistorySymbols } from "@/lib/quotesHistory";
+import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
+
+export const dynamic = "force-dynamic";
+/** Keep below Vercel Preview ceiling — parallel Yahoo fetches are slow. */
+export const maxDuration = 60;
+
+const HISTORY_LIMIT = 12;
+const HISTORY_WINDOW_MS = 60_000;
 
 function toIsoDate(d: unknown): string | null {
   if (d == null || d === "") return null;
@@ -57,16 +66,20 @@ async function fetchDailyCloses(symbol: string, period1: Date): Promise<QuoteHis
 }
 
 export async function GET(request: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const clientKey = clientKeyFromRequest(request, userId);
+  const limited = checkRateLimit("quotes-history", clientKey, HISTORY_LIMIT, HISTORY_WINDOW_MS);
+  if (!limited.ok) {
+    return rateLimitResponse(limited.retryAfterSec);
+  }
+
   const { searchParams } = new URL(request.url);
-  const raw = searchParams.get("symbols") ?? "";
-  const symbols = Array.from(
-    new Set(
-      raw
-        .split(",")
-        .map((s) => s.trim().toUpperCase())
-        .filter((s) => /^[A-Z0-9.\-^]+$/.test(s)),
-    ),
-  ).slice(0, WATCHLIST_MAX);
+  const symbols = parseQuotesHistorySymbols(searchParams.get("symbols") ?? "");
 
   if (symbols.length === 0) {
     return NextResponse.json({ history: {} as Record<string, QuoteHistoryBar[]> });

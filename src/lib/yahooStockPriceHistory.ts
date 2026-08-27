@@ -23,7 +23,7 @@ async function resolveYahooSymbol(input: string): Promise<string> {
       return String((q as { symbol?: string }).symbol ?? sym).toUpperCase();
     }
   } catch {
-    // Quote timed out / failed — still try the ticker as Yahoo listed it.
+    // Quote timed out / failed — fall through to search before failing closed.
   }
 
   try {
@@ -40,10 +40,10 @@ async function resolveYahooSymbol(input: string): Promise<string> {
 
     if (hit?.symbol) return hit.symbol.toUpperCase();
   } catch {
-    /* search is optional */
+    /* search failed — fail closed below */
   }
 
-  return sym;
+  throw new Error(`Yahoo symbol not found: ${sym}`);
 }
 
 function toIsoDate(d: unknown): string | null {
