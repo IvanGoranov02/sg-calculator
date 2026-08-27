@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -42,6 +43,8 @@ type FundamentalChartCardProps = {
   description?: string;
   data: Record<string, unknown>[];
   xKey?: string;
+  /** When xKey is ISO period end, formats axis + tooltip labels. */
+  xLabelFormatter?: (value: string) => string;
   series: FundamentalSeries[];
   /** Defaults to columns for one series, lines when several series share the chart. */
   chartType?: "bar" | "line";
@@ -92,6 +95,7 @@ export function FundamentalChartCard({
   description,
   data,
   xKey = "label",
+  xLabelFormatter,
   series,
   chartType,
   valueFormat,
@@ -120,6 +124,31 @@ export function FundamentalChartCard({
     return formatTooltipValue(valueFormat, n);
   }
 
+  const periodDisplayLabels = useMemo(() => {
+    if (xKey !== "periodEnd") return null;
+    const m = new Map<string, string>();
+    for (const row of data) {
+      const pe = row.periodEnd;
+      if (typeof pe !== "string" || !pe) continue;
+      const display =
+        typeof row.label === "string" && row.label.trim()
+          ? row.label
+          : xLabelFormatter
+            ? xLabelFormatter(pe)
+            : pe;
+      m.set(pe, display);
+    }
+    return m;
+  }, [data, xKey, xLabelFormatter]);
+
+  const formatCategoryLabel = (value: unknown): string => {
+    if (value == null) return "";
+    const s = String(value);
+    const mapped = periodDisplayLabels?.get(s);
+    if (mapped) return mapped;
+    return xLabelFormatter ? xLabelFormatter(s) : s;
+  };
+
   const renderChart = (maxLabels: number) => (
     <ResponsiveContainer width="100%" height="100%">
       {resolvedType === "bar" ? (
@@ -128,7 +157,12 @@ export function FundamentalChartCard({
           <XAxis
             dataKey={xKey}
             tick={(props) => (
-              <CategoryAxisTick {...props} total={data.length} maxLabels={maxLabels} />
+              <CategoryAxisTick
+                {...props}
+                total={data.length}
+                maxLabels={maxLabels}
+                formatValue={xLabelFormatter ? (v) => formatCategoryLabel(v) : undefined}
+              />
             )}
             tickLine={false}
             axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
@@ -145,6 +179,7 @@ export function FundamentalChartCard({
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
+            labelFormatter={(label) => formatCategoryLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
               border: "1px solid rgba(255,255,255,0.1)",
@@ -171,7 +206,12 @@ export function FundamentalChartCard({
           <XAxis
             dataKey={xKey}
             tick={(props) => (
-              <CategoryAxisTick {...props} total={data.length} maxLabels={maxLabels} />
+              <CategoryAxisTick
+                {...props}
+                total={data.length}
+                maxLabels={maxLabels}
+                formatValue={xLabelFormatter ? (v) => formatCategoryLabel(v) : undefined}
+              />
             )}
             tickLine={false}
             axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
@@ -188,6 +228,7 @@ export function FundamentalChartCard({
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
+            labelFormatter={(label) => formatCategoryLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
               border: "1px solid rgba(255,255,255,0.1)",
@@ -317,7 +358,12 @@ export function FundamentalChartCard({
                 {tableRows.map((row, i) => (
                   <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/5">
                     <td className="px-3 py-1.5 text-left font-mono text-xs text-muted-foreground">
-                      {String(row[xKey] ?? "")}
+                      {String(
+                        row.label ??
+                          (xLabelFormatter
+                            ? xLabelFormatter(String(row[xKey] ?? ""))
+                            : row[xKey] ?? ""),
+                      )}
                     </td>
                     {series.map((s) => {
                       const v = row[s.dataKey];

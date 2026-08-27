@@ -9,6 +9,7 @@ type CategoryAxisTickProps = {
   index?: number;
   total: number;
   maxLabels: number;
+  formatValue?: (value: unknown) => string;
 };
 
 /** Centered category labels; hides extras instead of letting Recharts shift them. */
@@ -19,8 +20,15 @@ export function CategoryAxisTick({
   index = 0,
   total,
   maxLabels,
+  formatValue,
 }: CategoryAxisTickProps) {
   if (!axisTickVisible(index, total, maxLabels)) return <g />;
+  const label =
+    payload?.value == null
+      ? ""
+      : formatValue
+        ? formatValue(payload.value)
+        : String(payload.value);
   return (
     <text
       x={tickCoord(x)}
@@ -30,7 +38,7 @@ export function CategoryAxisTick({
       fill="var(--muted-foreground)"
       fontSize={10}
     >
-      {payload?.value == null ? "" : String(payload.value)}
+      {label}
     </text>
   );
 }
