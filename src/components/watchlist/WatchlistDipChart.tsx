@@ -13,25 +13,30 @@ import {
 
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
+import type { DipRange } from "@/lib/dipFinder";
 
-type WatchlistDipChartProps = {
-  quotes: WatchlistQuoteRow[];
+export type DipChartDatum = {
+  symbol: string;
+  dipPct: number;
+  dipVsSma200Pct: number | null;
+  lookbackChangePct: number | null;
+  windowSma: number | null;
+  sma200: number | null;
 };
 
-export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
+type WatchlistDipChartProps = {
+  rows: DipChartDatum[];
+  range: DipRange;
+};
+
+export function WatchlistDipChart({ rows, range }: WatchlistDipChartProps) {
   const { t } = useI18n();
 
-  const rows = [...quotes]
-    .filter((q) => q.dipVsSma200Pct != null && Number.isFinite(q.dipVsSma200Pct))
-    .map((q) => ({
-      symbol: q.symbol,
-      dipVsSma200Pct: q.dipVsSma200Pct as number,
-      sma: q.twoHundredDayAverage,
-    }))
-    .sort((a, b) => a.dipVsSma200Pct - b.dipVsSma200Pct);
+  const sorted = [...rows]
+    .filter((q) => Number.isFinite(q.dipPct))
+    .sort((a, b) => a.dipPct - b.dipPct);
 
-  if (rows.length === 0) {
+  if (sorted.length === 0) {
     return (
       <p className="text-sm text-muted-foreground" role="status">
         {t("watchlist.dipNoData")}
@@ -44,7 +49,7 @@ export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
       <div className="absolute inset-0 min-h-0 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={rows}
+          data={sorted}
           layout="vertical"
           margin={{ top: 8, right: 12, left: 4, bottom: 8 }}
         >
@@ -65,27 +70,37 @@ export function WatchlistDipChart({ quotes }: WatchlistDipChartProps) {
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
-              const p = payload[0].payload as (typeof rows)[0];
+              const p = payload[0].payload as (typeof sorted)[0];
               return (
                 <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
                   <p className="font-mono font-medium text-foreground">{p.symbol}</p>
                   <p className="text-muted-foreground">
-                    {t("watchlist.dipVsSma")}: {formatPercent(p.dipVsSma200Pct)}
+                    {t("watchlist.dipVsWindowSma", { range })}: {formatPercent(p.dipPct)}
                   </p>
-                  {p.sma != null ? (
+                  {p.lookbackChangePct != null ? (
                     <p className="text-muted-foreground">
-                      {t("watchlist.sma200")}: {p.sma.toFixed(2)}
+                      {t("watchlist.dipLookback")}: {formatPercent(p.lookbackChangePct)}
+                    </p>
+                  ) : null}
+                  {p.dipVsSma200Pct != null ? (
+                    <p className="text-muted-foreground">
+                      {t("watchlist.dipVsSma")}: {formatPercent(p.dipVsSma200Pct)}
+                    </p>
+                  ) : null}
+                  {p.sma200 != null ? (
+                    <p className="text-muted-foreground">
+                      {t("watchlist.sma200")}: {p.sma200.toFixed(2)}
                     </p>
                   ) : null}
                 </div>
               );
             }}
           />
-          <Bar dataKey="dipVsSma200Pct" radius={[0, 4, 4, 0]} maxBarSize={28}>
-            {rows.map((entry) => (
+          <Bar dataKey="dipPct" radius={[0, 4, 4, 0]} maxBarSize={28}>
+            {sorted.map((entry) => (
               <Cell
                 key={entry.symbol}
-                fill={entry.dipVsSma200Pct >= 0 ? "#34d399" : "#f87171"}
+                fill={entry.dipPct >= 0 ? "#34d399" : "#f87171"}
               />
             ))}
           </Bar>

@@ -359,10 +359,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         { dataKey: "operatingMargin", color: C.opIncome, label: t("annual.operatingMargin") },
         { dataKey: "netMargin", color: C.netIncome, label: t("annual.netMargin") },
       ] satisfies FundamentalSeries[],
-      ebitdaNi: [
-        { dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") },
-        { dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") },
-      ] satisfies FundamentalSeries[],
       ebitdaSolo: [{ dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") }] satisfies FundamentalSeries[],
       peTtm: [{ dataKey: "peTtm", color: C.valuationPe, label: t("chartsFund.seriesPeTtm") }] satisfies FundamentalSeries[],
       psTtm: [{ dataKey: "psTtm", color: C.valuationPs, label: t("chartsFund.seriesPsTtm") }] satisfies FundamentalSeries[],
@@ -586,6 +582,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             description={t("chartsFund.chartNetIncomeSoloDesc")}
             data={chartRows}
             series={series.netIncomeSolo}
+            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "netIncome", freq, t)}
           />
@@ -651,16 +648,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             valueFormat="percent"
             growthNote={growthFooterMulti(chartRows, ["grossMargin", "operatingMargin", "netMargin"], freq, t)}
           />
-          {hasEbitda ? (
-            <FundamentalChartCard
-              title={t("chartsFund.chartEbitdaNi")}
-              description={t("chartsFund.chartEbitdaNiDesc")}
-              data={chartRows}
-              series={series.ebitdaNi}
-              valueFormat="currency"
-              growthNote={growthFooterMulti(chartRows, ["ebitda", "netIncome"], freq, t)}
-            />
-          ) : null}
           {hasEbitda ? (
             <FundamentalChartCard
               title={t("chartsFund.chartEbitdaSolo")}

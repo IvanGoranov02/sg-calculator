@@ -21,6 +21,8 @@ import {
 } from "@/lib/portfolioFx";
 import { cn } from "@/lib/utils";
 import { PortfolioAnalytics, type AnalyticsRow } from "@/components/portfolio/PortfolioAnalytics";
+import { T212RecentDividends } from "@/components/portfolio/T212RecentDividends";
+import { periodizeAnnualDividend } from "@/lib/dividendEstimate";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -519,102 +521,6 @@ export function PortfolioClient() {
         </div>
       ) : null}
 
-      <Card className="border-white/10 bg-zinc-900/50">
-        <CardHeader className="space-y-1 pb-2 sm:pb-6">
-          <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
-        </CardHeader>
-        <form
-          onSubmit={onAddManual}
-          className="grid grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
-        >
-          <div className="grid gap-1.5">
-            <Label htmlFor="m-sym">{t("portfolio.manualSymbol")}</Label>
-            <Input
-              id="m-sym"
-              value={sym}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSym(v);
-                const listing = listingCurrencyOverride(v);
-                if (listing) setManualCurrency(listing);
-              }}
-              className="border-white/10 bg-zinc-950"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="m-qty">{t("portfolio.manualQty")}</Label>
-            <Input
-              id="m-qty"
-              inputMode="decimal"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-              className="border-white/10 bg-zinc-950"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="m-avg">{t("portfolio.manualAvg")}</Label>
-            <Input
-              id="m-avg"
-              inputMode="decimal"
-              value={avg}
-              onChange={(e) => setAvg(e.target.value)}
-              className="border-white/10 bg-zinc-950"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="m-ccy">{t("portfolio.manualCurrency")}</Label>
-            <select
-              id="m-ccy"
-              value={manualCurrency}
-              onChange={(e) => setManualCurrency(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
-            >
-              {MANUAL_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-end">
-            <Button type="submit" disabled={adding} className="w-full sm:w-auto">
-              {adding ? <Loader2 className="size-4 animate-spin" /> : t("portfolio.manualAdd")}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
-
-      {holdings.length > 0 ? (
-        <Card className="border border-emerald-500/25 bg-emerald-950/25">
-          <CardHeader className="space-y-1.5 px-4 pb-2 sm:px-6">
-            <CardTitle className="text-base leading-snug sm:text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
-            <CardDescription className="text-xs leading-relaxed sm:text-sm">
-              {t("portfolio.dividendSummaryHint")}
-            </CardDescription>
-          </CardHeader>
-          <div className="px-4 pb-6 sm:px-6">
-            {dividendTotalsByCurrency.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("portfolio.dividendNoData")}</p>
-            ) : (
-              <div className="flex flex-wrap gap-6 sm:gap-8">
-                {dividendTotalsByCurrency.map(([currency, sum]) => (
-                  <div key={currency}>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {currency} · {t("portfolio.dividendPerYearLabel")}
-                    </p>
-                    <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-emerald-400 sm:text-2xl">
-                      {fmtMoney(sum, currency)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-      ) : null}
-
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
@@ -628,8 +534,6 @@ export function PortfolioClient() {
           </CardHeader>
         </Card>
       ) : (
-        <>
-        <PortfolioAnalytics rows={analyticsRows} fx={fx} />
         <div className="-mx-4 rounded-lg border border-white/10 sm:mx-0">
           <Table className="min-w-[36rem] sm:min-w-[44rem] md:min-w-full">
             <TableHeader>
@@ -815,8 +719,129 @@ export function PortfolioClient() {
             </TableBody>
           </Table>
         </div>
-        </>
       )}
+
+      <T212RecentDividends connected={!!trading212?.connected} />
+
+      {holdings.length > 0 ? <PortfolioAnalytics rows={analyticsRows} fx={fx} /> : null}
+
+      <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
+
+      {holdings.length > 0 ? (
+        <Card className="border border-emerald-500/25 bg-emerald-950/25">
+          <CardHeader className="space-y-1.5 px-4 pb-2 sm:px-6">
+            <CardTitle className="text-base leading-snug sm:text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
+            <CardDescription className="text-xs leading-relaxed sm:text-sm">
+              {t("portfolio.dividendSummaryHint")}
+            </CardDescription>
+          </CardHeader>
+          <div className="px-4 pb-6 sm:px-6">
+            {dividendTotalsByCurrency.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t("portfolio.dividendNoData")}</p>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {dividendTotalsByCurrency.map(([currency, sum]) => {
+                  const parts = periodizeAnnualDividend(sum);
+                  if (!parts) return null;
+                  return (
+                    <div key={currency} className="flex flex-wrap gap-6 sm:gap-8">
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {currency} · {t("portfolio.dividendPerYearLabel")}
+                        </p>
+                        <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-emerald-400 sm:text-2xl">
+                          {fmtMoney(parts.annual, currency)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {t("portfolio.dividendPerMonthLabel")}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-emerald-400/90 sm:text-xl">
+                          {fmtMoney(parts.month, currency)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {t("portfolio.dividendPerDayLabel")}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-emerald-400/90 sm:text-xl">
+                          {fmtMoney(parts.day, currency)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : null}
+
+      <Card className="border-white/10 bg-zinc-900/50">
+        <CardHeader className="space-y-1 pb-2 sm:pb-6">
+          <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
+        </CardHeader>
+        <form
+          onSubmit={onAddManual}
+          className="grid grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="m-sym">{t("portfolio.manualSymbol")}</Label>
+            <Input
+              id="m-sym"
+              value={sym}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSym(v);
+                const listing = listingCurrencyOverride(v);
+                if (listing) setManualCurrency(listing);
+              }}
+              className="border-white/10 bg-zinc-950"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="m-qty">{t("portfolio.manualQty")}</Label>
+            <Input
+              id="m-qty"
+              inputMode="decimal"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="border-white/10 bg-zinc-950"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="m-avg">{t("portfolio.manualAvg")}</Label>
+            <Input
+              id="m-avg"
+              inputMode="decimal"
+              value={avg}
+              onChange={(e) => setAvg(e.target.value)}
+              className="border-white/10 bg-zinc-950"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="m-ccy">{t("portfolio.manualCurrency")}</Label>
+            <select
+              id="m-ccy"
+              value={manualCurrency}
+              onChange={(e) => setManualCurrency(e.target.value)}
+              className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+            >
+              {MANUAL_CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <Button type="submit" disabled={adding} className="w-full sm:w-auto">
+              {adding ? <Loader2 className="size-4 animate-spin" /> : t("portfolio.manualAdd")}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       <details className="group rounded-xl border border-white/10 bg-zinc-900/50 [&_summary::-webkit-details-marker]:hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-white/5 sm:px-6 sm:py-4 sm:text-base">

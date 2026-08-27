@@ -169,6 +169,22 @@ export async function fetchT212AccountSummary(
   }
 }
 
+/** Paid-out dividends. Rate limit is 6/min — keep maxPages small. */
+export async function fetchT212HistoryDividends(
+  environment: Trading212Environment,
+  apiKey: string,
+  apiSecret: string,
+  options?: { maxPages?: number },
+): Promise<T212HistoryDividendItem[]> {
+  return fetchAllT212Paginated<T212HistoryDividendItem>(
+    environment,
+    apiKey,
+    apiSecret,
+    "/api/v0/equity/history/dividends",
+    { maxPages: options?.maxPages ?? 2 },
+  );
+}
+
 /** Follow nextPagePath until exhausted (dividends, orders, etc.). */
 export async function fetchAllT212Paginated<T>(
   environment: Trading212Environment,
