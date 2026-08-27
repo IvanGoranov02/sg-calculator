@@ -3,16 +3,11 @@
  * amounts merged into quarterly dividend-per-share. Fundamentals stay from Gemini/cache.
  */
 
-import YahooFinance from "yahoo-finance2";
-
 import { convertBundleFundamentals } from "@/lib/bundleCurrency";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
-
-const yahooFinance = new YahooFinance({
-  suppressNotices: ["ripHistorical", "yahooSurvey"],
-});
+import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 const DAILY_HISTORY_START = "1990-01-01";
 
@@ -21,26 +16,34 @@ async function resolveYahooSymbol(input: string): Promise<string> {
   const sym = trimmed.toUpperCase();
   if (!sym) throw new Error("Empty ticker.");
 
-  const quoteResult = await yahooFinance.quote(sym);
-  const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
-  if (q && (q as { quoteType?: string }).quoteType !== "NONE") {
-    return String((q as { symbol?: string }).symbol ?? sym).toUpperCase();
+  try {
+    const quoteResult = await yahooFinance.quote(sym);
+    const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
+    if (q && (q as { quoteType?: string }).quoteType !== "NONE") {
+      return String((q as { symbol?: string }).symbol ?? sym).toUpperCase();
+    }
+  } catch {
+    // Quote timed out / failed — still try the ticker as Yahoo listed it.
   }
 
-  const searchResult = await yahooFinance.search(trimmed, { quotesCount: 15 });
-  const hit = searchResult.quotes.find((row) => {
-    if (typeof row !== "object" || row === null || !("symbol" in row)) return false;
-    const r = row as { symbol?: string; quoteType?: string; isYahooFinance?: boolean };
-    return (
-      r.isYahooFinance === true &&
-      r.quoteType === "EQUITY" &&
-      typeof r.symbol === "string"
-    );
-  }) as { symbol: string } | undefined;
+  try {
+    const searchResult = await yahooFinance.search(trimmed, { quotesCount: 15 });
+    const hit = searchResult.quotes.find((row) => {
+      if (typeof row !== "object" || row === null || !("symbol" in row)) return false;
+      const r = row as { symbol?: string; quoteType?: string; isYahooFinance?: boolean };
+      return (
+        r.isYahooFinance === true &&
+        r.quoteType === "EQUITY" &&
+        typeof r.symbol === "string"
+      );
+    }) as { symbol: string } | undefined;
 
-  if (hit?.symbol) return hit.symbol.toUpperCase();
+    if (hit?.symbol) return hit.symbol.toUpperCase();
+  } catch {
+    /* search is optional */
+  }
 
-  throw new Error(`Ticker "${sym}" was not found on Yahoo Finance.`);
+  return sym;
 }
 
 function toIsoDate(d: unknown): string | null {
@@ -308,7 +311,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
 
     const [quoteResult, dailyBars, chartIntraday, quoteSummaryResult, fxQuote, _dpsMerge] =
       await Promise.all([
-        yahooFinance.quote(resolved),
+        yahooFinance.quote(resolved).catch(() => null),
         fetchDailyPriceBars(resolved, period2Str),
         yahooFinance
           .chart(resolved, {

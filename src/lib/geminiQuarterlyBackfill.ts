@@ -290,6 +290,7 @@ export async function backfillQuarterlyHistoryFromGemini(
       defaultGeminiModel(),
       buildBackfillPrompt(bundle),
       8192,
+      { timeoutMs: 20_000, maxRetries: 1 },
     );
     const added = mergeValidatedBackfill(bundle, raw);
     if (added > 0) {

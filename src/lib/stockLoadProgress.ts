@@ -1,5 +1,6 @@
 /** Emitted during stock analysis load (EDGAR/Gemini + Yahoo) for progress UI. */
 export type StockAnalysisLoadProgress =
+  | { kind: "start" }
   | { kind: "cache_hit" }
   | { kind: "fmp" }
   | { kind: "edgar" }
@@ -18,6 +19,8 @@ export type StockAnalysisPageLoadProgress = {
 /** Map last progress event to ~0–99%; client sets 100% when the stream sends `done`. */
 export function stockLoadProgressPercent(e: StockAnalysisLoadProgress): number {
   switch (e.kind) {
+    case "start":
+      return 8;
     case "cache_hit":
       return 18;
     case "fmp":

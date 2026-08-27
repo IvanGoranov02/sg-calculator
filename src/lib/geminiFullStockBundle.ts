@@ -443,13 +443,18 @@ const MAX_QUARTERS = FUNDAMENTALS_MAX_QUARTERS;
 /** Quarterly JSON is large; extra headroom reduces truncated responses (few bars in UI). */
 const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 16_384;
 const GEMINI_ANNUAL_MAX_OUTPUT_TOKENS = 16_384;
-const GEMINI_JSON_MAX_RETRIES = 3;
+const GEMINI_JSON_MAX_RETRIES = 2;
 
 function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
   if (Number.isFinite(raw) && raw >= 15_000) return Math.min(Math.floor(raw), 300_000);
-  return 120_000;
+  return 45_000;
 }
+
+export type CallGeminiJsonOptions = {
+  timeoutMs?: number;
+  maxRetries?: number;
+};
 
 type GeminiGenerateResponse = {
   candidates?: Array<{
@@ -463,6 +468,7 @@ async function callGeminiJsonOnce(
   model: string,
   prompt: string,
   maxTokens: number,
+  timeoutMs: number,
 ): Promise<{ parsed: unknown; finishReason: string | null }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
@@ -482,7 +488,7 @@ async function callGeminiJsonOnce(
           responseMimeType: "application/json",
         },
       }),
-      signal: AbortSignal.timeout(perRequestTimeoutMs()),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "network error";
@@ -509,13 +515,22 @@ export async function callGeminiJson(
   model: string,
   prompt: string,
   maxTokens: number,
+  opts?: CallGeminiJsonOptions,
 ): Promise<unknown> {
   let tokens = maxTokens;
   let lastError: Error | null = null;
+  const maxRetries = Math.max(1, opts?.maxRetries ?? GEMINI_JSON_MAX_RETRIES);
+  const timeoutMs = opts?.timeoutMs ?? perRequestTimeoutMs();
 
-  for (let attempt = 0; attempt < GEMINI_JSON_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const { parsed, finishReason } = await callGeminiJsonOnce(apiKey, model, prompt, tokens);
+      const { parsed, finishReason } = await callGeminiJsonOnce(
+        apiKey,
+        model,
+        prompt,
+        tokens,
+        timeoutMs,
+      );
       if (finishReason === "MAX_TOKENS") {
         throw new Error("Gemini response did not contain a complete JSON object.");
       }
@@ -525,9 +540,9 @@ export async function callGeminiJson(
       const retryable =
         lastError.message.includes("complete JSON object") ||
         lastError.message.includes("Empty Gemini");
-      if (!retryable || attempt >= GEMINI_JSON_MAX_RETRIES - 1) break;
+      if (!retryable || attempt >= maxRetries - 1) break;
       tokens = Math.min(Math.floor(tokens * 1.5), 65_536);
-      console.warn(`[gemini] JSON parse/truncation — retry ${attempt + 2}/${GEMINI_JSON_MAX_RETRIES}, maxOutputTokens=${tokens}`);
+      console.warn(`[gemini] JSON parse/truncation — retry ${attempt + 2}/${maxRetries}, maxOutputTokens=${tokens}`);
     }
   }
 

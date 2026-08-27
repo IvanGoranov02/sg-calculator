@@ -4,6 +4,8 @@ type TFn = (path: string, vars?: Record<string, string | number>) => string;
 
 export function stockLoadProgressLabel(t: TFn, e: StockAnalysisLoadProgress): string {
   switch (e.kind) {
+    case "start":
+      return t("stock.loadProgressStart");
     case "cache_hit":
       return t("stock.loadProgressCache");
     case "fmp":
