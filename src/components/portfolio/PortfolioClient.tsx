@@ -22,7 +22,9 @@ import {
 import { cn } from "@/lib/utils";
 import { PortfolioAnalytics, type AnalyticsRow } from "@/components/portfolio/PortfolioAnalytics";
 import { T212RecentDividends } from "@/components/portfolio/T212RecentDividends";
+import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { periodizeAnnualDividend } from "@/lib/dividendEstimate";
+import type { QuoteHistoryBar } from "@/lib/dipFinder";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -96,6 +98,7 @@ export function PortfolioClient() {
   const [adding, setAdding] = useState(false);
 
   const [fx, setFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
+  const [dipHistory, setDipHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState("");
@@ -424,6 +427,49 @@ export function PortfolioClient() {
     [rows],
   );
 
+  const holdingSymbols = useMemo(
+    () => [...new Set(holdings.map((h) => h.symbolYahoo.trim().toUpperCase()).filter(Boolean))],
+    [holdings],
+  );
+
+  useEffect(() => {
+    if (holdingSymbols.length === 0) {
+      setDipHistory({});
+      return;
+    }
+    let cancelled = false;
+    const q = `/api/quotes/history?symbols=${encodeURIComponent(holdingSymbols.join(","))}`;
+    void fetch(q)
+      .then(async (res) => {
+        const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
+        if (cancelled || !res.ok) return;
+        setDipHistory(data.history ?? {});
+      })
+      .catch(() => {
+        if (!cancelled) setDipHistory({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [holdingSymbols]);
+
+  const dipQuotes = useMemo(
+    () =>
+      holdingSymbols.flatMap((sym) => {
+        const q = quotes[sym];
+        if (!q) return [];
+        return [
+          {
+            symbol: sym,
+            price: q.price,
+            dipVsSma200Pct: q.dipVsSma200Pct,
+            twoHundredDayAverage: q.twoHundredDayAverage,
+          },
+        ];
+      }),
+    [holdingSymbols, quotes],
+  );
+
   /** Sums est. annual dividend by holding currency (same basis as table column). */
   const dividendTotalsByCurrency = useMemo(() => {
     const map = new Map<string, number>();
@@ -720,6 +766,12 @@ export function PortfolioClient() {
           </Table>
         </div>
       )}
+
+      {holdings.length > 0 ? (
+        <div className="rounded-lg border border-white/10 px-4 py-4">
+          <DipFinderPanel quotes={dipQuotes} history={dipHistory} compact />
+        </div>
+      ) : null}
 
       <T212RecentDividends connected={!!trading212?.connected} />
 

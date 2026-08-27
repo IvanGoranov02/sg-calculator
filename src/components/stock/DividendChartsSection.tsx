@@ -321,6 +321,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             description={t("chartsFund.dividendQtrChartDesc")}
             data={pack.rows}
             series={qDpsSeries}
+            chartType="bar"
             valueFormat="perShare"
           />
         </div>

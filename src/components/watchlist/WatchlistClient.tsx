@@ -8,18 +8,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { WatchlistDipChart } from "@/components/watchlist/WatchlistDipChart";
+import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
-import {
-  DIP_RANGES,
-  closesOldestFirst,
-  dipMetricsForRange,
-  type DipRange,
-  type QuoteHistoryBar,
-} from "@/lib/dipFinder";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { useVisibleInterval } from "@/lib/useVisibleInterval";
+import type { QuoteHistoryBar } from "@/lib/dipFinder";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 import { cn } from "@/lib/utils";
@@ -33,7 +27,6 @@ export function WatchlistClient() {
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dipRange, setDipRange] = useState<DipRange>("1m");
   const [history, setHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
 
   const loadQuotes = useCallback(
@@ -104,33 +97,6 @@ export function WatchlistClient() {
   }, [symbols]);
 
   useVisibleInterval(() => void loadQuotes({ silent: true }), QUOTES_REFRESH_MS, symbols.length > 0);
-
-  const dipChartRows = useMemo(() => {
-    const out: {
-      symbol: string;
-      dipPct: number;
-      dipVsSma200Pct: number | null;
-      lookbackChangePct: number | null;
-      windowSma: number | null;
-      sma200: number | null;
-    }[] = [];
-    for (const q of quotes) {
-      const bars = history[q.symbol] ?? [];
-      const closes = closesOldestFirst(bars);
-      const m = dipMetricsForRange(closes, dipRange, q.price);
-      const dipPct = m.dipVsWindowSmaPct ?? q.dipVsSma200Pct;
-      if (dipPct == null || !Number.isFinite(dipPct)) continue;
-      out.push({
-        symbol: q.symbol,
-        dipPct,
-        dipVsSma200Pct: q.dipVsSma200Pct,
-        lookbackChangePct: m.lookbackChangePct,
-        windowSma: m.windowSma,
-        sma200: q.twoHundredDayAverage,
-      });
-    }
-    return out;
-  }, [quotes, history, dipRange]);
 
   const quoteMap = useMemo(
     () => new Map(quotes.map((q) => [q.symbol.toUpperCase(), q])),
@@ -319,31 +285,7 @@ export function WatchlistClient() {
             </TableBody>
           </Table>
           <div className="border-t border-white/10 px-4 py-4">
-            <h3 className="mb-1 text-sm font-semibold tracking-tight">{t("watchlist.dipTitle")}</h3>
-            <p className="mb-3 text-xs text-muted-foreground">{t("watchlist.dipSubtitle")}</p>
-            <div className="mb-3">
-              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {t("watchlist.dipRangeLabel")}
-              </p>
-              <div className="flex flex-wrap gap-1" role="group" aria-label={t("watchlist.dipRangeLabel")}>
-                {DIP_RANGES.map((id) => (
-                  <Button
-                    key={id}
-                    type="button"
-                    size="sm"
-                    variant={dipRange === id ? "secondary" : "ghost"}
-                    className={cn(
-                      "h-8 min-w-11 rounded-md px-2 font-mono text-xs",
-                      dipRange === id && "bg-zinc-700 text-white hover:bg-zinc-700",
-                    )}
-                    onClick={() => setDipRange(id)}
-                  >
-                    {t(`watchlist.dipRange_${id}`)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <WatchlistDipChart rows={dipChartRows} range={dipRange} />
+            <DipFinderPanel quotes={quotes} history={history} />
           </div>
         </Card>
       )}

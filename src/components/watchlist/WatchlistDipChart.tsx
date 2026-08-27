@@ -14,6 +14,7 @@ import {
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { DipRange } from "@/lib/dipFinder";
+import { cn } from "@/lib/utils";
 
 export type DipChartDatum = {
   symbol: string;
@@ -27,9 +28,10 @@ export type DipChartDatum = {
 type WatchlistDipChartProps = {
   rows: DipChartDatum[];
   range: DipRange;
+  compact?: boolean;
 };
 
-export function WatchlistDipChart({ rows, range }: WatchlistDipChartProps) {
+export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDipChartProps) {
   const { t } = useI18n();
 
   const sorted = [...rows]
@@ -45,7 +47,12 @@ export function WatchlistDipChart({ rows, range }: WatchlistDipChartProps) {
   }
 
   return (
-    <div className="relative h-[min(360px,50vh)] min-h-0 min-w-0 w-full">
+    <div
+      className={cn(
+        "relative min-h-0 min-w-0 w-full",
+        compact ? "h-[min(220px,36vh)]" : "h-[min(360px,50vh)]",
+      )}
+    >
       <div className="absolute inset-0 min-h-0 min-w-0">
         <ResponsiveContainer width="100%" height="100%">
         <BarChart
