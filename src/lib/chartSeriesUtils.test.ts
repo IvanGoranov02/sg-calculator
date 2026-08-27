@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { axisTickVisible, seriesCoverage, seriesHasAnyPoint, seriesHasPartialGaps } from "@/lib/chartSeriesUtils";
+import { axisTickVisible, seriesCoverage, seriesHasAnyPoint, seriesHasPartialGaps, tickCoord } from "@/lib/chartSeriesUtils";
 
 const rows = [
   { label: "Q1", a: null, b: null },
@@ -86,5 +86,15 @@ describe("axisTickVisible", () => {
     for (let k = 1; k < lastShown.length; k++) {
       assert.ok(lastShown[k]! - lastShown[k - 1]! >= 2);
     }
+  });
+});
+
+describe("tickCoord", () => {
+  it("keeps finite numbers and parses numeric strings", () => {
+    assert.equal(tickCoord(12.5), 12.5);
+    assert.equal(tickCoord("40"), 40);
+    assert.equal(tickCoord(undefined), 0);
+    assert.equal(tickCoord("nope"), 0);
+    assert.equal(tickCoord(Number.NaN), 0);
   });
 });
