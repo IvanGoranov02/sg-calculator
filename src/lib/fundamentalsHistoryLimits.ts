@@ -1,4 +1,4 @@
-import { alignAnnualToIncome, alignQuarterlyToIncome } from "@/lib/quarterlyAlign";
+import { alignAnnualToIncome, alignQuarterlyToIncome, dedupeQuarterlyBundle } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type StockAnalysisBundle,
@@ -34,6 +34,8 @@ export function trimBundleToFundamentalsWindow(bundle: StockAnalysisBundle): voi
   const alignedAnnual = alignAnnualToIncome(sym, bundle.income, bundle.cashFlow, bundle.balanceSheet);
   bundle.cashFlow = alignedAnnual.cashFlow;
   bundle.balanceSheet = alignedAnnual.balanceSheet;
+
+  dedupeQuarterlyBundle(bundle, sym);
 
   const takeQ = (rows: { date: string }[]) => {
     const sorted = sortQuarterlyByDateAsc(rows as StockAnalysisBundle["incomeQuarterly"]);

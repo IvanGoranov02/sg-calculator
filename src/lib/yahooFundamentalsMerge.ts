@@ -7,7 +7,7 @@ import {
   fundamentalsPeriod1Iso,
 } from "@/lib/fundamentalsHistoryLimits";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
-import { alignQuarterlyToIncome, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
+import { alignQuarterlyToIncome, hasNearbyQuarterEnd, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type BalanceSheetAnnual,
@@ -262,7 +262,7 @@ export function applyYahooFundamentalsToBundle(
   const yahooOnlyQuarters: IncomeStatementQuarter[] = [];
   for (const fin of finQ) {
     const d = iso(fin.date);
-    if (quarterEndsSeen.has(d)) continue;
+    if (quarterEndsSeen.has(d) || hasNearbyQuarterEnd(d, bundle.incomeQuarterly)) continue;
     const rev = pickNum(fin.totalRevenue);
     const gp = pickNum(fin.grossProfit);
     const ni = pickNum(fin.netIncome);

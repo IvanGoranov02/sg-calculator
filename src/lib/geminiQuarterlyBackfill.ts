@@ -12,7 +12,7 @@
 import { defaultGeminiModel, getGeminiApiKey } from "@/lib/geminiClient";
 import { callGeminiJson } from "@/lib/geminiFullStockBundle";
 import { FUNDAMENTALS_MAX_QUARTERS } from "@/lib/fundamentalsHistoryLimits";
-import { alignQuarterlyToIncome, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
+import { alignQuarterlyToIncome, hasNearbyQuarterEnd, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type CashFlowQuarter,
@@ -139,6 +139,8 @@ export function mergeValidatedBackfill(bundle: StockAnalysisBundle, parsed: unkn
 
   const annualByFy = new Map(bundle.income.map((r) => [r.fiscalYear, r]));
   const existingIncomeDates = new Set(bundle.incomeQuarterly.map((r) => r.date.slice(0, 10)));
+  const incomeQuarterExists = (dateIso: string) =>
+    existingIncomeDates.has(dateIso) || hasNearbyQuarterEnd(dateIso, bundle.incomeQuarterly);
 
   const candidates = parseIncomeQuarters(parsed);
   const byWindow = new Map<string, ParsedIncomeQ[]>();
@@ -163,7 +165,7 @@ export function mergeValidatedBackfill(bundle: StockAnalysisBundle, parsed: unkn
     }
     acceptedYears.add(fy);
     for (const q of qs) {
-      if (existingIncomeDates.has(q.date)) continue;
+      if (incomeQuarterExists(q.date)) continue;
       acceptedIncome.push({
         date: q.date,
         symbol: sym,

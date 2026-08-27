@@ -165,6 +165,87 @@ export function alignQuarterlyToIncome(
   return { cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly };
 }
 
+function pickQuarterScalar(a: number, b: number): number {
+  if (Number.isFinite(b) && b !== 0) return b;
+  if (Number.isFinite(a) && a !== 0) return a;
+  return Number.isFinite(b) ? b : a;
+}
+
+function pickQuarterOptional(a: number | undefined, b: number | undefined): number | undefined {
+  if (b != null && b !== 0 && Number.isFinite(b)) return b;
+  if (a != null && a !== 0 && Number.isFinite(a)) return a;
+  return b ?? a;
+}
+
+/** Merge two income quarters that share the same fiscal window (slightly different period ends). */
+export function mergeIncomeStatementQuarters(
+  a: IncomeStatementQuarter,
+  b: IncomeStatementQuarter,
+): IncomeStatementQuarter {
+  const aDate = a.date.slice(0, 10);
+  const bDate = b.date.slice(0, 10);
+  const earlier = aDate <= bDate ? a : b;
+  const later = aDate <= bDate ? b : a;
+  return {
+    date: later.date.slice(0, 10),
+    symbol: later.symbol || earlier.symbol,
+    revenue: pickQuarterScalar(earlier.revenue, later.revenue),
+    grossProfit: pickQuarterScalar(earlier.grossProfit, later.grossProfit),
+    operatingExpenses: pickQuarterScalar(earlier.operatingExpenses, later.operatingExpenses),
+    netIncome: pickQuarterScalar(earlier.netIncome, later.netIncome),
+    operatingIncome: pickQuarterOptional(earlier.operatingIncome, later.operatingIncome),
+    ebitda: pickQuarterOptional(earlier.ebitda, later.ebitda),
+    dilutedEps: pickQuarterOptional(earlier.dilutedEps, later.dilutedEps),
+    dilutedAverageShares: pickQuarterOptional(earlier.dilutedAverageShares, later.dilutedAverageShares),
+  };
+}
+
+/**
+ * Collapse quarterly income rows whose period ends fall within `maxDays` of each other.
+ * EDGAR, Yahoo, and Gemini often disagree by a few days on the same fiscal quarter after a new filing.
+ */
+export function dedupeQuarterlyIncome(
+  rows: IncomeStatementQuarter[],
+  maxDays = NEAREST_QUARTER_SIDE_ROW_DAYS,
+): IncomeStatementQuarter[] {
+  const sorted = sortQuarterlyByDateAsc(rows);
+  const out: IncomeStatementQuarter[] = [];
+  for (const row of sorted) {
+    const d = row.date.slice(0, 10);
+    const prev = out[out.length - 1];
+    if (prev && daysBetweenIso(prev.date, d) <= maxDays) {
+      out[out.length - 1] = mergeIncomeStatementQuarters(prev, row);
+    } else {
+      out.push({ ...row, date: d });
+    }
+  }
+  return out;
+}
+
+export function hasNearbyQuarterEnd(
+  dateIso: string,
+  rows: IncomeStatementQuarter[],
+  maxDays = NEAREST_QUARTER_SIDE_ROW_DAYS,
+): boolean {
+  return nearestQuarterSideRow(dateIso, rows, (r) => r.date, maxDays) !== null;
+}
+
+/** Dedupe income quarters and realign side statements to the canonical period ends. */
+export function dedupeQuarterlyBundle(bundle: StockAnalysisBundle, sym?: string): void {
+  const symbol = sym ?? bundle.quote.symbol.trim().toUpperCase();
+  bundle.incomeQuarterly = dedupeQuarterlyIncome(bundle.incomeQuarterly);
+  const aligned = alignQuarterlyToIncome(
+    symbol,
+    bundle.incomeQuarterly,
+    bundle.cashFlowQuarterly,
+    bundle.balanceSheetQuarterly,
+    bundle.dividendQuarterly,
+  );
+  bundle.cashFlowQuarterly = aligned.cashFlowQuarterly;
+  bundle.balanceSheetQuarterly = aligned.balanceSheetQuarterly;
+  bundle.dividendQuarterly = aligned.dividendQuarterly;
+}
+
 /** Keep the most recent `max` quarters (by period-end date). */
 export function trimQuarterlyToMax<T extends { date: string }>(rows: T[], max: number): T[] {
   const sorted = sortQuarterlyByDateAsc(rows);
