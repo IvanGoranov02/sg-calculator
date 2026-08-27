@@ -138,6 +138,10 @@ export function stubBalanceQuarter(sym: string, dateIso: string): BalanceSheetQu
   };
 }
 
+function withIncomePeriodEnd<T extends { date: string }>(row: T, incomeDateIso: string): T {
+  return { ...row, date: incomeDateIso.slice(0, 10) };
+}
+
 /** Align CF/BS/dividend rows to `incomeSorted` dates (stubs when a side is missing). */
 export function alignQuarterlyToIncome(
   sym: string,
@@ -156,10 +160,14 @@ export function alignQuarterlyToIncome(
 
   for (const inc of incomeSorted) {
     const d = inc.date.slice(0, 10);
-    cashFlowQuarterly.push(exactOrNearestSideRow(d, cfBy, cfRaw) ?? stubCashFlowQuarter(sym, d, inc.netIncome));
-    balanceSheetQuarterly.push(exactOrNearestSideRow(d, bsBy, bsRaw) ?? stubBalanceQuarter(sym, d));
+    const cf = exactOrNearestSideRow(d, cfBy, cfRaw);
+    cashFlowQuarterly.push(
+      cf ? withIncomePeriodEnd(cf, d) : stubCashFlowQuarter(sym, d, inc.netIncome),
+    );
+    const bs = exactOrNearestSideRow(d, bsBy, bsRaw);
+    balanceSheetQuarterly.push(bs ? withIncomePeriodEnd(bs, d) : stubBalanceQuarter(sym, d));
     const dv = exactOrNearestSideRow(d, divBy, divRaw);
-    dividendQuarterly.push(dv ?? { date: d, dividendPerShare: null });
+    dividendQuarterly.push(dv ? withIncomePeriodEnd(dv, d) : { date: d, dividendPerShare: null });
   }
 
   return { cashFlowQuarterly, balanceSheetQuarterly, dividendQuarterly };
