@@ -2,13 +2,12 @@
  * Yahoo fundamentalsTimeSeries: fetch 5y window, merge into bundle with Yahoo taking priority over Gemini.
  */
 
-import YahooFinance from "yahoo-finance2";
-
 import {
   FUNDAMENTALS_MAX_QUARTERS,
   fundamentalsPeriod1Iso,
 } from "@/lib/fundamentalsHistoryLimits";
-import { alignQuarterlyToIncome, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
+import { yahooFinance } from "@/lib/yahooFinanceClient";
+import { alignQuarterlyToIncome, hasNearbyQuarterEnd, nearestQuarterSideRow, trimQuarterlyToMax } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type BalanceSheetAnnual,
@@ -19,8 +18,6 @@ import {
   type IncomeStatementQuarter,
   type StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
-
-const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 export type Fin = {
   date: Date;
@@ -139,7 +136,7 @@ export async function fetchYahooFundamentalsPayload(symbol: string): Promise<Yah
   const period1 = fundamentalsPeriod1Iso();
 
   try {
-    const [a1, a2, a3, a4, a5, a6] = await Promise.all([
+    const settled = await Promise.allSettled([
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "financials" }),
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "financials" }),
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "cash-flow" }),
@@ -147,14 +144,16 @@ export async function fetchYahooFundamentalsPayload(symbol: string): Promise<Yah
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "balance-sheet" }),
       yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "balance-sheet" }),
     ]);
+    const rows = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
+    if (settled.every((r) => r.status === "rejected")) return null;
 
     return {
-      finA: filterRowsSincePeriod1((a1 as Fin[]) ?? [], period1),
-      finQ: filterRowsSincePeriod1((a2 as Fin[]) ?? [], period1),
-      cfA: filterRowsSincePeriod1((a3 as Cf[]) ?? [], period1),
-      cfQ: filterRowsSincePeriod1((a4 as Cf[]) ?? [], period1),
-      bsA: filterRowsSincePeriod1((a5 as Bs[]) ?? [], period1),
-      bsQ: filterRowsSincePeriod1((a6 as Bs[]) ?? [], period1),
+      finA: filterRowsSincePeriod1((rows[0] as Fin[]) ?? [], period1),
+      finQ: filterRowsSincePeriod1((rows[1] as Fin[]) ?? [], period1),
+      cfA: filterRowsSincePeriod1((rows[2] as Cf[]) ?? [], period1),
+      cfQ: filterRowsSincePeriod1((rows[3] as Cf[]) ?? [], period1),
+      bsA: filterRowsSincePeriod1((rows[4] as Bs[]) ?? [], period1),
+      bsQ: filterRowsSincePeriod1((rows[5] as Bs[]) ?? [], period1),
     };
   } catch {
     return null;
@@ -263,7 +262,7 @@ export function applyYahooFundamentalsToBundle(
   const yahooOnlyQuarters: IncomeStatementQuarter[] = [];
   for (const fin of finQ) {
     const d = iso(fin.date);
-    if (quarterEndsSeen.has(d)) continue;
+    if (quarterEndsSeen.has(d) || hasNearbyQuarterEnd(d, bundle.incomeQuarterly)) continue;
     const rev = pickNum(fin.totalRevenue);
     const gp = pickNum(fin.grossProfit);
     const ni = pickNum(fin.netIncome);

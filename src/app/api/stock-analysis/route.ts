@@ -5,6 +5,7 @@ import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 import { INVALID_TICKER_SYMBOL_MESSAGE, isValidStockSymbolInput } from "@/lib/stockSymbol";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 /** Per client: page loads (Yahoo + possible Gemini fetch behind them). */
 const LOAD_LIMIT = 20;
@@ -28,25 +29,26 @@ export async function GET(request: Request) {
     return Response.json({ bundle: null, error: INVALID_TICKER_SYMBOL_MESSAGE }, { status: 400 });
   }
 
-  const session = await auth();
-  const userId = session?.user?.id ?? null;
-  const clientKey = clientKeyFromRequest(request, userId);
-
-  const general = checkRateLimit("stock-analysis", clientKey, LOAD_LIMIT, LOAD_WINDOW_MS);
-  if (!general.ok) {
-    return rateLimitResponse(general.retryAfterSec);
-  }
-
+  // Session is only required to authorize a paid full re-fetch. Skip Prisma/auth
+  // on the anonymous hot path so a pooler hang cannot stall the NDJSON stream.
   if (forceRefresh) {
+    const session = await auth();
+    const userId = session?.user?.id ?? null;
     if (!userId) {
-      // Anonymous clients cannot trigger paid full re-fetches; serve the normal path.
       forceRefresh = false;
     } else {
+      const clientKey = clientKeyFromRequest(request, userId);
       const refresh = checkRateLimit("stock-refresh", clientKey, REFRESH_LIMIT, REFRESH_WINDOW_MS);
       if (!refresh.ok) {
         return rateLimitResponse(refresh.retryAfterSec);
       }
     }
+  }
+
+  const clientKey = clientKeyFromRequest(request);
+  const general = checkRateLimit("stock-analysis", clientKey, LOAD_LIMIT, LOAD_WINDOW_MS);
+  if (!general.ok) {
+    return rateLimitResponse(general.retryAfterSec);
   }
 
   if (!stream) {

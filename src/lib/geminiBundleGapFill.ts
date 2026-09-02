@@ -271,20 +271,18 @@ export async function fillBundleGapsFromGemini(bundle: StockAnalysisBundle): Pro
 
   const displayYears = annualDisplayFiscalYears(bundle, "5y", null, null);
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (!bundleHasYahooSecDataGaps(bundle, displayYears)) return;
+  if (!bundleHasYahooSecDataGaps(bundle, displayYears)) return;
 
-    try {
-      const raw = await callGeminiJson(
-        apiKey,
-        defaultGeminiModel(),
-        buildGapFillPrompt(bundle, displayYears, attempt),
-        8192,
-      );
-      mergeGapFillIntoBundle(bundle, raw);
-    } catch (e) {
-      console.warn("[gemini gap-fill]", e instanceof Error ? e.message : e);
-      return;
-    }
+  try {
+    const raw = await callGeminiJson(
+      apiKey,
+      defaultGeminiModel(),
+      buildGapFillPrompt(bundle, displayYears, 0),
+      8192,
+      { timeoutMs: 20_000, maxRetries: 1 },
+    );
+    mergeGapFillIntoBundle(bundle, raw);
+  } catch (e) {
+    console.warn("[gemini gap-fill]", e instanceof Error ? e.message : e);
   }
 }

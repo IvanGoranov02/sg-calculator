@@ -1,15 +1,53 @@
 import { safePct, safeRatio } from "@/lib/annualTables";
+import { dedupeQuarterlyIncome, nearestQuarterSideRow } from "@/lib/quarterlyAlign";
 import { isEmptyIncomeStatementCore, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
 /** ISO date (period end) for filtering; stripped before passing to Recharts. Annual rows also carry `fiscalYear`. */
 export type FundamentalsChartRow = Record<string, unknown> & { periodEnd?: string; fiscalYear?: string };
 
-export function rowsForCharts(rows: FundamentalsChartRow[]): Record<string, unknown>[] {
+export function rowsForCharts(
+  rows: FundamentalsChartRow[],
+  opts?: { keepPeriodEnd?: boolean },
+): Record<string, unknown>[] {
   return rows.map((r) => {
-    const { periodEnd: _p, fiscalYear: _fy, ...rest } = r;
-    return rest;
+    const { fiscalYear: _fy, ...rest } = r;
+    if (opts?.keepPeriodEnd) return rest;
+    const { periodEnd: _p, ...withoutPeriod } = rest;
+    return withoutPeriod;
   });
+}
+
+/** Month+year labels collide within the same calendar month (e.g. Apr 20 & Apr 26 → both "Apr 26"). */
+export function disambiguateQuarterlyChartLabels(
+  periodEnds: string[],
+  formatPeriod: (dateIso: string) => string,
+  locale: string,
+): string[] {
+  const base = periodEnds.map((iso) => formatPeriod(iso));
+  const counts = new Map<string, number>();
+  for (const label of base) {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return periodEnds.map((iso, i) => {
+    const label = base[i]!;
+    if ((counts.get(label) ?? 0) <= 1) return label;
+    const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+    return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
+      month: "short",
+      day: "numeric",
+      year: "2-digit",
+    });
+  });
+}
+
+function sideRowByIncomeDate<T extends { date: string }>(
+  incomeDateIso: string,
+  byExact: Map<string, T>,
+  rows: T[],
+): T | undefined {
+  const d = incomeDateIso.slice(0, 10);
+  return byExact.get(d) ?? nearestQuarterSideRow(d, rows, (r) => r.date) ?? undefined;
 }
 
 function isStubIncome(r: {
@@ -107,18 +145,26 @@ export function buildAnnualChartRows(
 export function buildQuarterlyChartRows(
   bundle: StockAnalysisBundle,
   formatPeriod: (dateIso: string) => string,
+  locale = "en-US",
 ): FundamentalsChartRow[] {
-  const inc = sortQuarterlyByDateAsc(bundle.incomeQuarterly).filter((r) => !isStubIncome(r));
-  const cfByDate = new Map(bundle.cashFlowQuarterly.map((c) => [c.date.slice(0, 10), c]));
-  const bsByDate = new Map(bundle.balanceSheetQuarterly.map((b) => [b.date.slice(0, 10), b]));
-  return inc.map((r) => {
-    const cf = cfByDate.get(r.date.slice(0, 10));
-    const bs = bsByDate.get(r.date.slice(0, 10));
+  const inc = dedupeQuarterlyIncome(
+    sortQuarterlyByDateAsc(bundle.incomeQuarterly).filter((r) => !isStubIncome(r)),
+  );
+  const periodEnds = inc.map((r) => r.date.slice(0, 10));
+  const labels = disambiguateQuarterlyChartLabels(periodEnds, formatPeriod, locale);
+  const cfRows = bundle.cashFlowQuarterly;
+  const bsRows = bundle.balanceSheetQuarterly;
+  const cfByDate = new Map(cfRows.map((c) => [c.date.slice(0, 10), c]));
+  const bsByDate = new Map(bsRows.map((b) => [b.date.slice(0, 10), b]));
+  return inc.map((r, i) => {
+    const d = periodEnds[i]!;
+    const cf = sideRowByIncomeDate(d, cfByDate, cfRows);
+    const bs = sideRowByIncomeDate(d, bsByDate, bsRows);
     const rev = r.revenue;
     const ebitda = r.ebitda ?? null;
     return {
-      label: formatPeriod(r.date),
-      periodEnd: r.date.slice(0, 10),
+      label: labels[i]!,
+      periodEnd: d,
       revenue: r.revenue,
       netIncome: r.netIncome,
       operatingIncome: r.operatingIncome ?? null,

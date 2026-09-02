@@ -75,10 +75,20 @@ export function seriesCoverage(
  * so about `maxLabels` fit. Labels stay centered on their bar — unlike Recharts
  * `preserveStartEnd` + angled ticks, which drift onto the wrong columns.
  */
+/** Recharts tick `x`/`y` are `string | number`; SVG text needs a finite number. */
+export function tickCoord(value: string | number | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
 export function axisTickVisible(index: number, total: number, maxLabels: number): boolean {
   if (total <= 0 || index < 0 || index >= total) return false;
   if (total <= maxLabels) return true;
-  if (index === 0 || index === total - 1) return true;
+  if (index === 0 || index === total - 1 || index === total - 2) return true;
   const stride = Math.ceil((total - 1) / (maxLabels - 1));
   if (index % stride !== 0) return false;
   // Hide a stride tick that would sit on top of the last label.

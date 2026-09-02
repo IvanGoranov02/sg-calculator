@@ -8,7 +8,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 
-const SIDEBAR_COLLAPSED_KEY = "sg-sidebar-collapsed-v1";
+const SIDEBAR_COLLAPSED_KEY = "sg-sidebar-collapsed-v2";
 
 type ResponsiveAppShellProps = {
   children: React.ReactNode;
@@ -18,8 +18,8 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () =>
-      typeof window !== "undefined" &&
-      window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1",
+      typeof window === "undefined" ||
+      window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== "0",
   );
   const { t } = useI18n();
   const pathname = usePathname();

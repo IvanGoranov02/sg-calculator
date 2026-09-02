@@ -8,17 +8,17 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
+import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { useVisibleInterval } from "@/lib/useVisibleInterval";
+import type { QuoteHistoryBar } from "@/lib/dipFinder";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 import { cn } from "@/lib/utils";
 
 const QUOTES_REFRESH_MS = 60_000;
-
-import { WatchlistDipChart } from "./WatchlistDipChart";
-import { useWatchlist } from "./WatchlistProvider";
 
 export function WatchlistClient() {
   const { t } = useI18n();
@@ -27,6 +27,7 @@ export function WatchlistClient() {
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
 
   const loadQuotes = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -73,6 +74,27 @@ export function WatchlistClient() {
   useEffect(() => {
     void loadQuotes();
   }, [loadQuotes]);
+
+  useEffect(() => {
+    if (symbols.length === 0) {
+      setHistory({});
+      return;
+    }
+    let cancelled = false;
+    const q = `/api/quotes/history?symbols=${encodeURIComponent(symbols.join(","))}`;
+    void fetch(q)
+      .then(async (res) => {
+        const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
+        if (cancelled || !res.ok) return;
+        setHistory(data.history ?? {});
+      })
+      .catch(() => {
+        if (!cancelled) setHistory({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbols]);
 
   useVisibleInterval(() => void loadQuotes({ silent: true }), QUOTES_REFRESH_MS, symbols.length > 0);
 
@@ -263,9 +285,7 @@ export function WatchlistClient() {
             </TableBody>
           </Table>
           <div className="border-t border-white/10 px-4 py-4">
-            <h3 className="mb-1 text-sm font-semibold tracking-tight">{t("watchlist.dipTitle")}</h3>
-            <p className="mb-3 text-xs text-muted-foreground">{t("watchlist.dipSubtitle")}</p>
-            <WatchlistDipChart quotes={quotes} />
+            <DipFinderPanel quotes={quotes} history={history} />
           </div>
         </Card>
       )}

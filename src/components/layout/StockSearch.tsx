@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
+import { resolveStockSearchQuery, suggestCompanies, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
 import usCompanies from "@/data/usCompanies.json";
 
 type SearchTarget = "stock" | "dcf" | "dividend";
@@ -16,7 +17,7 @@ type SearchTarget = "stock" | "dcf" | "dividend";
 export function StockSearchContainer({ target }: { target: SearchTarget }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const pathTicker = pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "";
+  const pathTicker = decodeTickerSegment(pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "");
   const queryTicker = searchParams.get("ticker") ?? "";
   const syncKey =
     target === "stock" ? `stock-${pathTicker}` : `${target}-${queryTicker}-${searchParams.toString()}`;
@@ -38,10 +39,9 @@ type StockSearchProps = {
   target: SearchTarget;
 };
 
-type CompanyEntry = { s: string; n: string };
+type CompanyEntry = SearchCompany;
 
 const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
-const MAX_SUGGESTIONS = 8;
 
 /**
  * Full company index (~6k SEC filers) is lazy-loaded from /public on first use so
@@ -58,27 +58,15 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
   return fullCompaniesPromise;
 }
 
-/** Ticker prefix matches first (exact ticker on top), then company-name substring matches. */
-function suggestCompanies(companies: CompanyEntry[], query: string): CompanyEntry[] {
-  const q = query.trim().toUpperCase();
-  if (!q) return [];
-  const byTicker: CompanyEntry[] = [];
-  const byName: CompanyEntry[] = [];
-  for (const c of companies) {
-    if (c.s.startsWith(q)) byTicker.push(c);
-    else if (c.n.toUpperCase().includes(q)) byName.push(c);
-    if (byTicker.length >= MAX_SUGGESTIONS) break;
-  }
-  return [...byTicker, ...byName].slice(0, MAX_SUGGESTIONS);
-}
-
 function StockSearch({ target }: StockSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const fromPath = pathname.match(/^\/stock\/([^/]+)/i)?.[1]?.trim().toUpperCase() ?? "";
+  const fromPath = decodeTickerSegment(pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "")
+    .trim()
+    .toUpperCase();
   const fromUrl = searchParams.get("ticker")?.trim() ?? "";
   const [query, setQuery] = useState(() => fromPath || fromUrl || "AAPL");
   const [symbolError, setSymbolError] = useState(false);
@@ -112,10 +100,11 @@ function StockSearch({ target }: StockSearchProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const suggestions = useMemo(
-    () => (open ? suggestCompanies(companies, query) : []),
-    [open, query, companies],
+  const suggestionPool = useMemo(
+    () => suggestCompanies(companies, query),
+    [query, companies],
   );
+  const suggestions = open ? suggestionPool : [];
 
   function go(rawSym: string) {
     const sym = rawSym.trim().toUpperCase();
@@ -139,11 +128,16 @@ function StockSearch({ target }: StockSearchProps) {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (highlighted >= 0 && highlighted < suggestions.length) {
-      go(suggestions[highlighted].s);
+    if (highlighted >= 0 && highlighted < suggestionPool.length) {
+      go(suggestionPool[highlighted].s);
       return;
     }
-    go(query);
+    const resolved = resolveStockSearchQuery(query, suggestionPool, companies);
+    if (!resolved) {
+      setSymbolError(true);
+      return;
+    }
+    go(resolved);
   }
 
   return (

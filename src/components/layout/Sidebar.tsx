@@ -52,26 +52,26 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
     <aside
       className={cn(
         "flex h-full min-h-0 min-w-0 shrink-0 flex-col border-r border-white/10 bg-sidebar transition-[width] duration-200 ease-out lg:h-dvh lg:max-h-dvh",
-        collapsed ? "w-[4.25rem]" : "w-64",
+        collapsed ? "w-[4.25rem]" : "w-[10rem]",
         className,
       )}
     >
       <div
         className={cn(
           "flex h-14 shrink-0 items-center border-b border-white/10",
-          collapsed ? "justify-center px-1" : "justify-between px-3",
+          collapsed ? "justify-center px-1" : "justify-between gap-1 px-2",
         )}
       >
         <Link
           href="/dashboard"
           onClick={() => onNavigate?.()}
-          className={cn("flex items-center gap-2 font-semibold tracking-tight", collapsed && "justify-center")}
+          className={cn("flex min-w-0 items-center gap-1.5 font-semibold tracking-tight", collapsed && "justify-center")}
           title={t("nav.brand")}
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
             SP
           </span>
-          {!collapsed ? <span className="text-sidebar-foreground">{t("nav.brand")}</span> : null}
+          {!collapsed ? <span className="truncate text-sm text-sidebar-foreground">{t("nav.brand")}</span> : null}
         </Link>
         {onToggleCollapsed ? (
           <Button
@@ -106,7 +106,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
         </div>
       ) : null}
       <nav
-        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain bg-sidebar p-2"
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain bg-sidebar p-1.5"
         aria-label="Main"
       >
         {nav.map(({ href, labelKey, icon: Icon }) => {
@@ -115,21 +115,17 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
               ? pathname.startsWith("/stock/")
               : pathname === href || pathname.startsWith(`${href}/`);
           const label = t(labelKey);
-          const collapsedTitle =
-            collapsed && href === "/watchlist" && symbols.length > 0
-              ? `${label} (${symbols.length})`
-              : collapsed
-                ? label
-                : undefined;
+          const linkTitle =
+            href === "/watchlist" && symbols.length > 0 ? `${label} (${symbols.length})` : label;
           return (
             <Link
               key={href}
               href={href}
-              title={collapsedTitle}
+              title={linkTitle}
               onClick={() => onNavigate?.()}
               className={cn(
-                "flex min-h-10 items-center rounded-lg py-2.5 text-sm font-medium transition-colors",
-                collapsed ? "justify-center px-0" : "gap-3 px-3",
+                "flex min-h-9 items-center rounded-lg py-2 text-xs font-medium transition-colors",
+                collapsed ? "justify-center px-0" : "gap-2 px-2",
                 active
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
@@ -151,8 +147,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
             title={collapsed ? t("admin.link") : undefined}
             onClick={() => onNavigate?.()}
             className={cn(
-              "mt-1 flex min-h-10 items-center rounded-lg py-2.5 text-sm font-medium text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300",
-              collapsed ? "justify-center px-0" : "gap-3 px-3",
+              "mt-1 flex min-h-9 items-center rounded-lg py-2 text-xs font-medium text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300",
+              collapsed ? "justify-center px-0" : "gap-2 px-2",
               pathname.startsWith("/admin") && "bg-amber-500/10 text-amber-300",
             )}
           >
@@ -162,7 +158,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
         ) : null}
       </nav>
       {!collapsed ? (
-        <div className="border-t border-white/10 p-4 text-xs text-muted-foreground">{t("nav.footer")}</div>
+        <div className="border-t border-white/10 p-2 text-[10px] leading-snug text-muted-foreground">{t("nav.footer")}</div>
       ) : null}
     </aside>
   );

@@ -8,7 +8,12 @@ type PageProps = {
 
 export default async function StockTickerPage({ params }: PageProps) {
   const { ticker: raw } = await params;
-  const ticker = raw?.trim() || "AAPL";
+  let ticker = (raw ?? "").trim() || "AAPL";
+  try {
+    ticker = decodeURIComponent(ticker).trim() || "AAPL";
+  } catch {
+    /* keep raw */
+  }
 
   return <StockAnalysisPageClient ticker={ticker} />;
 }

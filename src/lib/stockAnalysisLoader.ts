@@ -1,12 +1,14 @@
 import { fetchStockBundleFromEdgar } from "@/lib/edgar/client";
 import { fetchStockBundleFromFmp, fmpApiKey } from "@/lib/fmp/client";
-import { fetchStockBundleFromGemini } from "@/lib/geminiFullStockBundle";
+import { fetchStockBundleFromGemini, GEMINI_FULL_BUNDLE_BUDGET_MS } from "@/lib/geminiFullStockBundle";
 import { fillBundleGapsFromGemini } from "@/lib/geminiBundleGapFill";
 import {
   backfillQuarterlyHistoryFromGemini,
   quarterlyHistoryIsThin,
 } from "@/lib/geminiQuarterlyBackfill";
+import { withRetry, withTimeout, withTimeoutFallback } from "@/lib/asyncTimeout";
 import { prisma } from "@/lib/prisma";
+import { isTransientPrismaError } from "@/lib/prismaPool";
 import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 import {
   INVALID_TICKER_SYMBOL_MESSAGE,
@@ -68,6 +70,41 @@ type EnrichOptions = {
   mergeMode?: YahooMergeMode;
 };
 
+const PRISMA_CACHE_TIMEOUT_MS = 8_000;
+const PRISMA_CACHE_ATTEMPTS = 2;
+const YAHOO_STEP_TIMEOUT_MS = 20_000;
+const GEMINI_GAP_FILL_BUDGET_MS = 22_000;
+
+function logLoadStep(sym: string, step: string, startedAt: number, extra?: string): void {
+  const ms = Date.now() - startedAt;
+  console.log(`[stock-load] ${sym} ${step} ${ms}ms${extra ? ` ${extra}` : ""}`);
+}
+
+async function readStockCache(sym: string): Promise<{ payload: unknown; updatedAt: Date } | null> {
+  try {
+    return await withRetry(
+      () =>
+        prisma.stockAnalysisCache.findUnique({
+          where: { symbol: sym },
+          select: { payload: true, updatedAt: true },
+        }),
+      {
+        attempts: PRISMA_CACHE_ATTEMPTS,
+        timeoutMs: PRISMA_CACHE_TIMEOUT_MS,
+        label: `cache read ${sym}`,
+        retryIf: isTransientPrismaError,
+        delayMs: 150,
+      },
+    );
+  } catch (e) {
+    console.warn(
+      `[stock-load] ${sym} cache read failed:`,
+      e instanceof Error ? e.message : e,
+    );
+    return null;
+  }
+}
+
 async function enrichFundamentalsPipeline(
   bundle: StockAnalysisBundle,
   sym: string,
@@ -75,20 +112,43 @@ async function enrichFundamentalsPipeline(
   { onProgress, runGapFill = true, mergeMode = "prefer-yahoo" }: EnrichOptions,
 ): Promise<void> {
   onProgress?.({ kind: "yahoo_fundamentals" });
-  const payload = yahooPayload ?? (await fetchYahooFundamentalsPayload(sym));
+  const y0 = Date.now();
+  const payload =
+    yahooPayload !== undefined
+      ? yahooPayload
+      : await withTimeoutFallback(
+          fetchYahooFundamentalsPayload(sym),
+          YAHOO_STEP_TIMEOUT_MS,
+          `yahoo fundamentals ${sym}`,
+          null,
+        );
   if (payload) applyYahooFundamentalsToBundle(bundle, payload, mergeMode);
+  logLoadStep(sym, "yahoo_fundamentals", y0, payload ? "ok" : "skip");
   sanitizeBundleDilutedShares(bundle);
   appendCalendarAnnualFromQuarterly(bundle);
   trimBundleToFundamentalsWindow(bundle);
   if (runGapFill) {
     onProgress?.({ kind: "gemini_gap_fill" });
-    // 20-F/ADR filers: EDGAR+Yahoo leave only a handful of quarters; propose older
-    // ones via Gemini but keep only fiscal years that reconcile with SEC annuals.
-    if (mergeMode === "fill-gaps" && quarterlyHistoryIsThin(bundle)) {
-      await backfillQuarterlyHistoryFromGemini(bundle);
-      trimBundleToFundamentalsWindow(bundle);
+    const g0 = Date.now();
+    try {
+      await withTimeout(
+        (async () => {
+          if (mergeMode === "fill-gaps" && quarterlyHistoryIsThin(bundle)) {
+            await backfillQuarterlyHistoryFromGemini(bundle);
+            trimBundleToFundamentalsWindow(bundle);
+          }
+          await fillBundleGapsFromGemini(bundle);
+        })(),
+        GEMINI_GAP_FILL_BUDGET_MS,
+        `gemini gap-fill ${sym}`,
+      );
+    } catch (e) {
+      console.warn(
+        `[stock-load] ${sym} gap-fill skipped:`,
+        e instanceof Error ? e.message : e,
+      );
     }
-    await fillBundleGapsFromGemini(bundle);
+    logLoadStep(sym, "gemini_gap_fill", g0);
     markGapFillAttempt(bundle);
   }
   sanitizeBundleDilutedShares(bundle);
@@ -100,14 +160,29 @@ async function persistStockCache(
   opts?: BuildCachePayloadOptions,
 ): Promise<void> {
   const plain = buildCachePayload(bundle, opts);
+  const t0 = Date.now();
   try {
-    await prisma.stockAnalysisCache.upsert({
-      where: { symbol: sym },
-      create: { symbol: sym, payload: plain },
-      update: { payload: plain },
-    });
-  } catch {
-    // DB optional in some dev setups
+    await withRetry(
+      () =>
+        prisma.stockAnalysisCache.upsert({
+          where: { symbol: sym },
+          create: { symbol: sym, payload: plain },
+          update: { payload: plain },
+        }),
+      {
+        attempts: PRISMA_CACHE_ATTEMPTS,
+        timeoutMs: PRISMA_CACHE_TIMEOUT_MS,
+        label: `cache write ${sym}`,
+        retryIf: isTransientPrismaError,
+        delayMs: 150,
+      },
+    );
+    logLoadStep(sym, "cache_write", t0);
+  } catch (e) {
+    console.warn(
+      `[stock-load] ${sym} cache write skipped:`,
+      e instanceof Error ? e.message : e,
+    );
   }
 }
 
@@ -120,24 +195,34 @@ async function fetchFreshFundamentals(
   sym: string,
   opts: LoadStockAnalysisOptions | undefined,
 ): Promise<{ bundle: StockAnalysisBundle; source: FundamentalsSource }> {
-  const yahooPromise = fetchYahooFundamentalsPayload(sym);
+  const yahooPromise = withTimeoutFallback(
+    fetchYahooFundamentalsPayload(sym),
+    YAHOO_STEP_TIMEOUT_MS,
+    `yahoo fundamentals ${sym}`,
+    null,
+  );
   let source: FundamentalsSource = "gemini";
   let bundle: StockAnalysisBundle | null = null;
 
   if (fmpApiKey()) {
     opts?.onProgress?.({ kind: "fmp" });
+    const t0 = Date.now();
     bundle = await fetchStockBundleFromFmp(sym);
+    logLoadStep(sym, "fmp", t0, bundle ? "ok" : "empty");
     if (bundle) source = "fmp";
     else console.warn(`[fundamentals] ${sym}: FMP key set but no usable data — falling back`);
   }
   if (!bundle) {
     opts?.onProgress?.({ kind: "edgar" });
+    const t0 = Date.now();
     bundle = await fetchStockBundleFromEdgar(sym);
+    logLoadStep(sym, "edgar", t0, bundle ? "ok" : "empty");
     if (bundle) source = "edgar";
   }
   if (!bundle) {
     bundle = await fetchStockBundleFromGemini(sym, {
       onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+      budgetMs: GEMINI_FULL_BUNDLE_BUDGET_MS,
     });
   }
   console.log(`[fundamentals] ${sym}: source=${source}`);
@@ -147,6 +232,17 @@ async function fetchFreshFundamentals(
   });
   markFundamentalsSource(bundle, source);
   return { bundle, source };
+}
+
+async function refreshLivePrices(bundle: StockAnalysisBundle, sym: string): Promise<void> {
+  const t0 = Date.now();
+  await withTimeoutFallback(
+    enrichBundleWithYahooPrices(bundle),
+    YAHOO_STEP_TIMEOUT_MS,
+    `yahoo prices ${sym}`,
+    undefined,
+  );
+  logLoadStep(sym, "yahoo_prices", t0);
 }
 
 /**
@@ -163,17 +259,13 @@ export async function loadStockAnalysis(
     return { bundle: null, error: INVALID_TICKER_SYMBOL_MESSAGE };
   }
   const sym = normalizeStockSymbol(raw);
+  const loadStarted = Date.now();
+  opts?.onProgress?.({ kind: "start" });
 
   try {
-    let row: { payload: unknown; updatedAt: Date } | null = null;
-    try {
-      row = await prisma.stockAnalysisCache.findUnique({
-        where: { symbol: sym },
-        select: { payload: true, updatedAt: true },
-      });
-    } catch {
-      row = null;
-    }
+    const tCache = Date.now();
+    const row = await readStockCache(sym);
+    logLoadStep(sym, "cache_read", tCache, row ? "hit" : "miss");
     const cachedPayload = row ? (row.payload as CachePayload) : null;
     const adminEditedAt = readAdminEditedAt(cachedPayload);
 
@@ -198,13 +290,14 @@ export async function loadStockAnalysis(
       }
 
       opts?.onProgress?.({ kind: "yahoo_prices" });
-      await enrichBundleWithYahooPrices(working);
+      await refreshLivePrices(working, sym);
       if (overlay) applyAdminOverlay(working, overlay);
       await persistStockCache(sym, working, {
         adminEditedAt,
         adminOverlay: overlay ?? undefined,
         lastFullFetchAt,
       });
+      logLoadStep(sym, "total", loadStarted);
       return { bundle: working, error: null };
     }
 
@@ -219,31 +312,49 @@ export async function loadStockAnalysis(
       ) {
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
-        const yahooPromise = fetchYahooFundamentalsPayload(sym);
+        const yahooPromise = withTimeoutFallback(
+          fetchYahooFundamentalsPayload(sym),
+          YAHOO_STEP_TIMEOUT_MS,
+          `yahoo fundamentals ${sym}`,
+          null,
+        );
         await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
           onProgress: opts?.onProgress,
           runGapFill: gapFillIsDue(cachedPayload),
           mergeMode: readFundamentalsSource(cachedPayload) === "gemini" ? "prefer-yahoo" : "fill-gaps",
         });
         opts?.onProgress?.({ kind: "yahoo_prices" });
-        await enrichBundleWithYahooPrices(bundle);
+        await refreshLivePrices(bundle, sym);
         await persistStockCache(sym, bundle, {
           lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? undefined,
         });
         // Persisted in native currency; convert to the quote currency for display.
-        await reconcileFundamentalsCurrency(bundle);
+        await withTimeoutFallback(
+          reconcileFundamentalsCurrency(bundle),
+          8_000,
+          `fx reconcile ${sym}`,
+          undefined,
+        );
+        logLoadStep(sym, "total", loadStarted);
         return { bundle, error: null };
       }
     }
 
     const { bundle } = await fetchFreshFundamentals(sym, opts);
     opts?.onProgress?.({ kind: "yahoo_prices" });
-    await enrichBundleWithYahooPrices(bundle);
+    await refreshLivePrices(bundle, sym);
     await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
-    await reconcileFundamentalsCurrency(bundle);
+    await withTimeoutFallback(
+      reconcileFundamentalsCurrency(bundle),
+      8_000,
+      `fx reconcile ${sym}`,
+      undefined,
+    );
+    logLoadStep(sym, "total", loadStarted);
     return { bundle, error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load stock data.";
+    logLoadStep(sym, "error", loadStarted, message.slice(0, 120));
     return { bundle: null, error: message };
   }
 }

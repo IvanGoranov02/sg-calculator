@@ -27,6 +27,8 @@ Open [http://localhost:3000](http://localhost:3000). Data is fetched on the **se
 3. Use **Node.js 22.x** (matches `engines` in `package.json` and `yahoo-finance2`). In the project: **Settings → General → Node.js Version**.
 4. Deploy. Set **DATABASE_URL**, **DIRECT_URL**, **AUTH_SECRET**, **AUTH_URL**, **AUTH_GOOGLE_ID**, and **AUTH_GOOGLE_SECRET** in the Vercel project (see `.env.example`). With **Supabase**, use the **pooler** URL for `DATABASE_URL` and the **non-pooling** (5432) URL for `DIRECT_URL`. If your host has only one URL, set both to the same value. After the first deploy, apply the DB schema: `npx prisma db push` (or `prisma migrate dev`) against that database.
 
+   Preview and CI run `build:skip-db` (`prisma generate && next build`) so they never `db push`. Production (`VERCEL_ENV=production`) still runs `prisma db push` and `prisma/lock-supabase-api.sql` when `DATABASE_URL` is set.
+
 ### Admin panel
 
 Set **ADMIN_EMAILS** (comma-separated Google sign-in emails). Sign in, then open **/admin/cache** to list and edit cached stock fundamentals (`StockAnalysisCache`). Same variable must be set on Vercel for production.

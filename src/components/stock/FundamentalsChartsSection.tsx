@@ -120,8 +120,16 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
   const baseRows = useMemo((): Row[] => {
     return freq === "annual"
       ? buildAnnualChartRows(data, formatYear)
-      : buildQuarterlyChartRows(data, formatPeriod);
-  }, [data, freq, formatYear, formatPeriod]);
+      : buildQuarterlyChartRows(data, formatPeriod, locale);
+  }, [data, freq, formatYear, formatPeriod, locale]);
+
+  const chartAxisProps = useMemo(
+    () =>
+      freq === "quarterly"
+        ? { xKey: "periodEnd" as const, xLabelFormatter: formatPeriod }
+        : {},
+    [freq, formatPeriod],
+  );
 
   const annualYearOptions = useMemo(() => {
     const inc = sortIncomeByYearAsc(data.income);
@@ -204,7 +212,10 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
     });
   }, [rows, valuationByPeriod]);
 
-  const chartRows = useMemo(() => rowsForCharts(rowsMerged), [rowsMerged]);
+  const chartRows = useMemo(
+    () => rowsForCharts(rowsMerged, { keepPeriodEnd: freq === "quarterly" }),
+    [rowsMerged, freq],
+  );
 
   useEffect(() => {
     const incA = sortIncomeByYearAsc(data.income);
@@ -358,10 +369,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         { dataKey: "grossMargin", color: C.gross, label: t("annual.grossMargin") },
         { dataKey: "operatingMargin", color: C.opIncome, label: t("annual.operatingMargin") },
         { dataKey: "netMargin", color: C.netIncome, label: t("annual.netMargin") },
-      ] satisfies FundamentalSeries[],
-      ebitdaNi: [
-        { dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") },
-        { dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") },
       ] satisfies FundamentalSeries[],
       ebitdaSolo: [{ dataKey: "ebitda", color: C.ebitda, label: t("annual.ebitda") }] satisfies FundamentalSeries[],
       peTtm: [{ dataKey: "peTtm", color: C.valuationPe, label: t("chartsFund.seriesPeTtm") }] satisfies FundamentalSeries[],
@@ -574,6 +581,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
       ) : (
         <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartRevenue")}
             description={t("chartsFund.chartRevenueDesc")}
             data={chartRows}
@@ -582,15 +590,18 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "revenue", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartNetIncomeSolo")}
             description={t("chartsFund.chartNetIncomeSoloDesc")}
             data={chartRows}
             series={series.netIncomeSolo}
+            chartType="bar"
             valueFormat="currency"
             growthNote={growthFooterLine(chartRows, "netIncome", freq, t)}
           />
           {hasDilutedEps ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartDilutedEps")}
               description={t("chartsFund.chartDilutedEpsDesc")}
               data={chartRows}
@@ -601,6 +612,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           ) : null}
           {hasDilutedShares ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartDilutedShares")}
               description={t("chartsFund.chartDilutedSharesDesc")}
               data={chartRows}
@@ -610,6 +622,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             />
           ) : null}
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartPeTtm")}
             description={t("chartsFund.chartPeTtmDesc")}
             data={chartRows}
@@ -618,6 +631,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "peTtm", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartPsTtm")}
             description={t("chartsFund.chartPsTtmDesc")}
             data={chartRows}
@@ -627,6 +641,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           />
           {hasOperatingIncome ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartOperatingIncomeSolo")}
               description={t("chartsFund.chartOperatingIncomeSoloDesc")}
               data={chartRows}
@@ -636,6 +651,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             />
           ) : null}
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartOpexSolo")}
             description={t("chartsFund.chartOpexSoloDesc")}
             data={chartRows}
@@ -644,6 +660,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "operatingExpenses", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartMargins")}
             description={t("chartsFund.chartMarginsDesc")}
             data={chartRows}
@@ -653,16 +670,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           />
           {hasEbitda ? (
             <FundamentalChartCard
-              title={t("chartsFund.chartEbitdaNi")}
-              description={t("chartsFund.chartEbitdaNiDesc")}
-              data={chartRows}
-              series={series.ebitdaNi}
-              valueFormat="currency"
-              growthNote={growthFooterMulti(chartRows, ["ebitda", "netIncome"], freq, t)}
-            />
-          ) : null}
-          {hasEbitda ? (
-            <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartEbitdaSolo")}
               description={t("chartsFund.chartEbitdaSoloDesc")}
               data={chartRows}
@@ -672,6 +680,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             />
           ) : null}
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartOcfSolo")}
             description={t("chartsFund.chartOcfSoloDesc")}
             data={chartRows}
@@ -680,6 +689,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "ocf", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartFcfSolo")}
             description={t("chartsFund.chartFcfSoloDesc")}
             data={chartRows}
@@ -688,6 +698,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "fcf", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartCapexSolo")}
             description={t("chartsFund.chartCapexSoloDesc")}
             data={chartRows}
@@ -696,6 +707,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "capex", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartInvestFinance")}
             description={t("chartsFund.chartInvestFinanceDesc")}
             data={chartRows}
@@ -704,6 +716,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterMulti(chartRows, ["investCf", "financeCf"], freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartBalance")}
             description={t("chartsFund.chartBalanceDesc")}
             data={chartRows}
@@ -712,6 +725,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterMulti(chartRows, ["totalAssets", "totalDebt", "equity"], freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartCashNetDebt")}
             description={t("chartsFund.chartCashNetDebtDesc")}
             data={chartRows}
@@ -720,6 +734,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterMulti(chartRows, ["cash", "netDebt"], freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartRoeRoa")}
             description={t("chartsFund.chartRoeRoaDesc")}
             data={chartRows}
@@ -728,6 +743,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterMulti(chartRows, ["roe", "roa"], freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartCurrentRatio")}
             description={t("chartsFund.chartCurrentRatioDesc")}
             data={chartRows}
@@ -736,6 +752,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "currentRatio", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartFcfMargin")}
             description={t("chartsFund.chartFcfMarginDesc")}
             data={chartRows}
@@ -744,6 +761,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "fcfMargin", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartPopGrowth")}
             description={freq === "annual" ? t("chartsFund.chartPopGrowthDescAnnual") : t("chartsFund.chartPopGrowthDescQ")}
             data={chartRows}
@@ -753,6 +771,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           />
           {hasShareholderFlows ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartShareholder")}
               description={t("chartsFund.chartShareholderDesc")}
               data={chartRows}
@@ -763,6 +782,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           ) : null}
           {hasArInv ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartArInv")}
               description={t("chartsFund.chartArInvDesc")}
               data={chartRows}
@@ -773,6 +793,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           ) : null}
           {hasGwLt ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartGwLt")}
               description={t("chartsFund.chartGwLtDesc")}
               data={chartRows}
@@ -783,6 +804,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           ) : null}
           {hasEbitdaOcfMargins ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartEbitdaOcfMargin")}
               description={t("chartsFund.chartEbitdaOcfMarginDesc")}
               data={chartRows}
@@ -792,6 +814,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             />
           ) : null}
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartDebtPctCapital")}
             description={t("chartsFund.chartDebtPctCapitalDesc")}
             data={chartRows}
@@ -801,6 +824,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           />
           {hasNetDebtEbitda ? (
             <FundamentalChartCard
+            {...chartAxisProps}
               title={t("chartsFund.chartNetDebtEbitda")}
               description={t("chartsFund.chartNetDebtEbitdaDesc")}
               data={chartRows}
@@ -810,6 +834,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             />
           ) : null}
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartQuickRatio")}
             description={t("chartsFund.chartQuickRatioDesc")}
             data={chartRows}
@@ -818,6 +843,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             growthNote={growthFooterLine(chartRows, "quickRatio", freq, t)}
           />
           <FundamentalChartCard
+            {...chartAxisProps}
             title={t("chartsFund.chartCapexIntensity")}
             description={t("chartsFund.chartCapexIntensityDesc")}
             data={chartRows}

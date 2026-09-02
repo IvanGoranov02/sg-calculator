@@ -1,36 +1,44 @@
 "use client";
 
-import { axisTickVisible } from "@/lib/chartSeriesUtils";
+import { axisTickVisible, tickCoord } from "@/lib/chartSeriesUtils";
 
 type CategoryAxisTickProps = {
-  x?: number;
-  y?: number;
+  x?: string | number;
+  y?: string | number;
   payload?: { value?: unknown };
   index?: number;
   total: number;
   maxLabels: number;
+  formatValue?: (value: unknown) => string;
 };
 
 /** Centered category labels; hides extras instead of letting Recharts shift them. */
 export function CategoryAxisTick({
-  x = 0,
-  y = 0,
+  x,
+  y,
   payload,
   index = 0,
   total,
   maxLabels,
+  formatValue,
 }: CategoryAxisTickProps) {
   if (!axisTickVisible(index, total, maxLabels)) return <g />;
+  const label =
+    payload?.value == null
+      ? ""
+      : formatValue
+        ? formatValue(payload.value)
+        : String(payload.value);
   return (
     <text
-      x={x}
-      y={y}
+      x={tickCoord(x)}
+      y={tickCoord(y)}
       dy={12}
       textAnchor="middle"
       fill="var(--muted-foreground)"
       fontSize={10}
     >
-      {payload?.value == null ? "" : String(payload.value)}
+      {label}
     </text>
   );
 }

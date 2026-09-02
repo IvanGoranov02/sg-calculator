@@ -443,13 +443,34 @@ const MAX_QUARTERS = FUNDAMENTALS_MAX_QUARTERS;
 /** Quarterly JSON is large; extra headroom reduces truncated responses (few bars in UI). */
 const GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS = 16_384;
 const GEMINI_ANNUAL_MAX_OUTPUT_TOKENS = 16_384;
-const GEMINI_JSON_MAX_RETRIES = 3;
+const GEMINI_JSON_MAX_RETRIES = 2;
+
+/** Default per-call ceiling; actual timeout may be lower when a route budget applies. */
+const GEMINI_DEFAULT_REQUEST_TIMEOUT_MS = 45_000;
+
+/** Total wall-clock budget for the 3-part full bundle (fits inside stock-analysis maxDuration=120). */
+export const GEMINI_FULL_BUNDLE_BUDGET_MS = 85_000;
+
+const GEMINI_BUDGET_MIN_PART_MS = 8_000;
 
 function perRequestTimeoutMs(): number {
   const raw = Number(process.env.GEMINI_STOCK_REQUEST_TIMEOUT_MS?.trim());
   if (Number.isFinite(raw) && raw >= 15_000) return Math.min(Math.floor(raw), 300_000);
-  return 120_000;
+  return GEMINI_DEFAULT_REQUEST_TIMEOUT_MS;
 }
+
+function timeoutForBudget(remainingMs: number): number {
+  const cap = perRequestTimeoutMs();
+  if (!Number.isFinite(remainingMs) || remainingMs <= GEMINI_BUDGET_MIN_PART_MS) {
+    return Math.max(1_000, Math.floor(remainingMs));
+  }
+  return Math.min(cap, Math.floor(remainingMs));
+}
+
+export type CallGeminiJsonOptions = {
+  timeoutMs?: number;
+  maxRetries?: number;
+};
 
 type GeminiGenerateResponse = {
   candidates?: Array<{
@@ -463,6 +484,7 @@ async function callGeminiJsonOnce(
   model: string,
   prompt: string,
   maxTokens: number,
+  timeoutMs: number,
 ): Promise<{ parsed: unknown; finishReason: string | null }> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
@@ -482,7 +504,7 @@ async function callGeminiJsonOnce(
           responseMimeType: "application/json",
         },
       }),
-      signal: AbortSignal.timeout(perRequestTimeoutMs()),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "network error";
@@ -509,13 +531,22 @@ export async function callGeminiJson(
   model: string,
   prompt: string,
   maxTokens: number,
+  opts?: CallGeminiJsonOptions,
 ): Promise<unknown> {
   let tokens = maxTokens;
   let lastError: Error | null = null;
+  const maxRetries = Math.max(1, opts?.maxRetries ?? GEMINI_JSON_MAX_RETRIES);
+  const timeoutMs = opts?.timeoutMs ?? perRequestTimeoutMs();
 
-  for (let attempt = 0; attempt < GEMINI_JSON_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const { parsed, finishReason } = await callGeminiJsonOnce(apiKey, model, prompt, tokens);
+      const { parsed, finishReason } = await callGeminiJsonOnce(
+        apiKey,
+        model,
+        prompt,
+        tokens,
+        timeoutMs,
+      );
       if (finishReason === "MAX_TOKENS") {
         throw new Error("Gemini response did not contain a complete JSON object.");
       }
@@ -525,9 +556,9 @@ export async function callGeminiJson(
       const retryable =
         lastError.message.includes("complete JSON object") ||
         lastError.message.includes("Empty Gemini");
-      if (!retryable || attempt >= GEMINI_JSON_MAX_RETRIES - 1) break;
+      if (!retryable || attempt >= maxRetries - 1) break;
       tokens = Math.min(Math.floor(tokens * 1.5), 65_536);
-      console.warn(`[gemini] JSON parse/truncation — retry ${attempt + 2}/${GEMINI_JSON_MAX_RETRIES}, maxOutputTokens=${tokens}`);
+      console.warn(`[gemini] JSON parse/truncation — retry ${attempt + 2}/${maxRetries}, maxOutputTokens=${tokens}`);
     }
   }
 
@@ -652,6 +683,29 @@ function buildQuarterlyBsDivPrompt(sym: string): string {
 
 export type GeminiBundlePart = 1 | 2 | 3;
 
+async function callGeminiJsonWithinBudget(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  maxTokens: number,
+  budget: { startedAt: number; budgetMs: number },
+): Promise<unknown> {
+  const remainingMs = budget.budgetMs - (Date.now() - budget.startedAt);
+  if (remainingMs <= GEMINI_BUDGET_MIN_PART_MS) {
+    throw new Error("Gemini full-bundle budget exceeded before request.");
+  }
+  const timeoutMs = timeoutForBudget(remainingMs);
+  const maxRetries =
+    remainingMs < perRequestTimeoutMs() + GEMINI_BUDGET_MIN_PART_MS ? 1 : GEMINI_JSON_MAX_RETRIES;
+  return callGeminiJson(apiKey, model, prompt, maxTokens, { timeoutMs, maxRetries });
+}
+
+export type FetchStockBundleFromGeminiOptions = {
+  onPartStart?: (part: GeminiBundlePart) => void;
+  /** Wall-clock budget for all three Gemini parts (default {@link GEMINI_FULL_BUNDLE_BUDGET_MS}). */
+  budgetMs?: number;
+};
+
 /**
  * Fetches stock data from Gemini in 3 sequential requests to avoid overwhelming the model:
  * 1) Quote + investor + annual statements (5 years)
@@ -660,7 +714,7 @@ export type GeminiBundlePart = 1 | 2 | 3;
  */
 export async function fetchStockBundleFromGemini(
   symbol: string,
-  opts?: { onPartStart?: (part: GeminiBundlePart) => void },
+  opts?: FetchStockBundleFromGeminiOptions,
 ): Promise<StockAnalysisBundle> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -669,23 +723,37 @@ export async function fetchStockBundleFromGemini(
 
   const sym = symbol.trim().toUpperCase() || "AAPL";
   const model = defaultGeminiModel();
+  const budgetMs = opts?.budgetMs ?? GEMINI_FULL_BUNDLE_BUDGET_MS;
+  const budget = { startedAt: Date.now(), budgetMs };
 
   opts?.onPartStart?.(1);
   console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
-  const part1 = (await callGeminiJson(
-    apiKey, model, buildAnnualPrompt(sym), GEMINI_ANNUAL_MAX_OUTPUT_TOKENS,
+  const part1 = (await callGeminiJsonWithinBudget(
+    apiKey,
+    model,
+    buildAnnualPrompt(sym),
+    GEMINI_ANNUAL_MAX_OUTPUT_TOKENS,
+    budget,
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(2);
   console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
-  const part2 = (await callGeminiJson(
-    apiKey, model, buildQuarterlyIncomeCfPrompt(sym), GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
+  const part2 = (await callGeminiJsonWithinBudget(
+    apiKey,
+    model,
+    buildQuarterlyIncomeCfPrompt(sym),
+    GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
+    budget,
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(3);
   console.log(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
-  const part3 = (await callGeminiJson(
-    apiKey, model, buildQuarterlyBsDivPrompt(sym), GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
+  const part3 = (await callGeminiJsonWithinBudget(
+    apiKey,
+    model,
+    buildQuarterlyBsDivPrompt(sym),
+    GEMINI_QUARTERLY_MAX_OUTPUT_TOKENS,
+    budget,
   )) as Record<string, unknown>;
 
   const merged = {
