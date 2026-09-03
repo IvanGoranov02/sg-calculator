@@ -7,6 +7,10 @@ import {
   extractExDividendDate,
   extractSymbolEventRow,
   flattenUpcomingEvents,
+  formatDayGutter,
+  formatWeekRangeLabel,
+  groupEventsByWeek,
+  mondayOfWeek,
   nextEarningsDate,
   unionEventSymbols,
 } from "@/lib/calendarEvents";
@@ -162,5 +166,43 @@ describe("daysUntil", () => {
     const now = Date.UTC(2026, 0, 1, 12);
     assert.equal(daysUntil("2026-01-03", now), 2);
     assert.equal(daysUntil("2026-01-01", now), 0);
+  });
+});
+
+describe("groupEventsByWeek", () => {
+  it("groups events by calendar week and day", () => {
+    const events = [
+      { symbol: "A", name: "A", kind: "earnings" as const, date: "2026-10-05", days: 2 },
+      { symbol: "B", name: "B", kind: "exDividend" as const, date: "2026-10-05", days: 2 },
+      { symbol: "C", name: "C", kind: "dividendPay" as const, date: "2026-10-07", days: 4 },
+    ];
+    const weeks = groupEventsByWeek(events);
+    assert.equal(weeks.length, 1);
+    assert.equal(weeks[0]?.weekStart, "2026-10-05");
+    assert.equal(weeks[0]?.days.length, 2);
+    assert.equal(weeks[0]?.days[0]?.events.length, 2);
+    assert.equal(weeks[0]?.days[1]?.date, "2026-10-07");
+  });
+});
+
+describe("formatWeekRangeLabel", () => {
+  it("formats a single-month week range", () => {
+    assert.equal(formatWeekRangeLabel("2026-10-05", "2026-10-11"), "OCT 5 – 11");
+  });
+
+  it("formats a cross-month week range", () => {
+    assert.equal(formatWeekRangeLabel("2026-09-29", "2026-10-05"), "SEP 29 – OCT 5");
+  });
+});
+
+describe("mondayOfWeek / formatDayGutter", () => {
+  it("finds Monday for a mid-week date", () => {
+    assert.equal(mondayOfWeek("2026-10-07"), "2026-10-05");
+  });
+
+  it("formats weekday and day for the gutter", () => {
+    const gutter = formatDayGutter("2026-10-05", "en");
+    assert.equal(gutter.weekday, "MON");
+    assert.equal(gutter.day, 5);
   });
 });

@@ -142,3 +142,88 @@ export function flattenUpcomingEvents(
 
   return { upcoming, undated };
 }
+
+function parseIsoLocal(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function toIsoLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Monday of the calendar week containing `iso` (local). */
+export function mondayOfWeek(iso: string): string {
+  const d = parseIsoLocal(iso);
+  const dow = d.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff);
+  return toIsoLocal(d);
+}
+
+/** Sunday of the calendar week starting on `weekStartIso` (Monday, local). */
+export function sundayOfWeek(weekStartIso: string): string {
+  const d = parseIsoLocal(weekStartIso);
+  d.setDate(d.getDate() + 6);
+  return toIsoLocal(d);
+}
+
+export type DayEventGroup = {
+  date: string;
+  events: FlatEvent[];
+};
+
+export type WeekEventGroup = {
+  weekStart: string;
+  weekEnd: string;
+  days: DayEventGroup[];
+};
+
+/** Group flat events into calendar weeks (Mon–Sun) and days for list layout. */
+export function groupEventsByWeek(events: FlatEvent[]): WeekEventGroup[] {
+  const byDate = new Map<string, FlatEvent[]>();
+  for (const e of events) {
+    const list = byDate.get(e.date) ?? [];
+    list.push(e);
+    byDate.set(e.date, list);
+  }
+
+  const byWeek = new Map<string, DayEventGroup[]>();
+  for (const date of [...byDate.keys()].sort()) {
+    const weekStart = mondayOfWeek(date);
+    const days = byWeek.get(weekStart) ?? [];
+    days.push({ date, events: byDate.get(date)! });
+    byWeek.set(weekStart, days);
+  }
+
+  return [...byWeek.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, days]) => ({
+      weekStart,
+      weekEnd: sundayOfWeek(weekStart),
+      days,
+    }));
+}
+
+const MONTH_FMT = new Intl.DateTimeFormat("en-US", { month: "short" });
+
+/** e.g. "OCT 4 – 10" or "SEP 29 – OCT 5" */
+export function formatWeekRangeLabel(weekStart: string, weekEnd: string): string {
+  const start = parseIsoLocal(weekStart);
+  const end = parseIsoLocal(weekEnd);
+  const startMonth = MONTH_FMT.format(start).toUpperCase();
+  const endMonth = MONTH_FMT.format(end).toUpperCase();
+  if (startMonth === endMonth) {
+    return `${startMonth} ${start.getDate()} – ${end.getDate()}`;
+  }
+  return `${startMonth} ${start.getDate()} – ${endMonth} ${end.getDate()}`;
+}
+
+export function formatDayGutter(iso: string, locale: "en" | "bg"): { weekday: string; day: number } {
+  const d = parseIsoLocal(iso);
+  const weekday = d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", { weekday: "short" }).toUpperCase();
+  return { weekday, day: d.getDate() };
+}

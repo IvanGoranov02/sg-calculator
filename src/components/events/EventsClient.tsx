@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Loader2 } from "lucide-react";
+import { BarChart3, CalendarClock, Coins, Loader2, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -10,6 +10,9 @@ import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   flattenUpcomingEvents,
+  formatDayGutter,
+  formatWeekRangeLabel,
+  groupEventsByWeek,
   type EventKind,
   type FlatEvent,
   unionEventSymbols,
@@ -17,10 +20,25 @@ import {
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
-const KIND_BADGE: Record<EventKind, string> = {
-  earnings: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  exDividend: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  dividendPay: "bg-violet-500/15 text-violet-300 ring-violet-500/30",
+const KIND_META: Record<
+  EventKind,
+  { icon: typeof BarChart3; labelClass: string; cardAccent: string }
+> = {
+  earnings: {
+    icon: BarChart3,
+    labelClass: "text-emerald-400",
+    cardAccent: "border-emerald-500/20",
+  },
+  exDividend: {
+    icon: TrendingDown,
+    labelClass: "text-sky-400",
+    cardAccent: "border-sky-500/20",
+  },
+  dividendPay: {
+    icon: Coins,
+    labelClass: "text-violet-400",
+    cardAccent: "border-violet-500/20",
+  },
 };
 
 export function EventsClient() {
@@ -91,14 +109,7 @@ export function EventsClient() {
   }, [load]);
 
   const { upcoming, undated } = useMemo(() => flattenUpcomingEvents(rows), [rows]);
-
-  const fmtDate = (iso: string) =>
-    new Date(iso).toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+  const weekGroups = useMemo(() => groupEventsByWeek(upcoming), [upcoming]);
 
   const relative = (days: number) => {
     if (days <= 0) return t("events.today");
@@ -156,15 +167,47 @@ export function EventsClient() {
           {error}
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-8">
           {upcoming.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("events.noneUpcoming")}</p>
           ) : (
-            <ul className="grid gap-3 lg:grid-cols-2">
-              {upcoming.map((r: FlatEvent) => (
-                <EventRow key={`${r.symbol}-${r.kind}-${r.date}`} event={r} fmtDate={fmtDate} relative={relative} kindLabel={kindLabel} />
-              ))}
-            </ul>
+            weekGroups.map((week) => (
+              <section key={week.weekStart} className="space-y-4">
+                <h2 className="text-center text-xs font-medium tracking-widest text-muted-foreground uppercase">
+                  {formatWeekRangeLabel(week.weekStart, week.weekEnd)}
+                </h2>
+                <div className="space-y-4">
+                  {week.days.map((day) => {
+                    const gutter = formatDayGutter(day.date, locale);
+                    return (
+                      <div key={day.date} className="flex gap-3 sm:gap-4">
+                        <div
+                          className="flex w-11 shrink-0 flex-col items-center pt-3 sm:w-12"
+                          aria-hidden
+                        >
+                          <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
+                            {gutter.weekday}
+                          </span>
+                          <span className="text-2xl leading-none font-semibold tabular-nums sm:text-3xl">
+                            {gutter.day}
+                          </span>
+                        </div>
+                        <div className="grid min-w-0 flex-1 gap-2 sm:gap-3 lg:grid-cols-2 xl:grid-cols-2">
+                          {day.events.map((event) => (
+                            <EventCard
+                              key={`${event.symbol}-${event.kind}-${event.date}`}
+                              event={event}
+                              kindLabel={kindLabel}
+                              relative={relative}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
           )}
 
           {undated.length > 0 ? (
@@ -191,45 +234,39 @@ export function EventsClient() {
   );
 }
 
-function EventRow({
+function EventCard({
   event,
-  fmtDate,
-  relative,
   kindLabel,
+  relative,
 }: {
   event: FlatEvent;
-  fmtDate: (iso: string) => string;
-  relative: (days: number) => string;
   kindLabel: (kind: EventKind) => string;
+  relative: (days: number) => string;
 }) {
+  const meta = KIND_META[event.kind];
+  const Icon = meta.icon;
   const soon = event.days <= 14;
+
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 transition-colors hover:bg-white/5">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/stock/${encodeURIComponent(event.symbol)}`}
-            className="font-mono text-sm font-medium text-emerald-400 hover:underline"
-          >
-            {event.symbol}
-          </Link>
-          <span
-            className={cn(
-              "rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ring-1 ring-inset",
-              KIND_BADGE[event.kind],
-            )}
-          >
-            {kindLabel(event.kind)}
-          </span>
-        </div>
-        <p className="truncate text-xs text-muted-foreground">{event.name}</p>
+    <Link
+      href={`/stock/${encodeURIComponent(event.symbol)}`}
+      className={cn(
+        "block rounded-2xl border bg-zinc-900/60 px-4 py-3.5 shadow-sm transition-colors hover:bg-zinc-900/80",
+        meta.cardAccent,
+      )}
+    >
+      <div className={cn("mb-2 flex items-center gap-1.5 text-xs font-medium", meta.labelClass)}>
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        <span>{kindLabel(event.kind)}</span>
       </div>
-      <div className="shrink-0 text-right">
-        <p className="text-sm tabular-nums">{fmtDate(event.date)}</p>
-        <p className={cn("text-xs tabular-nums", soon ? "text-amber-400" : "text-muted-foreground")}>
+      <p className="truncate text-base leading-snug font-semibold text-foreground sm:text-lg">{event.name}</p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm">
+        <span className="font-mono text-emerald-400">{event.symbol}</span>
+        <span className="text-muted-foreground">·</span>
+        <span className={cn("tabular-nums", soon ? "text-amber-400" : "text-muted-foreground")}>
           {relative(event.days)}
-        </p>
-      </div>
-    </li>
+        </span>
+      </p>
+    </Link>
   );
 }
