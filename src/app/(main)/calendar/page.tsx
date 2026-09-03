@@ -1,7 +1,5 @@
-import { EarningsCalendarClient } from "@/components/calendar/EarningsCalendarClient";
-
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 
 export default function CalendarPage() {
-  return <EarningsCalendarClient />;
+  redirect("/events");
 }
