@@ -19,6 +19,7 @@ import {
   unionEventSymbols,
 } from "@/lib/calendarEvents";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { initialPortfolioReady } from "@/lib/eventsSession";
 import { cn } from "@/lib/utils";
 
 const KIND_META: Record<
@@ -47,7 +48,7 @@ export function EventsClient() {
   const { symbols: watchlistSymbols } = useWatchlist();
   const { status: sessionStatus } = useSession();
   const [portfolioSymbols, setPortfolioSymbols] = useState<string[]>([]);
-  const [portfolioReady, setPortfolioReady] = useState(sessionStatus !== "authenticated");
+  const [portfolioReady, setPortfolioReady] = useState(() => initialPortfolioReady(sessionStatus));
   const [rows, setRows] = useState<SymbolEventRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
