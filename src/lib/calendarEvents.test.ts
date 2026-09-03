@@ -8,6 +8,7 @@ import {
   extractSymbolEventRow,
   flattenUpcomingEvents,
   formatDayGutter,
+  formatEventRelativeDays,
   formatWeekRangeLabel,
   groupEventsByWeek,
   mondayOfWeek,
@@ -17,8 +18,9 @@ import {
 
 const DAY = 86_400_000;
 
-function isoDaysFromNow(n: number, now: number): string {
-  return new Date(now + n * DAY).toISOString().slice(0, 10);
+/** Noon local on a calendar day — keeps flatten tests stable across timezones. */
+function localNoon(year: number, month: number, day: number): number {
+  return new Date(year, month - 1, day, 12, 0, 0).getTime();
 }
 
 describe("nextEarningsDate", () => {
@@ -96,7 +98,7 @@ describe("unionEventSymbols", () => {
 });
 
 describe("flattenUpcomingEvents", () => {
-  const now = Date.UTC(2026, 8, 3);
+  const now = localNoon(2026, 9, 3);
 
   it("merges event kinds into one chronological list", () => {
     const { upcoming } = flattenUpcomingEvents(
@@ -104,16 +106,16 @@ describe("flattenUpcomingEvents", () => {
         {
           symbol: "A",
           name: "A",
-          earningsDate: isoDaysFromNow(10, now),
-          exDividendDate: isoDaysFromNow(3, now),
+          earningsDate: "2026-09-13",
+          exDividendDate: "2026-09-06",
           dividendPayDate: null,
         },
         {
           symbol: "B",
           name: "B",
-          earningsDate: isoDaysFromNow(5, now),
+          earningsDate: "2026-09-08",
           exDividendDate: null,
-          dividendPayDate: isoDaysFromNow(7, now),
+          dividendPayDate: "2026-09-10",
         },
       ],
       2,
@@ -137,8 +139,8 @@ describe("flattenUpcomingEvents", () => {
         {
           symbol: "OLD",
           name: "Old Co",
-          earningsDate: isoDaysFromNow(-5, now),
-          exDividendDate: isoDaysFromNow(-1, now),
+          earningsDate: "2026-08-29",
+          exDividendDate: "2026-09-02",
           dividendPayDate: null,
         },
       ],
@@ -147,6 +149,7 @@ describe("flattenUpcomingEvents", () => {
     );
     assert.equal(upcoming.length, 1);
     assert.equal(upcoming[0]?.kind, "exDividend");
+    assert.equal(upcoming[0]?.days, -1);
     assert.equal(undated.length, 0);
   });
 
@@ -162,10 +165,40 @@ describe("flattenUpcomingEvents", () => {
 });
 
 describe("daysUntil", () => {
-  it("rounds to whole days from a fixed now", () => {
-    const now = Date.UTC(2026, 0, 1, 12);
+  it("rounds to whole local calendar days from a fixed now", () => {
+    const now = localNoon(2026, 1, 1);
     assert.equal(daysUntil("2026-01-03", now), 2);
     assert.equal(daysUntil("2026-01-01", now), 0);
+  });
+
+  it("uses local calendar days at end of day, not UTC midnight parsing", () => {
+    const evening = new Date(2026, 8, 3, 18, 0, 0).getTime();
+    assert.equal(daysUntil("2026-09-03", evening), 0);
+    assert.equal(daysUntil("2026-09-04", evening), 1);
+    // Date.parse("2026-09-04") is UTC midnight; near local evening that can round to 0
+    // while the calendar gutter still shows the 4th as tomorrow.
+    const utcMidnightDays = Math.round((Date.parse("2026-09-04") - evening) / DAY);
+    if (utcMidnightDays !== 1) {
+      assert.notEqual(utcMidnightDays, daysUntil("2026-09-04", evening));
+    }
+  });
+});
+
+describe("formatEventRelativeDays", () => {
+  const labels = {
+    today: "Today",
+    yesterday: "Yesterday",
+    daysAgo: "{days} days ago",
+    tomorrow: "Tomorrow",
+    inDays: "in {days} days",
+  };
+
+  it("labels grace-window past events without calling them today", () => {
+    assert.equal(formatEventRelativeDays(0, labels), "Today");
+    assert.equal(formatEventRelativeDays(-1, labels), "Yesterday");
+    assert.equal(formatEventRelativeDays(-2, labels), "2 days ago");
+    assert.equal(formatEventRelativeDays(1, labels), "Tomorrow");
+    assert.equal(formatEventRelativeDays(5, labels), "in 5 days");
   });
 });
 

@@ -80,10 +80,29 @@ export function extractSymbolEventRow(
 }
 
 export function daysUntil(iso: string, now = Date.now()): number | null {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return null;
-  const days = Math.round((t - now) / 86_400_000);
+  const target = parseIsoLocal(iso);
+  if (Number.isNaN(target.getTime())) return null;
+  const today = startOfLocalDay(new Date(now));
+  const targetDay = startOfLocalDay(target);
+  const days = Math.round((targetDay.getTime() - today.getTime()) / 86_400_000);
   return days === 0 ? 0 : days;
+}
+
+export type EventRelativeLabels = {
+  today: string;
+  yesterday: string;
+  daysAgo: string;
+  tomorrow: string;
+  inDays: string;
+};
+
+/** Format relative day offset for event cards; `daysAgo` / `inDays` use `{days}` placeholder. */
+export function formatEventRelativeDays(days: number, labels: EventRelativeLabels): string {
+  if (days === 0) return labels.today;
+  if (days === -1) return labels.yesterday;
+  if (days < -1) return labels.daysAgo.replace("{days}", String(-days));
+  if (days === 1) return labels.tomorrow;
+  return labels.inDays.replace("{days}", String(days));
 }
 
 const KIND_ORDER: Record<EventKind, number> = {
@@ -146,6 +165,10 @@ export function flattenUpcomingEvents(
 function parseIsoLocal(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function toIsoLocal(d: Date): string {

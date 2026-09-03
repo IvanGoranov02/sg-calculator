@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { SymbolEventRow } from "@/app/api/events/route";
+import type { SymbolEventRow } from "@/lib/calendarEvents";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   flattenUpcomingEvents,
   formatDayGutter,
+  formatEventRelativeDays,
   formatWeekRangeLabel,
   groupEventsByWeek,
   type EventKind,
@@ -46,6 +47,7 @@ export function EventsClient() {
   const { symbols: watchlistSymbols } = useWatchlist();
   const { status: sessionStatus } = useSession();
   const [portfolioSymbols, setPortfolioSymbols] = useState<string[]>([]);
+  const [portfolioReady, setPortfolioReady] = useState(sessionStatus !== "authenticated");
   const [rows, setRows] = useState<SymbolEventRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,11 +58,14 @@ export function EventsClient() {
   );
 
   useEffect(() => {
+    if (sessionStatus === "loading") return;
     if (sessionStatus !== "authenticated") {
       setPortfolioSymbols([]);
+      setPortfolioReady(true);
       return;
     }
     let cancelled = false;
+    setPortfolioReady(false);
     void (async () => {
       try {
         const res = await fetch("/api/portfolio", { cache: "no-store" });
@@ -71,6 +76,8 @@ export function EventsClient() {
         setPortfolioSymbols(syms);
       } catch {
         if (!cancelled) setPortfolioSymbols([]);
+      } finally {
+        if (!cancelled) setPortfolioReady(true);
       }
     })();
     return () => {
@@ -111,11 +118,14 @@ export function EventsClient() {
   const { upcoming, undated } = useMemo(() => flattenUpcomingEvents(rows), [rows]);
   const weekGroups = useMemo(() => groupEventsByWeek(upcoming), [upcoming]);
 
-  const relative = (days: number) => {
-    if (days <= 0) return t("events.today");
-    if (days === 1) return t("events.tomorrow");
-    return t("events.inDays", { days });
-  };
+  const relative = (days: number) =>
+    formatEventRelativeDays(days, {
+      today: t("events.today"),
+      yesterday: t("events.yesterday"),
+      daysAgo: t("events.daysAgo"),
+      tomorrow: t("events.tomorrow"),
+      inDays: t("events.inDays"),
+    });
 
   const kindLabel = (kind: EventKind) => {
     if (kind === "earnings") return t("events.kindEarnings");
@@ -123,7 +133,11 @@ export function EventsClient() {
     return t("events.kindPay");
   };
 
-  const emptyBoth = watchlistSymbols.length === 0 && portfolioSymbols.length === 0;
+  const symbolsSettling =
+    sessionStatus === "loading" || (sessionStatus === "authenticated" && !portfolioReady);
+  const emptyBoth =
+    !symbolsSettling && watchlistSymbols.length === 0 && portfolioSymbols.length === 0;
+  const showLoading = symbolsSettling || loading;
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -154,7 +168,7 @@ export function EventsClient() {
             </CardDescription>
           </CardHeader>
         </Card>
-      ) : loading ? (
+      ) : showLoading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
           <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
           {t("events.loading")}
