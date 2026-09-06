@@ -32,6 +32,29 @@ describe("computeGrowthPills", () => {
     assert.ok(pills.twoYear != null && Math.abs(pills.twoYear - 10) < 1e-9);
   });
 
+  it("computes 1Y with abs denominator when base is negative", () => {
+    const pills = computeGrowthPills([-10, -5], 1);
+    assert.ok(pills.oneYear != null && Math.abs(pills.oneYear - 50) < 1e-9);
+  });
+
+  it("5Y pill needs full history beyond a 5-year visible window", () => {
+    const full = Array.from({ length: 10 }, (_, i) => 100 * Math.pow(1.1, i));
+    const visible = full.slice(-5);
+    const fullPills = computeGrowthPills(full, 1);
+    const visiblePills = computeGrowthPills(visible, 1);
+    assert.equal(visiblePills.fiveYear, null);
+    assert.ok(fullPills.fiveYear != null);
+  });
+
+  it("preserves calendar gaps when EPS years are missing", () => {
+    const withGaps = [1, null, 2, null, 3];
+    const compact = [1, 2, 3];
+    const gapPills = computeGrowthPills(withGaps, 1);
+    const compactPills = computeGrowthPills(compact, 1);
+    assert.notEqual(gapPills.oneYear, compactPills.oneYear);
+    assert.equal(gapPills.oneYear, null);
+  });
+
   it("matches TTM DPS helper for quarterly horizons", () => {
     const ttm = Array.from({ length: 41 }, (_, i) => (i < 3 ? null : 1 + i * 0.1));
     assert.deepEqual(computeGrowthPills(ttm, 4), computeTtmDpsGrowthPills(ttm));

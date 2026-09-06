@@ -228,9 +228,9 @@ function growthPillsForMetric(data: StockAnalysisBundle, metric: ChartMetric) {
       return computeGrowthPills(values, 1);
     }
     case "eps": {
-      const values = sortIncomeByYearAsc(data.income)
-        .filter((row) => row.dilutedEps != null && Number.isFinite(row.dilutedEps))
-        .map((row) => row.dilutedEps as number);
+      const values = sortIncomeByYearAsc(data.income).map((row) =>
+        row.dilutedEps != null && Number.isFinite(row.dilutedEps) ? row.dilutedEps : null,
+      );
       return computeGrowthPills(values, 1);
     }
     default:

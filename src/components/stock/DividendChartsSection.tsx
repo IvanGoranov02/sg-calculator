@@ -61,6 +61,13 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   );
 
   const pack = useMemo(() => {
+    const allSorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
+    const allDpsArr = allSorted.map((p) => p.dividendPerShare);
+    const allTtmStrict = rollingSum4Quarterly(allDpsArr);
+    const pills = computeTtmDpsGrowthPills(allTtmStrict);
+    const allRows = allSorted.map((p) => ({ qDps: p.dividendPerShare }));
+    const qDpsPills = growthPillsForKey(allRows, "qDps", "quarterly");
+
     const filtered = filterDividendQuarterlyByPeriod(
       data.dividendQuarterly,
       timeRange,
@@ -72,7 +79,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     const dpsArr = sorted.map((p) => p.dividendPerShare);
     const ttmStrict = rollingSum4Quarterly(dpsArr);
     const loose = rollingSum4QuarterlyLoose(dpsArr);
-    const pills = computeTtmDpsGrowthPills(ttmStrict);
     const hasDps =
       dpsArr.some((v) => v != null && (v as number) > 0) ||
       ttmStrict.some((v) => v != null && (v as number) > 0) ||
@@ -83,7 +89,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       ttmPartial: loose.partial[i],
       qDps: dpsArr[i],
     }));
-    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean), qDpsPills: growthPillsForKey(rows, "qDps", "quarterly") };
+    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean), qDpsPills };
   }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
   const showsDividend = useMemo(() => {

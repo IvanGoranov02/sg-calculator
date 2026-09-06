@@ -324,9 +324,9 @@ export function FundamentalChartCard({
           </div>
           {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
         </CardHeader>
-        <CardContent className="h-[220px] min-h-0 min-w-0 pt-0">
+        <CardContent className="min-h-0 min-w-0 pt-0">
           {!hasPoints ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
+            <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
               <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
               <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
               <p className="text-xs leading-relaxed text-muted-foreground/80">
@@ -334,7 +334,7 @@ export function FundamentalChartCard({
               </p>
             </div>
           ) : (
-            <div className="relative h-full min-h-0 min-w-0 w-full">
+            <div className="relative h-[220px] min-h-0 min-w-0 w-full">
               <div className="absolute inset-0 min-h-0 min-w-0">{renderChart(8)}</div>
             </div>
           )}

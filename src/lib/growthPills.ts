@@ -52,7 +52,7 @@ export function computeGrowthPills(values: (number | null)[], periodsPerYear: nu
   const oneYear = (() => {
     const s = startVal(oneYearBack);
     if (s == null || s === 0) return null;
-    return ((end - s) / s) * 100;
+    return ((end - s) / Math.abs(s)) * 100;
   })();
 
   const twoYear = (() => {
