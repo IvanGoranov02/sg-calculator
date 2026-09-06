@@ -77,6 +77,7 @@ export async function POST() {
       const cur = normalizePortfolioCurrency(
         p.walletImpact?.currency ?? p.instrument?.currency ?? summary?.currency ?? "USD",
       );
+      const brokerPx = Number(p.currentPrice ?? 0);
       rows.push({
         userId,
         symbolYahoo: yahoo,
@@ -84,6 +85,8 @@ export async function POST() {
         quantity: new Prisma.Decimal(qty),
         avgPrice: new Prisma.Decimal(Number.isFinite(avg) ? avg : 0),
         currency: cur,
+        brokerPrice:
+          Number.isFinite(brokerPx) && brokerPx > 0 ? new Prisma.Decimal(brokerPx) : null,
         source: "t212",
       });
     }
@@ -114,6 +117,10 @@ export async function POST() {
                 : prevQty >= qty
                   ? prev.avgPrice
                   : r.avgPrice,
+            brokerPrice:
+              qty >= prevQty && r.brokerPrice != null
+                ? r.brokerPrice
+                : prev.brokerPrice ?? r.brokerPrice ?? null,
           });
         }
         await tx.portfolioHolding.createMany({ data: [...bySymbol.values()] });

@@ -80,6 +80,8 @@ model PortfolioHolding {
   quantity    Decimal                @db.Decimal(20, 8)
   avgPrice    Decimal                @db.Decimal(20, 8)
   currency    String                 @default("USD")
+  /** Last broker-reported price from T212 sync (same units as `currency`). */
+  brokerPrice Decimal?               @db.Decimal(20, 8)
   source      PortfolioHoldingSource
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt

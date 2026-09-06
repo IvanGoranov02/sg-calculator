@@ -1,13 +1,15 @@
 /**
  * Server-only: batch Yahoo quotes + dividend metrics for portfolio rows.
- * Order: stored symbolYahoo → T212-mapped ticker → EU/ETP suffix fallbacks → Yahoo search.
+ * Order: T212-mapped tickers → stored symbolYahoo → EU suffix fallbacks → Yahoo search.
+ * Prefer T212 broker price when supplied (same currency as holding cost).
  */
 
 import YahooFinance from "yahoo-finance2";
 
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { normalizeYahooDividendYieldToDecimal } from "@/lib/format";
-import { t212TickerToYahoo } from "@/lib/t212Ticker";
+import { normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency } from "@/lib/portfolioFx";
+import { parseT212Ticker, t212TickerToYahooCandidates } from "@/lib/t212Ticker";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["ripHistorical", "yahooSurvey"],
@@ -15,7 +17,7 @@ const yahooFinance = new YahooFinance({
 
 export type PortfolioQuoteRow = {
   symbol: string;
-  /** Yahoo symbol used to fetch this row (may differ from portfolio key, e.g. AMZD-EQ → AMZD.DE). */
+  /** Yahoo symbol used to fetch this row (may differ from portfolio key, e.g. AMZD-EQ → AMZ.DE). */
   resolvedYahooSymbol?: string;
   name: string;
   price: number;
@@ -31,6 +33,8 @@ export type PortfolioQuoteRow = {
   nextEarnings: string | null;
   /** GICS-style sector from Yahoo assetProfile, when available. */
   sector: string | null;
+  /** True when price comes from the broker sync rather than Yahoo. */
+  fromBroker?: boolean;
 };
 
 /** Next upcoming (or most recent) earnings date from a Yahoo quoteSummary calendarEvents block. */
@@ -62,7 +66,6 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
   if (u.endsWith("-EQ")) {
     const base = u.slice(0, -3);
     add(base);
-    // T212 EU stubs often add a trailing "A" (e.g. ASMLA-EQ → ASML on AMS).
     if (base.length >= 5 && base.endsWith("A")) {
       add(`${base.slice(0, -1)}.AS`);
     }
@@ -91,9 +94,12 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
   return out;
 }
 
-/** Try Yahoo in a stable order: UI symbol → broker mapping → heuristics. */
-function buildOrderedCandidates(symbolYahoo: string, symbolT212: string | null): string[] {
-  const u = symbolYahoo.trim().toUpperCase();
+/** Try Yahoo in a stable order: T212 mapping → UI symbol → heuristics. */
+function buildOrderedCandidates(
+  symbolYahoo: string,
+  symbolT212: string | null,
+  holdingCurrency: string | null,
+): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   const push = (s: string) => {
@@ -103,14 +109,28 @@ function buildOrderedCandidates(symbolYahoo: string, symbolT212: string | null):
     out.push(x);
   };
 
-  push(u);
+  const parsedT212 = symbolT212 ? parseT212Ticker(symbolT212) : null;
+
   if (symbolT212) {
-    const mapped = t212TickerToYahoo(symbolT212).trim().toUpperCase();
-    if (mapped) push(mapped);
+    for (const c of t212TickerToYahooCandidates(symbolT212, holdingCurrency)) {
+      push(c);
+    }
   }
-  for (const c of buildYahooSymbolCandidates(u)) {
+
+  push(symbolYahoo.trim().toUpperCase());
+  for (const c of buildYahooSymbolCandidates(symbolYahoo)) {
     push(c);
   }
+
+  // Avoid US ADR / ETF traps (e.g. AMZD bear ETF) when T212 says EU listing.
+  if (parsedT212?.isNonUsListing) {
+    const blocked = new Set<string>();
+    const base = parsedT212.base;
+    if (base.length >= 3) blocked.add(base);
+    if (base.length > 3 && /[A-Z]D$/.test(base)) blocked.add(base);
+    return out.filter((sym) => !blocked.has(sym));
+  }
+
   return out;
 }
 
@@ -121,23 +141,35 @@ function rawQuoteToRow(
   qs: Record<string, unknown> | null,
 ): PortfolioQuoteRow | null {
   if (raw.quoteType === "NONE") return null;
-  const price = Number(raw.regularMarketPrice ?? 0);
-  if (!Number.isFinite(price) || price <= 0) return null;
+  const rawPrice = Number(raw.regularMarketPrice ?? 0);
+  if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
 
   const metrics = mapInvestorMetrics(raw, qs);
+  const normalized = normalizeQuotePrice(rawPrice, metrics.currency);
+  const price = normalized.price;
+  const currency = normalized.currency;
+
   const pct = Number(raw.regularMarketChangePercent ?? 0);
   const yieldDec = normalizeYahooDividendYieldToDecimal(metrics.dividendYield);
-  const sma = metrics.twoHundredDayAverage;
+  const smaRaw = metrics.twoHundredDayAverage;
+  const sma =
+    smaRaw != null && isPenceQuoteCurrency(metrics.currency) ? smaRaw / 100 : smaRaw;
   const dipVsSma200Pct =
     sma != null && sma !== 0 && Number.isFinite(price) ? ((price - sma) / sma) * 100 : null;
+
+  let dividendRate = metrics.dividendRate;
+  if (dividendRate != null && isPenceQuoteCurrency(metrics.currency)) {
+    dividendRate = dividendRate / 100;
+  }
+
   return {
     symbol: portfolioKey,
     resolvedYahooSymbol: resolvedYahoo,
     name: String(raw.longName ?? raw.shortName ?? portfolioKey),
     price,
-    currency: metrics.currency,
+    currency,
     dividendYield: yieldDec,
-    dividendRate: metrics.dividendRate,
+    dividendRate,
     changePercent: Number.isFinite(pct) ? pct : 0,
     twoHundredDayAverage: sma,
     dipVsSma200Pct,
@@ -150,6 +182,17 @@ function pickSector(qs: Record<string, unknown> | null): string | null {
   const ap = (qs as { assetProfile?: { sector?: unknown } } | null)?.assetProfile;
   const s = ap?.sector;
   return typeof s === "string" && s.trim() ? s.trim() : null;
+}
+
+function quoteCurrencyScore(row: PortfolioQuoteRow, holdingCurrency: string | null): number {
+  const hold = holdingCurrency ? normalizePortfolioCurrency(holdingCurrency) : null;
+  const quote = normalizePortfolioCurrency(row.currency);
+  if (hold && hold === quote) return 2;
+  if (hold === "EUR" && /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW)$/i.test(row.resolvedYahooSymbol ?? "")) {
+    return 1;
+  }
+  if (hold === "GBP" && (row.resolvedYahooSymbol ?? "").endsWith(".L")) return 1;
+  return 0;
 }
 
 async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<PortfolioQuoteRow | null> {
@@ -178,12 +221,16 @@ async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<P
   }
 }
 
-async function searchFallbackQuote(portfolioKey: string): Promise<PortfolioQuoteRow | null> {
+async function searchFallbackQuote(
+  portfolioKey: string,
+  holdingCurrency: string | null,
+): Promise<PortfolioQuoteRow | null> {
   const stripped = portfolioKey.replace(/-EQ$/i, "").replace(/-/g, " ");
   const query = stripped.trim() || portfolioKey;
   try {
     const r = await yahooFinance.search(query, { quotesCount: 14, newsCount: 0 });
     const quotes = r.quotes ?? [];
+    const rows: PortfolioQuoteRow[] = [];
     for (const hit of quotes) {
       if (typeof hit !== "object" || hit === null || !("symbol" in hit)) continue;
       const h = hit as { symbol?: string; quoteType?: string };
@@ -192,47 +239,122 @@ async function searchFallbackQuote(portfolioKey: string): Promise<PortfolioQuote
       const qt = h.quoteType ?? "";
       if (qt !== "EQUITY" && qt !== "ETF" && qt !== "MUTUALFUND") continue;
       const row = await tryQuoteSymbol(portfolioKey, sym);
-      if (row) return row;
+      if (row) rows.push(row);
     }
+    if (rows.length === 0) return null;
+    rows.sort((a, b) => quoteCurrencyScore(b, holdingCurrency) - quoteCurrencyScore(a, holdingCurrency));
+    return rows[0] ?? null;
   } catch {
     return null;
   }
-  return null;
 }
 
 async function fetchOnePortfolioQuote(
   portfolioSymbol: string,
   symbolT212: string | null,
+  holdingCurrency: string | null,
+  brokerPrice: number | null,
+  brokerCurrency: string | null,
 ): Promise<PortfolioQuoteRow | null> {
-  for (const c of buildOrderedCandidates(portfolioSymbol, symbolT212)) {
+  const broker =
+    brokerPrice != null && Number.isFinite(brokerPrice) && brokerPrice > 0
+      ? normalizeQuotePrice(brokerPrice, brokerCurrency ?? holdingCurrency)
+      : null;
+
+  const candidates = buildOrderedCandidates(portfolioSymbol, symbolT212, holdingCurrency);
+  const rows: PortfolioQuoteRow[] = [];
+  for (const c of candidates) {
     const row = await tryQuoteSymbol(portfolioSymbol, c);
-    if (row) return row;
+    if (row) rows.push(row);
   }
-  return searchFallbackQuote(portfolioSymbol);
+
+  let best: PortfolioQuoteRow | null = null;
+  if (rows.length > 0) {
+    rows.sort((a, b) => quoteCurrencyScore(b, holdingCurrency) - quoteCurrencyScore(a, holdingCurrency));
+    best = rows[0] ?? null;
+  } else {
+    best = await searchFallbackQuote(portfolioSymbol, holdingCurrency);
+  }
+
+  if (broker) {
+    const hold = holdingCurrency ? normalizePortfolioCurrency(holdingCurrency) : null;
+    const brokerCcy = normalizePortfolioCurrency(broker.currency);
+    const yahooCcy = best ? normalizePortfolioCurrency(best.currency) : null;
+    const preferBroker =
+      !best ||
+      (hold != null && brokerCcy === hold && yahooCcy !== hold) ||
+      (hold != null && brokerCcy === hold && yahooCcy === hold);
+
+    if (preferBroker) {
+      return {
+        symbol: portfolioSymbol,
+        resolvedYahooSymbol: best?.resolvedYahooSymbol,
+        name: best?.name ?? portfolioSymbol,
+        price: broker.price,
+        currency: brokerCcy,
+        dividendYield: best?.dividendYield ?? null,
+        dividendRate: best?.dividendRate ?? null,
+        changePercent: best?.changePercent ?? 0,
+        twoHundredDayAverage: best?.twoHundredDayAverage ?? null,
+        dipVsSma200Pct: best?.dipVsSma200Pct ?? null,
+        nextEarnings: best?.nextEarnings ?? null,
+        sector: best?.sector ?? null,
+        fromBroker: true,
+      };
+    }
+  }
+
+  return best;
 }
 
 export type PortfolioHoldingQuoteKey = {
   symbolYahoo: string;
   symbolT212: string | null;
+  currency?: string | null;
+  brokerPrice?: number | null;
 };
 
 export async function fetchPortfolioQuotesForHoldings(
   holdings: PortfolioHoldingQuoteKey[],
 ): Promise<Record<string, PortfolioQuoteRow | null>> {
-  const t212ByYahoo = new Map<string, string | null>();
+  const metaByYahoo = new Map<
+    string,
+    { symbolT212: string | null; currency: string | null; brokerPrice: number | null }
+  >();
   for (const h of holdings) {
     const k = h.symbolYahoo.trim().toUpperCase();
     if (!k) continue;
-    if (!t212ByYahoo.has(k)) t212ByYahoo.set(k, h.symbolT212 ?? null);
-    else if (!t212ByYahoo.get(k) && h.symbolT212) t212ByYahoo.set(k, h.symbolT212);
+    const prev = metaByYahoo.get(k);
+    const brokerPrice =
+      h.brokerPrice != null && Number.isFinite(h.brokerPrice) && h.brokerPrice > 0
+        ? h.brokerPrice
+        : null;
+    if (!prev) {
+      metaByYahoo.set(k, {
+        symbolT212: h.symbolT212 ?? null,
+        currency: h.currency ?? null,
+        brokerPrice,
+      });
+    } else {
+      if (!prev.symbolT212 && h.symbolT212) prev.symbolT212 = h.symbolT212;
+      if (!prev.currency && h.currency) prev.currency = h.currency;
+      if (brokerPrice != null) prev.brokerPrice = brokerPrice;
+    }
   }
 
-  const uniq = [...t212ByYahoo.keys()];
+  const uniq = [...metaByYahoo.keys()];
   const out: Record<string, PortfolioQuoteRow | null> = Object.fromEntries(uniq.map((s) => [s, null]));
 
   await Promise.all(
     uniq.map(async (sym) => {
-      out[sym] = await fetchOnePortfolioQuote(sym, t212ByYahoo.get(sym) ?? null);
+      const meta = metaByYahoo.get(sym)!;
+      out[sym] = await fetchOnePortfolioQuote(
+        sym,
+        meta.symbolT212,
+        meta.currency,
+        meta.brokerPrice,
+        meta.currency,
+      );
     }),
   );
 

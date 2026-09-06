@@ -12,6 +12,7 @@ function serializeHolding(h: {
   quantity: { toString(): string };
   avgPrice: { toString(): string };
   currency: string;
+  brokerPrice: { toString(): string } | null;
   source: string;
   updatedAt: Date;
 }) {
@@ -22,6 +23,7 @@ function serializeHolding(h: {
     quantity: h.quantity.toString(),
     avgPrice: h.avgPrice.toString(),
     currency: h.currency,
+    brokerPrice: h.brokerPrice?.toString() ?? null,
     source: h.source,
     updatedAt: h.updatedAt.toISOString(),
   };
@@ -46,7 +48,12 @@ export async function GET() {
     const [quotes, fx] = await Promise.all([
       holdings.length > 0
         ? fetchPortfolioQuotesForHoldings(
-            holdings.map((h) => ({ symbolYahoo: h.symbolYahoo, symbolT212: h.symbolT212 })),
+            holdings.map((h) => ({
+              symbolYahoo: h.symbolYahoo,
+              symbolT212: h.symbolT212,
+              currency: h.currency,
+              brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
+            })),
           )
         : Promise.resolve({} as Record<string, import("@/lib/portfolioMarketData").PortfolioQuoteRow | null>),
       fetchPortfolioFxRates(),
