@@ -5,6 +5,7 @@ import {
   convertPortfolioMoney,
   inferCurrencyFromSymbol,
   listingCurrencyOverride,
+  normalizeQuotePrice,
 } from "@/lib/portfolioFx";
 
 describe("listingCurrencyOverride", () => {
@@ -32,5 +33,13 @@ describe("convertPortfolioMoney", () => {
 
   it("leaves same-currency amounts unchanged", () => {
     assert.equal(convertPortfolioMoney(50, "EUR", "EUR", fx), 50);
+  });
+});
+
+describe("normalizeQuotePrice", () => {
+  it("converts GBp quotes to GBP", () => {
+    const n = normalizeQuotePrice(539.7, "GBp");
+    assert.equal(n.currency, "GBP");
+    assert.equal(Number(n.price.toFixed(4)), 5.397);
   });
 });

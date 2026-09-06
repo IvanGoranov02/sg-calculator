@@ -16,6 +16,23 @@ export function normalizePortfolioCurrency(raw: string | null | undefined): stri
   return "USD";
 }
 
+/** True when Yahoo reports a pence-denominated UK quote (GBp). */
+export function isPenceQuoteCurrency(raw: string | null | undefined): boolean {
+  const c = (raw ?? "").trim();
+  return c === "GBp" || c === "GBX";
+}
+
+/** Normalize Yahoo quote price/currency (GBp → GBP with price / 100). */
+export function normalizeQuotePrice(
+  price: number,
+  currency: string | null | undefined,
+): { price: number; currency: string } {
+  if (isPenceQuoteCurrency(currency)) {
+    return { price: price / 100, currency: "GBP" };
+  }
+  return { price, currency: normalizePortfolioCurrency(currency) };
+}
+
 /** Guess listing currency from Yahoo-style suffix (manual entry without explicit currency). */
 export function inferCurrencyFromSymbol(symbol: string): string {
   const u = symbol.trim().toUpperCase();
