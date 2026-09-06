@@ -95,4 +95,26 @@ describe("growthPillsEntries", () => {
     assert.equal(entries[0]!.label, "Series A");
     assert.equal(entries[1]!.label, "Series B");
   });
+
+  it("5Y multi-series pills need full history, not a 5-year visible slice", () => {
+    const full = Array.from({ length: 10 }, (_, i) => ({
+      ar: 100 * Math.pow(1.1, i),
+      inventory: 50 * Math.pow(1.05, i),
+    }));
+    const visible = full.slice(-5);
+    const fullEntries = growthPillsEntries(
+      full,
+      [{ key: "ar", label: "AR" }, { key: "inventory", label: "Inv" }],
+      "annual",
+    );
+    const visibleEntries = growthPillsEntries(
+      visible,
+      [{ key: "ar", label: "AR" }, { key: "inventory", label: "Inv" }],
+      "annual",
+    );
+    assert.equal(visibleEntries[0]!.pills.fiveYear, null);
+    assert.equal(visibleEntries[1]!.pills.fiveYear, null);
+    assert.ok(fullEntries[0]!.pills.fiveYear != null);
+    assert.ok(fullEntries[1]!.pills.fiveYear != null);
+  });
 });

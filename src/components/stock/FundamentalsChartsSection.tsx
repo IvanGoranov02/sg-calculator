@@ -825,7 +825,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               series={series.shareholder}
               valueFormat="currency"
               growthPills={chartGrowthPillsMulti(
-                chartRows,
+                growthPillRows,
                 [
                   { key: "dividendsPaidPos", label: t("annual.dividends") },
                   { key: "stockRepurchasePos", label: t("annual.buyback") },
@@ -843,7 +843,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               series={series.arInv}
               valueFormat="currency"
               growthPills={chartGrowthPillsMulti(
-                chartRows,
+                growthPillRows,
                 [
                   { key: "ar", label: t("annual.accountsReceivable") },
                   { key: "inventory", label: t("annual.inventory") },
@@ -861,7 +861,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               series={series.gwLt}
               valueFormat="currency"
               growthPills={chartGrowthPillsMulti(
-                chartRows,
+                growthPillRows,
                 [
                   { key: "goodwill", label: t("annual.goodwill") },
                   { key: "longTermDebt", label: t("annual.longTermDebt") },
@@ -879,7 +879,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               series={series.ebitdaOcfMargin}
               valueFormat="percent"
               growthPills={chartGrowthPillsMulti(
-                chartRows,
+                growthPillRows,
                 [
                   { key: "ebitdaMargin", label: t("chartsFund.seriesEbitdaMargin") },
                   { key: "ocfMargin", label: t("chartsFund.seriesOcfMargin") },
