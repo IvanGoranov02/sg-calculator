@@ -15,6 +15,7 @@ import {
 
 import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
+import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,33 +24,12 @@ import {
   rollingSum4QuarterlyLoose,
 } from "@/lib/dividendMetrics";
 import { formatCurrencyPerShare } from "@/lib/format";
+import { growthPillsForKey } from "@/lib/growthPills";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { filterDividendQuarterlyByPeriod, quarterlyFilterYearBounds, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
-
-function GrowthPill({ label, pct }: { label: string; pct: number | null }) {
-  if (pct == null || !Number.isFinite(pct)) {
-    return (
-      <span className="rounded-full bg-zinc-800/90 px-2.5 py-1 font-mono text-[11px] tabular-nums text-muted-foreground">
-        {label}: —
-      </span>
-    );
-  }
-  const pos = pct >= 0;
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2.5 py-1 font-mono text-[11px] tabular-nums",
-        pos ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300",
-      )}
-    >
-      {label}: {pos ? "+" : ""}
-      {pct.toFixed(2)}%
-    </span>
-  );
-}
 
 type DividendChartsSectionProps = {
   data: StockAnalysisBundle;
@@ -103,7 +83,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       ttmPartial: loose.partial[i],
       qDps: dpsArr[i],
     }));
-    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean) };
+    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean), qDpsPills: growthPillsForKey(rows, "qDps", "quarterly") };
   }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
   const showsDividend = useMemo(() => {
@@ -118,6 +98,16 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       return true;
     return false;
   }, [data.investor, data.dividendQuarterly]);
+
+  const pillLabels = useMemo(
+    () => ({
+      oneYear: t("chartsFund.pill1Y"),
+      twoYear: t("chartsFund.pill2Y"),
+      fiveYear: t("chartsFund.pill5Y"),
+      tenYear: t("chartsFund.pill10Y"),
+    }),
+    [t],
+  );
 
   const qDpsSeries: FundamentalSeries[] = useMemo(
     () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
@@ -306,12 +296,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <GrowthPill label={t("chartsFund.pill1Y")} pct={pack.pills.oneYear} />
-                <GrowthPill label={t("chartsFund.pill2Y")} pct={pack.pills.twoYear} />
-                <GrowthPill label={t("chartsFund.pill5Y")} pct={pack.pills.fiveYear} />
-                <GrowthPill label={t("chartsFund.pill10Y")} pct={pack.pills.tenYear} />
-              </div>
+              <GrowthPillsRow pills={pack.pills} labels={pillLabels} className="mt-4" />
             </CardContent>
           </Card>
 
@@ -323,6 +308,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             series={qDpsSeries}
             chartType="bar"
             valueFormat="perShare"
+            growthPills={[{ pills: pack.qDpsPills }]}
           />
         </div>
       )}

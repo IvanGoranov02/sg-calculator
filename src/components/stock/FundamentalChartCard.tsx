@@ -28,6 +28,8 @@ import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { seriesCoverage } from "@/lib/chartSeriesUtils";
+import { GrowthPillsGroup } from "@/components/stock/GrowthPillsRow";
+import type { GrowthPillsEntry } from "@/lib/growthPills";
 import { cn } from "@/lib/utils";
 
 export type FundamentalSeries = {
@@ -52,6 +54,8 @@ type FundamentalChartCardProps = {
   className?: string;
   /** One-line growth vs prior period (last two points in range). */
   growthNote?: string | null;
+  /** Multi-horizon growth pill badges (1Y / 2Y / 5Y / 10Y). */
+  growthPills?: GrowthPillsEntry[] | null;
 };
 
 function formatTooltipValue(fmt: ValueFormat, v: number): string {
@@ -101,8 +105,18 @@ export function FundamentalChartCard({
   valueFormat,
   className,
   growthNote,
+  growthPills,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
+  const pillLabels = useMemo(
+    () => ({
+      oneYear: t("chartsFund.pill1Y"),
+      twoYear: t("chartsFund.pill2Y"),
+      fiveYear: t("chartsFund.pill5Y"),
+      tenYear: t("chartsFund.pill10Y"),
+    }),
+    [t],
+  );
   const resolvedType = chartType ?? (series.length > 1 ? "line" : "bar");
   const keys = series.map((s) => s.dataKey);
   const coverage = seriesCoverage(data, keys, xKey);
@@ -330,6 +344,9 @@ export function FundamentalChartCard({
           {growthNote ? (
             <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{growthNote}</p>
           ) : null}
+          {growthPills && growthPills.length > 0 ? (
+            <GrowthPillsGroup entries={growthPills} labels={pillLabels} className="mt-3" />
+          ) : null}
         </CardContent>
       </Card>
 
@@ -339,6 +356,9 @@ export function FundamentalChartCard({
           {description ? <DialogDescription className="mt-1">{description}</DialogDescription> : null}
           {coverageNote ? <p className="mt-1 text-xs text-amber-300/80">{coverageNote}</p> : null}
           {growthNote ? <p className="mt-1 text-xs text-muted-foreground">{growthNote}</p> : null}
+          {growthPills && growthPills.length > 0 ? (
+            <GrowthPillsGroup entries={growthPills} labels={pillLabels} className="mt-2" />
+          ) : null}
         </div>
         <div className="flex min-h-0 flex-col gap-4">
           <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart(16)}</div>
