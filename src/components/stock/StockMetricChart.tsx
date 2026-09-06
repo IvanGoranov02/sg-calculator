@@ -13,6 +13,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import {
   formatCurrency,
   formatCurrencyCompact,
@@ -27,6 +28,7 @@ import type {
   StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { computeGrowthPills } from "@/lib/growthPills";
 import { sortIncomeByYearAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
@@ -201,6 +203,41 @@ function fundamentalStats(series: SeriesPoint[]) {
   return { first, last, high, low, changePct };
 }
 
+const TRADING_DAYS_PER_YEAR = 252;
+
+function growthPillsForMetric(data: StockAnalysisBundle, metric: ChartMetric) {
+  switch (metric) {
+    case "price": {
+      const closes = [...data.historical]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((row) => row.close);
+      return computeGrowthPills(closes, TRADING_DAYS_PER_YEAR);
+    }
+    case "revenue": {
+      const values = sortIncomeByYearAsc(data.income).map((row) => row.revenue);
+      return computeGrowthPills(values, 1);
+    }
+    case "netIncome": {
+      const values = sortIncomeByYearAsc(data.income).map((row) => row.netIncome);
+      return computeGrowthPills(values, 1);
+    }
+    case "freeCashFlow": {
+      const values = [...data.cashFlow]
+        .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear))
+        .map((row) => row.freeCashFlow);
+      return computeGrowthPills(values, 1);
+    }
+    case "eps": {
+      const values = sortIncomeByYearAsc(data.income).map((row) =>
+        row.dilutedEps != null && Number.isFinite(row.dilutedEps) ? row.dilutedEps : null,
+      );
+      return computeGrowthPills(values, 1);
+    }
+    default:
+      return { oneYear: null, twoYear: null, fiveYear: null, tenYear: null };
+  }
+}
+
 type StockMetricChartProps = {
   data: StockAnalysisBundle;
 };
@@ -277,6 +314,18 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
     }
     return fundamentalStats(series);
   }, [data, metric, range, series]);
+
+  const growthPills = useMemo(() => growthPillsForMetric(data, metric), [data, metric]);
+
+  const pillLabels = useMemo(
+    () => ({
+      oneYear: t("chartsFund.pill1Y"),
+      twoYear: t("chartsFund.pill2Y"),
+      fiveYear: t("chartsFund.pill5Y"),
+      tenYear: t("chartsFund.pill10Y"),
+    }),
+    [t],
+  );
 
   const volumeLabel =
     metric === "price" &&
@@ -434,6 +483,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
             </ResponsiveContainer>
           </div>
         </div>
+        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-4" />
       </CardContent>
     </Card>
   );

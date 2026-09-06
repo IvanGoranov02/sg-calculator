@@ -10,10 +10,10 @@ import {
   buildAnnualChartRows,
   buildQuarterlyChartRows,
   enrichPopGrowth,
-  pctPop,
   rowsForCharts,
   type FundamentalsChartRow,
 } from "@/lib/fundamentalsChartRows";
+import { growthPillsEntries, growthPillsForKey } from "@/lib/growthPills";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
   filterAnnualRowsByPeriod,
@@ -58,32 +58,20 @@ const C = {
   valuationPs: "#fb7185",
 };
 
-function growthFooterLine(
+function chartGrowthPills(
   rows: Record<string, unknown>[],
   key: string,
   freq: "annual" | "quarterly",
-  t: (k: string, p?: Record<string, string | number>) => string,
-): string | null {
-  if (rows.length < 2) return null;
-  const a = rows[rows.length - 2][key];
-  const b = rows[rows.length - 1][key];
-  const pct = pctPop(a, b);
-  if (pct == null) return null;
-  const tag = freq === "annual" ? t("chartsFund.growthYoy") : t("chartsFund.growthQoq");
-  const sign = pct >= 0 ? "+" : "";
-  return t("chartsFund.growthFooterLine", { tag, value: `${sign}${pct.toFixed(1)}%` });
+) {
+  return [{ pills: growthPillsForKey(rows, key, freq) }];
 }
 
-function growthFooterMulti(
+function chartGrowthPillsMulti(
   rows: Record<string, unknown>[],
-  keys: string[],
+  keys: { key: string; label: string }[],
   freq: "annual" | "quarterly",
-  t: (k: string, p?: Record<string, string | number>) => string,
-): string | null {
-  const parts = keys
-    .map((k) => growthFooterLine(rows, k, freq, t))
-    .filter((s): s is string => Boolean(s));
-  return parts.length > 0 ? parts.join(" · ") : null;
+) {
+  return growthPillsEntries(rows, keys, freq);
 }
 
 type FundamentalsChartsSectionProps = {
@@ -194,6 +182,8 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
   const rows = useMemo(() => enrichPopGrowth(filteredBaseRows), [filteredBaseRows]);
 
+  const fullRows = useMemo(() => enrichPopGrowth(baseRows), [baseRows]);
+
   const valuationGranularity = freq === "annual" ? "annual" : "quarterly";
   const valuationByPeriod = useMemo(
     () => computeValuationByPeriodEnd(data, valuationGranularity),
@@ -211,6 +201,19 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
       };
     });
   }, [rows, valuationByPeriod]);
+
+  /** Full unfiltered series — growth pills need history beyond the visible chart window. */
+  const growthPillRows = useMemo(() => {
+    return fullRows.map((r) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      const base = pe ? valuationByPeriod.get(pe) : undefined;
+      return {
+        ...r,
+        peTtm: base?.peTtm ?? null,
+        psTtm: base?.psTtm ?? null,
+      };
+    });
+  }, [fullRows, valuationByPeriod]);
 
   const chartRows = useMemo(
     () => rowsForCharts(rowsMerged, { keepPeriodEnd: freq === "quarterly" }),
@@ -587,7 +590,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.revenue}
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "revenue", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "revenue", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -597,7 +600,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             series={series.netIncomeSolo}
             chartType="bar"
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "netIncome", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "netIncome", freq)}
           />
           {hasDilutedEps ? (
             <FundamentalChartCard
@@ -607,7 +610,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.dilutedEpsSolo}
               valueFormat="perShare"
-              growthNote={growthFooterLine(chartRows, "dilutedEps", freq, t)}
+              growthPills={chartGrowthPills(growthPillRows, "dilutedEps", freq)}
             />
           ) : null}
           {hasDilutedShares ? (
@@ -618,7 +621,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.dilutedSharesSolo}
               valueFormat="compactCount"
-              growthNote={growthFooterLine(chartRows, "dilutedShares", freq, t)}
+              growthPills={chartGrowthPills(growthPillRows, "dilutedShares", freq)}
             />
           ) : null}
           <FundamentalChartCard
@@ -628,7 +631,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.peTtm}
             valueFormat="ratio"
-            growthNote={growthFooterLine(chartRows, "peTtm", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "peTtm", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -637,7 +640,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.psTtm}
             valueFormat="ratio"
-            growthNote={growthFooterLine(chartRows, "psTtm", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "psTtm", freq)}
           />
           {hasOperatingIncome ? (
             <FundamentalChartCard
@@ -647,7 +650,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.operatingIncomeSolo}
               valueFormat="currency"
-              growthNote={growthFooterLine(chartRows, "operatingIncome", freq, t)}
+              growthPills={chartGrowthPills(growthPillRows, "operatingIncome", freq)}
             />
           ) : null}
           <FundamentalChartCard
@@ -657,7 +660,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.opexSolo}
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "operatingExpenses", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "operatingExpenses", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -666,7 +669,15 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.margins}
             valueFormat="percent"
-            growthNote={growthFooterMulti(chartRows, ["grossMargin", "operatingMargin", "netMargin"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "grossMargin", label: t("annual.grossMargin") },
+                { key: "operatingMargin", label: t("annual.operatingMargin") },
+                { key: "netMargin", label: t("annual.netMargin") },
+              ],
+              freq,
+            )}
           />
           {hasEbitda ? (
             <FundamentalChartCard
@@ -676,7 +687,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.ebitdaSolo}
               valueFormat="currency"
-              growthNote={growthFooterLine(chartRows, "ebitda", freq, t)}
+              growthPills={chartGrowthPills(growthPillRows, "ebitda", freq)}
             />
           ) : null}
           <FundamentalChartCard
@@ -686,7 +697,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.ocfSolo}
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "ocf", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "ocf", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -695,7 +706,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.fcfSolo}
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "fcf", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "fcf", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -704,7 +715,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.capexSolo}
             valueFormat="currency"
-            growthNote={growthFooterLine(chartRows, "capex", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "capex", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -713,7 +724,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.investFinance}
             valueFormat="currency"
-            growthNote={growthFooterMulti(chartRows, ["investCf", "financeCf"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "investCf", label: t("annual.investingCf") },
+                { key: "financeCf", label: t("annual.financingCf") },
+              ],
+              freq,
+            )}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -722,7 +740,15 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.balance3}
             valueFormat="currency"
-            growthNote={growthFooterMulti(chartRows, ["totalAssets", "totalDebt", "equity"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "totalAssets", label: t("annual.totalAssets") },
+                { key: "totalDebt", label: t("annual.totalDebt") },
+                { key: "equity", label: t("annual.equity") },
+              ],
+              freq,
+            )}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -731,7 +757,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.cashDebt}
             valueFormat="currency"
-            growthNote={growthFooterMulti(chartRows, ["cash", "netDebt"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "cash", label: t("annual.cash") },
+                { key: "netDebt", label: t("annual.netDebt") },
+              ],
+              freq,
+            )}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -740,7 +773,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.roeRoa}
             valueFormat="percent"
-            growthNote={growthFooterMulti(chartRows, ["roe", "roa"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "roe", label: t("annual.roe") },
+                { key: "roa", label: t("annual.roa") },
+              ],
+              freq,
+            )}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -749,7 +789,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.currentRatio}
             valueFormat="ratio"
-            growthNote={growthFooterLine(chartRows, "currentRatio", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "currentRatio", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -758,7 +798,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.fcfMargin}
             valueFormat="percent"
-            growthNote={growthFooterLine(chartRows, "fcfMargin", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "fcfMargin", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -767,7 +807,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.popGrowth}
             valueFormat="percent"
-            growthNote={growthFooterMulti(chartRows, ["revPopGrowth", "niPopGrowth"], freq, t)}
+            growthPills={chartGrowthPillsMulti(
+              growthPillRows,
+              [
+                { key: "revPopGrowth", label: t("chartsFund.seriesRevPop") },
+                { key: "niPopGrowth", label: t("chartsFund.seriesNiPop") },
+              ],
+              freq,
+            )}
           />
           {hasShareholderFlows ? (
             <FundamentalChartCard
@@ -777,7 +824,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.shareholder}
               valueFormat="currency"
-              growthNote={growthFooterMulti(chartRows, ["dividendsPaidPos", "stockRepurchasePos"], freq, t)}
+              growthPills={chartGrowthPillsMulti(
+                growthPillRows,
+                [
+                  { key: "dividendsPaidPos", label: t("annual.dividends") },
+                  { key: "stockRepurchasePos", label: t("annual.buyback") },
+                ],
+                freq,
+              )}
             />
           ) : null}
           {hasArInv ? (
@@ -788,7 +842,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.arInv}
               valueFormat="currency"
-              growthNote={growthFooterMulti(chartRows, ["ar", "inventory"], freq, t)}
+              growthPills={chartGrowthPillsMulti(
+                growthPillRows,
+                [
+                  { key: "ar", label: t("annual.accountsReceivable") },
+                  { key: "inventory", label: t("annual.inventory") },
+                ],
+                freq,
+              )}
             />
           ) : null}
           {hasGwLt ? (
@@ -799,7 +860,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.gwLt}
               valueFormat="currency"
-              growthNote={growthFooterMulti(chartRows, ["goodwill", "longTermDebt"], freq, t)}
+              growthPills={chartGrowthPillsMulti(
+                growthPillRows,
+                [
+                  { key: "goodwill", label: t("annual.goodwill") },
+                  { key: "longTermDebt", label: t("annual.longTermDebt") },
+                ],
+                freq,
+              )}
             />
           ) : null}
           {hasEbitdaOcfMargins ? (
@@ -810,7 +878,14 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.ebitdaOcfMargin}
               valueFormat="percent"
-              growthNote={growthFooterMulti(chartRows, ["ebitdaMargin", "ocfMargin"], freq, t)}
+              growthPills={chartGrowthPillsMulti(
+                growthPillRows,
+                [
+                  { key: "ebitdaMargin", label: t("chartsFund.seriesEbitdaMargin") },
+                  { key: "ocfMargin", label: t("chartsFund.seriesOcfMargin") },
+                ],
+                freq,
+              )}
             />
           ) : null}
           <FundamentalChartCard
@@ -820,7 +895,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.debtPctCapital}
             valueFormat="percent"
-            growthNote={growthFooterLine(chartRows, "debtPctCapital", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "debtPctCapital", freq)}
           />
           {hasNetDebtEbitda ? (
             <FundamentalChartCard
@@ -830,7 +905,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               data={chartRows}
               series={series.netDebtEbitda}
               valueFormat="ratio"
-              growthNote={growthFooterLine(chartRows, "netDebtToEbitda", freq, t)}
+              growthPills={chartGrowthPills(growthPillRows, "netDebtToEbitda", freq)}
             />
           ) : null}
           <FundamentalChartCard
@@ -840,7 +915,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.quickRatio}
             valueFormat="ratio"
-            growthNote={growthFooterLine(chartRows, "quickRatio", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "quickRatio", freq)}
           />
           <FundamentalChartCard
             {...chartAxisProps}
@@ -849,7 +924,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             data={chartRows}
             series={series.capexIntensity}
             valueFormat="percent"
-            growthNote={growthFooterLine(chartRows, "capexIntensity", freq, t)}
+            growthPills={chartGrowthPills(growthPillRows, "capexIntensity", freq)}
           />
         </div>
       )}
