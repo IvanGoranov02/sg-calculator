@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { DcfProjectionCharts } from "@/components/dcf/DcfProjectionCharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,13 +82,16 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   const [addTangibleBook, setAddTangibleBook] = useState(false);
   const [tangibleBookPerShare, setTangibleBookPerShare] = useState(seed?.tangibleBookPerShare ?? 0);
 
-  useEffect(() => {
+  const seedSyncKey = seed
+    ? `${seed.symbol}:${seed.epsPerShare}:${seed.fcfPerShare}:${seed.tangibleBookPerShare}`
+    : `empty:${ticker}`;
+  const [syncedSeedKey, setSyncedSeedKey] = useState(seedSyncKey);
+  if (seedSyncKey !== syncedSeedKey) {
+    setSyncedSeedKey(seedSyncKey);
     setBasePerShare(baseFromSeed(seed, baseMetric));
     setGrowthPct(decimalToPct(growthFromSeed(seed, baseMetric)));
-    if (seed) {
-      setTangibleBookPerShare(seed.tangibleBookPerShare);
-    }
-  }, [seed, baseMetric]);
+    setTangibleBookPerShare(seed?.tangibleBookPerShare ?? 0);
+  }
 
   const baseMetricLabel = useMemo(() => {
     switch (baseMetric) {
