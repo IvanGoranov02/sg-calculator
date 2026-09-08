@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm ci && npx prisma generate",
+  "installCommand": "npm ci",
   "buildCommand": "node scripts/vercel-build.mjs"
 }
