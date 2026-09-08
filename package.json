@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
+    "prebuild": "prisma generate",
     "build": "node scripts/vercel-build.mjs",
     "build:skip-db": "prisma generate && next build",
     "build:with-db": "prisma generate && prisma db push && prisma db execute --file prisma/lock-supabase-api.sql --schema prisma/schema.prisma && next build",
