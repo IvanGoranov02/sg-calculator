@@ -151,6 +151,59 @@ export function capGuruFocusGrowthRate(rate: number): number {
 }
 
 /**
+ * CAGR across a fixed annual window (first→last), using calendar span `length − 1`.
+ * Loss years stay in the window; geometric CAGR requires positive endpoints.
+ */
+export function cagrFromAnnualWindow(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const start = values[0];
+  const end = values[values.length - 1];
+  const years = values.length - 1;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || years <= 0) return null;
+  if (start <= 0 || end <= 0) return null;
+  const rate = (end / start) ** (1 / years) - 1;
+  return Number.isFinite(rate) ? rate : null;
+}
+
+export type GuruFocusDcfValidationError =
+  | "discount_required"
+  | "discount_invalid"
+  | "terminal_growth_vs_discount"
+  | "base_non_positive"
+  | "invalid_years";
+
+export function validateGuruFocusDcfInputs(params: {
+  basePerShare: number;
+  discountPct: number;
+  growthYears: number;
+  terminalYears: number;
+  terminalGrowthPct: number;
+}): GuruFocusDcfValidationError | null {
+  const { basePerShare, discountPct, growthYears, terminalYears, terminalGrowthPct } = params;
+
+  if (!Number.isFinite(discountPct)) return "discount_required";
+  if (discountPct <= 0 || discountPct >= 100) return "discount_invalid";
+
+  const d = discountPct / 100;
+  if (Number.isFinite(terminalGrowthPct)) {
+    const g2 = terminalGrowthPct / 100;
+    if (g2 >= d) return "terminal_growth_vs_discount";
+  }
+
+  if (!Number.isFinite(basePerShare) || basePerShare <= 0) return "base_non_positive";
+  if (
+    !Number.isFinite(growthYears) ||
+    growthYears < 0 ||
+    !Number.isFinite(terminalYears) ||
+    terminalYears < 0
+  ) {
+    return "invalid_years";
+  }
+
+  return null;
+}
+
+/**
  * Simple 5-year FCF DCF + terminal multiple (common retail / spreadsheet style).
  * EV = PV(FCF yrs 1–5) + PV(terminal); equity = EV − net debt; per share = equity / shares.
  * FCF = free cash flow (Yahoo: operating cash flow − capex); used as cash available to investors.

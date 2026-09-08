@@ -3,10 +3,10 @@ import { describe, it } from "node:test";
 
 import {
   capGuruFocusGrowthRate,
+  cagrFromAnnualWindow,
   computeGuruFocusDcf,
-  growthStageFactor,
   marginOfSafetyPct,
-  terminalStageFactor,
+  validateGuruFocusDcfInputs,
 } from "@/lib/dcf";
 
 describe("computeGuruFocusDcf", () => {
@@ -20,16 +20,12 @@ describe("computeGuruFocusDcf", () => {
     tangibleBookPerShare: 0,
   };
 
-  it("matches closed-form growth + terminal factors", () => {
+  it("pins GuruFocus spot-check values for the standard case", () => {
     const r = computeGuruFocusDcf(baseInput);
-    const x = (1 + 0.15) / (1 + 0.11);
-    const y = (1 + 0.04) / (1 + 0.11);
-    const growthFactor = growthStageFactor(x, 10);
-    const terminalFactor = terminalStageFactor(x, y, 10, 10);
-
-    assert.ok(Math.abs(r.growthValue - 6 * growthFactor) < 1e-6);
-    assert.ok(Math.abs(r.terminalValue - 6 * terminalFactor) < 1e-6);
-    assert.ok(Math.abs(r.intrinsicValue - r.growthValue - r.terminalValue) < 1e-6);
+    assert.ok(Math.abs(r.growthValue - 73.275) < 0.01);
+    assert.ok(Math.abs(r.terminalValue - 60.797) < 0.01);
+    assert.ok(Math.abs(r.intrinsicValue - 134.072) < 0.01);
+    assert.ok(Math.abs(r.fairValuePerShare - 134.072) < 0.01);
   });
 
   it("yearly PVs sum to intrinsic value", () => {
@@ -40,7 +36,7 @@ describe("computeGuruFocusDcf", () => {
 
   it("adds tangible book to fair value", () => {
     const r = computeGuruFocusDcf({ ...baseInput, tangibleBookPerShare: 12.5 });
-    assert.equal(r.fairValuePerShare, r.intrinsicValue + 12.5);
+    assert.ok(Math.abs(r.fairValuePerShare - (134.072 + 12.5)) < 0.02);
   });
 
   it("handles x ≈ 1 (growth rate equals discount rate)", () => {
@@ -57,6 +53,47 @@ describe("computeGuruFocusDcf", () => {
   it("rejects terminal growth >= discount rate", () => {
     assert.throws(() =>
       computeGuruFocusDcf({ ...baseInput, terminalGrowthRate: 0.11 }),
+    );
+  });
+});
+
+describe("cagrFromAnnualWindow", () => {
+  it("uses full window span including loss years between endpoints", () => {
+    const rate = cagrFromAnnualWindow([2, -1, 0.5, 1, 4]);
+    assert.ok(rate != null);
+    assert.ok(Math.abs(rate - (Math.pow(4 / 2, 1 / 4) - 1)) < 1e-9);
+  });
+
+  it("returns null when an endpoint is non-positive", () => {
+    assert.equal(cagrFromAnnualWindow([-1, 1, 2, 3]), null);
+    assert.equal(cagrFromAnnualWindow([1, 2, -3]), null);
+  });
+});
+
+describe("validateGuruFocusDcfInputs", () => {
+  it("flags terminal growth at or above discount", () => {
+    assert.equal(
+      validateGuruFocusDcfInputs({
+        basePerShare: 6,
+        discountPct: 11,
+        growthYears: 10,
+        terminalYears: 10,
+        terminalGrowthPct: 11,
+      }),
+      "terminal_growth_vs_discount",
+    );
+  });
+
+  it("flags missing discount", () => {
+    assert.equal(
+      validateGuruFocusDcfInputs({
+        basePerShare: 6,
+        discountPct: Number.NaN,
+        growthYears: 10,
+        terminalYears: 10,
+        terminalGrowthPct: 4,
+      }),
+      "discount_required",
     );
   });
 });

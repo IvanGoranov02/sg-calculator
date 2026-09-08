@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   computeGuruFocusDcf,
   marginOfSafetyPct,
+  validateGuruFocusDcfInputs,
   type DcfBaseMetric,
 } from "@/lib/dcf";
 import { formatCurrency } from "@/lib/format";
@@ -55,15 +56,27 @@ function baseFromSeed(seed: DcfSeed | null, metric: DcfBaseMetric): number {
   }
 }
 
+function growthFromSeed(seed: DcfSeed | null, metric: DcfBaseMetric): number {
+  if (!seed) return 0.15;
+  switch (metric) {
+    case "eps":
+      return seed.suggestedEpsGrowthRate;
+    case "fcf":
+      return seed.suggestedFcfGrowthRate;
+    case "dividend":
+      return seed.suggestedEpsGrowthRate;
+    default:
+      return 0.15;
+  }
+}
+
 export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   const { t } = useI18n();
   const [baseMetric, setBaseMetric] = useState<DcfBaseMetric>("eps");
   const [basePerShare, setBasePerShare] = useState(baseFromSeed(seed, "eps"));
   const [discountPct, setDiscountPct] = useState(11);
   const [growthYears, setGrowthYears] = useState(10);
-  const [growthPct, setGrowthPct] = useState(
-    seed ? decimalToPct(seed.suggestedGrowthRate) : 15,
-  );
+  const [growthPct, setGrowthPct] = useState(decimalToPct(growthFromSeed(seed, "eps")));
   const [terminalYears, setTerminalYears] = useState(10);
   const [terminalGrowthPct, setTerminalGrowthPct] = useState(4);
   const [addTangibleBook, setAddTangibleBook] = useState(false);
@@ -71,8 +84,8 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
 
   useEffect(() => {
     setBasePerShare(baseFromSeed(seed, baseMetric));
+    setGrowthPct(decimalToPct(growthFromSeed(seed, baseMetric)));
     if (seed) {
-      setGrowthPct(decimalToPct(seed.suggestedGrowthRate));
       setTangibleBookPerShare(seed.tangibleBookPerShare);
     }
   }, [seed, baseMetric]);
@@ -90,18 +103,20 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
     }
   }, [baseMetric, t]);
 
+  const validationError = useMemo(
+    () =>
+      validateGuruFocusDcfInputs({
+        basePerShare,
+        discountPct,
+        growthYears,
+        terminalYears,
+        terminalGrowthPct,
+      }),
+    [basePerShare, discountPct, growthYears, terminalYears, terminalGrowthPct],
+  );
+
   const result = useMemo(() => {
-    const inputsFinite = [
-      basePerShare,
-      discountPct,
-      growthYears,
-      growthPct,
-      terminalYears,
-      terminalGrowthPct,
-      tangibleBookPerShare,
-    ].every((n) => Number.isFinite(n));
-    if (!inputsFinite) return null;
-    if (basePerShare <= 0 || growthYears < 0 || terminalYears < 0) return null;
+    if (validationError) return null;
     try {
       return computeGuruFocusDcf({
         basePerShare,
@@ -124,6 +139,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
     tangibleBookPerShare,
     terminalGrowthPct,
     terminalYears,
+    validationError,
   ]);
 
   const mosPct =
@@ -134,6 +150,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   const handleMetricChange = (value: DcfBaseMetric) => {
     setBaseMetric(value);
     setBasePerShare(baseFromSeed(seed, value));
+    setGrowthPct(decimalToPct(growthFromSeed(seed, value)));
   };
 
   return (
@@ -163,12 +180,16 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
           <SnapshotMetric
             label={t("dcf.snapEps")}
             sub={t("dcf.snapEpsSub")}
-            value={seed && seed.epsPerShare > 0 ? formatCurrency(seed.epsPerShare) : "—"}
+            value={
+              seed && Number.isFinite(seed.epsPerShare) ? formatCurrency(seed.epsPerShare) : "—"
+            }
           />
           <SnapshotMetric
             label={t("dcf.snapFcf")}
             sub={t("dcf.snapFcfSub")}
-            value={seed && seed.fcfPerShare > 0 ? formatCurrency(seed.fcfPerShare) : "—"}
+            value={
+              seed && Number.isFinite(seed.fcfPerShare) ? formatCurrency(seed.fcfPerShare) : "—"
+            }
           />
           <SnapshotMetric
             label={t("dcf.snapDividend")}
@@ -184,7 +205,11 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
           />
           <SnapshotMetric
             label={t("dcf.snapSuggestedGrowth")}
-            value={seed ? `${decimalToPct(seed.suggestedGrowthRate).toFixed(1)}%` : "—"}
+            value={
+              seed
+                ? `${decimalToPct(growthFromSeed(seed, baseMetric)).toFixed(1)}%`
+                : "—"
+            }
           />
         </CardContent>
       </Card>
@@ -215,7 +240,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
             <Input
               id="base"
               type="number"
-              min={0}
               step="any"
               value={Number.isFinite(basePerShare) ? basePerShare : ""}
               onChange={(e) => setBasePerShare(Number(e.target.value))}
@@ -315,7 +339,9 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
           <CardDescription>{t("dcf.resultDisclaimer")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!result ? (
+          {validationError ? (
+            <p className="text-sm text-amber-200/90">{t(`dcf.err.${validationError}`)}</p>
+          ) : !result ? (
             <p className="text-sm text-muted-foreground">{t("dcf.needInputs")}</p>
           ) : (
             <>
