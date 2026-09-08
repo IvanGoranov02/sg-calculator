@@ -4,9 +4,12 @@ import { describe, it } from "node:test";
 import {
   DIP_RANGES,
   dipChartRowForQuote,
+  dipChartYDomain,
+  dipChartYTicks,
   dipMetricsForRange,
   dipRangeTradingDays,
   dipVsAveragePct,
+  formatDipAxisPct,
   isDipRange,
   lookbackChangePct,
   simpleMovingAverage,
@@ -73,6 +76,39 @@ describe("dipMetricsForRange", () => {
     assert.ok(m.dipVsWindowSmaPct != null);
     assert.ok(m.lookbackChangePct != null);
     assert.ok(Math.abs(m.lookbackChangePct - ((90 - 100) / 100) * 100) < 1e-9);
+  });
+});
+
+describe("dipChartYDomain", () => {
+  it("uses mock defaults when data fits within -50/+25", () => {
+    assert.deepEqual(dipChartYDomain([-40, 0, 15]), { min: -50, max: 25 });
+  });
+
+  it("expands below -50 when dips are deeper", () => {
+    const d = dipChartYDomain([-48, -55, 10]);
+    assert.ok(d.min <= -55);
+    assert.equal(d.max, 25);
+  });
+
+  it("expands above +25 when gains are larger", () => {
+    const d = dipChartYDomain([-10, 30, 22]);
+    assert.equal(d.min, -50);
+    assert.ok(d.max >= 30);
+  });
+});
+
+describe("dipChartYTicks", () => {
+  it("steps in 5% increments", () => {
+    assert.deepEqual(dipChartYTicks(-50, 25), [
+      -50, -45, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25,
+    ]);
+  });
+});
+
+describe("formatDipAxisPct", () => {
+  it("formats whole percents without decimals", () => {
+    assert.equal(formatDipAxisPct(-50), "-50%");
+    assert.equal(formatDipAxisPct(25), "25%");
   });
 });
 
