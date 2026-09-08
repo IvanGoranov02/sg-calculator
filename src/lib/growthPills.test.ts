@@ -6,13 +6,14 @@ import {
   computeGrowthPills,
   growthPillsForKey,
   growthPillsEntries,
+  isShareCountGrowthKey,
 } from "@/lib/growthPills";
 
 describe("computeGrowthPills", () => {
   it("returns null pills for empty series", () => {
     const pills = computeGrowthPills([], 1);
     assert.equal(pills.oneYear, null);
-    assert.equal(pills.tenYear, null);
+    assert.equal(pills.fourYear, null);
   });
 
   it("computes 1Y simple change for annual data", () => {
@@ -37,13 +38,18 @@ describe("computeGrowthPills", () => {
     assert.ok(pills.oneYear != null && Math.abs(pills.oneYear - 50) < 1e-9);
   });
 
-  it("5Y pill needs full history beyond a 5-year visible window", () => {
-    const full = Array.from({ length: 10 }, (_, i) => 100 * Math.pow(1.1, i));
-    const visible = full.slice(-5);
+  it("3Y pill needs full history beyond a 3-year visible window", () => {
+    const full = Array.from({ length: 6 }, (_, i) => 100 * Math.pow(1.1, i));
+    const visible = full.slice(-3);
     const fullPills = computeGrowthPills(full, 1);
     const visiblePills = computeGrowthPills(visible, 1);
-    assert.equal(visiblePills.fiveYear, null);
-    assert.ok(fullPills.fiveYear != null);
+    assert.equal(visiblePills.threeYear, null);
+    assert.ok(fullPills.threeYear != null);
+  });
+
+  it("4Y pill is null when only three years of history exist", () => {
+    const pills = computeGrowthPills([100, 110, 121], 1);
+    assert.equal(pills.fourYear, null);
   });
 
   it("preserves calendar gaps when EPS years are missing", () => {
@@ -61,6 +67,14 @@ describe("computeGrowthPills", () => {
   });
 });
 
+describe("isShareCountGrowthKey", () => {
+  it("matches diluted shares and other share-count keys", () => {
+    assert.equal(isShareCountGrowthKey("dilutedShares"), true);
+    assert.equal(isShareCountGrowthKey("sharesOutstanding"), true);
+    assert.equal(isShareCountGrowthKey("revenue"), false);
+  });
+});
+
 describe("growthPillsForKey", () => {
   it("extracts values from chart rows", () => {
     const rows = [
@@ -70,16 +84,11 @@ describe("growthPillsForKey", () => {
       { revenue: 172.8 },
       { revenue: 207.36 },
       { revenue: 248.832 },
-      { revenue: 298.5984 },
-      { revenue: 358.31808 },
-      { revenue: 429.981696 },
-      { revenue: 515.9780352 },
-      { revenue: 619.17364224 },
     ];
     const pills = growthPillsForKey(rows, "revenue", "annual");
     assert.ok(pills.oneYear != null && pills.oneYear > 0);
-    assert.ok(pills.fiveYear != null && pills.fiveYear > 0);
-    assert.ok(pills.tenYear != null && pills.tenYear > 0);
+    assert.ok(pills.threeYear != null && pills.threeYear > 0);
+    assert.ok(pills.fourYear != null && pills.fourYear > 0);
   });
 });
 
@@ -96,12 +105,18 @@ describe("growthPillsEntries", () => {
     assert.equal(entries[1]!.label, "Series B");
   });
 
-  it("5Y multi-series pills need full history, not a 5-year visible slice", () => {
-    const full = Array.from({ length: 10 }, (_, i) => ({
+  it("sets invertColors for share-count series", () => {
+    const rows = [{ dilutedShares: 100 }, { dilutedShares: 95 }];
+    const entries = growthPillsEntries(rows, [{ key: "dilutedShares", label: "Shares" }], "annual");
+    assert.equal(entries[0]!.invertColors, true);
+  });
+
+  it("3Y multi-series pills need full history, not a 3-year visible slice", () => {
+    const full = Array.from({ length: 6 }, (_, i) => ({
       ar: 100 * Math.pow(1.1, i),
       inventory: 50 * Math.pow(1.05, i),
     }));
-    const visible = full.slice(-5);
+    const visible = full.slice(-3);
     const fullEntries = growthPillsEntries(
       full,
       [{ key: "ar", label: "AR" }, { key: "inventory", label: "Inv" }],
@@ -112,9 +127,9 @@ describe("growthPillsEntries", () => {
       [{ key: "ar", label: "AR" }, { key: "inventory", label: "Inv" }],
       "annual",
     );
-    assert.equal(visibleEntries[0]!.pills.fiveYear, null);
-    assert.equal(visibleEntries[1]!.pills.fiveYear, null);
-    assert.ok(fullEntries[0]!.pills.fiveYear != null);
-    assert.ok(fullEntries[1]!.pills.fiveYear != null);
+    assert.equal(visibleEntries[0]!.pills.threeYear, null);
+    assert.equal(visibleEntries[1]!.pills.threeYear, null);
+    assert.ok(fullEntries[0]!.pills.threeYear != null);
+    assert.ok(fullEntries[1]!.pills.threeYear != null);
   });
 });
