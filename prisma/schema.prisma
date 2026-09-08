@@ -68,6 +68,11 @@ model Trading212Connection {
   apiSecretEnc String                  @db.Text
   lastSyncAt   DateTime?
   lastError    String?                 @db.Text
+  /** Cached T212 dividend history JSON (refreshed on broker sync or explicit refresh). */
+  dividendsCache         Json?
+  dividendsCachedAt      DateTime?
+  dividendsCacheError    String?         @db.Text
+  dividendsCachePartial  Boolean         @default(false)
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 }

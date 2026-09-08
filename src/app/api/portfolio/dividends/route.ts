@@ -4,13 +4,14 @@ import { auth } from "@/auth";
 import { buildPortfolioDividendsPayload } from "@/lib/portfolioDividends";
 import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
-import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
+import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prisma } from "@/lib/prisma";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
-import { logApiException } from "@/lib/serverDebugLog";
 import { normalizeTicker } from "@/lib/watchlistStorage";
-import { fetchT212HistoryDividends, type T212RequestError } from "@/lib/trading212Client";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
+import { loadT212DividendsForUser } from "@/lib/t212DividendsCache";
+
+export const maxDuration = 60;
 
 function parsePositiveDecimal(raw: unknown, label: string): Prisma.Decimal {
   const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : NaN;
@@ -31,12 +32,16 @@ function parsePaidOn(raw: unknown): Date {
   return d;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const refresh =
+    new URL(request.url).searchParams.get("refresh") === "1" ||
+    new URL(request.url).searchParams.get("refresh") === "true";
 
   try {
     const [holdings, manualRows, t212Conn] = await Promise.all([
@@ -85,26 +90,22 @@ export async function GET() {
     for (const row of cacheRows) cacheBySymbol[row.symbol] = row.payload;
 
     let t212Items: import("@/lib/trading212Client").T212HistoryDividendItem[] = [];
-    let t212Meta: { connected: boolean; error?: string } = { connected: !!t212Conn };
+    let t212Meta: {
+      connected: boolean;
+      error?: string;
+      cachedAt?: string | null;
+      partial?: boolean;
+    } = { connected: !!t212Conn };
 
     if (t212Conn && isPortfolioEncryptionConfigured()) {
-      try {
-        const apiKey = decryptSecret(t212Conn.apiKeyEnc);
-        const apiSecret = decryptSecret(t212Conn.apiSecretEnc);
-        t212Items = await fetchT212HistoryDividends(t212Conn.environment, apiKey, apiSecret, {
-          maxPages: 20,
-        });
-      } catch (e) {
-        const status = (e as T212RequestError).status;
-        logApiException("GET /api/portfolio/dividends t212", e, {
-          userId,
-          trading212HttpStatus: status ?? undefined,
-        });
-        t212Meta = {
-          connected: true,
-          error: e instanceof Error ? e.message.slice(0, 500) : "Could not load Trading 212 dividends",
-        };
-      }
+      const loaded = await loadT212DividendsForUser(userId, t212Conn, { refresh });
+      t212Items = loaded.items;
+      t212Meta = {
+        connected: true,
+        cachedAt: loaded.cachedAt,
+        partial: loaded.partial,
+        error: loaded.fetchError ?? loaded.error ?? undefined,
+      };
     }
 
     const payload = buildPortfolioDividendsPayload({

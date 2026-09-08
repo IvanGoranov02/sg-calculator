@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Trash2 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -48,14 +48,16 @@ function formatMonthLabel(month: string, locale: string): string {
 }
 
 type PortfolioDividendsViewProps = {
+  refreshToken?: number;
   onRefresh?: () => void;
 };
 
-export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProps) {
+export function PortfolioDividendsView({ refreshToken = 0, onRefresh }: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
   const [data, setData] = useState<PortfolioDividendsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadDone = useRef(false);
 
   const [ticker, setTicker] = useState("");
   const [amount, setAmount] = useState("");
@@ -63,35 +65,46 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
   const [currency, setCurrency] = useState("EUR");
   const [note, setNote] = useState("");
   const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/portfolio/dividends");
-      if (res.status === 401) {
+  const load = useCallback(
+    async (forceRefresh: boolean) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const url = forceRefresh ? "/api/portfolio/dividends?refresh=1" : "/api/portfolio/dividends";
+        const res = await fetch(url);
+        if (res.status === 401) {
+          setData(null);
+          return;
+        }
+        const json = (await res.json()) as PortfolioDividendsPayload & { error?: string };
+        if (!res.ok) {
+          setError(json.error ?? t("portfolioDividends.errorLoad"));
+          setData(null);
+          return;
+        }
+        setData(json);
+      } catch {
+        setError(t("portfolioDividends.errorLoad"));
         setData(null);
-        return;
+      } finally {
+        setLoading(false);
       }
-      const json = (await res.json()) as PortfolioDividendsPayload & { error?: string };
-      if (!res.ok) {
-        setError(json.error ?? t("portfolioDividends.errorLoad"));
-        setData(null);
-        return;
-      }
-      setData(json);
-    } catch {
-      setError(t("portfolioDividends.errorLoad"));
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
+    },
+    [t],
+  );
 
   useEffect(() => {
-    void load();
+    void load(false);
+    initialLoadDone.current = true;
   }, [load]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || refreshToken === 0) return;
+    void load(true);
+  }, [refreshToken, load]);
 
   const pillLabels = useMemo(
     () => ({
@@ -104,18 +117,35 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
   );
 
   const chartData = useMemo(() => {
-    if (!data?.monthlyIncome.length) return [];
-    const base = data.summary.baseCurrency;
-    return data.monthlyIncome.map((m) => {
-      const baseHit = m.totals.find((x) => x.currency === base);
-      const total = baseHit?.amount ?? m.totals.reduce((s, x) => s + x.amount, 0);
-      return {
-        month: formatMonthLabel(m.month, locale),
-        income: total,
-        rawMonth: m.month,
-      };
-    });
+    if (!data?.chartSeries.length) return [];
+    return data.chartSeries
+      .filter((p) => p.income != null && Number.isFinite(p.income))
+      .map((p) => ({
+        month: formatMonthLabel(p.month, locale),
+        income: p.income as number,
+        rawMonth: p.month,
+      }));
   }, [data, locale]);
+
+  async function onDeleteManual(id: string) {
+    if (!window.confirm(t("portfolioDividends.deleteConfirm"))) return;
+    setDeletingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portfolio/dividends/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const body = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(body.error ?? t("portfolioDividends.deleteFailed"));
+        return;
+      }
+      await load(false);
+      onRefresh?.();
+    } catch {
+      setError(t("portfolio.saveNetworkError"));
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function onAddManual(e: FormEvent) {
     e.preventDefault();
@@ -145,7 +175,7 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
       setAmount("");
       setPaidOn("");
       setNote("");
-      await load();
+      await load(false);
       onRefresh?.();
     } catch {
       setAddError(t("portfolio.saveNetworkError"));
@@ -177,7 +207,15 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
   const hasPayments = data.payments.length > 0;
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="relative space-y-6 sm:space-y-8">
+      {loading && data ? (
+        <div className="absolute inset-x-0 top-0 z-10 flex justify-center pt-2">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" aria-hidden />
+            {t("portfolio.loading")}
+          </span>
+        </div>
+      ) : null}
       {data.trading212.error ? (
         <p className="text-sm text-amber-400/90" role="status">
           {data.trading212.error}
@@ -346,6 +384,7 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
                   <TableHead className="text-right">{t("portfolio.t212DivColAmount")}</TableHead>
                   <TableHead>{t("portfolio.t212DivColCurrency")}</TableHead>
                   <TableHead>{t("portfolio.t212DivColPaidOn")}</TableHead>
+                  <TableHead className="w-[56px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -359,6 +398,25 @@ export function PortfolioDividendsView({ onRefresh }: PortfolioDividendsViewProp
                     <TableCell className="text-muted-foreground">{p.currency}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(`${p.paidOn}T12:00:00Z`).toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US")}
+                    </TableCell>
+                    <TableCell>
+                      {p.source === "manual" ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 text-red-400 hover:text-red-300"
+                          aria-label={t("portfolio.manualDelete")}
+                          disabled={deletingId === p.id}
+                          onClick={() => void onDeleteManual(p.id)}
+                        >
+                          {deletingId === p.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}

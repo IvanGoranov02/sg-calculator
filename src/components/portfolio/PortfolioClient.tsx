@@ -122,6 +122,7 @@ export function PortfolioClient() {
 
   /** Non-error info (e.g. per-symbol sync skip or manual replacing broker row). */
   const [portfolioInfo, setPortfolioInfo] = useState<string | null>(null);
+  const [dividendsRefreshToken, setDividendsRefreshToken] = useState(0);
 
   const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);
@@ -192,6 +193,11 @@ export function PortfolioClient() {
     }
   }, [t]);
 
+  const refreshPortfolioData = useCallback(async () => {
+    await load();
+    setDividendsRefreshToken((n) => n + 1);
+  }, [load]);
+
   const runSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     setError(null);
@@ -205,6 +211,7 @@ export function PortfolioClient() {
         return false;
       }
       await load();
+      setDividendsRefreshToken((n) => n + 1);
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
         setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
       }
@@ -519,7 +526,7 @@ export function PortfolioClient() {
           type="button"
           variant="outline"
           className="w-full shrink-0 border-white/15 sm:w-auto"
-          onClick={() => void load()}
+          onClick={() => void refreshPortfolioData()}
           disabled={loading}
           aria-busy={loading}
         >
@@ -964,7 +971,7 @@ export function PortfolioClient() {
         </TabsContent>
 
         <TabsContent value="dividends" className="mt-6">
-          <PortfolioDividendsView onRefresh={() => void load()} />
+          <PortfolioDividendsView refreshToken={dividendsRefreshToken} onRefresh={() => void refreshPortfolioData()} />
         </TabsContent>
       </Tabs>
     </div>

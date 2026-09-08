@@ -679,7 +679,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualHint: "Record a cash dividend you received outside Trading 212 sync.",
       manualAdd: "Add dividend",
       addFailed: "Could not save dividend.",
-      note: "Note (optional)",
+      deleteConfirm: "Remove this manual dividend entry?",
+      deleteFailed: "Could not delete dividend.",
     },
     ai: {
       title: "AI qualitative view",
@@ -1520,6 +1521,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualAdd: "Добави дивидент",
       addFailed: "Неуспешно записване на дивидент.",
       note: "Бележка (по избор)",
+      deleteConfirm: "Премахни този ръчен дивидент?",
+      deleteFailed: "Неуспешно изтриване на дивидент.",
     },
     ai: {
       title: "AI качествен поглед",
