@@ -13,7 +13,7 @@ import {
   rowsForCharts,
   type FundamentalsChartRow,
 } from "@/lib/fundamentalsChartRows";
-import { growthPillsEntries, growthPillsForKey } from "@/lib/growthPills";
+import { growthPillsEntries, growthPillsForKey, isShareCountGrowthKey } from "@/lib/growthPills";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
   filterAnnualRowsByPeriod,
@@ -63,7 +63,7 @@ function chartGrowthPills(
   key: string,
   freq: "annual" | "quarterly",
 ) {
-  return [{ pills: growthPillsForKey(rows, key, freq) }];
+  return [{ pills: growthPillsForKey(rows, key, freq), invertColors: isShareCountGrowthKey(key) }];
 }
 
 function chartGrowthPillsMulti(

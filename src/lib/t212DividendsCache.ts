@@ -1,5 +1,13 @@
 import type { Trading212Connection, Trading212Environment } from "@prisma/client";
 
+/** Cache columns on Trading212Connection — explicit shape avoids stale Prisma client type errors on Preview. */
+export type T212DividendsCacheFields = {
+  dividendsCache: unknown;
+  dividendsCachedAt: Date | null;
+  dividendsCacheError: string | null;
+  dividendsCachePartial: boolean;
+};
+
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/portfolioEncryption";
 import {
@@ -95,10 +103,7 @@ function parseCachedItems(raw: unknown): T212HistoryDividendItem[] {
   return raw as T212HistoryDividendItem[];
 }
 
-export function readT212DividendsCache(conn: Pick<
-  Trading212Connection,
-  "dividendsCache" | "dividendsCachedAt" | "dividendsCacheError" | "dividendsCachePartial"
-> | null): T212DividendsCacheRead {
+export function readT212DividendsCache(conn: T212DividendsCacheFields | null): T212DividendsCacheRead {
   if (!conn?.dividendsCache) {
     return { items: [], cachedAt: null, partial: false, error: conn?.dividendsCacheError ?? null };
   }

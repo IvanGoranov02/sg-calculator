@@ -21,7 +21,14 @@ import {
   type PortfolioFxRates,
 } from "@/lib/portfolioFx";
 import { cn } from "@/lib/utils";
-import { PortfolioAnalytics, type AnalyticsRow } from "@/components/portfolio/PortfolioAnalytics";
+import {
+  PortfolioAllocationSection,
+  PortfolioMoversSection,
+  PortfolioSectorSection,
+  PortfolioSummarySection,
+  usePortfolioAnalytics,
+  type AnalyticsRow,
+} from "@/components/portfolio/PortfolioAnalytics";
 import { PortfolioDividendsView } from "@/components/portfolio/PortfolioDividendsView";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -497,6 +504,8 @@ export function PortfolioClient() {
   );
 
 
+  const analytics = usePortfolioAnalytics(analyticsRows, fx);
+
   if (status === "loading") {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -587,6 +596,13 @@ export function PortfolioClient() {
               t("portfolio.syncNow")
             )}
           </Button>
+        </div>
+      ) : null}
+
+      {analytics ? (
+        <div className="space-y-4">
+          <PortfolioSummarySection analytics={analytics} />
+          <PortfolioAllocationSection analytics={analytics} />
         </div>
       ) : null}
 
@@ -790,13 +806,15 @@ export function PortfolioClient() {
         </div>
       )}
 
+      {analytics ? <PortfolioSectorSection analytics={analytics} /> : null}
+
       {holdings.length > 0 ? (
         <div className="rounded-lg border border-white/10 px-4 py-4">
           <DipFinderPanel quotes={dipQuotes} history={dipHistory} compact />
         </div>
       ) : null}
 
-      {holdings.length > 0 ? <PortfolioAnalytics rows={analyticsRows} fx={fx} /> : null}
+      {analytics ? <PortfolioMoversSection analytics={analytics} /> : null}
 
       <Card className="border-white/10 bg-zinc-900/50">
         <CardHeader className="space-y-1 pb-2 sm:pb-6">

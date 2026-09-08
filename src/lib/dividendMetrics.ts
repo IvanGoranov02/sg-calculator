@@ -75,7 +75,7 @@ export function rollingSum4QuarterlyLoose(values: (number | null)[]): {
 export type TtmDpsGrowthPills = GrowthPills;
 
 /**
- * Uses strict TTM DPS at quarter ends (all four quarters filled). 1Y = vs 4 quarters earlier; 2/5/10Y = CAGR vs 8/20/40 quarters earlier.
+ * Uses strict TTM DPS at quarter ends (all four quarters filled). 1Y = vs 4 quarters earlier; 2/3/4Y = CAGR vs 8/12/16 quarters earlier.
  */
 export function computeTtmDpsGrowthPills(ttm: (number | null)[]): TtmDpsGrowthPills {
   return computeGrowthPills(ttm, 4);

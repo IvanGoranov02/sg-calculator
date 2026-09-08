@@ -39,6 +39,19 @@ describe("parseT212Ticker", () => {
       isNonUsListing: true,
     });
   });
+
+  it("parses uppercase Xetra stubs (FB2AD_EQ, METAD_EQ)", () => {
+    assert.deepEqual(parseT212Ticker("FB2AD_EQ"), {
+      base: "FB2A",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("METAD_EQ"), {
+      base: "META",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+  });
 });
 
 describe("germanListingYahooSymbols", () => {
@@ -46,12 +59,30 @@ describe("germanListingYahooSymbols", () => {
     assert.deepEqual(germanListingYahooSymbols("MSFT"), ["MSF.DE", "MSF.F", "MSFT.DE", "MSFT.F"]);
     assert.deepEqual(germanListingYahooSymbols("AMZN"), ["AMZ.DE", "AMZ.F", "AMZN.DE", "AMZN.F"]);
   });
+
+  it("does not truncate digit tickers and maps Meta to FB2A.DE", () => {
+    assert.deepEqual(germanListingYahooSymbols("FB2A"), [
+      "FB2A.DE",
+      "FB2A.F",
+      "FB2AD.XC",
+      "FB2AD.XD",
+    ]);
+    assert.deepEqual(germanListingYahooSymbols("META"), [
+      "FB2A.DE",
+      "FB2A.F",
+      "FB2AD.XC",
+      "FB2AD.XD",
+    ]);
+    assert.ok(!germanListingYahooSymbols("FB2A").includes("FB2.DE"));
+  });
 });
 
 describe("t212TickerToYahoo", () => {
   it("maps Xetra US names to German Yahoo symbols", () => {
     assert.equal(t212TickerToYahoo("MSFTd_EQ"), "MSF.DE");
     assert.equal(t212TickerToYahoo("AMZd_EQ"), "AMZ.DE");
+    assert.equal(t212TickerToYahoo("FB2Ad_EQ"), "FB2A.DE");
+    assert.equal(t212TickerToYahoo("FB2AD_EQ"), "FB2A.DE");
   });
 
   it("maps Amsterdam and London listings", () => {
@@ -62,6 +93,27 @@ describe("t212TickerToYahoo", () => {
   it("keeps US tickers bare", () => {
     assert.equal(t212TickerToYahoo("AAPL_US_EQ"), "AAPL");
     assert.equal(t212TickerToYahoo("BRK_B_US_EQ"), "BRK-B");
+  });
+
+  it("does not remap US tickers ending in D to Xetra (GILD, CRWD, SCHD)", () => {
+    assert.equal(t212TickerToYahoo("GILD_US_EQ"), "GILD");
+    assert.equal(t212TickerToYahoo("CRWD_US_EQ"), "CRWD");
+    assert.equal(t212TickerToYahoo("SCHD_US_EQ"), "SCHD");
+    assert.deepEqual(parseT212Ticker("GILD_US_EQ"), {
+      base: "GILD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
+    assert.deepEqual(parseT212Ticker("CRWD_US_EQ"), {
+      base: "CRWD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
+    assert.deepEqual(parseT212Ticker("SCHD_US_EQ"), {
+      base: "SCHD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
   });
 });
 
@@ -76,5 +128,13 @@ describe("t212TickerToYahooCandidates", () => {
     const c = t212TickerToYahooCandidates("MSFTd_EQ", "EUR");
     assert.equal(c[0], "MSF.DE");
     assert.ok(c.indexOf("MSF.DE") < c.indexOf("MSFT"));
+  });
+
+  it("does not include FB2.DE or METD for Xetra Meta", () => {
+    const c = t212TickerToYahooCandidates("FB2Ad_EQ", "EUR");
+    assert.equal(c[0], "FB2A.DE");
+    assert.ok(!c.includes("FB2.DE"));
+    assert.ok(!c.includes("METD"));
+    assert.ok(!c.includes("FB2AD"));
   });
 });
