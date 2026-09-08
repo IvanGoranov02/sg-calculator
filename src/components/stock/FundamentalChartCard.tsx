@@ -54,7 +54,7 @@ type FundamentalChartCardProps = {
   className?: string;
   /** One-line growth vs prior period (last two points in range). */
   growthNote?: string | null;
-  /** Multi-horizon growth pill badges (1Y / 2Y / 5Y / 10Y). */
+  /** Multi-horizon growth pill badges (1Y / 2Y / 3Y / 4Y). */
   growthPills?: GrowthPillsEntry[] | null;
 };
 
@@ -112,8 +112,8 @@ export function FundamentalChartCard({
     () => ({
       oneYear: t("chartsFund.pill1Y"),
       twoYear: t("chartsFund.pill2Y"),
-      fiveYear: t("chartsFund.pill5Y"),
-      tenYear: t("chartsFund.pill10Y"),
+      threeYear: t("chartsFund.pill3Y"),
+      fourYear: t("chartsFund.pill4Y"),
     }),
     [t],
   );

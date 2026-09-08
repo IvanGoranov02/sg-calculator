@@ -1,18 +1,35 @@
-/** Multi-horizon growth percentages for chart pill badges (1Y / 2Y / 5Y / 10Y). */
+/** Multi-horizon growth percentages for chart pill badges (1Y / 2Y / 3Y / 4Y). */
 
 export type GrowthPills = {
   oneYear: number | null;
   twoYear: number | null;
-  fiveYear: number | null;
-  tenYear: number | null;
+  threeYear: number | null;
+  fourYear: number | null;
 };
 
 const EMPTY_PILLS: GrowthPills = {
   oneYear: null,
   twoYear: null,
-  fiveYear: null,
-  tenYear: null,
+  threeYear: null,
+  fourYear: null,
 };
+
+/** Share-count metrics: decreasing shares is positive (green), increasing is negative (red). */
+const SHARE_COUNT_GROWTH_KEYS = new Set([
+  "dilutedShares",
+  "dilutedAverageShares",
+  "sharesOutstanding",
+  "weightedAverageShares",
+]);
+
+export function isShareCountGrowthKey(key: string): boolean {
+  return SHARE_COUNT_GROWTH_KEYS.has(key);
+}
+
+/** Whether a growth pill percentage should render with positive (green) styling. */
+export function growthPillColorPositive(pct: number, invertColors = false): boolean {
+  return invertColors ? pct <= 0 : pct >= 0;
+}
 
 function cagr(start: number, endVal: number, years: number): number | null {
   if (start <= 0 || endVal < 0 || !Number.isFinite(start) || !Number.isFinite(endVal) || years <= 0) {
@@ -22,7 +39,7 @@ function cagr(start: number, endVal: number, years: number): number | null {
 }
 
 /**
- * Compares the latest finite value to 1/2/5/10 years earlier.
+ * Compares the latest finite value to 1/2/3/4 years earlier.
  * `periodsPerYear` is 1 for annual rows, 4 for quarterly rows, ~252 for daily price bars.
  */
 export function computeGrowthPills(values: (number | null)[], periodsPerYear: number): GrowthPills {
@@ -60,17 +77,17 @@ export function computeGrowthPills(values: (number | null)[], periodsPerYear: nu
     return s != null && s > 0 && end >= 0 ? cagr(s, end, 2) : null;
   })();
 
-  const fiveYear = (() => {
-    const s = startVal(5 * periodsPerYear);
-    return s != null && s > 0 && end >= 0 ? cagr(s, end, 5) : null;
+  const threeYear = (() => {
+    const s = startVal(3 * periodsPerYear);
+    return s != null && s > 0 && end >= 0 ? cagr(s, end, 3) : null;
   })();
 
-  const tenYear = (() => {
-    const s = startVal(10 * periodsPerYear);
-    return s != null && s > 0 && end >= 0 ? cagr(s, end, 10) : null;
+  const fourYear = (() => {
+    const s = startVal(4 * periodsPerYear);
+    return s != null && s > 0 && end >= 0 ? cagr(s, end, 4) : null;
   })();
 
-  return { oneYear, twoYear, fiveYear, tenYear };
+  return { oneYear, twoYear, threeYear, fourYear };
 }
 
 export function extractSeriesValues(
@@ -96,6 +113,8 @@ export function growthPillsForKey(
 export type GrowthPillsEntry = {
   label?: string;
   pills: GrowthPills;
+  /** When true, decreasing values render green and increasing values render red. */
+  invertColors?: boolean;
 };
 
 export function growthPillsEntries(
@@ -106,5 +125,6 @@ export function growthPillsEntries(
   return keys.map(({ key, label }) => ({
     label,
     pills: growthPillsForKey(rows, key, freq),
+    invertColors: isShareCountGrowthKey(key),
   }));
 }
