@@ -10,11 +10,12 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-/** True only on Vercel Production when a database URL is already configured. */
+/** True only on Vercel Production when DATABASE_URL and DIRECT_URL are configured. */
 export function shouldApplyPrismaSchema(env = process.env) {
   const vercelEnv = env.VERCEL_ENV ?? "";
   const hasDatabaseUrl = Boolean(env.DATABASE_URL && String(env.DATABASE_URL).trim());
-  return vercelEnv === "production" && hasDatabaseUrl;
+  const hasDirectUrl = Boolean(env.DIRECT_URL && String(env.DIRECT_URL).trim());
+  return vercelEnv === "production" && hasDatabaseUrl && hasDirectUrl;
 }
 
 export function prismaBuildScriptName(env = process.env) {
@@ -22,6 +23,15 @@ export function prismaBuildScriptName(env = process.env) {
 }
 
 function main() {
+  const gen = spawnSync("npx", ["prisma", "generate"], {
+    stdio: "inherit",
+    env: process.env,
+    shell: process.platform === "win32",
+  });
+  if (gen.status !== 0) {
+    process.exit(gen.status === null ? 1 : gen.status);
+  }
+
   const script = prismaBuildScriptName();
   const vercelEnv = process.env.VERCEL_ENV || "unset";
   console.log(`[build] npm run ${script} (VERCEL_ENV=${vercelEnv})`);

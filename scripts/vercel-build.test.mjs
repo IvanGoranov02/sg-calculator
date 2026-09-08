@@ -4,9 +4,13 @@ import { describe, it } from "node:test";
 import { prismaBuildScriptName, shouldApplyPrismaSchema } from "./vercel-build.mjs";
 
 describe("shouldApplyPrismaSchema", () => {
-  it("applies schema only on Vercel production with DATABASE_URL", () => {
+  it("applies schema only on Vercel production with DATABASE_URL and DIRECT_URL", () => {
     assert.equal(
-      shouldApplyPrismaSchema({ VERCEL_ENV: "production", DATABASE_URL: "postgresql://x" }),
+      shouldApplyPrismaSchema({
+        VERCEL_ENV: "production",
+        DATABASE_URL: "postgresql://x",
+        DIRECT_URL: "postgresql://x",
+      }),
       true,
     );
   });
@@ -18,9 +22,13 @@ describe("shouldApplyPrismaSchema", () => {
     );
   });
 
-  it("skips production when DATABASE_URL is missing or blank", () => {
+  it("skips production when DATABASE_URL or DIRECT_URL is missing or blank", () => {
     assert.equal(shouldApplyPrismaSchema({ VERCEL_ENV: "production" }), false);
     assert.equal(shouldApplyPrismaSchema({ VERCEL_ENV: "production", DATABASE_URL: "  " }), false);
+    assert.equal(
+      shouldApplyPrismaSchema({ VERCEL_ENV: "production", DATABASE_URL: "postgresql://x" }),
+      false,
+    );
   });
 
   it("skips local / CI (no VERCEL_ENV)", () => {
@@ -32,8 +40,16 @@ describe("shouldApplyPrismaSchema", () => {
 describe("prismaBuildScriptName", () => {
   it("maps production+db to build:with-db and everything else to build:skip-db", () => {
     assert.equal(
-      prismaBuildScriptName({ VERCEL_ENV: "production", DATABASE_URL: "postgresql://x" }),
+      prismaBuildScriptName({
+        VERCEL_ENV: "production",
+        DATABASE_URL: "postgresql://x",
+        DIRECT_URL: "postgresql://x",
+      }),
       "build:with-db",
+    );
+    assert.equal(
+      prismaBuildScriptName({ VERCEL_ENV: "production", DATABASE_URL: "postgresql://x" }),
+      "build:skip-db",
     );
     assert.equal(prismaBuildScriptName({ VERCEL_ENV: "preview" }), "build:skip-db");
     assert.equal(prismaBuildScriptName({}), "build:skip-db");
