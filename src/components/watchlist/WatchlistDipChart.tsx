@@ -5,18 +5,21 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import type { LabelProps } from "recharts";
 
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { DipRange } from "@/lib/dipFinder";
+import {
+  dipChartYDomain,
+  dipChartYTicks,
+  formatDipAxisPct,
+  type DipRange,
+} from "@/lib/dipFinder";
 import { cn } from "@/lib/utils";
 
 export type DipChartDatum = {
@@ -34,9 +37,8 @@ type WatchlistDipChartProps = {
   compact?: boolean;
 };
 
-const Y_DOMAIN_MIN = -50;
-const Y_DOMAIN_MAX = 25;
-const Y_TICKS = Array.from({ length: (Y_DOMAIN_MAX - Y_DOMAIN_MIN) / 5 + 1 }, (_, i) => Y_DOMAIN_MIN + i * 5);
+const SLOT_WIDTH_COMPACT = 26;
+const SLOT_WIDTH = 30;
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
@@ -54,43 +56,48 @@ function lerpColor(from: string, to: string, t: number): string {
 }
 
 /** Red-orange for dips, light-blue to blue for gains (matches dip-finder mock). */
-export function dipBarColor(pct: number): string {
+export function dipBarColor(pct: number, yMin: number, yMax: number): string {
   if (pct < 0) {
-    const t = Math.min(1, Math.max(0, (pct - Y_DOMAIN_MIN) / -Y_DOMAIN_MIN));
+    const span = yMin < 0 ? -yMin : 1;
+    const t = Math.min(1, Math.max(0, (pct - yMin) / span));
     return lerpColor("#7f1d1d", "#fdba74", t);
   }
-  const t = Math.min(1, Math.max(0, pct / Y_DOMAIN_MAX));
+  const span = yMax > 0 ? yMax : 1;
+  const t = Math.min(1, Math.max(0, pct / span));
   return lerpColor("#e2e8f0", "#3b82f6", t);
 }
 
-type DipBarLabelProps = LabelProps & {
-  rows: DipChartDatum[];
+type AngledXTickProps = {
+  x?: string | number;
+  y?: string | number;
+  payload?: { value?: string };
 };
 
-function DipBarLabel({ x, y, width, height, value, index, rows }: DipBarLabelProps) {
-  const entry = rows[index ?? -1];
-  if (!entry || x == null || y == null || width == null || height == null) return null;
-
-  const cx = Number(x) + Number(width) / 2;
-  const isNeg = entry.dipPct < 0;
-  const cy = isNeg ? Number(y) + Number(height) + 12 : Number(y) - 6;
-
+function AngledXTick({ x, y, payload }: AngledXTickProps) {
+  if (x == null || y == null) return null;
+  const cx = typeof x === "number" ? x : Number(x);
+  const cy = typeof y === "number" ? y : Number(y);
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
   return (
     <text
       x={cx}
       y={cy}
-      textAnchor="middle"
+      dy={8}
+      dx={-2}
+      textAnchor="end"
       fill="var(--muted-foreground)"
       fontSize={9}
       fontFamily="ui-monospace, monospace"
+      transform={`rotate(-45, ${cx}, ${cy})`}
     >
-      {value}
+      {payload?.value ?? ""}
     </text>
   );
 }
 
 export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDipChartProps) {
   const { t } = useI18n();
+  const rangeLabel = t(`watchlist.dipRange_${range}`);
 
   const sorted = [...rows]
     .filter((q) => Number.isFinite(q.dipPct))
@@ -104,92 +111,95 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
     );
   }
 
-  const barMaxSize = compact ? 14 : Math.min(22, Math.max(8, Math.floor(640 / sorted.length)));
+  const dipValues = sorted.map((r) => r.dipPct);
+  const { min: yMin, max: yMax } = dipChartYDomain(dipValues);
+  const yTicks = dipChartYTicks(yMin, yMax);
+  const slotWidth = compact ? SLOT_WIDTH_COMPACT : SLOT_WIDTH;
+  const scrollWidth = Math.max(280, sorted.length * slotWidth);
+  const barMaxSize = slotWidth - 8;
+  const yAxisLabel = t("watchlist.dipYAxisLabel", { range: rangeLabel });
 
   return (
     <div
       className={cn(
         "relative min-h-0 min-w-0 w-full",
-        compact ? "h-[min(280px,42vh)]" : "h-[min(420px,58vh)]",
+        compact ? "h-[min(300px,44vh)]" : "h-[min(440px,60vh)]",
       )}
     >
-      <div className="absolute inset-0 min-h-0 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={sorted}
-            margin={{ top: 20, right: 12, left: 8, bottom: 4 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis
-              dataKey="symbol"
-              tick={{ fill: "var(--muted-foreground)", fontSize: 9, fontFamily: "ui-monospace, monospace" }}
-              tickLine={false}
-              axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-              interval={0}
-              minTickGap={0}
-              height={32}
-            />
-            <YAxis
-              domain={[Y_DOMAIN_MIN, Y_DOMAIN_MAX]}
-              ticks={Y_TICKS}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              width={48}
-              tickFormatter={(v: number) => `${v.toFixed(1)}%`}
-              label={{
-                value: t("watchlist.dipYAxisLabel"),
-                angle: -90,
-                position: "insideLeft",
-                offset: 4,
-                style: {
-                  fill: "var(--muted-foreground)",
-                  fontSize: 11,
-                  textAnchor: "middle",
-                },
-              }}
-            />
-            <ReferenceLine y={0} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const p = payload[0].payload as (typeof sorted)[0];
-                return (
-                  <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
-                    <p className="font-mono font-medium text-foreground">{p.symbol}</p>
-                    <p className="text-muted-foreground">
-                      {t("watchlist.dipVsWindowSma", { range })}: {formatPercent(p.dipPct)}
-                    </p>
-                    {p.lookbackChangePct != null ? (
-                      <p className="text-muted-foreground">
-                        {t("watchlist.dipLookback")}: {formatPercent(p.lookbackChangePct)}
-                      </p>
-                    ) : null}
-                    {p.dipVsSma200Pct != null ? (
-                      <p className="text-muted-foreground">
-                        {t("watchlist.dipVsSma")}: {formatPercent(p.dipVsSma200Pct)}
-                      </p>
-                    ) : null}
-                    {p.sma200 != null ? (
-                      <p className="text-muted-foreground">
-                        {t("watchlist.sma200")}: {p.sma200.toFixed(2)}
-                      </p>
-                    ) : null}
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey="dipPct" maxBarSize={barMaxSize} radius={[2, 2, 2, 2]}>
-              {sorted.map((entry) => (
-                <Cell key={entry.symbol} fill={dipBarColor(entry.dipPct)} />
-              ))}
-              <LabelList
-                dataKey="symbol"
-                content={(props) => <DipBarLabel {...props} rows={sorted} />}
-              />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="absolute inset-0 flex min-h-0 min-w-0">
+        <div
+          className="flex w-7 shrink-0 items-center justify-center self-stretch"
+          aria-hidden
+        >
+          <span className="block max-h-full -rotate-90 whitespace-nowrap text-[11px] leading-none text-muted-foreground">
+            {yAxisLabel}
+          </span>
+        </div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
+          <div className="h-full min-w-full" style={{ width: `max(100%, ${scrollWidth}px)` }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={sorted}
+                margin={{ top: 12, right: 12, left: 2, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis
+                  dataKey="symbol"
+                  tick={AngledXTick}
+                  tickLine={false}
+                  axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                  interval={0}
+                  minTickGap={0}
+                  height={52}
+                />
+                <YAxis
+                  domain={[yMin, yMax]}
+                  ticks={yTicks}
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                  tickFormatter={formatDipAxisPct}
+                />
+                <ReferenceLine y={0} stroke="rgba(255,255,255,0.35)" strokeWidth={1.5} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const p = payload[0].payload as (typeof sorted)[0];
+                    return (
+                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                        <p className="font-mono font-medium text-foreground">{p.symbol}</p>
+                        <p className="text-muted-foreground">
+                          {t("watchlist.dipVsWindowSma", { range: rangeLabel })}: {formatPercent(p.dipPct)}
+                        </p>
+                        {p.lookbackChangePct != null ? (
+                          <p className="text-muted-foreground">
+                            {t("watchlist.dipLookback")}: {formatPercent(p.lookbackChangePct)}
+                          </p>
+                        ) : null}
+                        {p.dipVsSma200Pct != null ? (
+                          <p className="text-muted-foreground">
+                            {t("watchlist.dipVsSma")}: {formatPercent(p.dipVsSma200Pct)}
+                          </p>
+                        ) : null}
+                        {p.sma200 != null ? (
+                          <p className="text-muted-foreground">
+                            {t("watchlist.sma200")}: {p.sma200.toFixed(2)}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="dipPct" maxBarSize={barMaxSize} radius={[2, 2, 2, 2]}>
+                  {sorted.map((entry) => (
+                    <Cell key={entry.symbol} fill={dipBarColor(entry.dipPct, yMin, yMax)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
     </div>
   );
