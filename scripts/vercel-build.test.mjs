@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 import { prismaBuildScriptName, shouldApplyPrismaSchema } from "./vercel-build.mjs";
+
+const vercelJson = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "vercel.json"), "utf8"),
+);
+
+describe("vercel.json", () => {
+  it("uses npm run build so production can apply Prisma schema via vercel-build.mjs", () => {
+    assert.equal(vercelJson.buildCommand, "npm run build");
+  });
+});
 
 describe("shouldApplyPrismaSchema", () => {
   it("applies schema only on Vercel production with DATABASE_URL and DIRECT_URL", () => {
