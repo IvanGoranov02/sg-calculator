@@ -8,6 +8,9 @@ import { logApiException } from "@/lib/serverDebugLog";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
+import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
+
+export const maxDuration = 60;
 
 export async function POST() {
   const session = await auth();
@@ -133,6 +136,17 @@ export async function POST() {
         },
       });
     });
+
+    try {
+      await refreshT212DividendsCache({
+        userId,
+        environment: conn.environment,
+        apiKeyEnc: conn.apiKeyEnc,
+        apiSecretEnc: conn.apiSecretEnc,
+      });
+    } catch (e) {
+      logApiException("POST /api/trading212/sync dividends cache", e, { userId });
+    }
 
     return Response.json({
       ok: true,

@@ -42,10 +42,12 @@ export async function GET() {
   }
 
   try {
-    const items = await fetchT212HistoryDividends(conn.environment, apiKey, apiSecret);
+    const result = await fetchT212HistoryDividends(conn.environment, apiKey, apiSecret);
     return Response.json({
       connected: true,
-      dividends: recentT212DividendRows(items),
+      dividends: recentT212DividendRows(result.items),
+      partial: result.partial,
+      error: result.error,
     });
   } catch (e) {
     const status = (e as T212RequestError).status;

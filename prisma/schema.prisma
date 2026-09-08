@@ -46,6 +46,7 @@ model User {
   watchlistSymbols      WatchlistSymbol[]
   trading212Connection  Trading212Connection?
   portfolioHoldings     PortfolioHolding[]
+  manualDividends       ManualPortfolioDividend[]
 }
 
 enum Trading212Environment {
@@ -67,6 +68,11 @@ model Trading212Connection {
   apiSecretEnc String                  @db.Text
   lastSyncAt   DateTime?
   lastError    String?                 @db.Text
+  /** Cached T212 dividend history JSON (refreshed on broker sync or explicit refresh). */
+  dividendsCache         Json?
+  dividendsCachedAt      DateTime?
+  dividendsCacheError    String?         @db.Text
+  dividendsCachePartial  Boolean         @default(false)
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 }
@@ -96,6 +102,23 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/** User-entered dividend payments (merged with Trading 212 history on the Dividends view). */
+model ManualPortfolioDividend {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbolYahoo String?
+  ticker      String
+  amount      Decimal  @db.Decimal(20, 8)
+  currency    String   @default("USD")
+  paidOn      DateTime @db.Date
+  note        String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, paidOn])
 }
 
 model WatchlistSymbol {

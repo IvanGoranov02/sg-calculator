@@ -2,6 +2,7 @@
 
 import { ChevronDown, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 
@@ -28,9 +29,9 @@ import {
   usePortfolioAnalytics,
   type AnalyticsRow,
 } from "@/components/portfolio/PortfolioAnalytics";
-import { T212RecentDividends } from "@/components/portfolio/T212RecentDividends";
+import { PortfolioDividendsView } from "@/components/portfolio/PortfolioDividendsView";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
-import { periodizeAnnualDividend } from "@/lib/dividendEstimate";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { QuoteHistoryBar } from "@/lib/dipFinder";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
@@ -86,6 +87,19 @@ function formatEarnings(iso: string, locale: string): string {
 export function PortfolioClient() {
   const { t, locale } = useI18n();
   const { status } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const portfolioView = searchParams.get("view") === "dividends" ? "dividends" : "holdings";
+  const setPortfolioView = useCallback(
+    (view: "holdings" | "dividends") => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (view === "holdings") params.delete("view");
+      else params.set("view", view);
+      const q = params.toString();
+      router.replace(q ? `/portfolio?${q}` : "/portfolio", { scroll: false });
+    },
+    [router, searchParams],
+  );
   const [holdings, setHoldings] = useState<HoldingApi[]>([]);
   const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
   const [trading212, setTrading212] = useState<Trading212Api | null>(null);
@@ -115,6 +129,8 @@ export function PortfolioClient() {
 
   /** Non-error info (e.g. per-symbol sync skip or manual replacing broker row). */
   const [portfolioInfo, setPortfolioInfo] = useState<string | null>(null);
+  const [dividendsReloadToken, setDividendsReloadToken] = useState(0);
+  const [dividendsLiveRefreshToken, setDividendsLiveRefreshToken] = useState(0);
 
   const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);
@@ -185,6 +201,15 @@ export function PortfolioClient() {
     }
   }, [t]);
 
+  const refreshPortfolioData = useCallback(async () => {
+    await load();
+    setDividendsLiveRefreshToken((n) => n + 1);
+  }, [load]);
+
+  const reloadDividendsFromCache = useCallback(() => {
+    setDividendsReloadToken((n) => n + 1);
+  }, []);
+
   const runSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     setError(null);
@@ -198,6 +223,7 @@ export function PortfolioClient() {
         return false;
       }
       await load();
+      reloadDividendsFromCache();
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
         setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
       }
@@ -209,7 +235,7 @@ export function PortfolioClient() {
     } finally {
       setSyncing(false);
     }
-  }, [load, t]);
+  }, [load, reloadDividendsFromCache, t]);
 
   useEffect(() => {
     if (status === "authenticated") void load();
@@ -477,19 +503,6 @@ export function PortfolioClient() {
     [holdingSymbols, quotes],
   );
 
-  /** Sums est. annual dividend by holding currency (same basis as table column). */
-  const dividendTotalsByCurrency = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const { h, estAnnual } of rows) {
-      if (estAnnual == null || !Number.isFinite(estAnnual) || estAnnual <= 0) continue;
-      const c =
-        typeof h.currency === "string" && h.currency.trim().length >= 3
-          ? h.currency.trim().toUpperCase().slice(0, 8)
-          : "USD";
-      map.set(c, (map.get(c) ?? 0) + estAnnual);
-    }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [rows]);
 
   const analytics = usePortfolioAnalytics(analyticsRows, fx);
 
@@ -527,7 +540,7 @@ export function PortfolioClient() {
           type="button"
           variant="outline"
           className="w-full shrink-0 border-white/15 sm:w-auto"
-          onClick={() => void load()}
+          onClick={() => void refreshPortfolioData()}
           disabled={loading}
           aria-busy={loading}
         >
@@ -536,6 +549,16 @@ export function PortfolioClient() {
         </Button>
       </div>
 
+      <Tabs
+        value={portfolioView}
+        onValueChange={(v) => setPortfolioView(v === "dividends" ? "dividends" : "holdings")}
+      >
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="holdings">{t("portfolio.tabHoldings")}</TabsTrigger>
+          <TabsTrigger value="dividends">{t("portfolio.tabDividends")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="holdings" className="mt-6 space-y-6 sm:space-y-8">
       {error ? (
         <p id="portfolio-page-error" className="text-sm text-red-400" role="alert">
           {error}
@@ -793,61 +816,6 @@ export function PortfolioClient() {
 
       {analytics ? <PortfolioMoversSection analytics={analytics} /> : null}
 
-      <T212RecentDividends connected={!!trading212?.connected} />
-
-      <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
-
-      {holdings.length > 0 ? (
-        <Card className="border border-emerald-500/25 bg-emerald-950/25">
-          <CardHeader className="space-y-1.5 px-4 pb-2 sm:px-6">
-            <CardTitle className="text-base leading-snug sm:text-lg">{t("portfolio.dividendSummaryTitle")}</CardTitle>
-            <CardDescription className="text-xs leading-relaxed sm:text-sm">
-              {t("portfolio.dividendSummaryHint")}
-            </CardDescription>
-          </CardHeader>
-          <div className="px-4 pb-6 sm:px-6">
-            {dividendTotalsByCurrency.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("portfolio.dividendNoData")}</p>
-            ) : (
-              <div className="flex flex-col gap-6">
-                {dividendTotalsByCurrency.map(([currency, sum]) => {
-                  const parts = periodizeAnnualDividend(sum);
-                  if (!parts) return null;
-                  return (
-                    <div key={currency} className="flex flex-wrap gap-6 sm:gap-8">
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {currency} · {t("portfolio.dividendPerYearLabel")}
-                        </p>
-                        <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight text-emerald-400 sm:text-2xl">
-                          {fmtMoney(parts.annual, currency)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {t("portfolio.dividendPerMonthLabel")}
-                        </p>
-                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-emerald-400/90 sm:text-xl">
-                          {fmtMoney(parts.month, currency)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          {t("portfolio.dividendPerDayLabel")}
-                        </p>
-                        <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-emerald-400/90 sm:text-xl">
-                          {fmtMoney(parts.day, currency)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </Card>
-      ) : null}
-
       <Card className="border-white/10 bg-zinc-900/50">
         <CardHeader className="space-y-1 pb-2 sm:pb-6">
           <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
@@ -1023,6 +991,15 @@ export function PortfolioClient() {
           ) : null}
         </div>
       </details>
+        </TabsContent>
+
+        <TabsContent value="dividends" className="mt-6">
+          <PortfolioDividendsView
+            reloadToken={dividendsReloadToken}
+            liveRefreshToken={dividendsLiveRefreshToken}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

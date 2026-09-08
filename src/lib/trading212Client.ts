@@ -57,6 +57,21 @@ export type T212RequestError = Error & {
   rateLimitReset?: number;
 };
 
+export type T212PaginatedFetchResult<T> = {
+  items: T[];
+  /** True when pagination stopped early (rate limit, error, or maxPages). */
+  partial: boolean;
+  error?: string;
+};
+
+const T212_MIN_REQUEST_INTERVAL_MS = 10_000;
+const T212_429_DEFAULT_BACKOFF_MS = 10_500;
+const T212_MAX_429_RETRIES = 4;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function buildAuthHeader(apiKey: string, apiSecret: string): string {
   const raw = `${apiKey}:${apiSecret}`;
   const b64 = Buffer.from(raw, "utf8").toString("base64");
@@ -174,14 +189,17 @@ export async function fetchT212HistoryDividends(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
-  options?: { maxPages?: number },
-): Promise<T212HistoryDividendItem[]> {
+  options?: { maxPages?: number; minRequestIntervalMs?: number },
+): Promise<T212PaginatedFetchResult<T212HistoryDividendItem>> {
   return fetchAllT212Paginated<T212HistoryDividendItem>(
     environment,
     apiKey,
     apiSecret,
     "/api/v0/equity/history/dividends",
-    { maxPages: options?.maxPages ?? 2 },
+    {
+      maxPages: options?.maxPages ?? 6,
+      minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
+    },
   );
 }
 
@@ -191,24 +209,66 @@ export async function fetchAllT212Paginated<T>(
   apiKey: string,
   apiSecret: string,
   initialPath: string,
-  options?: { maxPages?: number },
-): Promise<T[]> {
+  options?: { maxPages?: number; minRequestIntervalMs?: number },
+): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
+  const minRequestIntervalMs = options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS;
   const out: T[] = [];
   let path: string | null = initialPath.includes("?")
     ? initialPath
     : `${initialPath}?limit=50`;
   let pages = 0;
+  let lastRequestAt = 0;
+  let partial = false;
+  let error: string | undefined;
 
-  while (path && pages < maxPages) {
-    const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, path);
-    const page: T212Paginated<T> = result.data;
-    pages += 1;
-    if (Array.isArray(page.items)) {
-      out.push(...page.items);
+  async function waitForSlot(): Promise<void> {
+    const elapsed = Date.now() - lastRequestAt;
+    if (lastRequestAt > 0 && elapsed < minRequestIntervalMs) {
+      await sleep(minRequestIntervalMs - elapsed);
     }
-    path = page.nextPagePath;
   }
 
-  return out;
+  while (path && pages < maxPages) {
+    const pagePath = path;
+    let retries429 = 0;
+    for (;;) {
+      try {
+        await waitForSlot();
+        lastRequestAt = Date.now();
+        const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, pagePath);
+        const page: T212Paginated<T> = result.data;
+        pages += 1;
+        if (Array.isArray(page.items)) {
+          out.push(...page.items);
+        }
+        path = page.nextPagePath;
+        break;
+      } catch (e) {
+        const status = (e as T212RequestError).status;
+        if (status === 429 && retries429 < T212_MAX_429_RETRIES) {
+          retries429 += 1;
+          const reset = (e as T212RequestError).rateLimitReset;
+          const waitMs =
+            reset != null && reset > Date.now()
+              ? Math.min(reset - Date.now() + 250, 120_000)
+              : T212_429_DEFAULT_BACKOFF_MS * retries429;
+          await sleep(waitMs);
+          continue;
+        }
+        partial = true;
+        error =
+          e instanceof Error ? e.message.slice(0, 500) : "Trading 212 request failed during pagination";
+        path = null;
+        break;
+      }
+    }
+  }
+
+  if (path && pages >= maxPages) {
+    partial = true;
+    if (!error) error = "Trading 212 dividend history truncated (page limit reached).";
+  }
+
+  return { items: out, partial, error };
 }
