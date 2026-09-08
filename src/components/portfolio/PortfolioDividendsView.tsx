@@ -48,11 +48,14 @@ function formatMonthLabel(month: string, locale: string): string {
 }
 
 type PortfolioDividendsViewProps = {
-  refreshToken?: number;
-  onRefresh?: () => void;
+  reloadToken?: number;
+  liveRefreshToken?: number;
 };
 
-export function PortfolioDividendsView({ refreshToken = 0, onRefresh }: PortfolioDividendsViewProps) {
+export function PortfolioDividendsView({
+  reloadToken = 0,
+  liveRefreshToken = 0,
+}: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
   const [data, setData] = useState<PortfolioDividendsPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,9 +105,14 @@ export function PortfolioDividendsView({ refreshToken = 0, onRefresh }: Portfoli
   }, [load]);
 
   useEffect(() => {
-    if (!initialLoadDone.current || refreshToken === 0) return;
+    if (!initialLoadDone.current || reloadToken === 0) return;
+    void load(false);
+  }, [reloadToken, load]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current || liveRefreshToken === 0) return;
     void load(true);
-  }, [refreshToken, load]);
+  }, [liveRefreshToken, load]);
 
   const pillLabels = useMemo(
     () => ({
@@ -139,7 +147,6 @@ export function PortfolioDividendsView({ refreshToken = 0, onRefresh }: Portfoli
         return;
       }
       await load(false);
-      onRefresh?.();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
@@ -176,7 +183,6 @@ export function PortfolioDividendsView({ refreshToken = 0, onRefresh }: Portfoli
       setPaidOn("");
       setNote("");
       await load(false);
-      onRefresh?.();
     } catch {
       setAddError(t("portfolio.saveNetworkError"));
     } finally {

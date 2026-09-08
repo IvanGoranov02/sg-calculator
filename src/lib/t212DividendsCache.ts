@@ -15,6 +15,81 @@ export type T212DividendsCacheRead = {
   error: string | null;
 };
 
+export function t212DividendPaymentKey(item: T212HistoryDividendItem): string {
+  const ticker = typeof item.ticker === "string" ? item.ticker.trim() : "";
+  const paidOn = typeof item.paidOn === "string" ? item.paidOn.trim() : "";
+  const amount = item.amount != null ? String(item.amount) : "";
+  const currency =
+    typeof item.currency === "string" ? item.currency.trim().toUpperCase().slice(0, 8) : "";
+  return `${ticker}|${paidOn}|${amount}|${currency}`;
+}
+
+/** Union by stable payment key — never drops previously cached rows. */
+export function mergeT212DividendItems(
+  prev: T212HistoryDividendItem[],
+  incoming: T212HistoryDividendItem[],
+): T212HistoryDividendItem[] {
+  const map = new Map<string, T212HistoryDividendItem>();
+  for (const item of prev) map.set(t212DividendPaymentKey(item), item);
+  for (const item of incoming) map.set(t212DividendPaymentKey(item), item);
+  return [...map.values()].sort((a, b) => {
+    const ta = Date.parse(a.paidOn ?? "") || 0;
+    const tb = Date.parse(b.paidOn ?? "") || 0;
+    return tb - ta;
+  });
+}
+
+export type T212DividendsCacheWriteDecision = {
+  items: T212HistoryDividendItem[];
+  partial: boolean;
+  error: string | null;
+  replaced: boolean;
+};
+
+/** Decide what to persist without shrinking a fuller cache on partial/truncated fetches. */
+export function decideT212DividendsCacheWrite(
+  prevItems: T212HistoryDividendItem[],
+  fetch: T212PaginatedFetchResult<T212HistoryDividendItem>,
+): T212DividendsCacheWriteDecision {
+  if (fetch.items.length === 0 && fetch.partial) {
+    return {
+      items: prevItems,
+      partial: true,
+      error: fetch.error ?? "Trading 212 dividend fetch returned no rows.",
+      replaced: false,
+    };
+  }
+
+  const merged = mergeT212DividendItems(prevItems, fetch.items);
+
+  if (fetch.partial) {
+    return {
+      items: merged,
+      partial: true,
+      error: fetch.error ?? null,
+      replaced: merged.length > prevItems.length,
+    };
+  }
+
+  if (prevItems.length === 0 || fetch.items.length >= prevItems.length) {
+    return {
+      items: merged,
+      partial: false,
+      error: null,
+      replaced: true,
+    };
+  }
+
+  return {
+    items: merged,
+    partial: true,
+    error:
+      fetch.error ??
+      "Trading 212 returned fewer dividend rows than cache; kept merged history.",
+    replaced: false,
+  };
+}
+
 function parseCachedItems(raw: unknown): T212HistoryDividendItem[] {
   if (!Array.isArray(raw)) return [];
   return raw as T212HistoryDividendItem[];
@@ -50,24 +125,34 @@ export async function refreshT212DividendsCache(input: {
 
   const prev = await prisma.trading212Connection.findUnique({
     where: { userId: input.userId },
-    select: { dividendsCache: true },
+    select: {
+      dividendsCache: true,
+      dividendsCachedAt: true,
+      dividendsCachePartial: true,
+      dividendsCacheError: true,
+    },
   });
-  const merged =
-    result.items.length > 0
-      ? result.items
-      : parseCachedItems(prev?.dividendsCache);
+  const prevItems = parseCachedItems(prev?.dividendsCache);
+  const decision = decideT212DividendsCacheWrite(prevItems, result);
+
+  const shouldTouchCachedAt =
+    decision.replaced || prevItems.length === 0 || decision.items.length > prevItems.length;
 
   await prisma.trading212Connection.update({
     where: { userId: input.userId },
     data: {
-      dividendsCache: merged,
-      dividendsCachedAt: new Date(),
-      dividendsCachePartial: result.partial,
-      dividendsCacheError: result.error ?? null,
+      dividendsCache: decision.items,
+      dividendsCachedAt: shouldTouchCachedAt ? new Date() : (prev?.dividendsCachedAt ?? new Date()),
+      dividendsCachePartial: decision.partial,
+      dividendsCacheError: decision.error,
     },
   });
 
-  return { ...result, items: merged };
+  return {
+    items: decision.items,
+    partial: decision.partial,
+    error: decision.error ?? undefined,
+  };
 }
 
 export async function loadT212DividendsForUser(
@@ -87,11 +172,21 @@ export async function loadT212DividendsForUser(
         apiKeyEnc: conn.apiKeyEnc,
         apiSecretEnc: conn.apiSecretEnc,
       });
+      const updated = await prisma.trading212Connection.findUnique({
+        where: { userId },
+        select: {
+          dividendsCache: true,
+          dividendsCachedAt: true,
+          dividendsCachePartial: true,
+          dividendsCacheError: true,
+        },
+      });
+      const read = readT212DividendsCache(updated);
       return {
         items: result.items,
-        cachedAt: new Date().toISOString(),
+        cachedAt: read.cachedAt,
         partial: result.partial,
-        error: result.error ?? null,
+        error: result.error ?? read.error,
       };
     } catch (e) {
       const cached = readT212DividendsCache(conn);

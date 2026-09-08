@@ -122,7 +122,8 @@ export function PortfolioClient() {
 
   /** Non-error info (e.g. per-symbol sync skip or manual replacing broker row). */
   const [portfolioInfo, setPortfolioInfo] = useState<string | null>(null);
-  const [dividendsRefreshToken, setDividendsRefreshToken] = useState(0);
+  const [dividendsReloadToken, setDividendsReloadToken] = useState(0);
+  const [dividendsLiveRefreshToken, setDividendsLiveRefreshToken] = useState(0);
 
   const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);
@@ -195,8 +196,12 @@ export function PortfolioClient() {
 
   const refreshPortfolioData = useCallback(async () => {
     await load();
-    setDividendsRefreshToken((n) => n + 1);
+    setDividendsLiveRefreshToken((n) => n + 1);
   }, [load]);
+
+  const reloadDividendsFromCache = useCallback(() => {
+    setDividendsReloadToken((n) => n + 1);
+  }, []);
 
   const runSync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
@@ -211,7 +216,7 @@ export function PortfolioClient() {
         return false;
       }
       await load();
-      setDividendsRefreshToken((n) => n + 1);
+      reloadDividendsFromCache();
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
         setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
       }
@@ -223,7 +228,7 @@ export function PortfolioClient() {
     } finally {
       setSyncing(false);
     }
-  }, [load, t]);
+  }, [load, reloadDividendsFromCache, t]);
 
   useEffect(() => {
     if (status === "authenticated") void load();
@@ -971,7 +976,10 @@ export function PortfolioClient() {
         </TabsContent>
 
         <TabsContent value="dividends" className="mt-6">
-          <PortfolioDividendsView refreshToken={dividendsRefreshToken} onRefresh={() => void refreshPortfolioData()} />
+          <PortfolioDividendsView
+            reloadToken={dividendsReloadToken}
+            liveRefreshToken={dividendsLiveRefreshToken}
+          />
         </TabsContent>
       </Tabs>
     </div>
