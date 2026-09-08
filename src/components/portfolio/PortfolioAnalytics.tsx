@@ -20,6 +20,22 @@ export type AnalyticsRow = {
 
 type Props = { rows: AnalyticsRow[]; fx: PortfolioFxRates };
 
+export type PortfolioAnalyticsData = {
+  base: string;
+  totalValue: number;
+  totalCost: number;
+  totalPl: number;
+  totalPlPct: number | null;
+  totalIncome: number;
+  portfolioYield: number | null;
+  unconverted: number;
+  holdings: { symbol: string; value: number }[];
+  sectors: { name: string; value: number }[];
+  hasRealSectors: boolean;
+  best: { symbol: string; plPct: number }[];
+  worst: { symbol: string; plPct: number }[];
+};
+
 function money(n: number, currency: string): string {
   try {
     return new Intl.NumberFormat("en-US", {
@@ -52,7 +68,7 @@ const SECTOR_COLORS = [
   "#22d3ee", "#f472b6", "#818cf8", "#fb923c", "#4ade80", "#94a3b8",
 ];
 
-export function PortfolioAnalytics({ rows, fx }: Props) {
+export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates): PortfolioAnalyticsData | null {
   const { t } = useI18n();
 
   const a = useMemo(() => {
@@ -116,83 +132,133 @@ export function PortfolioAnalytics({ rows, fx }: Props) {
   }, [rows, fx, t]);
 
   if (a.totalValue <= 0) return null;
+  return a;
+}
 
-  const pctOf = (v: number) => (a.totalValue > 0 ? (v / a.totalValue) * 100 : 0);
+function pctOf(totalValue: number, v: number) {
+  return totalValue > 0 ? (v / totalValue) * 100 : 0;
+}
+
+/** 1. Summary metrics + holdings bars visualization */
+export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAnalyticsData }) {
+  const { t } = useI18n();
+  const a = analytics;
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <SummaryCard
+        icon={<Wallet className="size-4" />}
+        label={t("portfolioAnalytics.totalValue")}
+        value={money(a.totalValue, a.base)}
+      />
+      <SummaryCard
+        icon={a.totalPl >= 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}
+        label={t("portfolioAnalytics.totalPl")}
+        value={money(a.totalPl, a.base)}
+        sub={a.totalPlPct != null ? `${a.totalPlPct >= 0 ? "+" : ""}${a.totalPlPct.toFixed(1)}%` : undefined}
+        tone={a.totalPl >= 0 ? "pos" : "neg"}
+      />
+      <SummaryCard
+        icon={<TrendingUp className="size-4" />}
+        label={t("portfolioAnalytics.annualIncome")}
+        value={money(a.totalIncome, a.base)}
+        sub={a.portfolioYield != null ? t("portfolioAnalytics.yieldOnValue", { pct: a.portfolioYield.toFixed(2) }) : undefined}
+      />
+      <SummaryCard
+        icon={<PieChart className="size-4" />}
+        label={t("portfolioAnalytics.holdings")}
+        value={String(a.holdings.length)}
+        sub={a.unconverted > 0 ? t("portfolioAnalytics.unconverted", { n: a.unconverted }) : undefined}
+      />
+    </div>
+  );
+}
+
+/** 3. Allocation by holding (holdings bars visualization) */
+export function PortfolioAllocationSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
+  const { t } = useI18n();
+  const a = analytics;
+
+  return (
+    <Card className="border-white/10 bg-zinc-900/40">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
+        <CardDescription>{t("portfolioAnalytics.allocationDesc", { base: a.base })}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {a.holdings.slice(0, 8).map((h) => (
+          <BarRow
+            key={h.symbol}
+            label={h.symbol}
+            pct={pctOf(a.totalValue, h.value)}
+            value={money(h.value, a.base)}
+            color="#34d399"
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 4. Sector allocation */
+export function PortfolioSectorSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
+  const { t } = useI18n();
+  const a = analytics;
+
+  if (!a.hasRealSectors) return null;
+
+  return (
+    <Card className="border-white/10 bg-zinc-900/40">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
+        <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {a.sectors.map((s, i) => (
+          <BarRow
+            key={s.name}
+            label={s.name}
+            pct={pctOf(a.totalValue, s.value)}
+            value={`${pctOf(a.totalValue, s.value).toFixed(0)}%`}
+            color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+          />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** 6. Movers */
+export function PortfolioMoversSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
+  const { t } = useI18n();
+  const a = analytics;
+
+  if (a.best.length === 0) return null;
+
+  return (
+    <Card className="border-white/10 bg-zinc-900/40">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{t("portfolioAnalytics.moversTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <MoverList title={t("portfolioAnalytics.topGainers")} items={a.best} tone="pos" />
+        <MoverList title={t("portfolioAnalytics.topLosers")} items={a.worst} tone="neg" />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** @deprecated Use section components with usePortfolioAnalytics in PortfolioClient */
+export function PortfolioAnalytics({ rows, fx }: Props) {
+  const analytics = usePortfolioAnalytics(rows, fx);
+  if (!analytics) return null;
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          icon={<Wallet className="size-4" />}
-          label={t("portfolioAnalytics.totalValue")}
-          value={money(a.totalValue, a.base)}
-        />
-        <SummaryCard
-          icon={a.totalPl >= 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}
-          label={t("portfolioAnalytics.totalPl")}
-          value={money(a.totalPl, a.base)}
-          sub={a.totalPlPct != null ? `${a.totalPlPct >= 0 ? "+" : ""}${a.totalPlPct.toFixed(1)}%` : undefined}
-          tone={a.totalPl >= 0 ? "pos" : "neg"}
-        />
-        <SummaryCard
-          icon={<TrendingUp className="size-4" />}
-          label={t("portfolioAnalytics.annualIncome")}
-          value={money(a.totalIncome, a.base)}
-          sub={a.portfolioYield != null ? t("portfolioAnalytics.yieldOnValue", { pct: a.portfolioYield.toFixed(2) }) : undefined}
-        />
-        <SummaryCard
-          icon={<PieChart className="size-4" />}
-          label={t("portfolioAnalytics.holdings")}
-          value={String(a.holdings.length)}
-          sub={a.unconverted > 0 ? t("portfolioAnalytics.unconverted", { n: a.unconverted }) : undefined}
-        />
-      </div>
-
-      <div className={cn("grid gap-4", a.hasRealSectors && "lg:grid-cols-2")}>
-        <Card className="border-white/10 bg-zinc-900/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
-            <CardDescription>{t("portfolioAnalytics.allocationDesc", { base: a.base })}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {a.holdings.slice(0, 8).map((h) => (
-              <BarRow key={h.symbol} label={h.symbol} pct={pctOf(h.value)} value={money(h.value, a.base)} color="#34d399" />
-            ))}
-          </CardContent>
-        </Card>
-
-        {a.hasRealSectors ? (
-          <Card className="border-white/10 bg-zinc-900/40">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
-              <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {a.sectors.map((s, i) => (
-                <BarRow
-                  key={s.name}
-                  label={s.name}
-                  pct={pctOf(s.value)}
-                  value={`${pctOf(s.value).toFixed(0)}%`}
-                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-                />
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
-      </div>
-
-      {a.best.length > 0 ? (
-        <Card className="border-white/10 bg-zinc-900/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{t("portfolioAnalytics.moversTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <MoverList title={t("portfolioAnalytics.topGainers")} items={a.best} tone="pos" />
-            <MoverList title={t("portfolioAnalytics.topLosers")} items={a.worst} tone="neg" />
-          </CardContent>
-        </Card>
-      ) : null}
+      <PortfolioSummarySection analytics={analytics} />
+      <PortfolioAllocationSection analytics={analytics} />
+      <PortfolioSectorSection analytics={analytics} />
+      <PortfolioMoversSection analytics={analytics} />
     </div>
   );
 }

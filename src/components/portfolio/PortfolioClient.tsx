@@ -20,7 +20,14 @@ import {
   type PortfolioFxRates,
 } from "@/lib/portfolioFx";
 import { cn } from "@/lib/utils";
-import { PortfolioAnalytics, type AnalyticsRow } from "@/components/portfolio/PortfolioAnalytics";
+import {
+  PortfolioAllocationSection,
+  PortfolioMoversSection,
+  PortfolioSectorSection,
+  PortfolioSummarySection,
+  usePortfolioAnalytics,
+  type AnalyticsRow,
+} from "@/components/portfolio/PortfolioAnalytics";
 import { T212RecentDividends } from "@/components/portfolio/T212RecentDividends";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { periodizeAnnualDividend } from "@/lib/dividendEstimate";
@@ -484,6 +491,8 @@ export function PortfolioClient() {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [rows]);
 
+  const analytics = usePortfolioAnalytics(analyticsRows, fx);
+
   if (status === "loading") {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -566,6 +575,8 @@ export function PortfolioClient() {
           </Button>
         </div>
       ) : null}
+
+      {analytics ? <PortfolioSummarySection analytics={analytics} /> : null}
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -767,15 +778,19 @@ export function PortfolioClient() {
         </div>
       )}
 
+      {analytics ? <PortfolioAllocationSection analytics={analytics} /> : null}
+
+      {analytics ? <PortfolioSectorSection analytics={analytics} /> : null}
+
       {holdings.length > 0 ? (
         <div className="rounded-lg border border-white/10 px-4 py-4">
           <DipFinderPanel quotes={dipQuotes} history={dipHistory} compact />
         </div>
       ) : null}
 
-      <T212RecentDividends connected={!!trading212?.connected} />
+      {analytics ? <PortfolioMoversSection analytics={analytics} /> : null}
 
-      {holdings.length > 0 ? <PortfolioAnalytics rows={analyticsRows} fx={fx} /> : null}
+      <T212RecentDividends connected={!!trading212?.connected} />
 
       <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
 
