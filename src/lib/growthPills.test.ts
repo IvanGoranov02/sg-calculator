@@ -6,6 +6,7 @@ import {
   computeGrowthPills,
   growthPillsForKey,
   growthPillsEntries,
+  growthPillColorPositive,
   isShareCountGrowthKey,
 } from "@/lib/growthPills";
 
@@ -72,6 +73,16 @@ describe("isShareCountGrowthKey", () => {
     assert.equal(isShareCountGrowthKey("dilutedShares"), true);
     assert.equal(isShareCountGrowthKey("sharesOutstanding"), true);
     assert.equal(isShareCountGrowthKey("revenue"), false);
+    assert.equal(isShareCountGrowthKey("shareholdersEquity"), false);
+  });
+});
+
+describe("growthPillColorPositive", () => {
+  it("treats flat 0% as positive when share-count colors are inverted", () => {
+    assert.equal(growthPillColorPositive(0, true), true);
+    assert.equal(growthPillColorPositive(0, false), true);
+    assert.equal(growthPillColorPositive(5, true), false);
+    assert.equal(growthPillColorPositive(-5, true), true);
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { GrowthPills, GrowthPillsEntry } from "@/lib/growthPills";
+import { growthPillColorPositive, type GrowthPills, type GrowthPillsEntry } from "@/lib/growthPills";
 import { cn } from "@/lib/utils";
 
 type GrowthPillProps = {
@@ -18,7 +18,7 @@ export function GrowthPill({ label, pct, invertColors = false }: GrowthPillProps
     );
   }
   const displayPos = pct >= 0;
-  const colorPos = invertColors ? !displayPos : displayPos;
+  const colorPos = growthPillColorPositive(pct, invertColors);
   return (
     <span
       className={cn(

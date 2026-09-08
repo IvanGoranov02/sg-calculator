@@ -15,9 +15,20 @@ const EMPTY_PILLS: GrowthPills = {
 };
 
 /** Share-count metrics: decreasing shares is positive (green), increasing is negative (red). */
+const SHARE_COUNT_GROWTH_KEYS = new Set([
+  "dilutedShares",
+  "dilutedAverageShares",
+  "sharesOutstanding",
+  "weightedAverageShares",
+]);
+
 export function isShareCountGrowthKey(key: string): boolean {
-  const k = key.toLowerCase();
-  return k.includes("shares") || k.includes("sharecount");
+  return SHARE_COUNT_GROWTH_KEYS.has(key);
+}
+
+/** Whether a growth pill percentage should render with positive (green) styling. */
+export function growthPillColorPositive(pct: number, invertColors = false): boolean {
+  return invertColors ? pct <= 0 : pct >= 0;
 }
 
 function cagr(start: number, endVal: number, years: number): number | null {
