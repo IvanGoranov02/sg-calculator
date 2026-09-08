@@ -14,6 +14,18 @@ describe("buildBlockedYahooSymbols", () => {
     assert.ok(blocked.has("AMZD"));
     assert.ok(blocked.has("AMZD")); // stored key
   });
+
+  it("blocks METD trap for Xetra Meta listings", () => {
+    const blocked = buildBlockedYahooSymbols("FB2AD", "FB2Ad_EQ");
+    assert.ok(blocked.has("METD"));
+    assert.ok(blocked.has("FB2AD"));
+  });
+
+  it("blocks METD for legacy FB2AD-EQ keys without symbolT212", () => {
+    const blocked = buildBlockedYahooSymbols("FB2AD-EQ", null);
+    assert.ok(blocked.has("METD"));
+    assert.ok(blocked.has("FB2AD"));
+  });
 });
 
 describe("pickBestQuoteRow", () => {
@@ -57,6 +69,26 @@ describe("pickBestQuoteRow", () => {
     };
     assert.equal(pickBestQuoteRow([us, eu], "EUR", "MSFTd_EQ", blocked)?.resolvedYahooSymbol, "MSF.DE");
     assert.equal(pickBestQuoteRow([us], "EUR", "MSFTd_EQ", blocked), null);
+  });
+
+  it("rejects METD bear ETF for Xetra Meta (FB2Ad_EQ)", () => {
+    const blocked = buildBlockedYahooSymbols("FB2AD", "FB2Ad_EQ");
+    const bear = {
+      resolvedYahooSymbol: "METD",
+      currency: "USD",
+      price: 15.5,
+      name: "Direxion Daily META Bear 1X ETF",
+      quoteType: "ETF",
+    };
+    const eu = {
+      resolvedYahooSymbol: "FB2A.DE",
+      currency: "EUR",
+      price: 526,
+      name: "Meta Platforms Inc.",
+      quoteType: "EQUITY",
+    };
+    assert.equal(pickBestQuoteRow([bear], "EUR", "FB2Ad_EQ", blocked), null);
+    assert.equal(pickBestQuoteRow([bear, eu], "EUR", "FB2Ad_EQ", blocked)?.resolvedYahooSymbol, "FB2A.DE");
   });
 });
 
@@ -116,6 +148,24 @@ describe("isTrapQuoteRow", () => {
           quoteType: "ETF",
         },
         "AMZd_EQ",
+        blocked,
+      ),
+      true,
+    );
+  });
+
+  it("flags METD for EU Meta T212 context", () => {
+    const blocked = buildBlockedYahooSymbols("FB2AD", "FB2Ad_EQ");
+    assert.equal(
+      isTrapQuoteRow(
+        {
+          resolvedYahooSymbol: "METD",
+          currency: "USD",
+          price: 15.5,
+          name: "Direxion Daily META Bear 1X ETF",
+          quoteType: "ETF",
+        },
+        "FB2Ad_EQ",
         blocked,
       ),
       true,

@@ -15,7 +15,10 @@ export type PortfolioQuotePickRow = {
 };
 
 /** Yahoo symbols that must never be used for certain T212 EU contexts. */
-const KNOWN_TRAP_SYMBOLS = new Set(["AMZD"]);
+const KNOWN_TRAP_SYMBOLS = new Set(["AMZD", "METD"]);
+
+/** Legacy portfolio keys for Meta on Xetra (FB2AD-EQ, METAD-EQ). */
+const EU_META_STUB_KEY = /^FB2AD(-EQ)?$|^METAD(-EQ)?$/i;
 
 /**
  * Symbols to exclude from Yahoo fetch/search for a holding.
@@ -30,6 +33,10 @@ export function buildBlockedYahooSymbols(
 
   if (!symbolT212) {
     if (KNOWN_TRAP_SYMBOLS.has(stored)) blocked.add(stored);
+    if (EU_META_STUB_KEY.test(stored)) {
+      blocked.add(stored.replace(/-EQ$/i, ""));
+      for (const sym of KNOWN_TRAP_SYMBOLS) blocked.add(sym);
+    }
     return blocked;
   }
 
@@ -50,6 +57,10 @@ export function buildBlockedYahooSymbols(
 
   if (/AMZd/i.test(symbolT212)) {
     blocked.add("AMZD");
+  }
+
+  if (/FB2Ad|FB2AD|METAd|METAD/i.test(symbolT212)) {
+    blocked.add("METD");
   }
 
   for (const sym of KNOWN_TRAP_SYMBOLS) {
@@ -90,7 +101,7 @@ export function quoteCurrencyScore(
   const hold = holdingCurrency ? normalizePortfolioCurrency(holdingCurrency) : null;
   const quote = normalizePortfolioCurrency(row.currency);
   if (hold && hold === quote) return 2;
-  if (hold === "EUR" && /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW)$/i.test(row.resolvedYahooSymbol ?? "")) {
+  if (hold === "EUR" && /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM)$/i.test(row.resolvedYahooSymbol ?? "")) {
     return 1;
   }
   if (hold === "GBP" && (row.resolvedYahooSymbol ?? "").endsWith(".L")) return 1;
