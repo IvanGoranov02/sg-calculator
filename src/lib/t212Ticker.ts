@@ -52,12 +52,29 @@ function pushUnique(out: string[], sym: string) {
   out.push(x);
 }
 
+/** Known German Yahoo symbols where generic 3-char truncation is wrong (FB2A → FB2.DE). */
+const GERMAN_YAHOO_SYMBOL_OVERRIDES: Record<string, string[]> = {
+  FB2A: ["FB2A.DE", "FB2A.F", "FB2AD.XC", "FB2AD.XD"],
+  // Meta on Xetra trades as FB2A; META.* / MET.* are stale or missing on Yahoo.
+  META: ["FB2A.DE", "FB2A.F", "FB2AD.XC", "FB2AD.XD"],
+};
+
+const EUR_LISTING_SUFFIX =
+  /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM|MU|BE|MC|LS|IC|WA|CO|IR|AT|HA|HE)$/i;
+
 /** Yahoo symbols for German listings (Xetra / Frankfurt), including 3-char truncation. */
 export function germanListingYahooSymbols(base: string): string[] {
   const b = base.trim().toUpperCase();
   if (!b) return [];
+  const override = GERMAN_YAHOO_SYMBOL_OVERRIDES[b];
+  if (override) {
+    const out: string[] = [];
+    for (const sym of override) pushUnique(out, sym);
+    return out;
+  }
   const out: string[] = [];
-  if (b.length > 3) {
+  // Do not truncate tickers with digits (FB2A → FB2.* is invalid on Yahoo).
+  if (b.length > 3 && !/[0-9]/.test(b)) {
     const short = b.slice(0, 3);
     pushUnique(out, `${short}.DE`);
     pushUnique(out, `${short}.F`);
@@ -125,6 +142,13 @@ export function parseT212Ticker(ticker: string): T212ParsedTicker {
     }
   }
 
+  // Legacy / display stubs: FB2AD_EQ, METAD_EQ (uppercase venue D = Xetra, not a US bear stub).
+  if (!isNonUsListing && body.length >= 4 && body.endsWith("D") && body === body.toUpperCase()) {
+    body = body.slice(0, -1);
+    yahooSuffix = ".DE";
+    isNonUsListing = true;
+  }
+
   const base = body.replace(/_/g, "-").toUpperCase();
   return { base, yahooSuffix, isNonUsListing };
 }
@@ -167,7 +191,7 @@ export function t212TickerToYahooCandidates(
   const rest: string[] = [];
   for (const sym of out) {
     if (
-      (want === "EUR" && /\.(DE|PA|AS|MI|BR|VI|ST|OL|F|HA|HE|MU|BE|MC|SW|LS|IC|WA|CO|IR|AT)$/i.test(sym)) ||
+      (want === "EUR" && EUR_LISTING_SUFFIX.test(sym)) ||
       (want === "GBP" && /\.L$/i.test(sym)) ||
       (want === "CHF" && /\.SW$/i.test(sym))
     ) {

@@ -16,7 +16,7 @@ import {
   searchQueryForPortfolioSymbol,
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
-import { parseT212Ticker, t212TickerToYahooCandidates } from "@/lib/t212Ticker";
+import { parseT212Ticker, t212TickerToYahooCandidates, germanListingYahooSymbols } from "@/lib/t212Ticker";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["ripHistorical", "yahooSurvey"],
@@ -76,6 +76,9 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
     if (base.length >= 5 && base.endsWith("A")) {
       add(`${base.slice(0, -1)}.AS`);
     }
+    if (/^FB2AD$/i.test(base)) {
+      for (const s of germanListingYahooSymbols("FB2A")) add(s);
+    }
     for (const suf of [
       ".DE",
       ".L",
@@ -95,7 +98,12 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
     }
     if (base.length > 2 && /[A-Z]D$/.test(base)) {
       add(base.slice(0, -1));
+      if (/^FB2AD$/i.test(base)) {
+        for (const s of germanListingYahooSymbols("FB2A")) add(s);
+      }
     }
+  } else if (/^FB2AD$/i.test(u)) {
+    for (const s of germanListingYahooSymbols("FB2A")) add(s);
   }
 
   return out;
