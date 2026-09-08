@@ -5,6 +5,8 @@ import {
   computeDividendGrowth,
   dividendYieldFromDps,
   MAX_HOLDING_YEARS,
+  SHARESIGHT_BENCHMARK_EXPECTED,
+  SHARESIGHT_BENCHMARK_INPUTS,
   type DividendGrowthInputs,
 } from "@/lib/dividendGrowth";
 
@@ -19,59 +21,67 @@ const base: DividendGrowthInputs = {
   reinvest: false,
 };
 
+function near(actual: number, expected: number, tol = 1e-6): void {
+  assert.ok(Math.abs(actual - expected) < tol, `expected ${expected}, got ${actual}`);
+}
+
 describe("computeDividendGrowth", () => {
-  it("compounds the dividend per share each year (no reinvest)", () => {
+  it("matches Sharesight public calculator benchmark", () => {
+    const r = computeDividendGrowth(SHARESIGHT_BENCHMARK_INPUTS)!;
+    near(r.estimatedDividendReturn, SHARESIGHT_BENCHMARK_EXPECTED.dividends, 0.02);
+    near(r.breakdown.growth, SHARESIGHT_BENCHMARK_EXPECTED.growth, 0.02);
+    near(r.rows[0].monthlyIncome, SHARESIGHT_BENCHMARK_EXPECTED.year1Monthly, 0.02);
+  });
+
+  it("has zero growth when DRIP is off and appreciation is 0%", () => {
+    const r = computeDividendGrowth({
+      ...SHARESIGHT_BENCHMARK_INPUTS,
+      priceGrowthRate: 0,
+    })!;
+    assert.equal(r.breakdown.growth, 0);
+  });
+
+  it("pays year-1 income on starting price × shares × yield", () => {
     const r = computeDividendGrowth(base)!;
-    assert.equal(r.rows.length, 3);
-    assert.ok(Math.abs(r.rows[0].dividendPerShare - 1.1) < 1e-9);
-    assert.ok(Math.abs(r.rows[1].dividendPerShare - 1.21) < 1e-9);
-    assert.ok(Math.abs(r.rows[2].dividendPerShare - 1.331) < 1e-9);
+    near(r.rows[0].annualIncome, 50 * 100 * 0.02);
+    near(r.rows[0].dividendPerShare, 1);
     assert.equal(r.finalShares, 100);
-    assert.ok(Math.abs(r.rows[0].annualIncome - 110) < 1e-9);
+  });
+
+  it("grows yield after each year (year-2 DPS reflects prior growth)", () => {
+    const r = computeDividendGrowth(base)!;
+    near(r.rows[1].dividendPerShare, 1.1);
+    near(r.rows[2].dividendPerShare, 1.21);
   });
 
   it("computes yield on cost against the original principal", () => {
     const r = computeDividendGrowth(base)!;
     assert.equal(r.principal, 5000);
-    assert.ok(Math.abs(r.rows[0].yieldOnCostPct - 2.2) < 1e-9);
+    near(r.rows[0].yieldOnCostPct, 2);
   });
 
   it("accumulates total income across the horizon", () => {
     const r = computeDividendGrowth(base)!;
-    const expected = 110 + 121 + 133.1;
-    assert.ok(Math.abs(r.totalIncome - expected) < 1e-6);
-    assert.ok(Math.abs(r.estimatedDividendReturn - expected) < 1e-6);
+    const expected = 100 + 110 + 121;
+    near(r.totalIncome, expected);
+    near(r.estimatedDividendReturn, expected);
   });
 
   it("grows the share count when reinvesting (DRIP)", () => {
     const r = computeDividendGrowth({ ...base, reinvest: true })!;
     assert.ok(r.finalShares > 100, "shares should grow with DRIP");
-    assert.ok(Math.abs(r.rows[0].shares - 102.2) < 1e-9);
+    near(r.rows[0].shares, 102);
   });
 
-  it("adds shares from annual contributions", () => {
+  it("adds shares from annual contributions at pre-appreciation price", () => {
     const r = computeDividendGrowth({ ...base, annualContribution: 500 })!;
     assert.ok(r.finalShares > 100);
     assert.equal(r.breakdown.contributions, 1500);
   });
 
-  it("builds a portfolio breakdown that sums to final value", () => {
-    const r = computeDividendGrowth({
-      ...base,
-      annualContribution: 1000,
-      reinvest: true,
-      priceGrowthRate: 0.07,
-      years: 5,
-    })!;
-    const { breakdown } = r;
-    const sum = breakdown.principal + breakdown.contributions + breakdown.dividends + breakdown.growth;
-    assert.ok(Math.abs(sum - breakdown.totalPortfolioValue) < 1e-6);
-    assert.ok(Math.abs(breakdown.totalPortfolioValue - r.finalPortfolioValue) < 1e-6);
-  });
-
   it("tracks monthly income as annual / 12", () => {
     const r = computeDividendGrowth(base)!;
-    assert.ok(Math.abs(r.rows[0].monthlyIncome - r.rows[0].annualIncome / 12) < 1e-9);
+    near(r.rows[0].monthlyIncome, r.rows[0].annualIncome / 12);
   });
 
   it("returns null on invalid input", () => {

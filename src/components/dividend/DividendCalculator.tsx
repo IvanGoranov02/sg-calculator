@@ -175,20 +175,17 @@ export function DividendCalculator({ ticker, seed }: Props) {
   const chartData = useMemo(() => {
     if (!result) return [];
     const { principal } = result;
-    return result.rows.map((r) => {
-      const growth = r.portfolioValue - principal - r.cumulativeContributions - r.cumulativeIncome;
-      return {
-        year: r.year,
-        annualIncome: Math.round(r.annualIncome),
-        monthlyIncome: Math.round(r.monthlyIncome),
-        cumulativeIncome: Math.round(r.cumulativeIncome),
-        portfolioValue: Math.round(r.portfolioValue),
-        principal: Math.round(principal),
-        contributions: Math.round(r.cumulativeContributions),
-        dividends: Math.round(r.cumulativeIncome),
-        growth: Math.round(Math.max(0, growth)),
-      };
-    });
+    return result.rows.map((r) => ({
+      year: r.year,
+      annualIncome: Math.round(r.annualIncome),
+      monthlyIncome: Math.round(r.monthlyIncome),
+      cumulativeIncome: Math.round(r.cumulativeIncome),
+      portfolioValue: Math.round(r.portfolioValue),
+      principal: Math.round(principal),
+      contributions: Math.round(r.cumulativeContributions),
+      dividends: Math.round(r.cumulativeIncome),
+      growth: Math.round(r.cumulativeGrowth),
+    }));
   }, [result]);
 
   const yearTableRows = result?.rows ?? [];
@@ -402,15 +399,13 @@ export function DividendCalculator({ ticker, seed }: Props) {
                   </div>
                 </div>
 
-                {reinvest ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t("dividendCalc.finalShares", { shares: result.finalShares.toFixed(1) })}
-                    {" · "}
-                    {t("dividendCalc.finalPortfolio", {
-                      value: formatCurrencyCompact(result.finalPortfolioValue),
-                    })}
-                  </p>
-                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {t("dividendCalc.finalShares", { shares: result.finalShares.toFixed(1) })}
+                  {" · "}
+                  {t("dividendCalc.finalPortfolio", {
+                    value: formatCurrencyCompact(result.finalPortfolioValue),
+                  })}
+                </p>
               </>
             )}
           </CardContent>

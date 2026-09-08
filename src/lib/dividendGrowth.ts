@@ -1,6 +1,10 @@
 /**
  * Dividend portfolio projection: yield-based income, optional annual contributions,
  * DRIP, dividend growth, and share-price appreciation. Pure + deterministic for tests.
+ *
+ * Income each year: currentPrice × shares × currentYield (year 1 uses starting values).
+ * Capital growth each year: currentPrice × shares × priceGrowthRate (before contributions).
+ * Contributions and DRIP buy at the pre-appreciation price; then price and yield step up.
  */
 
 export const MAX_HOLDING_YEARS = 40;
@@ -31,6 +35,8 @@ export type DividendGrowthYear = {
   annualIncome: number;
   monthlyIncome: number;
   cumulativeIncome: number;
+  annualGrowth: number;
+  cumulativeGrowth: number;
   portfolioValue: number;
   cumulativeContributions: number;
   /** Annual income as % of the original principal. */
@@ -72,9 +78,8 @@ function buildBreakdown(
   principal: number,
   contributions: number,
   dividends: number,
-  finalPortfolioValue: number,
+  growth: number,
 ): ReturnBreakdown {
-  const growth = finalPortfolioValue - principal - contributions - dividends;
   const total = principal + contributions + dividends + growth;
   const pct = (part: number) => (total > 0 ? (part / total) * 100 : 0);
 
@@ -97,14 +102,14 @@ export function computeDividendGrowth(input: DividendGrowthInputs): DividendGrow
     shares: s0,
     dividendYield: y0,
     annualContribution,
-    dividendGrowthRate: g,
+    dividendGrowthRate: dg,
     priceGrowthRate: pg,
     reinvest,
   } = input;
   const years = clampYears(input.years);
 
   const valid =
-    [p0, s0, y0, annualContribution, g, pg].every((n) => Number.isFinite(n)) &&
+    [p0, s0, y0, annualContribution, dg, pg].every((n) => Number.isFinite(n)) &&
     p0 > 0 &&
     s0 > 0 &&
     y0 >= 0 &&
@@ -114,54 +119,63 @@ export function computeDividendGrowth(input: DividendGrowthInputs): DividendGrow
 
   const principal = s0 * p0;
   const rows: DividendGrowthYear[] = [];
+  let price = p0;
   let shares = s0;
+  let yieldRate = y0;
   let totalDividends = 0;
   let totalContributions = 0;
+  let totalGrowth = 0;
 
   for (let t = 1; t <= years; t++) {
-    const dps = p0 * y0 * (1 + g) ** t;
-    const currentPrice = p0 * (1 + pg) ** t;
-    const annualIncome = shares * dps;
-    totalDividends += annualIncome;
+    const dividendPerShare = price * yieldRate;
+    const annualIncome = price * shares * yieldRate;
+    const annualGrowth = price * shares * pg;
 
-    if (reinvest && annualIncome > 0 && currentPrice > 0) {
-      shares += annualIncome / currentPrice;
+    totalDividends += annualIncome;
+    totalGrowth += annualGrowth;
+
+    if (reinvest && annualIncome > 0 && price > 0) {
+      shares += annualIncome / price;
     }
 
-    if (annualContribution > 0 && currentPrice > 0) {
-      shares += annualContribution / currentPrice;
+    if (annualContribution > 0 && price > 0) {
+      shares += annualContribution / price;
       totalContributions += annualContribution;
     }
 
-    const portfolioValue = shares * currentPrice;
+    const endPrice = price * (1 + pg);
+    const portfolioValue = shares * endPrice;
 
     rows.push({
       year: t,
-      dividendPerShare: dps,
+      dividendPerShare,
       shares,
       annualIncome,
       monthlyIncome: annualIncome / 12,
       cumulativeIncome: totalDividends,
+      annualGrowth,
+      cumulativeGrowth: totalGrowth,
       portfolioValue,
       cumulativeContributions: totalContributions,
       yieldOnCostPct: principal > 0 ? (annualIncome / principal) * 100 : 0,
     });
+
+    price = endPrice;
+    yieldRate *= 1 + dg;
   }
 
   const last = rows[rows.length - 1];
-  const finalPrice = p0 * (1 + pg) ** years;
-  const finalPortfolioValue = shares * finalPrice;
 
   return {
     rows,
     principal,
-    breakdown: buildBreakdown(principal, totalContributions, totalDividends, finalPortfolioValue),
+    breakdown: buildBreakdown(principal, totalContributions, totalDividends, totalGrowth),
     estimatedDividendReturn: totalDividends,
-    startingAnnualIncome: s0 * p0 * y0,
+    startingAnnualIncome: p0 * s0 * y0,
     finalAnnualIncome: last.annualIncome,
     totalIncome: totalDividends,
     finalShares: last.shares,
-    finalPortfolioValue,
+    finalPortfolioValue: last.portfolioValue,
     finalYieldOnCostPct: last.yieldOnCostPct,
   };
 }
@@ -172,3 +186,21 @@ export function dividendYieldFromDps(sharePrice: number, annualDividendPerShare:
   if (!Number.isFinite(annualDividendPerShare) || annualDividendPerShare < 0) return 0;
   return annualDividendPerShare / sharePrice;
 }
+
+/** Sharesight public calculator benchmark defaults (EU page). */
+export const SHARESIGHT_BENCHMARK_INPUTS: DividendGrowthInputs = {
+  sharePrice: 100,
+  shares: 100,
+  years: 10,
+  dividendYield: 0.05,
+  annualContribution: 1000,
+  dividendGrowthRate: 0.02,
+  priceGrowthRate: 0.02,
+  reinvest: false,
+};
+
+export const SHARESIGHT_BENCHMARK_EXPECTED = {
+  dividends: 8764.83,
+  growth: 3158.66,
+  year1Monthly: 41.67,
+};
