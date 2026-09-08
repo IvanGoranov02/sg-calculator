@@ -94,6 +94,27 @@ describe("t212TickerToYahoo", () => {
     assert.equal(t212TickerToYahoo("AAPL_US_EQ"), "AAPL");
     assert.equal(t212TickerToYahoo("BRK_B_US_EQ"), "BRK-B");
   });
+
+  it("does not remap US tickers ending in D to Xetra (GILD, CRWD, SCHD)", () => {
+    assert.equal(t212TickerToYahoo("GILD_US_EQ"), "GILD");
+    assert.equal(t212TickerToYahoo("CRWD_US_EQ"), "CRWD");
+    assert.equal(t212TickerToYahoo("SCHD_US_EQ"), "SCHD");
+    assert.deepEqual(parseT212Ticker("GILD_US_EQ"), {
+      base: "GILD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
+    assert.deepEqual(parseT212Ticker("CRWD_US_EQ"), {
+      base: "CRWD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
+    assert.deepEqual(parseT212Ticker("SCHD_US_EQ"), {
+      base: "SCHD",
+      yahooSuffix: null,
+      isNonUsListing: false,
+    });
+  });
 });
 
 describe("t212TickerToYahooCandidates", () => {

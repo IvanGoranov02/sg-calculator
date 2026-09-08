@@ -46,6 +46,9 @@ const T212_COUNTRY_CODES = new Set([
   "JP",
 ]);
 
+/** Legacy uppercase Xetra venue stubs (FB2AD_EQ), not US tickers ending in D (GILD_US_EQ). */
+const UPPERCASE_XETRA_STUBS = new Set(["FB2AD", "METAD", "MSFTD", "AMZD"]);
+
 function pushUnique(out: string[], sym: string) {
   const x = sym.trim().toUpperCase();
   if (!x || out.includes(x)) return;
@@ -114,12 +117,14 @@ export function parseT212Ticker(ticker: string): T212ParsedTicker {
   let body = t.replace(/_EQ$/i, "");
   let yahooSuffix: string | null = null;
   let isNonUsListing = false;
+  let countryCodeConsumed = false;
 
   const countryMatch = body.match(/^(.+)_([A-Z]{2})$/i);
   if (countryMatch) {
     const code = countryMatch[2].toUpperCase();
     if (T212_COUNTRY_CODES.has(code)) {
       body = countryMatch[1];
+      countryCodeConsumed = true;
       if (code !== "US") {
         isNonUsListing = true;
         if (code === "UK") yahooSuffix = ".L";
@@ -142,8 +147,13 @@ export function parseT212Ticker(ticker: string): T212ParsedTicker {
     }
   }
 
-  // Legacy / display stubs: FB2AD_EQ, METAD_EQ (uppercase venue D = Xetra, not a US bear stub).
-  if (!isNonUsListing && body.length >= 4 && body.endsWith("D") && body === body.toUpperCase()) {
+  // Legacy uppercase Xetra stubs (FB2AD_EQ). Skip when _US/_DE was already parsed (GILD_US_EQ).
+  const upperBody = body.toUpperCase();
+  if (
+    !isNonUsListing &&
+    !countryCodeConsumed &&
+    UPPERCASE_XETRA_STUBS.has(upperBody)
+  ) {
     body = body.slice(0, -1);
     yahooSuffix = ".DE";
     isNonUsListing = true;
