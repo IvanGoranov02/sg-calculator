@@ -122,6 +122,40 @@ export type DipChartRow = {
   sma200: number | null;
 };
 
+export const DIP_CHART_Y_BASE_MIN = -50;
+export const DIP_CHART_Y_BASE_MAX = 25;
+
+/** Y domain: mock defaults (-50/+25) unless data exceeds them, then expand in 5% steps. */
+export function dipChartYDomain(values: number[]): { min: number; max: number } {
+  if (values.length === 0) {
+    return { min: DIP_CHART_Y_BASE_MIN, max: DIP_CHART_Y_BASE_MAX };
+  }
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  let min = DIP_CHART_Y_BASE_MIN;
+  let max = DIP_CHART_Y_BASE_MAX;
+  if (dataMin < DIP_CHART_Y_BASE_MIN) {
+    min = Math.floor(dataMin / 5) * 5;
+    if (min > dataMin) min -= 5;
+  }
+  if (dataMax > DIP_CHART_Y_BASE_MAX) {
+    max = Math.ceil(dataMax / 5) * 5;
+    if (max < dataMax) max += 5;
+  }
+  return { min, max };
+}
+
+export function dipChartYTicks(min: number, max: number): number[] {
+  const start = Math.ceil(min / 5) * 5;
+  const ticks: number[] = [];
+  for (let v = start; v <= max; v += 5) ticks.push(v);
+  return ticks;
+}
+
+export function formatDipAxisPct(v: number): string {
+  return `${Math.round(v)}%`;
+}
+
 /** Chart row for the selected range; omits symbols without window SMA (no 200d fallback). */
 export function dipChartRowForQuote(
   quote: DipFinderQuoteInput,
