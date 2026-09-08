@@ -18,8 +18,6 @@ export type AnalyticsRow = {
   estAnnual: number | null;
 };
 
-type Props = { rows: AnalyticsRow[]; fx: PortfolioFxRates };
-
 export type PortfolioAnalyticsData = {
   base: string;
   totalValue: number;
@@ -139,7 +137,7 @@ function pctOf(totalValue: number, v: number) {
   return totalValue > 0 ? (v / totalValue) * 100 : 0;
 }
 
-/** 1. Summary metrics + holdings bars visualization */
+/** 1. Summary metrics (Total value, Total P&L, Est. income, holdings count). */
 export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
@@ -174,7 +172,7 @@ export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAna
   );
 }
 
-/** 3. Allocation by holding (holdings bars visualization) */
+/** 1. Holdings bars visualization (paired with summary metrics at top). */
 export function PortfolioAllocationSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
@@ -200,7 +198,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
   );
 }
 
-/** 4. Sector allocation */
+/** 3. Sector allocation */
 export function PortfolioSectorSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
@@ -228,7 +226,7 @@ export function PortfolioSectorSection({ analytics }: { analytics: PortfolioAnal
   );
 }
 
-/** 6. Movers */
+/** 5. Movers */
 export function PortfolioMoversSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
@@ -245,21 +243,6 @@ export function PortfolioMoversSection({ analytics }: { analytics: PortfolioAnal
         <MoverList title={t("portfolioAnalytics.topLosers")} items={a.worst} tone="neg" />
       </CardContent>
     </Card>
-  );
-}
-
-/** @deprecated Use section components with usePortfolioAnalytics in PortfolioClient */
-export function PortfolioAnalytics({ rows, fx }: Props) {
-  const analytics = usePortfolioAnalytics(rows, fx);
-  if (!analytics) return null;
-
-  return (
-    <div className="space-y-4">
-      <PortfolioSummarySection analytics={analytics} />
-      <PortfolioAllocationSection analytics={analytics} />
-      <PortfolioSectorSection analytics={analytics} />
-      <PortfolioMoversSection analytics={analytics} />
-    </div>
   );
 }
 

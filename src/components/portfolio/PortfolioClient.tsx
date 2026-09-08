@@ -576,7 +576,12 @@ export function PortfolioClient() {
         </div>
       ) : null}
 
-      {analytics ? <PortfolioSummarySection analytics={analytics} /> : null}
+      {analytics ? (
+        <div className="space-y-4">
+          <PortfolioSummarySection analytics={analytics} />
+          <PortfolioAllocationSection analytics={analytics} />
+        </div>
+      ) : null}
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -777,8 +782,6 @@ export function PortfolioClient() {
           </Table>
         </div>
       )}
-
-      {analytics ? <PortfolioAllocationSection analytics={analytics} /> : null}
 
       {analytics ? <PortfolioSectorSection analytics={analytics} /> : null}
 
