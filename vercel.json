@@ -1,4 +1,4 @@
 {
-  "installCommand": "npm ci --include=dev",
+  "installCommand": "npm ci",
   "buildCommand": "npx prisma generate && next build"
 }
