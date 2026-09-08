@@ -14,6 +14,7 @@ import {
 
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { tickCoord } from "@/lib/chartSeriesUtils";
 import {
   dipChartYDomain,
   dipChartYTicks,
@@ -70,14 +71,15 @@ export function dipBarColor(pct: number, yMin: number, yMax: number): string {
 type AngledXTickProps = {
   x?: string | number;
   y?: string | number;
-  payload?: { value?: string };
+  payload?: { value?: unknown };
 };
 
 function AngledXTick({ x, y, payload }: AngledXTickProps) {
   if (x == null || y == null) return null;
-  const cx = typeof x === "number" ? x : Number(x);
-  const cy = typeof y === "number" ? y : Number(y);
+  const cx = tickCoord(x);
+  const cy = tickCoord(y);
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  const label = payload?.value == null ? "" : String(payload.value);
   return (
     <text
       x={cx}
@@ -90,7 +92,7 @@ function AngledXTick({ x, y, payload }: AngledXTickProps) {
       fontFamily="ui-monospace, monospace"
       transform={`rotate(-45, ${cx}, ${cy})`}
     >
-      {payload?.value ?? ""}
+      {label}
     </text>
   );
 }
@@ -145,7 +147,7 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
                   dataKey="symbol"
-                  tick={AngledXTick}
+                  tick={(props) => <AngledXTick {...props} />}
                   tickLine={false}
                   axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
                   interval={0}
