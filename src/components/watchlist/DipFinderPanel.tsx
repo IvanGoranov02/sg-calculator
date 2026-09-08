@@ -42,8 +42,8 @@ export function DipFinderPanel({ quotes, history, compact = false }: DipFinderPa
 
   return (
     <div className={compact ? "px-0 py-0" : ""}>
-      <h3 className="mb-1 text-sm font-semibold tracking-tight">{t("watchlist.dipTitle")}</h3>
-      <p className="mb-3 text-xs text-muted-foreground">{t("watchlist.dipSubtitle")}</p>
+      <h3 className="mb-1 text-center text-sm font-semibold tracking-tight">{t("watchlist.dipTitle")}</h3>
+      <p className="mb-3 text-center text-xs text-muted-foreground">{t("watchlist.dipSubtitle")}</p>
       <div className="mb-3">
         <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {t("watchlist.dipRangeLabel")}
