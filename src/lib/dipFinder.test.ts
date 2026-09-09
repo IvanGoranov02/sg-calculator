@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   DIP_RANGES,
+  buildDipHistorySymbolMappings,
   dipChartRowForQuote,
   dipChartYDomain,
   dipChartYTicks,
@@ -12,6 +13,8 @@ import {
   formatDipAxisPct,
   isDipRange,
   lookbackChangePct,
+  remapPortfolioDipHistory,
+  scaleHistoryBarsToQuotePrice,
   simpleMovingAverage,
 } from "@/lib/dipFinder";
 
@@ -109,6 +112,56 @@ describe("formatDipAxisPct", () => {
   it("formats whole percents without decimals", () => {
     assert.equal(formatDipAxisPct(-50), "-50%");
     assert.equal(formatDipAxisPct(25), "25%");
+  });
+});
+
+describe("buildDipHistorySymbolMappings", () => {
+  it("uses resolved Yahoo symbols when available", () => {
+    const mappings = buildDipHistorySymbolMappings(["AMZD-EQ", "AAPL"], (key) =>
+      key === "AMZD-EQ" ? "AMZ.DE" : null,
+    );
+    assert.deepEqual(mappings, [
+      { portfolioKey: "AMZD-EQ", yahooSymbol: "AMZ.DE" },
+      { portfolioKey: "AAPL", yahooSymbol: "AAPL" },
+    ]);
+  });
+});
+
+describe("scaleHistoryBarsToQuotePrice", () => {
+  it("scales pence history to match normalized GBP quote price", () => {
+    const bars = [
+      { date: "2024-01-01", close: 5000 },
+      { date: "2024-01-02", close: 5397 },
+    ];
+    const scaled = scaleHistoryBarsToQuotePrice(bars, 53.97);
+    assert.equal(scaled[1]!.close, 53.97);
+  });
+
+  it("leaves EUR/USD history unchanged when scales already match", () => {
+    const bars = [
+      { date: "2024-01-01", close: 218 },
+      { date: "2024-01-02", close: 220 },
+    ];
+    const scaled = scaleHistoryBarsToQuotePrice(bars, 220);
+    assert.deepEqual(scaled, bars);
+  });
+});
+
+describe("remapPortfolioDipHistory", () => {
+  it("re-keys Yahoo history onto portfolio symbols and aligns pence", () => {
+    const raw = {
+      "AMZ.DE": [{ date: "2024-01-01", close: 200 }, { date: "2024-01-02", close: 220 }],
+      "VOD.L": [{ date: "2024-01-01", close: 5200 }, { date: "2024-01-02", close: 5397 }],
+    };
+    const mappings = buildDipHistorySymbolMappings(["AMZD-EQ", "VOD.L"], (key) =>
+      key === "AMZD-EQ" ? "AMZ.DE" : "VOD.L",
+    );
+    const remapped = remapPortfolioDipHistory(raw, mappings, {
+      "AMZD-EQ": 220,
+      "VOD.L": 53.97,
+    });
+    assert.equal(remapped["AMZD-EQ"]?.[1]?.close, 220);
+    assert.equal(remapped["VOD.L"]?.[1]?.close, 53.97);
   });
 });
 

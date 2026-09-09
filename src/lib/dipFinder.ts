@@ -157,6 +157,59 @@ export function formatDipAxisPct(v: number): string {
 }
 
 /** Chart row for the selected range; omits symbols without window SMA (no 200d fallback). */
+export type DipHistorySymbolMapping = {
+  portfolioKey: string;
+  yahooSymbol: string;
+};
+
+/** Map portfolio storage keys to Yahoo symbols used for history fetches. */
+export function buildDipHistorySymbolMappings(
+  portfolioKeys: string[],
+  resolveYahooSymbol: (portfolioKey: string) => string | null | undefined,
+): DipHistorySymbolMapping[] {
+  return portfolioKeys.map((portfolioKey) => {
+    const resolved = resolveYahooSymbol(portfolioKey)?.trim().toUpperCase();
+    return {
+      portfolioKey,
+      yahooSymbol: resolved && resolved.length > 0 ? resolved : portfolioKey,
+    };
+  });
+}
+
+/**
+ * Align history closes with a normalized quote price (e.g. portfolio GBp → GBP).
+ * When the last close is ~100× the live quote, Yahoo history is still in pence.
+ */
+export function scaleHistoryBarsToQuotePrice(
+  bars: QuoteHistoryBar[],
+  quotePrice: number,
+): QuoteHistoryBar[] {
+  if (bars.length === 0 || !Number.isFinite(quotePrice) || quotePrice <= 0) return bars;
+  const last = bars[bars.length - 1]?.close;
+  if (!Number.isFinite(last) || last <= 0) return bars;
+  const ratio = last / quotePrice;
+  if (ratio > 50 && ratio < 200) {
+    return bars.map((b) => ({ ...b, close: b.close / 100 }));
+  }
+  return bars;
+}
+
+/** Re-key Yahoo history rows onto portfolio symbols for the dip finder. */
+export function remapPortfolioDipHistory(
+  raw: Record<string, QuoteHistoryBar[]>,
+  mappings: DipHistorySymbolMapping[],
+  quotePriceByKey: Record<string, number | null | undefined>,
+): Record<string, QuoteHistoryBar[]> {
+  const out: Record<string, QuoteHistoryBar[]> = {};
+  for (const { portfolioKey, yahooSymbol } of mappings) {
+    const bars = raw[yahooSymbol] ?? raw[portfolioKey] ?? [];
+    const price = quotePriceByKey[portfolioKey];
+    out[portfolioKey] =
+      price != null && Number.isFinite(price) ? scaleHistoryBarsToQuotePrice(bars, price) : bars;
+  }
+  return out;
+}
+
 export function dipChartRowForQuote(
   quote: DipFinderQuoteInput,
   bars: QuoteHistoryBar[],

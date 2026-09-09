@@ -32,7 +32,11 @@ import {
 import { PortfolioDividendsView } from "@/components/portfolio/PortfolioDividendsView";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { QuoteHistoryBar } from "@/lib/dipFinder";
+import {
+  buildDipHistorySymbolMappings,
+  remapPortfolioDipHistory,
+  type QuoteHistoryBar,
+} from "@/lib/dipFinder";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -465,18 +469,33 @@ export function PortfolioClient() {
     [holdings],
   );
 
+  const dipHistoryMappings = useMemo(
+    () =>
+      buildDipHistorySymbolMappings(holdingSymbols, (key) => quotes[key]?.resolvedYahooSymbol ?? null),
+    [holdingSymbols, quotes],
+  );
+
+  const dipHistoryFetchSymbols = useMemo(
+    () => [...new Set(dipHistoryMappings.map((m) => m.yahooSymbol))],
+    [dipHistoryMappings],
+  );
+
   useEffect(() => {
-    if (holdingSymbols.length === 0) {
+    if (dipHistoryFetchSymbols.length === 0) {
       setDipHistory({});
       return;
     }
     let cancelled = false;
-    const q = `/api/quotes/history?symbols=${encodeURIComponent(holdingSymbols.join(","))}`;
+    const q = `/api/quotes/history?symbols=${encodeURIComponent(dipHistoryFetchSymbols.join(","))}`;
     void fetch(q)
       .then(async (res) => {
         const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
         if (cancelled || !res.ok) return;
-        setDipHistory(data.history ?? {});
+        const quotePrices: Record<string, number | null | undefined> = {};
+        for (const { portfolioKey } of dipHistoryMappings) {
+          quotePrices[portfolioKey] = quotes[portfolioKey]?.price;
+        }
+        setDipHistory(remapPortfolioDipHistory(data.history ?? {}, dipHistoryMappings, quotePrices));
       })
       .catch(() => {
         if (!cancelled) setDipHistory({});
@@ -484,7 +503,7 @@ export function PortfolioClient() {
     return () => {
       cancelled = true;
     };
-  }, [holdingSymbols]);
+  }, [dipHistoryFetchSymbols, dipHistoryMappings, quotes]);
 
   const dipQuotes = useMemo(
     () =>
