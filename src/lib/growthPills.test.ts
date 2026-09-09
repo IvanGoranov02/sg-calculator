@@ -14,7 +14,7 @@ describe("computeGrowthPills", () => {
   it("returns null pills for empty series", () => {
     const pills = computeGrowthPills([], 1);
     assert.equal(pills.oneYear, null);
-    assert.equal(pills.fourYear, null);
+    assert.equal(pills.threeYear, null);
   });
 
   it("computes 1Y simple change for annual data", () => {
@@ -46,11 +46,6 @@ describe("computeGrowthPills", () => {
     const visiblePills = computeGrowthPills(visible, 1);
     assert.equal(visiblePills.threeYear, null);
     assert.ok(fullPills.threeYear != null);
-  });
-
-  it("4Y pill is null when only three years of history exist", () => {
-    const pills = computeGrowthPills([100, 110, 121], 1);
-    assert.equal(pills.fourYear, null);
   });
 
   it("preserves calendar gaps when EPS years are missing", () => {
@@ -99,7 +94,6 @@ describe("growthPillsForKey", () => {
     const pills = growthPillsForKey(rows, "revenue", "annual");
     assert.ok(pills.oneYear != null && pills.oneYear > 0);
     assert.ok(pills.threeYear != null && pills.threeYear > 0);
-    assert.ok(pills.fourYear != null && pills.fourYear > 0);
   });
 });
 
