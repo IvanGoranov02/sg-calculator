@@ -79,6 +79,9 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
     if (/^FB2AD$/i.test(base)) {
       for (const s of germanListingYahooSymbols("FB2A")) add(s);
     }
+    if (/^ABEAD$/i.test(base)) {
+      for (const s of germanListingYahooSymbols("ABEA")) add(s);
+    }
     for (const suf of [
       ".DE",
       ".L",
@@ -101,9 +104,14 @@ function buildYahooSymbolCandidates(portfolioSymbol: string): string[] {
       if (/^FB2AD$/i.test(base)) {
         for (const s of germanListingYahooSymbols("FB2A")) add(s);
       }
+      if (/^ABEAD$/i.test(base)) {
+        for (const s of germanListingYahooSymbols("ABEA")) add(s);
+      }
     }
   } else if (/^FB2AD$/i.test(u)) {
     for (const s of germanListingYahooSymbols("FB2A")) add(s);
+  } else if (/^ABEAD$/i.test(u)) {
+    for (const s of germanListingYahooSymbols("ABEA")) add(s);
   }
 
   return out;

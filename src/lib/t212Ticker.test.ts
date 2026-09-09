@@ -40,7 +40,7 @@ describe("parseT212Ticker", () => {
     });
   });
 
-  it("parses uppercase Xetra stubs (FB2AD_EQ, METAD_EQ)", () => {
+  it("parses uppercase Xetra stubs (FB2AD_EQ, METAD_EQ, ABEAD_EQ)", () => {
     assert.deepEqual(parseT212Ticker("FB2AD_EQ"), {
       base: "FB2A",
       yahooSuffix: ".DE",
@@ -48,6 +48,11 @@ describe("parseT212Ticker", () => {
     });
     assert.deepEqual(parseT212Ticker("METAD_EQ"), {
       base: "META",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("ABEAD_EQ"), {
+      base: "ABEA",
       yahooSuffix: ".DE",
       isNonUsListing: true,
     });
@@ -75,6 +80,12 @@ describe("germanListingYahooSymbols", () => {
     ]);
     assert.ok(!germanListingYahooSymbols("FB2A").includes("FB2.DE"));
   });
+
+  it("maps Alphabet Class A to ABEA.DE and avoids wrong ABE.F trap", () => {
+    assert.deepEqual(germanListingYahooSymbols("ABEA"), ["ABEA.DE", "ABEA.F", "ABEAD.XC"]);
+    assert.ok(!germanListingYahooSymbols("ABEA").includes("ABE.F"));
+    assert.ok(!germanListingYahooSymbols("ABEA").includes("ABE.DE"));
+  });
 });
 
 describe("t212TickerToYahoo", () => {
@@ -83,6 +94,8 @@ describe("t212TickerToYahoo", () => {
     assert.equal(t212TickerToYahoo("AMZd_EQ"), "AMZ.DE");
     assert.equal(t212TickerToYahoo("FB2Ad_EQ"), "FB2A.DE");
     assert.equal(t212TickerToYahoo("FB2AD_EQ"), "FB2A.DE");
+    assert.equal(t212TickerToYahoo("ABEAd_EQ"), "ABEA.DE");
+    assert.equal(t212TickerToYahoo("ABEAD_EQ"), "ABEA.DE");
   });
 
   it("maps Amsterdam and London listings", () => {
@@ -136,5 +149,16 @@ describe("t212TickerToYahooCandidates", () => {
     assert.ok(!c.includes("FB2.DE"));
     assert.ok(!c.includes("METD"));
     assert.ok(!c.includes("FB2AD"));
+  });
+
+  it("does not include ABE.F trap for Xetra Alphabet Class A", () => {
+    const c = t212TickerToYahooCandidates("ABEAd_EQ", "EUR");
+    assert.equal(c[0], "ABEA.DE");
+    assert.ok(!c.includes("ABE.F"));
+    assert.ok(!c.includes("ABE.DE"));
+    assert.ok(!c.includes("ABEAD"));
+    const upper = t212TickerToYahooCandidates("ABEAD_EQ", "EUR");
+    assert.equal(upper[0], "ABEA.DE");
+    assert.ok(!upper.includes("ABE.F"));
   });
 });
