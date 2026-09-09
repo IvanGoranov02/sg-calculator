@@ -38,7 +38,6 @@ type GrowthPillsRowProps = {
     oneYear: string;
     twoYear: string;
     threeYear: string;
-    fourYear: string;
   };
   invertColors?: boolean;
   className?: string;
@@ -50,7 +49,6 @@ export function GrowthPillsRow({ pills, labels, invertColors = false, className 
       <GrowthPill label={labels.oneYear} pct={pills.oneYear} invertColors={invertColors} />
       <GrowthPill label={labels.twoYear} pct={pills.twoYear} invertColors={invertColors} />
       <GrowthPill label={labels.threeYear} pct={pills.threeYear} invertColors={invertColors} />
-      <GrowthPill label={labels.fourYear} pct={pills.fourYear} invertColors={invertColors} />
     </div>
   );
 }

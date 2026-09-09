@@ -119,7 +119,6 @@ export function PortfolioDividendsView({
       oneYear: t("chartsFund.pill1Y"),
       twoYear: t("chartsFund.pill2Y"),
       threeYear: t("chartsFund.pill3Y"),
-      fourYear: t("chartsFund.pill4Y"),
     }),
     [t],
   );

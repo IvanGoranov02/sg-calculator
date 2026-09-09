@@ -1,17 +1,15 @@
-/** Multi-horizon growth percentages for chart pill badges (1Y / 2Y / 3Y / 4Y). */
+/** Multi-horizon growth percentages for chart pill badges (1Y / 2Y / 3Y). */
 
 export type GrowthPills = {
   oneYear: number | null;
   twoYear: number | null;
   threeYear: number | null;
-  fourYear: number | null;
 };
 
 const EMPTY_PILLS: GrowthPills = {
   oneYear: null,
   twoYear: null,
   threeYear: null,
-  fourYear: null,
 };
 
 /** Share-count metrics: decreasing shares is positive (green), increasing is negative (red). */
@@ -39,7 +37,7 @@ function cagr(start: number, endVal: number, years: number): number | null {
 }
 
 /**
- * Compares the latest finite value to 1/2/3/4 years earlier.
+ * Compares the latest finite value to 1/2/3 years earlier.
  * `periodsPerYear` is 1 for annual rows, 4 for quarterly rows, ~252 for daily price bars.
  */
 export function computeGrowthPills(values: (number | null)[], periodsPerYear: number): GrowthPills {
@@ -82,12 +80,7 @@ export function computeGrowthPills(values: (number | null)[], periodsPerYear: nu
     return s != null && s > 0 && end >= 0 ? cagr(s, end, 3) : null;
   })();
 
-  const fourYear = (() => {
-    const s = startVal(4 * periodsPerYear);
-    return s != null && s > 0 && end >= 0 ? cagr(s, end, 4) : null;
-  })();
-
-  return { oneYear, twoYear, threeYear, fourYear };
+  return { oneYear, twoYear, threeYear };
 }
 
 export function extractSeriesValues(

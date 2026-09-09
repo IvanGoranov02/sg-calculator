@@ -234,7 +234,7 @@ function growthPillsForMetric(data: StockAnalysisBundle, metric: ChartMetric) {
       return computeGrowthPills(values, 1);
     }
     default:
-      return { oneYear: null, twoYear: null, threeYear: null, fourYear: null };
+      return { oneYear: null, twoYear: null, threeYear: null };
   }
 }
 
@@ -322,7 +322,6 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
       oneYear: t("chartsFund.pill1Y"),
       twoYear: t("chartsFund.pill2Y"),
       threeYear: t("chartsFund.pill3Y"),
-      fourYear: t("chartsFund.pill4Y"),
     }),
     [t],
   );

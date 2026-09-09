@@ -144,8 +144,7 @@ export function growthPillsFromCachePayload(payload: unknown): GrowthPills | nul
   const any =
     pills.oneYear != null ||
     pills.twoYear != null ||
-    pills.threeYear != null ||
-    pills.fourYear != null;
+    pills.threeYear != null;
   return any ? pills : null;
 }
 
@@ -214,8 +213,7 @@ export function incomeGrowthPillsFromMonthly(
   const any =
     pills.oneYear != null ||
     pills.twoYear != null ||
-    pills.threeYear != null ||
-    pills.fourYear != null;
+    pills.threeYear != null;
   return any ? pills : null;
 }
 

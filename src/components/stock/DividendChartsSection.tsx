@@ -110,7 +110,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       oneYear: t("chartsFund.pill1Y"),
       twoYear: t("chartsFund.pill2Y"),
       threeYear: t("chartsFund.pill3Y"),
-      fourYear: t("chartsFund.pill4Y"),
     }),
     [t],
   );
