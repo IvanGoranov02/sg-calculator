@@ -26,6 +26,18 @@ describe("buildBlockedYahooSymbols", () => {
     assert.ok(blocked.has("METD"));
     assert.ok(blocked.has("FB2AD"));
   });
+
+  it("blocks ABE.F trap for legacy ABEAD-EQ keys without symbolT212", () => {
+    const blocked = buildBlockedYahooSymbols("ABEAD-EQ", null);
+    assert.ok(blocked.has("ABE.F"));
+    assert.ok(blocked.has("ABEAD"));
+  });
+
+  it("blocks ABE.F trap for Xetra Alphabet listings", () => {
+    const blocked = buildBlockedYahooSymbols("ABEAD", "ABEAd_EQ");
+    assert.ok(blocked.has("ABE.F"));
+    assert.ok(blocked.has("ABEAD"));
+  });
 });
 
 describe("pickBestQuoteRow", () => {
@@ -89,6 +101,26 @@ describe("pickBestQuoteRow", () => {
     };
     assert.equal(pickBestQuoteRow([bear], "EUR", "FB2Ad_EQ", blocked), null);
     assert.equal(pickBestQuoteRow([bear, eu], "EUR", "FB2Ad_EQ", blocked)?.resolvedYahooSymbol, "FB2A.DE");
+  });
+
+  it("rejects ABE.F wrong instrument for Xetra Alphabet (ABEAd_EQ)", () => {
+    const blocked = buildBlockedYahooSymbols("ABEAD", "ABEAd_EQ");
+    const trap = {
+      resolvedYahooSymbol: "ABE.F",
+      currency: "EUR",
+      price: 8.2,
+      name: "Alphabet Inc. R",
+      quoteType: "EQUITY",
+    };
+    const eu = {
+      resolvedYahooSymbol: "ABEA.DE",
+      currency: "EUR",
+      price: 291.7,
+      name: "Alphabet Inc.",
+      quoteType: "EQUITY",
+    };
+    assert.equal(pickBestQuoteRow([trap], "EUR", "ABEAd_EQ", blocked), null);
+    assert.equal(pickBestQuoteRow([trap, eu], "EUR", "ABEAd_EQ", blocked)?.resolvedYahooSymbol, "ABEA.DE");
   });
 });
 

@@ -20,6 +20,12 @@ const KNOWN_TRAP_SYMBOLS = new Set(["AMZD", "METD"]);
 /** Legacy portfolio keys for Meta on Xetra (FB2AD-EQ, METAD-EQ). */
 const EU_META_STUB_KEY = /^FB2AD(-EQ)?$|^METAD(-EQ)?$/i;
 
+/** Legacy portfolio keys for Alphabet Class A on Xetra (ABEAD-EQ). */
+const EU_ALPHABET_STUB_KEY = /^ABEAD(-EQ)?$/i;
+
+/** Wrong Yahoo symbols for Alphabet on Xetra (truncated ABE.* ≠ Class A ~€290). */
+const ALPHABET_XETRA_TRAP_SYMBOLS = new Set(["ABE.F", "ABE.DE"]);
+
 /**
  * Symbols to exclude from Yahoo fetch/search for a holding.
  * Covers legacy stored keys (AMZD) and T212-body stubs (AMZd → AMZD).
@@ -36,6 +42,10 @@ export function buildBlockedYahooSymbols(
     if (EU_META_STUB_KEY.test(stored)) {
       blocked.add(stored.replace(/-EQ$/i, ""));
       for (const sym of KNOWN_TRAP_SYMBOLS) blocked.add(sym);
+    }
+    if (EU_ALPHABET_STUB_KEY.test(stored)) {
+      blocked.add(stored.replace(/-EQ$/i, ""));
+      for (const sym of ALPHABET_XETRA_TRAP_SYMBOLS) blocked.add(sym);
     }
     return blocked;
   }
@@ -61,6 +71,10 @@ export function buildBlockedYahooSymbols(
 
   if (/FB2Ad|FB2AD|METAd|METAD/i.test(symbolT212)) {
     blocked.add("METD");
+  }
+
+  if (/ABEAd|ABEAD/i.test(symbolT212)) {
+    for (const sym of ALPHABET_XETRA_TRAP_SYMBOLS) blocked.add(sym);
   }
 
   for (const sym of KNOWN_TRAP_SYMBOLS) {
