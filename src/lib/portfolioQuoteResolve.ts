@@ -26,6 +26,12 @@ const EU_ALPHABET_STUB_KEY = /^ABEAD(-EQ)?$/i;
 /** Wrong Yahoo symbols for Alphabet on Xetra (truncated ABE.* ≠ Class A ~€290). */
 const ALPHABET_XETRA_TRAP_SYMBOLS = new Set(["ABE.F", "ABE.DE"]);
 
+/** Wrong Yahoo symbols for Uber on Xetra (truncated UBE.* ≠ Uber ~€70). */
+const UBER_XETRA_TRAP_SYMBOLS = new Set(["UBE.F", "UBE.DE"]);
+
+/** Legacy portfolio keys for Uber on Xetra (UBERD-EQ). */
+const EU_UBER_STUB_KEY = /^UBERD(-EQ)?$/i;
+
 /**
  * Symbols to exclude from Yahoo fetch/search for a holding.
  * Covers legacy stored keys (AMZD) and T212-body stubs (AMZd → AMZD).
@@ -46,6 +52,10 @@ export function buildBlockedYahooSymbols(
     if (EU_ALPHABET_STUB_KEY.test(stored)) {
       blocked.add(stored.replace(/-EQ$/i, ""));
       for (const sym of ALPHABET_XETRA_TRAP_SYMBOLS) blocked.add(sym);
+    }
+    if (EU_UBER_STUB_KEY.test(stored)) {
+      blocked.add(stored.replace(/-EQ$/i, ""));
+      for (const sym of UBER_XETRA_TRAP_SYMBOLS) blocked.add(sym);
     }
     return blocked;
   }
@@ -75,6 +85,10 @@ export function buildBlockedYahooSymbols(
 
   if (/ABEAd|ABEAD/i.test(symbolT212)) {
     for (const sym of ALPHABET_XETRA_TRAP_SYMBOLS) blocked.add(sym);
+  }
+
+  if (/UBERd|UBERD/i.test(symbolT212)) {
+    for (const sym of UBER_XETRA_TRAP_SYMBOLS) blocked.add(sym);
   }
 
   for (const sym of KNOWN_TRAP_SYMBOLS) {

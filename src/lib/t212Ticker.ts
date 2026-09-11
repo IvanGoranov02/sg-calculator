@@ -47,7 +47,7 @@ const T212_COUNTRY_CODES = new Set([
 ]);
 
 /** Legacy uppercase Xetra venue stubs (FB2AD_EQ), not US tickers ending in D (GILD_US_EQ). */
-const UPPERCASE_XETRA_STUBS = new Set(["FB2AD", "METAD", "MSFTD", "AMZD", "ABEAD"]);
+const UPPERCASE_XETRA_STUBS = new Set(["FB2AD", "METAD", "MSFTD", "AMZD", "ABEAD", "UBERD"]);
 
 function pushUnique(out: string[], sym: string) {
   const x = sym.trim().toUpperCase();
@@ -62,6 +62,8 @@ const GERMAN_YAHOO_SYMBOL_OVERRIDES: Record<string, string[]> = {
   META: ["FB2A.DE", "FB2A.F", "FB2AD.XC", "FB2AD.XD"],
   // Alphabet Class A on Xetra trades as ABEA; generic ABE.* is a different ~€8 instrument.
   ABEA: ["ABEA.DE", "ABEA.F", "ABEAD.XC"],
+  // Uber on Xetra keeps the full UBER ticker; generic UBE.* is a different instrument.
+  UBER: ["UBER.DE", "UBER.F"],
 };
 
 const EUR_LISTING_SUFFIX =
