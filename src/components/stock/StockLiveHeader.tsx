@@ -109,7 +109,6 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
               </Badge>
             ) : null}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{t("stock.subtitle")}</p>
           {quote.earningsDate ? (
             <p className="mt-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground/90">{t("stock.nextEarnings")}</span>{" "}
@@ -161,11 +160,6 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
               <span className="text-muted-foreground">({changeLabel})</span>
             </span>
           </div>
-          {ccy === "eur" && canEur ? (
-            <p className="max-w-[240px] text-right text-[10px] leading-snug text-muted-foreground">
-              {t("stock.eurFxNote")}
-            </p>
-          ) : null}
 
           {showPost ? (
             <div className="text-left sm:text-right">

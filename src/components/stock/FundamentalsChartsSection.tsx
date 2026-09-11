@@ -259,42 +259,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
     chartRows,
   ]);
 
-  const loadedMeta = useMemo(() => {
-    if (baseRows.length === 0 || yearOptions.length === 0) return null;
-    return {
-      fromY: yearOptions[0],
-      toY: yearOptions[yearOptions.length - 1],
-      n: baseRows.length,
-    };
-  }, [baseRows, yearOptions]);
-
-  /** Inclusive calendar-year span of distinct period-end years (matches x-axis density, not Yahoo depth). */
-  const loadedCalendarYearSpan = useMemo(() => {
-    if (yearOptions.length === 0) return 0;
-    return yearOptions[yearOptions.length - 1] - yearOptions[0] + 1;
-  }, [yearOptions]);
-
-  const presetYearsRequested: number | null =
-    timeRange === "custom"
-      ? null
-      : ({ "1y": 1, "3y": 3, "5y": 5 } as const)[timeRange];
-
-  /** Preset (1y–5y) did not remove any rows — chart shows full loaded series for that preset. */
-  const presetMatchesAllLoaded =
-    chartRows.length > 0 && timeRange !== "custom" && chartRows.length === baseRows.length;
-
-  /** User asked for a longer calendar window than distinct years in the loaded series. */
-  const showPresetShorterThanRequested =
-    Boolean(loadedMeta) &&
-    presetMatchesAllLoaded &&
-    presetYearsRequested != null &&
-    loadedCalendarYearSpan > 0 &&
-    presetYearsRequested > loadedCalendarYearSpan;
-
-  const showFilterCount =
-    chartRows.length > 0 &&
-    (timeRange === "custom" || chartRows.length !== baseRows.length);
-
   const hasQuarterly = data.incomeQuarterly.length > 0;
   const hasEbitda = useMemo(
     () => rows.some((r) => r.ebitda != null && Number.isFinite(r.ebitda as number)),
@@ -435,8 +399,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
     <div className="flex flex-col gap-6">
       <div className="rounded-xl border border-white/10 bg-zinc-900/35 p-4 shadow-sm shadow-black/10">
         <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.subtitle")}</p>
-        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.chartMetricNoDataDetail")}</p>
       </div>
 
       <div
@@ -531,52 +493,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             </div>
           </div>
         </div>
-        <p className="text-[11px] leading-snug text-muted-foreground">{t("chartsFund.periodFilterStickyHint")}</p>
-      </div>
-
-      <div className="space-y-1">
-        {!empty && loadedMeta ? (
-          <p className="text-xs text-muted-foreground">
-            {t("chartsFund.loadedDataSpan", {
-              fromYear: loadedMeta.fromY,
-              toYear: loadedMeta.toY,
-              n: loadedMeta.n,
-              unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),
-            })}
-          </p>
-        ) : null}
-        {showPresetShorterThanRequested && loadedMeta ? (
-          <p className="text-xs text-amber-200/85">
-            {freq === "quarterly"
-              ? t("chartsFund.filterPresetShorterThanRequestedQuarterly", {
-                  presetYears: presetYearsRequested!,
-                  maxQuarters: presetYearsRequested! * 4,
-                  n: loadedMeta.n,
-                  unit: t("chartsFund.filterUnitQuarters"),
-                  fromYear: loadedMeta.fromY,
-                  toYear: loadedMeta.toY,
-                  loadedSpanYears: loadedCalendarYearSpan,
-                })
-              : t("chartsFund.filterPresetShorterThanRequestedAnnual", {
-                  presetYears: presetYearsRequested!,
-                  n: loadedMeta.n,
-                  unit: t("chartsFund.filterUnitYears"),
-                  fromYear: loadedMeta.fromY,
-                  toYear: loadedMeta.toY,
-                  loadedSpanYears: loadedCalendarYearSpan,
-                })}
-          </p>
-        ) : presetMatchesAllLoaded ? (
-          <p className="text-xs text-amber-200/85">{t("chartsFund.filterPresetNoNarrow")}</p>
-        ) : null}
-        {showFilterCount ? (
-          <p className="text-xs text-muted-foreground">
-            {t("chartsFund.filterShowing", {
-              n: chartRows.length,
-              unit: freq === "annual" ? t("chartsFund.filterUnitYears") : t("chartsFund.filterUnitQuarters"),
-            })}
-          </p>
-        ) : null}
       </div>
 
       {empty ? (

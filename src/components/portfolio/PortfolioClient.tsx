@@ -553,7 +553,6 @@ export function PortfolioClient() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{t("portfolio.title")}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{t("portfolio.subtitle")}</p>
         </div>
         <Button
           type="button"

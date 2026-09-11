@@ -15,7 +15,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +40,6 @@ import { cn } from "@/lib/utils";
 import type { DividendSeed } from "@/lib/yahooDividendSeed";
 
 type Props = {
-  ticker: string;
   seed: DividendSeed | null;
 };
 
@@ -76,7 +75,10 @@ function NumberField({
           min={min}
           step={step}
           value={Number.isFinite(value) ? value : ""}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(raw === "" ? Number.NaN : Number(raw));
+          }}
           className={cn("font-mono tabular-nums", suffix ? "pr-8" : undefined)}
         />
         {suffix ? (
@@ -139,7 +141,7 @@ const CHART_COLORS = {
   monthly: "#38bdf8",
 };
 
-export function DividendCalculator({ ticker, seed }: Props) {
+export function DividendCalculator({ seed }: Props) {
   const { t } = useI18n();
 
   const defaultYieldPct =
@@ -147,16 +149,16 @@ export function DividendCalculator({ ticker, seed }: Props) {
       ? seed.dividendYield * 100
       : seed && seed.annualDividendPerShare > 0 && seed.currentPrice > 0
         ? dividendYieldFromDps(seed.currentPrice, seed.annualDividendPerShare) * 100
-        : 4;
+        : Number.NaN;
 
-  const [price, setPrice] = useState(seed?.currentPrice ?? 50);
+  const [price, setPrice] = useState(seed?.currentPrice ?? Number.NaN);
   const [shares, setShares] = useState(100);
   const [years, setYears] = useState(10);
   const [yieldPct, setYieldPct] = useState(defaultYieldPct);
   const [annualContribution, setAnnualContribution] = useState(1000);
   const [reinvest, setReinvest] = useState(true);
   const [priceGrowthPct, setPriceGrowthPct] = useState(7);
-  const [dividendGrowthPct, setDividendGrowthPct] = useState(seed?.suggestedGrowthPct ?? 5);
+  const [dividendGrowthPct, setDividendGrowthPct] = useState(seed?.suggestedGrowthPct ?? Number.NaN);
 
   const result = useMemo(() => {
     const input: DividendGrowthInputs = {
@@ -202,19 +204,6 @@ export function DividendCalculator({ ticker, seed }: Props) {
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dividendCalc.title")}
         </h1>
-        <p className="mt-2 text-muted-foreground">{t("dividendCalc.intro")}</p>
-        {seed ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t("dividendCalc.seedLine", {
-              symbol: seed.symbol,
-              name: seed.name,
-              price: formatCurrency(seed.currentPrice),
-            })}
-            {seed.growthFromHistory ? ` · ${t("dividendCalc.growthFromHistory")}` : ""}
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-amber-200/80">{t("dividendCalc.noSeed", { ticker })}</p>
-        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
@@ -222,7 +211,6 @@ export function DividendCalculator({ ticker, seed }: Props) {
         <Card className="border-white/10 bg-zinc-900/40">
           <CardHeader>
             <CardTitle>{t("dividendCalc.inputsTitle")}</CardTitle>
-            <CardDescription>{t("dividendCalc.inputsDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 sm:grid-cols-2">
             <NumberField
@@ -324,7 +312,6 @@ export function DividendCalculator({ ticker, seed }: Props) {
         <Card className="border-emerald-500/20 bg-zinc-900/50">
           <CardHeader>
             <CardTitle>{t("dividendCalc.resultTitle")}</CardTitle>
-            <CardDescription>{t("dividendCalc.resultDisclaimer")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {!result ? (
@@ -398,14 +385,6 @@ export function DividendCalculator({ ticker, seed }: Props) {
                     ))}
                   </div>
                 </div>
-
-                <p className="text-xs text-muted-foreground">
-                  {t("dividendCalc.finalShares", { shares: result.finalShares.toFixed(1) })}
-                  {" · "}
-                  {t("dividendCalc.finalPortfolio", {
-                    value: formatCurrencyCompact(result.finalPortfolioValue),
-                  })}
-                </p>
               </>
             )}
           </CardContent>

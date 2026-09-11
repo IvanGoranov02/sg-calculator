@@ -9,8 +9,8 @@ type PageProps = {
 
 export default async function DcfCalculatorPage({ searchParams }: PageProps) {
   const { ticker: raw } = await searchParams;
-  const ticker = (raw ?? "AAPL").trim().toUpperCase() || "AAPL";
-  const seed = await fetchDcfSeed(ticker);
+  const ticker = raw?.trim().toUpperCase() ?? "";
+  const seed = ticker ? await fetchDcfSeed(ticker) : null;
 
-  return <DcfCalculator key={ticker} ticker={ticker} seed={seed} />;
+  return <DcfCalculator key={ticker || "empty"} ticker={ticker} seed={seed} />;
 }

@@ -9,8 +9,8 @@ type PageProps = {
 
 export default async function DividendCalculatorPage({ searchParams }: PageProps) {
   const { ticker: raw } = await searchParams;
-  const ticker = (raw ?? "KO").trim().toUpperCase() || "KO";
-  const seed = await fetchDividendSeed(ticker);
+  const ticker = raw?.trim().toUpperCase() ?? "";
+  const seed = ticker ? await fetchDividendSeed(ticker) : null;
 
-  return <DividendCalculator key={ticker} ticker={ticker} seed={seed} />;
+  return <DividendCalculator key={ticker || "empty"} seed={seed} />;
 }

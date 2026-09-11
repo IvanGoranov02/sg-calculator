@@ -233,8 +233,6 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">{t("annual.sectionTitle")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("annual.sectionSubtitle")}</p>
-        <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
       </div>
 
       <FiscalMetricTable
