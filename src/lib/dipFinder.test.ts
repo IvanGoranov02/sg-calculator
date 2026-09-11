@@ -5,6 +5,7 @@ import {
   DIP_RANGES,
   buildDipHistorySymbolMappings,
   dipChartRowForQuote,
+  dipChartTickStep,
   dipChartYDomain,
   dipChartYTicks,
   dipMetricsForRange,
@@ -83,28 +84,49 @@ describe("dipMetricsForRange", () => {
 });
 
 describe("dipChartYDomain", () => {
-  it("uses mock defaults when data fits within -50/+25", () => {
-    assert.deepEqual(dipChartYDomain([-40, 0, 15]), { min: -50, max: 25 });
+  it("zooms to small moves and always includes 0", () => {
+    const d = dipChartYDomain([-2.1, -0.8, 1.2, 2.4]);
+    assert.deepEqual(d, { min: -3, max: 3 });
+    assert.ok(d.min <= 0 && d.max >= 0);
   });
 
-  it("expands below -50 when dips are deeper", () => {
-    const d = dipChartYDomain([-48, -55, 10]);
-    assert.ok(d.min <= -55);
-    assert.equal(d.max, 25);
+  it("expands for large swings and includes 0", () => {
+    const d = dipChartYDomain([-40, 0, 15]);
+    assert.deepEqual(d, { min: -50, max: 30 });
+    assert.ok(d.min <= 0 && d.max >= 0);
   });
 
-  it("expands above +25 when gains are larger", () => {
-    const d = dipChartYDomain([-10, 30, 22]);
-    assert.equal(d.min, -50);
-    assert.ok(d.max >= 30);
+  it("anchors all-negative data at 0 on the high side", () => {
+    const d = dipChartYDomain([-48, -55, -10]);
+    assert.deepEqual(d, { min: -60, max: 0 });
+    assert.ok(d.min <= 0 && d.max >= 0);
+  });
+
+  it("anchors all-positive data at 0 on the low side", () => {
+    const d = dipChartYDomain([1, 2, 3]);
+    assert.deepEqual(d, { min: 0, max: 4 });
+    assert.ok(d.min <= 0 && d.max >= 0);
+  });
+
+  it("pads a flat series from 0", () => {
+    const d = dipChartYDomain([3, 3, 3]);
+    assert.deepEqual(d, { min: 0, max: 4 });
+    assert.ok(d.min <= 0 && d.max >= 0);
+  });
+});
+
+describe("dipChartTickStep", () => {
+  it("uses finer steps for narrow domains", () => {
+    assert.equal(dipChartTickStep(-3, 3), 1);
+    assert.equal(dipChartTickStep(-12, 8), 2);
+    assert.equal(dipChartTickStep(-50, 25), 10);
   });
 });
 
 describe("dipChartYTicks", () => {
-  it("steps in 5% increments", () => {
-    assert.deepEqual(dipChartYTicks(-50, 25), [
-      -50, -45, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25,
-    ]);
+  it("steps according to domain span", () => {
+    assert.deepEqual(dipChartYTicks(-3, 3), [-3, -2, -1, 0, 1, 2, 3]);
+    assert.deepEqual(dipChartYTicks(-10, 10), [-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10]);
   });
 });
 
