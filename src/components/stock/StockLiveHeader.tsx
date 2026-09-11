@@ -1,34 +1,21 @@
 "use client";
 
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatCurrencyEur, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
+import type { DisplayCurrency } from "@/lib/preferences/preferences";
 import type { StockQuote } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
-const DISPLAY_CCY_KEY = "sg-stock-price-ccy-v1";
-
-type DisplayCcy = "usd" | "eur";
-
-function readStoredCcy(): DisplayCcy {
-  if (typeof window === "undefined") return "usd";
-  try {
-    const v = localStorage.getItem(DISPLAY_CCY_KEY);
-    if (v === "eur" || v === "usd") return v;
-  } catch {
-    /* ignore */
-  }
-  return "usd";
-}
-
 function fmtLive(
   usd: number,
-  ccy: DisplayCcy,
+  ccy: DisplayCurrency,
   eurPerUsd: number | null | undefined,
 ): string {
   if (ccy === "eur" && eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0) {
@@ -44,16 +31,7 @@ type StockLiveHeaderProps = {
 
 export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
   const { t } = useI18n();
-  const [ccy, setCcy] = useState<DisplayCcy>(readStoredCcy);
-
-  const persistCcy = useCallback((next: DisplayCcy) => {
-    setCcy(next);
-    try {
-      localStorage.setItem(DISPLAY_CCY_KEY, next);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const { displayCurrency: ccy, setDisplayCurrency: persistCcy } = usePreferences();
 
   const canEur = eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0;
 

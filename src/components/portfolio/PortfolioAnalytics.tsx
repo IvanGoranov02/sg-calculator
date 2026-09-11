@@ -6,6 +6,8 @@ import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "luci
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { convertPortfolioMoney, type PortfolioFxRates } from "@/lib/portfolioFx";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
+import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
 import { cn } from "@/lib/utils";
 
 export type AnalyticsRow = {
@@ -46,19 +48,8 @@ function money(n: number, currency: string): string {
   }
 }
 
-/** Most frequent holding currency wins; ties prefer EUR then USD. */
-function pickBaseCurrency(rows: AnalyticsRow[]): string {
-  const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.holdingCcy, (counts.get(r.holdingCcy) ?? 0) + 1);
-  let best = "USD";
-  let bestN = -1;
-  for (const [c, n] of counts) {
-    if (n > bestN || (n === bestN && (c === "EUR" || (c === "USD" && best !== "EUR")))) {
-      best = c;
-      bestN = n;
-    }
-  }
-  return best;
+function pickBaseCurrency(preferred: "EUR" | "USD"): string {
+  return preferred;
 }
 
 const SECTOR_COLORS = [
@@ -68,9 +59,10 @@ const SECTOR_COLORS = [
 
 export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates): PortfolioAnalyticsData | null {
   const { t } = useI18n();
+  const { displayCurrency } = usePreferences();
 
   const a = useMemo(() => {
-    const base = pickBaseCurrency(rows);
+    const base = pickBaseCurrency(displayCurrencyToPortfolioCode(displayCurrency));
     const conv = (v: number | null, from: string) =>
       v == null ? null : convertPortfolioMoney(v, from, base, fx);
 
@@ -127,7 +119,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
       best: movers.slice(0, 3),
       worst: movers.slice(-3).reverse(),
     };
-  }, [rows, fx, t]);
+  }, [rows, fx, t, displayCurrency]);
 
   if (a.totalValue <= 0) return null;
   return a;
