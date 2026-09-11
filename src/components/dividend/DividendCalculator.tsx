@@ -75,7 +75,10 @@ function NumberField({
           min={min}
           step={step}
           value={Number.isFinite(value) ? value : ""}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(raw === "" ? Number.NaN : Number(raw));
+          }}
           className={cn("font-mono tabular-nums", suffix ? "pr-8" : undefined)}
         />
         {suffix ? (
