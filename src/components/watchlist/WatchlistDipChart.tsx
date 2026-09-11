@@ -65,7 +65,7 @@ export function dipBarColor(pct: number, yMin: number, yMax: number): string {
   }
   const span = yMax > 0 ? yMax : 1;
   const t = Math.min(1, Math.max(0, pct / span));
-  return lerpColor("#14532d", "#4ade80", t);
+  return lerpColor("#86efac", "#16a34a", t);
 }
 
 type AngledXTickProps = {

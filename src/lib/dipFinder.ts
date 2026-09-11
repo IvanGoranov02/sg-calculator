@@ -166,10 +166,9 @@ export function dipChartYDomain(values: number[]): { min: number; max: number } 
     hi += pad;
   }
 
-  if (dataMin <= 0 && dataMax >= 0) {
-    lo = Math.min(lo, 0);
-    hi = Math.max(hi, 0);
-  }
+  // Always include 0 so Recharts bars baseline correctly and the zero ref line is visible.
+  lo = Math.min(lo, 0);
+  hi = Math.max(hi, 0);
 
   const step = dipChartTickStep(lo, hi);
   let min = roundDownToStep(lo, step);

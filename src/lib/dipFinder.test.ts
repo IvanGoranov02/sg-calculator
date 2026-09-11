@@ -84,31 +84,34 @@ describe("dipMetricsForRange", () => {
 });
 
 describe("dipChartYDomain", () => {
-  it("zooms to small moves instead of a fixed wide domain", () => {
+  it("zooms to small moves and always includes 0", () => {
     const d = dipChartYDomain([-2.1, -0.8, 1.2, 2.4]);
-    assert.ok(d.max - d.min <= 10);
-    assert.ok(d.min <= -2.1);
-    assert.ok(d.max >= 2.4);
+    assert.deepEqual(d, { min: -3, max: 3 });
     assert.ok(d.min <= 0 && d.max >= 0);
   });
 
-  it("expands for large swings", () => {
+  it("expands for large swings and includes 0", () => {
     const d = dipChartYDomain([-40, 0, 15]);
-    assert.ok(d.min <= -40);
-    assert.ok(d.max >= 15);
-    assert.ok(d.max - d.min >= 40);
+    assert.deepEqual(d, { min: -50, max: 30 });
+    assert.ok(d.min <= 0 && d.max >= 0);
   });
 
-  it("expands below deep dips", () => {
-    const d = dipChartYDomain([-48, -55, 10]);
-    assert.ok(d.min <= -55);
-    assert.ok(d.max >= 10);
+  it("anchors all-negative data at 0 on the high side", () => {
+    const d = dipChartYDomain([-48, -55, -10]);
+    assert.deepEqual(d, { min: -60, max: 0 });
+    assert.ok(d.min <= 0 && d.max >= 0);
   });
 
-  it("pads a flat series", () => {
+  it("anchors all-positive data at 0 on the low side", () => {
+    const d = dipChartYDomain([1, 2, 3]);
+    assert.deepEqual(d, { min: 0, max: 4 });
+    assert.ok(d.min <= 0 && d.max >= 0);
+  });
+
+  it("pads a flat series from 0", () => {
     const d = dipChartYDomain([3, 3, 3]);
-    assert.ok(d.min < 3);
-    assert.ok(d.max > 3);
+    assert.deepEqual(d, { min: 0, max: 4 });
+    assert.ok(d.min <= 0 && d.max >= 0);
   });
 });
 
