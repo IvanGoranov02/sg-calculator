@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  BGN_PER_EUR,
   convertPortfolioMoney,
   inferCurrencyFromSymbol,
   listingCurrencyOverride,
@@ -33,6 +34,18 @@ describe("convertPortfolioMoney", () => {
 
   it("leaves same-currency amounts unchanged", () => {
     assert.equal(convertPortfolioMoney(50, "EUR", "EUR", fx), 50);
+  });
+
+  it("converts BGN to EUR via the official peg without live FX", () => {
+    const eur = convertPortfolioMoney(19.5583, "BGN", "EUR", { eurPerUsd: null, gbpPerUsd: null });
+    assert.ok(eur != null);
+    assert.equal(Number(eur!.toFixed(4)), 10);
+  });
+
+  it("converts BGN to USD through EUR peg and spot FX", () => {
+    const usd = convertPortfolioMoney(BGN_PER_EUR, "BGN", "USD", fx);
+    assert.ok(usd != null);
+    assert.equal(Number(usd!.toFixed(2)), 1.18);
   });
 });
 

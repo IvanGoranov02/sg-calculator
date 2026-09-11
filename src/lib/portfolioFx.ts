@@ -9,6 +9,9 @@ export type PortfolioFxRates = {
   gbpPerUsd: number | null;
 };
 
+/** Official BGN↔EUR peg: 1 EUR = 1.95583 BGN (Bulgaria euro adoption, fixed rate). */
+export const BGN_PER_EUR = 1.95583;
+
 export function normalizePortfolioCurrency(raw: string | null | undefined): string {
   const c = (raw ?? "USD").trim().toUpperCase();
   if (c === "GBX") return "GBP";
@@ -54,7 +57,7 @@ export function listingCurrencyOverride(symbol: string): string | null {
 
 /**
  * Convert `amount` from `from` to `to`. Returns null if cross-rate is unavailable.
- * Supports USD, EUR, GBP via USD bridge.
+ * Supports USD, EUR, GBP via USD bridge; BGN via the official EUR peg.
  */
 export function convertPortfolioMoney(
   amount: number,
@@ -67,6 +70,9 @@ export function convertPortfolioMoney(
   const t = normalizePortfolioCurrency(to);
   if (f === t) return amount;
 
+  if (f === "BGN" && t === "EUR") return amount / BGN_PER_EUR;
+  if (f === "EUR" && t === "BGN") return amount * BGN_PER_EUR;
+
   const toUsd = (amt: number, ccy: string): number | null => {
     if (ccy === "USD") return amt;
     if (ccy === "EUR") {
@@ -76,6 +82,11 @@ export function convertPortfolioMoney(
     if (ccy === "GBP") {
       if (fx.gbpPerUsd == null || fx.gbpPerUsd <= 0) return null;
       return amt / fx.gbpPerUsd;
+    }
+    if (ccy === "BGN") {
+      const eur = amt / BGN_PER_EUR;
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
+      return eur / fx.eurPerUsd;
     }
     return null;
   };
@@ -89,6 +100,10 @@ export function convertPortfolioMoney(
     if (ccy === "GBP") {
       if (fx.gbpPerUsd == null || fx.gbpPerUsd <= 0) return null;
       return usd * fx.gbpPerUsd;
+    }
+    if (ccy === "BGN") {
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
+      return usd * fx.eurPerUsd * BGN_PER_EUR;
     }
     return null;
   };
