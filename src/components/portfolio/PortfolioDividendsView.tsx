@@ -126,13 +126,11 @@ export function PortfolioDividendsView({
 
   const chartData = useMemo(() => {
     if (!data?.chartSeries.length) return [];
-    return data.chartSeries
-      .filter((p) => p.income != null && Number.isFinite(p.income))
-      .map((p) => ({
-        month: formatMonthKeyLabel(p.month, locale),
-        income: p.income as number,
-        rawMonth: p.month,
-      }));
+    return data.chartSeries.map((p) => ({
+      month: formatMonthKeyLabel(p.month, locale),
+      income: p.income != null && Number.isFinite(p.income) ? p.income : 0,
+      rawMonth: p.month,
+    }));
   }, [data, locale]);
 
   async function onDeleteManual(id: string) {

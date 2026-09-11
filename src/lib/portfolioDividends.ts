@@ -261,23 +261,44 @@ export function incomeGrowthPillsFromMonthly(
   return any ? pills : null;
 }
 
+function monthIncomeInBaseCurrency(
+  m: PortfolioDividendMonth,
+  base: string,
+  fx: PortfolioFxRates,
+): number | null {
+  if (m.totals.length === 0) return null;
+  let total = 0;
+  for (const t of m.totals) {
+    const converted = convertPortfolioMoney(t.amount, t.currency, base, fx);
+    if (converted == null) return null;
+    total += converted;
+  }
+  return total;
+}
+
+/** Chart series with every calendar month from first to last payment; quiet months have income 0. */
 export function buildMonthlyChartSeries(
   monthly: PortfolioDividendMonth[],
   baseCurrency: string,
   fx: PortfolioFxRates,
 ): PortfolioDividendChartPoint[] {
+  if (monthly.length === 0) return [];
+
   const base = normalizePortfolioCurrency(baseCurrency);
-  return monthly.map((m) => {
-    if (m.totals.length === 0) return { month: m.month, income: null };
-    let total = 0;
-    for (const t of m.totals) {
-      const converted = convertPortfolioMoney(t.amount, t.currency, base, fx);
-      if (converted == null) {
-        return { month: m.month, income: null };
-      }
-      total += converted;
-    }
-    return { month: m.month, income: total };
+  const minMonth = monthly[0]!.month;
+  const maxMonth = monthly[monthly.length - 1]!.month;
+  const calendar = calendarMonthsBetween(minMonth, maxMonth);
+  const incomeByMonth = new Map<string, number | null>();
+  for (const m of monthly) {
+    incomeByMonth.set(m.month, monthIncomeInBaseCurrency(m, base, fx));
+  }
+
+  return calendar.map((month) => {
+    const income = incomeByMonth.get(month);
+    return {
+      month,
+      income: income !== undefined ? income : 0,
+    };
   });
 }
 

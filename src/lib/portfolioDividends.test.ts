@@ -96,6 +96,38 @@ describe("buildMonthlyIncome", () => {
 });
 
 describe("buildMonthlyChartSeries", () => {
+  it("zero-fills quiet calendar months on the chart x-axis", () => {
+    const monthly = buildMonthlyIncome([
+      {
+        id: "1",
+        source: "manual",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        amount: 10,
+        currency: "USD",
+        paidOn: "2024-06-15",
+      },
+      {
+        id: "2",
+        source: "manual",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        amount: 20,
+        currency: "USD",
+        paidOn: "2024-08-15",
+      },
+    ]);
+    const chart = buildMonthlyChartSeries(monthly, "USD", { eurPerUsd: null, gbpPerUsd: null });
+    assert.deepEqual(
+      chart.map((p) => ({ month: p.month, income: p.income })),
+      [
+        { month: "2024-06", income: 10 },
+        { month: "2024-07", income: 0 },
+        { month: "2024-08", income: 20 },
+      ],
+    );
+  });
+
   it("returns null income when FX conversion is unavailable for foreign currency", () => {
     const monthly = buildMonthlyIncome([
       {
