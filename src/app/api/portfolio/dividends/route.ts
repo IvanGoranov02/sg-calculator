@@ -64,6 +64,7 @@ export async function GET(request: Request) {
               symbolT212: h.symbolT212,
               currency: h.currency,
               brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
+              source: h.source,
             })),
           )
         : Promise.resolve({} as Record<string, import("@/lib/portfolioMarketData").PortfolioQuoteRow | null>),

@@ -5,8 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException } from "@/lib/serverDebugLog";
-import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
-import { t212TickerToYahoo } from "@/lib/t212Ticker";
+import { mapT212PositionToHolding, mergeT212HoldingRows } from "@/lib/t212PositionSync";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
 import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
 
@@ -65,68 +64,39 @@ export async function POST() {
     const manualSymbols = new Set(manualSymbolsRows.map((r) => r.symbolYahoo));
     const skippedDueToManual: string[] = [];
 
+    if (positions.length === 0) {
+      const existingT212 = await prisma.portfolioHolding.count({
+        where: { userId, source: "t212" },
+      });
+      if (existingT212 > 0) {
+        return Response.json(
+          {
+            error:
+              "Trading 212 returned no open positions; your synced holdings were not changed. Try again in a moment.",
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    const accountCurrency = summary?.currency ?? null;
     const rows: Prisma.PortfolioHoldingCreateManyInput[] = [];
     for (const p of positions) {
-      const qty = Number(p.quantity ?? 0);
-      if (!Number.isFinite(qty) || qty === 0) continue;
-      const ticker = p.instrument?.ticker;
-      if (!ticker) continue;
-      const yahoo = t212TickerToYahoo(ticker);
-      if (manualSymbols.has(yahoo)) {
-        if (!skippedDueToManual.includes(yahoo)) skippedDueToManual.push(yahoo);
+      const row = mapT212PositionToHolding(p, userId, accountCurrency);
+      if (!row) continue;
+      if (manualSymbols.has(row.symbolYahoo)) {
+        if (!skippedDueToManual.includes(row.symbolYahoo)) skippedDueToManual.push(row.symbolYahoo);
         continue;
       }
-      const avg = Number(p.averagePricePaid ?? 0);
-      const cur = normalizePortfolioCurrency(
-        p.walletImpact?.currency ?? p.instrument?.currency ?? summary?.currency ?? "USD",
-      );
-      const brokerPx = Number(p.currentPrice ?? 0);
-      rows.push({
-        userId,
-        symbolYahoo: yahoo,
-        symbolT212: ticker,
-        quantity: new Prisma.Decimal(qty),
-        avgPrice: new Prisma.Decimal(Number.isFinite(avg) ? avg : 0),
-        currency: cur,
-        brokerPrice:
-          Number.isFinite(brokerPx) && brokerPx > 0 ? new Prisma.Decimal(brokerPx) : null,
-        source: "t212",
-      });
+      rows.push(row);
     }
+
+    const mergedRows = mergeT212HoldingRows(rows);
 
     await prisma.$transaction(async (tx) => {
       await tx.portfolioHolding.deleteMany({ where: { userId, source: "t212" } });
-      if (rows.length > 0) {
-        // Several T212 positions can map to one Yahoo symbol; combine them instead of dropping.
-        const bySymbol = new Map<string, (typeof rows)[0]>();
-        for (const r of rows) {
-          const prev = bySymbol.get(r.symbolYahoo);
-          if (!prev) {
-            bySymbol.set(r.symbolYahoo, r);
-            continue;
-          }
-          const prevQty = Number(prev.quantity);
-          const qty = Number(r.quantity);
-          const totalQty = prevQty + qty;
-          const sameCurrency = prev.currency === r.currency;
-          bySymbol.set(r.symbolYahoo, {
-            ...prev,
-            quantity: new Prisma.Decimal(totalQty),
-            avgPrice:
-              sameCurrency && totalQty > 0
-                ? new Prisma.Decimal(
-                    (Number(prev.avgPrice) * prevQty + Number(r.avgPrice) * qty) / totalQty,
-                  )
-                : prevQty >= qty
-                  ? prev.avgPrice
-                  : r.avgPrice,
-            brokerPrice:
-              qty >= prevQty && r.brokerPrice != null
-                ? r.brokerPrice
-                : prev.brokerPrice ?? r.brokerPrice ?? null,
-          });
-        }
-        await tx.portfolioHolding.createMany({ data: [...bySymbol.values()] });
+      if (mergedRows.length > 0) {
+        await tx.portfolioHolding.createMany({ data: mergedRows });
       }
       await tx.trading212Connection.update({
         where: { userId },
@@ -150,7 +120,7 @@ export async function POST() {
 
     return Response.json({
       ok: true,
-      positionsSynced: rows.length,
+      positionsSynced: mergedRows.length,
       skippedDueToManual,
       accountCurrency: summary?.currency ?? null,
       totalValue: summary?.totalValue ?? null,

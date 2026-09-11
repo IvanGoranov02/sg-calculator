@@ -160,8 +160,10 @@ export function shouldPreferBrokerPrice(
   holdingCurrency: string | null,
   symbolT212: string | null,
   blocked: Set<string>,
+  options?: { brokerFirst?: boolean },
 ): boolean {
   if (!broker) return false;
+  if (options?.brokerFirst) return true;
   if (!best) return true;
 
   const hold = holdingCurrency ? normalizePortfolioCurrency(holdingCurrency) : null;
