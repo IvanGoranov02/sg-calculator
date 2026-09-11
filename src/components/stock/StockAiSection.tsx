@@ -63,7 +63,7 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
 
   if (loading && !markdown) {
     return (
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader className="flex flex-row items-center gap-2">
           <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
           <div>
@@ -77,7 +77,7 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
 
   if (error) {
     return (
-      <Card className="border-amber-500/20 bg-zinc-900/40">
+      <Card className="border-amber-500/20 bg-card">
         <CardHeader>
           <CardTitle className="text-base text-amber-200/90">{t("ai.unavailableTitle")}</CardTitle>
           <CardDescription className="text-muted-foreground">{error}</CardDescription>
@@ -105,7 +105,7 @@ export function StockAiSection({ symbol }: StockAiSectionProps) {
           </span>
         ) : null}
       </div>
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardContent className="prose prose-invert prose-sm max-w-none px-5 pb-6 pt-6 prose-p:my-3 prose-p:leading-relaxed prose-ul:my-3 prose-ul:space-y-2 prose-li:my-0.5 prose-headings:text-foreground prose-headings:mt-6 prose-headings:mb-2 prose-headings:scroll-mt-20 prose-strong:text-foreground">
           <AiMarkdown html={simpleMarkdownToHtml(markdown)} />
         </CardContent>

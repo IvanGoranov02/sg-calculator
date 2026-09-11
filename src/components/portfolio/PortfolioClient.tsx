@@ -11,7 +11,13 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatDecimalAsPercent, formatDividendYieldPercent, formatPercent } from "@/lib/format";
+import {
+  formatDecimalAsPercent,
+  formatDividendYieldPercent,
+  formatLocaleDateShort,
+  formatPercent,
+  resolveDateLocaleTag,
+} from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
@@ -81,18 +87,9 @@ function isEarningsSoon(iso: string): boolean {
   return days >= -1 && days <= 14;
 }
 
-function formatEarnings(iso: string, locale: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export function PortfolioClient() {
   const { t, locale } = useI18n();
-  const { displayCurrency } = usePreferences();
+  const { displayCurrency, dateFormat } = usePreferences();
   const preferredPortfolioCurrency = displayCurrencyToPortfolioCode(displayCurrency);
   const { status } = useSession();
   const router = useRouter();
@@ -544,7 +541,7 @@ export function PortfolioClient() {
 
   if (!signedIn) {
     return (
-      <Card className="border-white/10 bg-zinc-900/50">
+      <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle>{t("portfolio.signInTitle")}</CardTitle>
           <CardDescription>{t("portfolio.signInDesc")}</CardDescription>
@@ -565,7 +562,7 @@ export function PortfolioClient() {
         <Button
           type="button"
           variant="outline"
-          className="w-full shrink-0 border-white/15 sm:w-auto"
+          className="w-full shrink-0 border-border sm:w-auto"
           onClick={() => void refreshPortfolioData()}
           disabled={loading}
           aria-busy={loading}
@@ -638,17 +635,17 @@ export function PortfolioClient() {
           {t("portfolio.loading")}
         </div>
       ) : holdings.length === 0 ? (
-        <Card className="border-dashed border-white/15 bg-transparent">
+        <Card className="border-dashed border-border bg-transparent">
           <CardHeader>
             <CardTitle className="text-base">{t("portfolio.emptyTitle")}</CardTitle>
             <CardDescription>{t("portfolio.emptyDesc")}</CardDescription>
           </CardHeader>
         </Card>
       ) : (
-        <div className="-mx-4 rounded-lg border border-white/10 sm:mx-0">
+        <div className="-mx-4 rounded-lg border border-border sm:mx-0">
           <Table className="min-w-[36rem] sm:min-w-[44rem] md:min-w-full">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="hidden lg:table-cell">{t("portfolio.colSource")}</TableHead>
                 <TableHead>{t("portfolio.colSymbol")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.colQty")}</TableHead>
@@ -667,7 +664,7 @@ export function PortfolioClient() {
             </TableHeader>
             <TableBody>
               {rows.map(({ h, q, qQty, holdingCcy, mv, cost, pl, plPct, estAnnual, fxMismatch, priceInHolding }) => (
-                <TableRow key={h.id} className="border-white/10">
+                <TableRow key={h.id} className="border-border">
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
                     {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                   </TableCell>
@@ -689,7 +686,7 @@ export function PortfolioClient() {
                   <TableCell className="text-right tabular-nums">
                     {editingId === h.id && h.source === "manual" ? (
                       <Input
-                        className="h-8 border-white/10 bg-zinc-950"
+                        className="h-8 border-border bg-background"
                         value={editQty}
                         onChange={(e) => setEditQty(e.target.value)}
                       />
@@ -700,7 +697,7 @@ export function PortfolioClient() {
                   <TableCell className="text-right tabular-nums">
                     {editingId === h.id && h.source === "manual" ? (
                       <Input
-                        className="h-8 border-white/10 bg-zinc-950"
+                        className="h-8 border-border bg-background"
                         value={editAvg}
                         onChange={(e) => setEditAvg(e.target.value)}
                       />
@@ -767,7 +764,7 @@ export function PortfolioClient() {
                   <TableCell className="hidden text-right text-xs tabular-nums lg:table-cell">
                     {q?.nextEarnings ? (
                       <span className={cn(isEarningsSoon(q.nextEarnings) ? "text-amber-400" : "text-muted-foreground")}>
-                        {formatEarnings(q.nextEarnings, locale)}
+                        {formatLocaleDateShort(q.nextEarnings, locale, dateFormat)}
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -780,7 +777,7 @@ export function PortfolioClient() {
                           <select
                             value={editCurrency}
                             onChange={(e) => setEditCurrency(e.target.value)}
-                            className="h-8 rounded-md border border-white/10 bg-zinc-950 px-2 text-xs text-foreground"
+                            className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
                             aria-label={t("portfolio.manualCurrency")}
                           >
                             {MANUAL_CURRENCIES.map((c) => (
@@ -835,14 +832,14 @@ export function PortfolioClient() {
       {analytics ? <PortfolioSectorSection analytics={analytics} /> : null}
 
       {holdings.length > 0 ? (
-        <div className="rounded-lg border border-white/10 px-4 py-4">
+        <div className="rounded-lg border border-border px-4 py-4">
           <DipFinderPanel quotes={dipQuotes} history={dipHistory} compact />
         </div>
       ) : null}
 
       {analytics ? <PortfolioMoversSection analytics={analytics} /> : null}
 
-      <Card className="border-white/10 bg-zinc-900/50">
+      <Card className="border-border bg-card">
         <CardHeader className="space-y-1 pb-2 sm:pb-6">
           <CardTitle className="text-base sm:text-lg">{t("portfolio.manualTitle")}</CardTitle>
         </CardHeader>
@@ -861,7 +858,7 @@ export function PortfolioClient() {
                 const listing = listingCurrencyOverride(v);
                 if (listing) setManualCurrency(listing);
               }}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -871,7 +868,7 @@ export function PortfolioClient() {
               inputMode="decimal"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -881,7 +878,7 @@ export function PortfolioClient() {
               inputMode="decimal"
               value={avg}
               onChange={(e) => setAvg(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -890,7 +887,7 @@ export function PortfolioClient() {
               id="m-ccy"
               value={manualCurrency}
               onChange={(e) => setManualCurrency(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
             >
               {MANUAL_CURRENCIES.map((c) => (
                 <option key={c} value={c}>
@@ -907,15 +904,15 @@ export function PortfolioClient() {
         </form>
       </Card>
 
-      <details className="group rounded-xl border border-white/10 bg-zinc-900/50 [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-white/5 sm:px-6 sm:py-4 sm:text-base">
+      <details className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-muted/50 sm:px-6 sm:py-4 sm:text-base">
           <span>{t("portfolio.t212Title")}</span>
           <ChevronDown
             className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
             aria-hidden
           />
         </summary>
-        <div className="space-y-4 border-t border-white/10 px-4 pb-6 pt-2 sm:px-6">
+        <div className="space-y-4 border-t border-border px-4 pb-6 pt-2 sm:px-6">
           <p className="text-sm text-muted-foreground">
             {t("portfolio.t212Desc")}{" "}
             <a
@@ -938,7 +935,7 @@ export function PortfolioClient() {
                 id="t212-env"
                 value={t212Env}
                 onChange={(e) => setT212Env(e.target.value === "live" ? "live" : "demo")}
-                className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
               >
                 <option value="demo">{t("portfolio.envDemo")}</option>
                 <option value="live">{t("portfolio.envLive")}</option>
@@ -952,7 +949,7 @@ export function PortfolioClient() {
                 autoComplete="off"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="border-white/10 bg-zinc-950"
+                className="border-border bg-background"
               />
             </div>
             <div className="grid gap-2">
@@ -963,7 +960,7 @@ export function PortfolioClient() {
                 autoComplete="off"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
-                className="border-white/10 bg-zinc-950"
+                className="border-border bg-background"
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1007,7 +1004,10 @@ export function PortfolioClient() {
             <p className="text-xs text-muted-foreground">
               {trading212.lastSyncAt
                 ? t("portfolio.lastSync", {
-                    time: new Date(trading212.lastSyncAt).toLocaleString(),
+                    time: new Date(trading212.lastSyncAt).toLocaleString(
+                      resolveDateLocaleTag(locale, dateFormat),
+                      { dateStyle: "short", timeStyle: "short" },
+                    ),
                   })
                 : t("portfolio.neverSynced")}
               {trading212.lastError

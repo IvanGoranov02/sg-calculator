@@ -170,7 +170,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
   const a = analytics;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
         <CardDescription>{t("portfolioAnalytics.allocationDesc", { base: a.base })}</CardDescription>
@@ -198,7 +198,7 @@ export function PortfolioSectorSection({ analytics }: { analytics: PortfolioAnal
   if (!a.hasRealSectors) return null;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
         <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
@@ -226,7 +226,7 @@ export function PortfolioMoversSection({ analytics }: { analytics: PortfolioAnal
   if (a.best.length === 0) return null;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.moversTitle")}</CardTitle>
       </CardHeader>
@@ -252,7 +252,7 @@ function SummaryCard({
   tone?: "pos" | "neg";
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="text-muted-foreground/70">{icon}</span>
         {label}

@@ -6,6 +6,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatLocaleDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import type { T212DividendRow } from "@/lib/t212Dividends";
 
 function fmtMoney(n: number, currency: string) {
@@ -26,6 +27,7 @@ type T212RecentDividendsProps = {
 
 export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
   const { t, locale } = useI18n();
+  const { dateFormat } = usePreferences();
   const [rows, setRows] = useState<T212DividendRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
   const empty = !loading && rows.length === 0;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="space-y-1 pb-2">
         <CardTitle className="text-base sm:text-lg">{t("portfolio.t212DivTitle")}</CardTitle>
         <CardDescription className="text-xs sm:text-sm">{t("portfolio.t212DivHint")}</CardDescription>
@@ -80,7 +82,7 @@ export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
         <div className="-mx-px overflow-x-auto">
           <Table className="min-w-[28rem]">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>{t("portfolio.t212DivColTicker")}</TableHead>
                 <TableHead className="text-right">{t("portfolio.t212DivColAmount")}</TableHead>
                 <TableHead>{t("portfolio.t212DivColCurrency")}</TableHead>
@@ -89,13 +91,15 @@ export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
             </TableHeader>
             <TableBody>
               {rows.map((r, i) => (
-                <TableRow key={`${r.ticker}-${r.paidOn ?? i}`} className="border-white/10">
+                <TableRow key={`${r.ticker}-${r.paidOn ?? i}`} className="border-border">
                   <TableCell className="font-mono font-medium">{r.ticker}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.amount != null ? fmtMoney(r.amount, r.currency === "—" ? "USD" : r.currency) : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{r.currency}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatLocaleDate(r.paidOn, locale)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatLocaleDate(r.paidOn, locale, dateFormat)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

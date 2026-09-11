@@ -95,7 +95,7 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
       : t("valuation.aboveEstimate", { pct: Math.abs(discount).toFixed(0) });
 
   return (
-    <Card className={cn("border bg-zinc-900/40", tone.border)}>
+    <Card className={cn("border bg-card", tone.border)}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Gauge className={cn("size-4", tone.text)} aria-hidden />
@@ -119,7 +119,7 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
             className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-full opacity-40", tone.bar)}
             style={{ left: `${bandLeft}%`, width: `${bandWidth}%` }}
           />
-          <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-white/10" />
+          <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-border" />
           {/* current price marker (label lives in the caption above, so it can't clip) */}
           <div
             className="absolute top-1/2 h-5 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-foreground"
@@ -143,7 +143,7 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
 
 function Method({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+    <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
       <p className="text-[11px] text-muted-foreground">{label}</p>
       <p className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{value}</p>
     </div>

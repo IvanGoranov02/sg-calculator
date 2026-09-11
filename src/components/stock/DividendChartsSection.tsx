@@ -196,7 +196,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             size="sm"
             disabled={isRefreshing}
             onClick={onReloadYahoo}
-            className="border-white/15 bg-zinc-900/50"
+            className="border-border bg-card"
           >
             <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
             {t("chartsFund.dividendRefreshData")}
@@ -208,7 +208,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
               size="sm"
               disabled={aiLoading}
               onClick={onReloadAi}
-              className="border-white/15 bg-zinc-900/50"
+              className="border-border bg-card"
             >
               <Sparkles className="size-3.5" />
               {t("chartsFund.dividendRefreshAi")}
@@ -226,15 +226,15 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             <p className="text-xs text-muted-foreground">{t("chartsFund.dividendAiLoading")}</p>
           ) : null}
           {aiNote ? (
-            <div className="rounded-lg border border-white/10 bg-zinc-900/50 p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <p className="text-xs font-medium text-muted-foreground">{t("chartsFund.dividendAiContextTitle")}</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{aiNote}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{aiNote}</p>
             </div>
           ) : null}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="border-white/10 bg-zinc-900/40 sm:col-span-2">
+          <Card className="border-border bg-card sm:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{t("chartsFund.dividendTtmTitle")}</CardTitle>
             </CardHeader>
@@ -243,7 +243,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
                 <div className="absolute inset-0 min-h-0 min-w-0">
                   <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <BarChart data={pack.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                       <XAxis
                         dataKey="label"
                         tick={(props) => (
@@ -274,7 +274,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
                         }
                         contentStyle={{
                           background: "rgba(9,9,11,0.95)",
-                          border: "1px solid rgba(255,255,255,0.1)",
+                          border: "1px solid var(--border)",
                           borderRadius: "8px",
                           fontSize: "12px",
                         }}

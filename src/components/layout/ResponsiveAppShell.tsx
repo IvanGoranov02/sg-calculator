@@ -39,7 +39,7 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
   }
 
   return (
-    <div className="flex min-h-dvh bg-zinc-950">
+    <div className="flex min-h-dvh bg-background">
       <aside className="hidden shrink-0 lg:sticky lg:top-0 lg:z-30 lg:flex lg:h-dvh lg:max-h-dvh lg:self-start">
         <Sidebar collapsed={sidebarCollapsed} onToggleCollapsed={toggleSidebarCollapsed} />
       </aside>

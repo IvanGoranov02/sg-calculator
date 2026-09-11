@@ -31,7 +31,7 @@ export function StockLoadProgressBar({ event, percent, connecting }: Props) {
         <span className="shrink-0 font-mono tabular-nums text-foreground/90">{Math.round(pct)}%</span>
       </div>
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/90"
+        className="h-2 w-full overflow-hidden rounded-full bg-muted"
         role="progressbar"
         aria-valuenow={Math.round(pct)}
         aria-valuemin={0}

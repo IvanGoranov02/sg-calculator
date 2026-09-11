@@ -94,13 +94,35 @@ export function normalizeIsoDateString(raw: string | null | undefined): string |
   return new Date(parsed).toISOString().slice(0, 10);
 }
 
+export type DateFormat = "dmy" | "mdy";
+
+/** Resolve BCP-47 tag for date-only display from user preference. */
+export function resolveDateLocaleTag(locale: string, dateFormat: DateFormat): string {
+  if (locale === "bg" && dateFormat === "dmy") return "bg-BG";
+  return dateFormat === "dmy" ? "en-GB" : "en-US";
+}
+
 /** Locale date for portfolio dividend fields; never returns "Invalid Date". */
-export function formatLocaleDate(iso: string | null | undefined, locale: string): string {
+export function formatLocaleDate(
+  iso: string | null | undefined,
+  locale: string,
+  dateFormat: DateFormat = "mdy",
+): string {
   const normalized = normalizeIsoDateString(iso);
   if (!normalized) return "—";
   const d = new Date(`${normalized}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US");
+  return d.toLocaleDateString(resolveDateLocaleTag(locale, dateFormat));
+}
+
+/** Short month + day (e.g. earnings dates); respects date format preference. */
+export function formatLocaleDateShort(iso: string, locale: string, dateFormat: DateFormat = "mdy"): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(resolveDateLocaleTag(locale, dateFormat), {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /** Short month label from yyyy-mm; dash when unparseable. */

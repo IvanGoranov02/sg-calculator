@@ -20,7 +20,7 @@ function MetricTable({ title, rows }: { title: string; rows: Row[] }) {
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
-      <dl className="divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
+      <dl className="divide-y divide-border overflow-hidden rounded-lg border border-border">
         {visible.map((row) => (
           <div key={row.label} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
             <dt className="min-w-0 flex-1 text-sm leading-snug text-muted-foreground">{row.label}</dt>
@@ -137,8 +137,8 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
   ];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
-      <div className="border-b border-white/10 px-5 py-4">
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-sm">
+      <div className="border-b border-border px-5 py-4">
         <h2 className="text-lg font-semibold tracking-tight">{t("investor.title")}</h2>
       </div>
       <div className="space-y-8 px-5 py-6">

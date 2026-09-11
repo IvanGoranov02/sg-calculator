@@ -18,7 +18,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
-import type { AppTheme, DisplayCurrency } from "@/lib/preferences/preferences";
+import type { AppTheme, DateFormat, DisplayCurrency } from "@/lib/preferences/preferences";
 import { cn } from "@/lib/utils";
 
 function SettingsToggleGroup<T extends string>({
@@ -62,7 +62,8 @@ function SettingsToggleGroup<T extends string>({
 
 function ProfileSettingsPanel() {
   const { t } = useI18n();
-  const { theme, setTheme, displayCurrency, setDisplayCurrency } = usePreferences();
+  const { theme, setTheme, displayCurrency, setDisplayCurrency, dateFormat, setDateFormat } =
+    usePreferences();
   const { data: session } = useSession();
   const user = session?.user;
 
@@ -113,6 +114,16 @@ function ProfileSettingsPanel() {
             { value: "eur", label: "EUR" },
           ]}
           onChange={setDisplayCurrency}
+        />
+
+        <SettingsToggleGroup<DateFormat>
+          label={t("settings.dateFormat")}
+          value={dateFormat}
+          options={[
+            { value: "dmy", label: t("settings.dateFormatDmy") },
+            { value: "mdy", label: t("settings.dateFormatMdy") },
+          ]}
+          onChange={setDateFormat}
         />
 
         <div className="space-y-2">

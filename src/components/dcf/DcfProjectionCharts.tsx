@@ -41,7 +41,7 @@ function ChartTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-md border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-lg">
       <p className="mb-1 font-medium text-foreground">{label}</p>
       {payload.map((p) =>
         p.value != null ? (
@@ -86,7 +86,7 @@ export function DcfProjectionCharts({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card className="border-white/10 bg-zinc-900/40 lg:col-span-2">
+      <Card className="border-border bg-card lg:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">{t("dcf.chartProjectedTitle")}</CardTitle>
           <CardDescription>
@@ -96,7 +96,7 @@ export function DcfProjectionCharts({
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={projectionRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="#71717a" />
               <YAxis
                 yAxisId="left"
@@ -128,7 +128,7 @@ export function DcfProjectionCharts({
         </CardContent>
       </Card>
 
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">{t("dcf.chartCumulativeTitle")}</CardTitle>
           <CardDescription>{t("dcf.chartCumulativeDesc")}</CardDescription>
@@ -136,7 +136,7 @@ export function DcfProjectionCharts({
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={projectionRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="#71717a" />
               <YAxis tick={{ fontSize: 11 }} stroke="#71717a" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
               <Tooltip
@@ -162,7 +162,7 @@ export function DcfProjectionCharts({
         </CardContent>
       </Card>
 
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">{t("dcf.chartValuationTitle")}</CardTitle>
           <CardDescription>{t("dcf.chartValuationDesc")}</CardDescription>
@@ -170,14 +170,14 @@ export function DcfProjectionCharts({
         <CardContent className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={valuationRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#71717a" />
               <YAxis tick={{ fontSize: 11 }} stroke="#71717a" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
               <Tooltip
                 formatter={(v) => formatCurrency(Number(v))}
                 contentStyle={{
                   background: "rgba(9,9,11,0.95)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  border: "1px solid var(--border)",
                   borderRadius: 6,
                   fontSize: 12,
                 }}

@@ -12,7 +12,7 @@ type GrowthPillProps = {
 export function GrowthPill({ label, pct, invertColors = false }: GrowthPillProps) {
   if (pct == null || !Number.isFinite(pct)) {
     return (
-      <span className="rounded-full bg-zinc-800/90 px-2.5 py-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <span className="rounded-full bg-muted px-2.5 py-1 font-mono text-[11px] tabular-nums text-muted-foreground">
         {label}: —
       </span>
     );

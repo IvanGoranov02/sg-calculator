@@ -44,7 +44,7 @@ export function StockNewsSection({ symbol, name }: Props) {
   if (items != null && items.length === 0) return null;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Newspaper className="size-4 text-emerald-400" aria-hidden />
@@ -55,7 +55,7 @@ export function StockNewsSection({ symbol, name }: Props) {
       <div className="grid gap-2 px-6 pb-6 sm:grid-cols-2">
         {items == null
           ? Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg border border-white/5 bg-zinc-800/40" />
+              <div key={i} className="h-16 animate-pulse rounded-lg border border-border/60 bg-muted" />
             ))
           : items.map((item) => {
               const ago = timeAgo(item.publishedAt, locale);
@@ -65,7 +65,7 @@ export function StockNewsSection({ symbol, name }: Props) {
                   href={item.link}
                   target="_blank"
                   rel="noreferrer"
-                  className="group rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2.5 transition-colors hover:border-emerald-500/30 hover:bg-zinc-900/60"
+                  className="group rounded-lg border border-border bg-muted/50 px-3 py-2.5 transition-colors hover:border-emerald-500/30 hover:bg-card"
                 >
                   <p className="line-clamp-2 text-sm text-foreground/90 group-hover:text-foreground">
                     {item.title}

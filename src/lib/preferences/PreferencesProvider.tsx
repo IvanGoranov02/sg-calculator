@@ -12,8 +12,11 @@ import {
 
 import {
   AppTheme,
+  DATE_FORMAT_STORAGE_KEY,
+  DateFormat,
   DISPLAY_CURRENCY_STORAGE_KEY,
   DisplayCurrency,
+  readStoredDateFormat,
   readStoredDisplayCurrency,
   readStoredTheme,
   THEME_STORAGE_KEY,
@@ -21,6 +24,7 @@ import {
 
 const THEME_EVENT = "sg-theme-changed";
 const CURRENCY_EVENT = "sg-currency-changed";
+const DATE_FORMAT_EVENT = "sg-date-format-changed";
 
 function subscribeTheme(onChange: () => void): () => void {
   if (typeof window === "undefined") return () => {};
@@ -50,6 +54,20 @@ function subscribeCurrency(onChange: () => void): () => void {
   };
 }
 
+function subscribeDateFormat(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === DATE_FORMAT_STORAGE_KEY) onChange();
+  };
+  const onLocal = () => onChange();
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(DATE_FORMAT_EVENT, onLocal);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(DATE_FORMAT_EVENT, onLocal);
+  };
+}
+
 function applyThemeClass(theme: AppTheme): void {
   document.documentElement.classList.toggle("dark", theme === "dark");
 }
@@ -59,6 +77,8 @@ type PreferencesContextValue = {
   setTheme: (theme: AppTheme) => void;
   displayCurrency: DisplayCurrency;
   setDisplayCurrency: (currency: DisplayCurrency) => void;
+  dateFormat: DateFormat;
+  setDateFormat: (format: DateFormat) => void;
 };
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -69,6 +89,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     subscribeCurrency,
     readStoredDisplayCurrency,
     () => "usd" as DisplayCurrency,
+  );
+  const dateFormat = useSyncExternalStore(
+    subscribeDateFormat,
+    readStoredDateFormat,
+    () => "mdy" as DateFormat,
   );
 
   useEffect(() => {
@@ -88,14 +113,22 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new Event(CURRENCY_EVENT));
   }, []);
 
+  const setDateFormat = useCallback((next: DateFormat) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(DATE_FORMAT_STORAGE_KEY, next);
+    window.dispatchEvent(new Event(DATE_FORMAT_EVENT));
+  }, []);
+
   const value = useMemo(
     () => ({
       theme,
       setTheme,
       displayCurrency,
       setDisplayCurrency,
+      dateFormat,
+      setDateFormat,
     }),
-    [theme, setTheme, displayCurrency, setDisplayCurrency],
+    [theme, setTheme, displayCurrency, setDisplayCurrency, dateFormat, setDateFormat],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
