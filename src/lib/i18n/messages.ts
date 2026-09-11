@@ -667,10 +667,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       incomeGrowthHint:
         "Rolling 12-month paid income from Trading 212 history and manual entries (same currency). Needs 13+ months of payments.",
       chartTitle: "Dividend income by month",
-      chartHint: "Paid amounts from Trading 212 and manual entries, in your main portfolio currency when available.",
       chartIncome: "Income",
       positionsTitle: "Dividend payers in portfolio",
-      positionsHint: "Holdings with trailing yield or dividend rate from live quotes.",
       noPayers: "No dividend-paying holdings detected yet.",
       paymentsTitle: "Recent payments",
       paymentsHint: "Trading 212 history (up to ~1000 rows) plus your manual entries.",
@@ -1544,10 +1542,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       incomeGrowthHint:
         "Платени суми за 12 месеца от Trading 212 и ръчни записи (една валута). Нужни са 13+ месеца.",
       chartTitle: "Дивидентен доход по месец",
-      chartHint: "Платени суми от Trading 212 и ръчни записи в основната валута на портфейла, когато е налична.",
       chartIncome: "Доход",
       positionsTitle: "Дивидентни позиции",
-      positionsHint: "Позиции с trailing доходност или дивидент от котировки.",
       noPayers: "Все още няма дивидентни позиции.",
       paymentsTitle: "Скорошни плащания",
       paymentsHint: "История от Trading 212 (до ~1000 реда) плюс ръчни записи.",

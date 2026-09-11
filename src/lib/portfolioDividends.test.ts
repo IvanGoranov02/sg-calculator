@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import {
   buildFilledMonthlyAmounts,
+  buildHoldingMonthlyTimeline,
   buildMonthlyChartSeries,
   buildMonthlyIncome,
   buildPortfolioDividendsPayload,
   calendarMonthsBetween,
   growthPillsFromCachePayload,
   incomeGrowthPillsFromMonthly,
+  paymentMatchesSymbol,
   rollingTtmMonthly,
   type PortfolioDividendPayment,
 } from "@/lib/portfolioDividends";
@@ -247,5 +249,76 @@ describe("growthPillsFromCachePayload", () => {
   it("returns null for empty cache payload", () => {
     assert.equal(growthPillsFromCachePayload(null), null);
     assert.equal(growthPillsFromCachePayload({}), null);
+  });
+});
+
+describe("paymentMatchesSymbol", () => {
+  it("matches symbolYahoo or ticker", () => {
+    const p: PortfolioDividendPayment = {
+      id: "1",
+      source: "manual",
+      ticker: "AAPL_US_EQ",
+      symbolYahoo: "AAPL",
+      amount: 1,
+      currency: "USD",
+      paidOn: "2024-01-01",
+    };
+    assert.equal(paymentMatchesSymbol(p, "AAPL"), true);
+    assert.equal(paymentMatchesSymbol(p, "AAPL_US_EQ"), true);
+    assert.equal(paymentMatchesSymbol(p, "MSFT"), false);
+  });
+});
+
+describe("buildHoldingMonthlyTimeline", () => {
+  it("fills quiet calendar months with null amounts", () => {
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "manual",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        amount: 10,
+        currency: "USD",
+        paidOn: "2024-01-15",
+      },
+      {
+        id: "2",
+        source: "t212",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        amount: 20,
+        currency: "USD",
+        paidOn: "2024-03-20",
+      },
+    ];
+    const timeline = buildHoldingMonthlyTimeline(payments, "AAPL");
+    assert.deepEqual(
+      timeline.map((r) => ({ month: r.month, amount: r.amount })),
+      [
+        { month: "2024-01", amount: 10 },
+        { month: "2024-02", amount: null },
+        { month: "2024-03", amount: 20 },
+      ],
+    );
+  });
+
+  it("normalizes datetime paidOn from T212", () => {
+    const payload = buildPortfolioDividendsPayload({
+      holdings: [],
+      quotes: {},
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      t212Items: [
+        {
+          ticker: "MSFT",
+          amount: 5,
+          currency: "USD",
+          paidOn: "2024-06-15T00:00:00.000Z",
+        },
+      ],
+      manualRows: [],
+      cacheBySymbol: {},
+      trading212: { connected: true },
+    });
+    assert.equal(payload.payments[0]?.paidOn, "2024-06-15");
   });
 });

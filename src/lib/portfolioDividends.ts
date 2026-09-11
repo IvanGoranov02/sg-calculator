@@ -2,6 +2,7 @@ import type { PortfolioHolding } from "@prisma/client";
 
 import { payloadToEditableBundle } from "@/lib/adminCacheApi";
 import { computeTtmDpsGrowthPills, rollingSum4Quarterly } from "@/lib/dividendMetrics";
+import { normalizeIsoDateString } from "@/lib/format";
 import { computeGrowthPills, type GrowthPills } from "@/lib/growthPills";
 import { convertPortfolioMoney, normalizePortfolioCurrency, type PortfolioFxRates } from "@/lib/portfolioFx";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
@@ -43,6 +44,12 @@ export type PortfolioDividendMonth = {
 export type PortfolioDividendChartPoint = {
   month: string;
   income: number | null;
+};
+
+export type HoldingDividendMonthRow = {
+  month: string;
+  amount: number | null;
+  currency: string;
 };
 
 export type PortfolioDividendsPayload = {
@@ -93,9 +100,46 @@ type HoldingDividendMetrics = {
 };
 
 function monthKey(isoDate: string): string | null {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString().slice(0, 7);
+  const normalized = normalizeIsoDateString(isoDate);
+  return normalized ? normalized.slice(0, 7) : null;
+}
+
+export function paymentMatchesSymbol(p: PortfolioDividendPayment, symbol: string): boolean {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return false;
+  if (p.symbolYahoo && p.symbolYahoo.trim().toUpperCase() === sym) return true;
+  if (p.ticker.trim().toUpperCase() === sym) return true;
+  return false;
+}
+
+/** Continuous calendar months for one holding; quiet months have amount null. */
+export function buildHoldingMonthlyTimeline(
+  payments: PortfolioDividendPayment[],
+  symbol: string,
+): HoldingDividendMonthRow[] {
+  const symPayments = payments.filter(
+    (p) => paymentMatchesSymbol(p, symbol) && p.amount > 0 && Number.isFinite(p.amount),
+  );
+  if (symPayments.length === 0) return [];
+
+  const monthAmounts = new Map<string, number>();
+  let currency = "USD";
+  for (const p of symPayments) {
+    const key = monthKey(p.paidOn);
+    if (!key) continue;
+    currency = normalizePortfolioCurrency(p.currency);
+    monthAmounts.set(key, (monthAmounts.get(key) ?? 0) + p.amount);
+  }
+
+  const months = [...monthAmounts.keys()].sort();
+  if (months.length === 0) return [];
+
+  const calendar = calendarMonthsBetween(months[0]!, months[months.length - 1]!);
+  return calendar.map((month) => ({
+    month,
+    amount: monthAmounts.get(month) ?? null,
+    currency,
+  }));
 }
 
 /** Inclusive yyyy-mm range with every calendar month. */
@@ -371,7 +415,7 @@ export function buildPortfolioDividendsPayload(input: {
       symbolYahoo: resolveYahooFromT212Ticker(ticker, input.holdings),
       amount: row.amount ?? 0,
       currency: row.currency === "—" ? "USD" : row.currency,
-      paidOn: row.paidOn ?? "",
+      paidOn: normalizeIsoDateString(row.paidOn) ?? "",
     };
   });
 

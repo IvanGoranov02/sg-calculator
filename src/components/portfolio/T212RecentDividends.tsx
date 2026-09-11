@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatLocaleDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { T212DividendRow } from "@/lib/t212Dividends";
 
@@ -17,17 +18,6 @@ function fmtMoney(n: number, currency: string) {
   } catch {
     return n.toFixed(2);
   }
-}
-
-function formatPaidOn(iso: string | null, locale: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 type T212RecentDividendsProps = {
@@ -105,7 +95,7 @@ export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
                     {r.amount != null ? fmtMoney(r.amount, r.currency === "—" ? "USD" : r.currency) : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{r.currency}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatPaidOn(r.paidOn, locale)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatLocaleDate(r.paidOn, locale)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Loader2, Trash2 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -20,9 +20,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { periodizeAnnualDividend } from "@/lib/dividendEstimate";
-import { formatDecimalAsPercent, formatDividendYieldPercent } from "@/lib/format";
+import {
+  formatDecimalAsPercent,
+  formatDividendYieldPercent,
+  formatLocaleDate,
+  formatMonthKeyLabel,
+} from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { PortfolioDividendsPayload } from "@/lib/portfolioDividends";
+import {
+  buildHoldingMonthlyTimeline,
+  type PortfolioDividendsPayload,
+} from "@/lib/portfolioDividends";
+import { cn } from "@/lib/utils";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -36,15 +45,6 @@ function fmtMoney(n: number, currency: string) {
   } catch {
     return n.toFixed(2);
   }
-}
-
-function formatMonthLabel(month: string, locale: string): string {
-  const d = new Date(`${month}-01T12:00:00Z`);
-  if (Number.isNaN(d.getTime())) return month;
-  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
-    month: "short",
-    year: "2-digit",
-  });
 }
 
 type PortfolioDividendsViewProps = {
@@ -70,6 +70,7 @@ export function PortfolioDividendsView({
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
 
   const load = useCallback(
     async (forceRefresh: boolean) => {
@@ -128,7 +129,7 @@ export function PortfolioDividendsView({
     return data.chartSeries
       .filter((p) => p.income != null && Number.isFinite(p.income))
       .map((p) => ({
-        month: formatMonthLabel(p.month, locale),
+        month: formatMonthKeyLabel(p.month, locale),
         income: p.income as number,
         rawMonth: p.month,
       }));
@@ -279,7 +280,6 @@ export function PortfolioDividendsView({
         <Card className="border-white/10 bg-zinc-900/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">{t("portfolioDividends.chartTitle")}</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">{t("portfolioDividends.chartHint")}</CardDescription>
           </CardHeader>
           <div className="h-64 px-2 pb-4 sm:px-4">
             <ResponsiveContainer width="100%" height="100%">
@@ -306,7 +306,7 @@ export function PortfolioDividendsView({
                   }}
                   labelFormatter={(_, payload) => {
                     const raw = payload?.[0]?.payload?.rawMonth as string | undefined;
-                    return raw ? formatMonthLabel(raw, locale) : "";
+                    return raw ? formatMonthKeyLabel(raw, locale) : "";
                   }}
                 />
                 <Bar dataKey="income" fill="#34d399" radius={[4, 4, 0, 0]} />
@@ -319,7 +319,6 @@ export function PortfolioDividendsView({
       <Card className="border-white/10 bg-zinc-900/40">
         <CardHeader className="space-y-1 pb-2">
           <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.positionsTitle")}</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">{t("portfolioDividends.positionsHint")}</CardDescription>
         </CardHeader>
         {!hasPositions ? (
           <p className="px-4 pb-6 text-sm text-muted-foreground sm:px-6">{t("portfolioDividends.noPayers")}</p>
@@ -337,37 +336,94 @@ export function PortfolioDividendsView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.positions.map((p) => (
-                  <TableRow key={p.symbol} className="border-white/10">
-                    <TableCell className="font-medium">
-                      <Link href={`/stock/${encodeURIComponent(p.symbol)}`} className="text-emerald-400 hover:underline">
-                        {p.symbol}
-                      </Link>
-                      {p.name ? (
-                        <p className="max-w-[12rem] truncate text-xs text-muted-foreground">{p.name}</p>
+                {data.positions.map((p) => {
+                  const holdingMonths = buildHoldingMonthlyTimeline(data.payments, p.symbol);
+                  const isExpanded = expandedSymbol === p.symbol;
+                  const canExpand = holdingMonths.length > 0;
+                  return (
+                    <Fragment key={p.symbol}>
+                      <TableRow
+                        className={cn(
+                          "border-white/10",
+                          canExpand && "cursor-pointer hover:bg-white/[0.03]",
+                        )}
+                        onClick={
+                          canExpand
+                            ? () => setExpandedSymbol((s) => (s === p.symbol ? null : p.symbol))
+                            : undefined
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-start gap-1.5">
+                            {canExpand ? (
+                              <ChevronDown
+                                className={cn(
+                                  "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+                                  isExpanded && "rotate-180",
+                                )}
+                                aria-hidden
+                              />
+                            ) : null}
+                            <div className="min-w-0">
+                              <Link
+                                href={`/stock/${encodeURIComponent(p.symbol)}`}
+                                className="text-emerald-400 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {p.symbol}
+                              </Link>
+                              {p.name ? (
+                                <p className="max-w-[12rem] truncate text-xs text-muted-foreground">{p.name}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatDividendYieldPercent(p.dividendYield)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-emerald-400/90">
+                          {p.yieldOnCost != null ? formatDecimalAsPercent(p.yieldOnCost / 100) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {p.dividendPerShare != null ? fmtMoney(p.dividendPerShare, p.currency) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {p.estAnnualIncome != null ? fmtMoney(p.estAnnualIncome, p.currency) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {p.growthPills ? (
+                            <GrowthPillsRow pills={p.growthPills} labels={pillLabels} className="max-w-md" />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {t("portfolioDividends.growthUnavailable")}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && holdingMonths.length > 0 ? (
+                        <TableRow className="border-white/10 bg-zinc-950/40 hover:bg-zinc-950/40">
+                          <TableCell colSpan={6} className="py-3">
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                              {holdingMonths.map((row) => (
+                                <div
+                                  key={row.month}
+                                  className="min-w-[4.5rem] text-center"
+                                >
+                                  <p className="text-[11px] font-medium text-muted-foreground">
+                                    {formatMonthKeyLabel(row.month, locale)}
+                                  </p>
+                                  <p className="mt-0.5 text-sm tabular-nums text-foreground">
+                                    {row.amount != null ? fmtMoney(row.amount, row.currency) : ""}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ) : null}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatDividendYieldPercent(p.dividendYield)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-emerald-400/90">
-                      {p.yieldOnCost != null ? formatDecimalAsPercent(p.yieldOnCost / 100) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {p.dividendPerShare != null ? fmtMoney(p.dividendPerShare, p.currency) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.estAnnualIncome != null ? fmtMoney(p.estAnnualIncome, p.currency) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {p.growthPills ? (
-                        <GrowthPillsRow pills={p.growthPills} labels={pillLabels} className="max-w-md" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{t("portfolioDividends.growthUnavailable")}</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -402,7 +458,7 @@ export function PortfolioDividendsView({
                     <TableCell className="text-right tabular-nums">{fmtMoney(p.amount, p.currency)}</TableCell>
                     <TableCell className="text-muted-foreground">{p.currency}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(`${p.paidOn}T12:00:00Z`).toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US")}
+                      {formatLocaleDate(p.paidOn, locale)}
                     </TableCell>
                     <TableCell>
                       {p.source === "manual" ? (
