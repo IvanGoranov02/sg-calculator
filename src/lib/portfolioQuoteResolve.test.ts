@@ -38,6 +38,19 @@ describe("buildBlockedYahooSymbols", () => {
     assert.ok(blocked.has("ABE.F"));
     assert.ok(blocked.has("ABEAD"));
   });
+
+  it("blocks UBE.DE trap for Xetra Uber listings", () => {
+    const blocked = buildBlockedYahooSymbols("UBER.DE", "UBERd_EQ");
+    assert.ok(blocked.has("UBE.DE"));
+    assert.ok(blocked.has("UBE.F"));
+    assert.ok(blocked.has("UBERD"));
+  });
+
+  it("blocks UBE.DE trap for legacy UBERD-EQ keys without symbolT212", () => {
+    const blocked = buildBlockedYahooSymbols("UBERD-EQ", null);
+    assert.ok(blocked.has("UBE.DE"));
+    assert.ok(blocked.has("UBERD"));
+  });
 });
 
 describe("pickBestQuoteRow", () => {
@@ -121,6 +134,26 @@ describe("pickBestQuoteRow", () => {
     };
     assert.equal(pickBestQuoteRow([trap], "EUR", "ABEAd_EQ", blocked), null);
     assert.equal(pickBestQuoteRow([trap, eu], "EUR", "ABEAd_EQ", blocked)?.resolvedYahooSymbol, "ABEA.DE");
+  });
+
+  it("rejects UBE.DE wrong instrument for Xetra Uber (UBERd_EQ)", () => {
+    const blocked = buildBlockedYahooSymbols("UBER.DE", "UBERd_EQ");
+    const trap = {
+      resolvedYahooSymbol: "UBE.DE",
+      currency: "EUR",
+      price: 12.4,
+      name: "Uber Technologies Inc. R",
+      quoteType: "EQUITY",
+    };
+    const eu = {
+      resolvedYahooSymbol: "UBER.DE",
+      currency: "EUR",
+      price: 72.5,
+      name: "Uber Technologies, Inc.",
+      quoteType: "EQUITY",
+    };
+    assert.equal(pickBestQuoteRow([trap], "EUR", "UBERd_EQ", blocked), null);
+    assert.equal(pickBestQuoteRow([trap, eu], "EUR", "UBERd_EQ", blocked)?.resolvedYahooSymbol, "UBER.DE");
   });
 });
 

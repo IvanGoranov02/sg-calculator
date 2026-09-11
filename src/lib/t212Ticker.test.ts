@@ -41,7 +41,7 @@ describe("parseT212Ticker", () => {
     });
   });
 
-  it("parses uppercase Xetra stubs (FB2AD_EQ, METAD_EQ, ABEAD_EQ)", () => {
+  it("parses uppercase Xetra stubs (FB2AD_EQ, METAD_EQ, ABEAD_EQ, UBERD_EQ)", () => {
     assert.deepEqual(parseT212Ticker("FB2AD_EQ"), {
       base: "FB2A",
       yahooSuffix: ".DE",
@@ -54,6 +54,19 @@ describe("parseT212Ticker", () => {
     });
     assert.deepEqual(parseT212Ticker("ABEAD_EQ"), {
       base: "ABEA",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("UBERD_EQ"), {
+      base: "UBER",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+  });
+
+  it("parses Xetra Uber with lowercase exchange letter", () => {
+    assert.deepEqual(parseT212Ticker("UBERd_EQ"), {
+      base: "UBER",
       yahooSuffix: ".DE",
       isNonUsListing: true,
     });
@@ -87,6 +100,12 @@ describe("germanListingYahooSymbols", () => {
     assert.ok(!germanListingYahooSymbols("ABEA").includes("ABE.F"));
     assert.ok(!germanListingYahooSymbols("ABEA").includes("ABE.DE"));
   });
+
+  it("maps Uber to UBER.DE and avoids wrong UBE.DE truncation", () => {
+    assert.deepEqual(germanListingYahooSymbols("UBER"), ["UBER.DE", "UBER.F"]);
+    assert.ok(!germanListingYahooSymbols("UBER").includes("UBE.DE"));
+    assert.ok(!germanListingYahooSymbols("UBER").includes("UBE.F"));
+  });
 });
 
 describe("t212TickerToYahoo", () => {
@@ -97,6 +116,8 @@ describe("t212TickerToYahoo", () => {
     assert.equal(t212TickerToYahoo("FB2AD_EQ"), "FB2A.DE");
     assert.equal(t212TickerToYahoo("ABEAd_EQ"), "ABEA.DE");
     assert.equal(t212TickerToYahoo("ABEAD_EQ"), "ABEA.DE");
+    assert.equal(t212TickerToYahoo("UBERd_EQ"), "UBER.DE");
+    assert.equal(t212TickerToYahoo("UBERD_EQ"), "UBER.DE");
   });
 
   it("maps Amsterdam and London listings", () => {
@@ -140,6 +161,7 @@ describe("t212QuoteCurrency", () => {
   it("uses EUR for Xetra listings", () => {
     assert.equal(t212QuoteCurrency("FB2Ad_EQ", "EUR"), "EUR");
     assert.equal(t212QuoteCurrency("MSFTd_EQ", "EUR"), "EUR");
+    assert.equal(t212QuoteCurrency("UBERd_EQ", "EUR"), "EUR");
   });
 
   it("uses GBP for London listings", () => {
@@ -177,5 +199,16 @@ describe("t212TickerToYahooCandidates", () => {
     const upper = t212TickerToYahooCandidates("ABEAD_EQ", "EUR");
     assert.equal(upper[0], "ABEA.DE");
     assert.ok(!upper.includes("ABE.F"));
+  });
+
+  it("does not include UBE.DE trap for Xetra Uber", () => {
+    const c = t212TickerToYahooCandidates("UBERd_EQ", "EUR");
+    assert.equal(c[0], "UBER.DE");
+    assert.ok(!c.includes("UBE.DE"));
+    assert.ok(!c.includes("UBE.F"));
+    assert.ok(!c.includes("UBERD"));
+    const upper = t212TickerToYahooCandidates("UBERD_EQ", "EUR");
+    assert.equal(upper[0], "UBER.DE");
+    assert.ok(!upper.includes("UBE.DE"));
   });
 });

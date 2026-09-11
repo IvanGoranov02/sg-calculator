@@ -46,6 +46,28 @@ describe("mapT212PositionToHolding", () => {
     assert.equal(Number(row.avgPrice), 480);
   });
 
+  it("maps Xetra Uber to UBER.DE with wallet-denominated broker price", () => {
+    const p: T212Position = {
+      instrument: { ticker: "UBERd_EQ", currency: "EUR" },
+      quantity: 3,
+      averagePricePaid: 68.5,
+      currentPrice: 72.1,
+      walletImpact: {
+        currency: "EUR",
+        currentValue: 216.3,
+        totalCost: 205.5,
+      },
+    };
+    const row = mapT212PositionToHolding(p, "user-1", "EUR");
+    assert.ok(row);
+    assert.equal(row.symbolYahoo, "UBER.DE");
+    assert.equal(row.symbolT212, "UBERd_EQ");
+    assert.equal(Number(row.quantity), 3);
+    assert.equal(row.currency, "EUR");
+    assert.equal(Number(row.brokerPrice), 72.1);
+    assert.equal(Number(row.avgPrice), 68.5);
+  });
+
   it("normalizes GBp instrument prices to GBP", () => {
     const p: T212Position = {
       instrument: { ticker: "BPl_EQ", currency: "GBX" },
