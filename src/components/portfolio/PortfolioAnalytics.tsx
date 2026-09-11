@@ -273,7 +273,7 @@ function SummaryCard({
 function BarRow({ label, pct, value, color }: { label: string; pct: number; value: string; color: string }) {
   return (
     <div className="flex items-center gap-2 sm:gap-3">
-      <span className="w-20 shrink-0 truncate font-mono text-xs text-foreground/90 sm:w-28">{label}</span>
+      <span className="w-20 shrink-0 truncate font-mono text-xs text-foreground/90 sm:w-28" title={label}>{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>

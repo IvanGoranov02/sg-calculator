@@ -220,7 +220,7 @@ function StockSearch({ target }: StockSearchProps) {
                 onMouseEnter={() => setHighlighted(i)}
               >
                 <span className="font-mono font-medium">{c.s}</span>
-                <span className="truncate text-xs text-muted-foreground">{c.n}</span>
+                <span className="truncate text-xs text-muted-foreground" title={c.n}>{c.n}</span>
               </button>
             </li>
           ))}

@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 function TopHeaderTagline() {
   const { t } = useI18n();
   return (
-    <p className="hidden min-w-0 truncate text-sm text-muted-foreground sm:block lg:max-w-xs">
+    <p className="hidden min-w-0 truncate text-sm text-muted-foreground sm:block lg:max-w-xs" title={t("header.tagline")}>
       {t("header.tagline")}
     </p>
   );

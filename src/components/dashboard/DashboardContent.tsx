@@ -68,8 +68,8 @@ function MarketQuoteCard({
   return (
     <div
       className={cn(
-        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-white/10 bg-zinc-950/50 px-3.5 py-3 transition-colors hover:border-white/20",
-        emphasized && "border-amber-400/25 bg-amber-950/10",
+        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-emerald-500/30",
+        emphasized && "border-amber-500/30 bg-amber-500/10",
       )}
     >
       {/* Direction accent rail */}
@@ -92,7 +92,7 @@ function MarketQuoteCard({
           {formatPercent(quote.changesPercentage)}
         </span>
       </div>
-      <p className="truncate text-xs text-muted-foreground">{quote.name}</p>
+      <p className="truncate text-xs text-muted-foreground" title={quote.name}>{quote.name}</p>
       <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-foreground">
         {formatQuoteValue(quote, valueKind)}
       </p>
@@ -151,9 +151,10 @@ function OilNews({ items }: { items: MarketNewsItem[] }) {
             href={item.link}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-emerald-500/30 hover:text-foreground"
+            className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-emerald-500/30 hover:bg-card"
+            title={item.title}
           >
-            <span className="line-clamp-2">{item.title}</span>
+            <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{item.title}</span>
             {item.publisher ? <span className="mt-1 block text-[10px] text-muted-foreground/80">{item.publisher}</span> : null}
           </a>
         ))}
@@ -168,7 +169,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/10 via-zinc-900/30 to-zinc-900/10 px-5 py-6 sm:px-7 sm:py-8">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-500/10 via-muted/50 to-card px-5 py-6 sm:px-7 sm:py-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl"
@@ -240,7 +241,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
           href="/stock/AAPL"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
                 <BarChart3 className="size-5" aria-hidden />
@@ -254,7 +255,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
           href="/dcf-calculator?ticker=AAPL"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
                 <Calculator className="size-5" aria-hidden />
@@ -268,7 +269,7 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
           href="/watchlist"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-white/10 bg-zinc-900/40 transition-colors group-hover:border-emerald-500/30 group-hover:bg-zinc-900/60">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
                 <ListPlus className="size-5" aria-hidden />

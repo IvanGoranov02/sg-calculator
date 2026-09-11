@@ -179,7 +179,7 @@ export function CacheListClient() {
                         </span>
                       ) : null}
                     </TableCell>
-                    <TableCell className="max-w-[200px] truncate text-sm">{it.name ?? "—"}</TableCell>
+                    <TableCell className="max-w-[200px] truncate text-sm" title={it.name ?? undefined}>{it.name ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {new Date(it.updatedAt).toLocaleString()}
                     </TableCell>

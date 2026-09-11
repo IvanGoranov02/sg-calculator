@@ -274,7 +274,7 @@ function EventCard({
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span>{kindLabel(event.kind)}</span>
       </div>
-      <p className="truncate text-base leading-snug font-semibold text-foreground sm:text-lg">{event.name}</p>
+      <p className="truncate text-base leading-snug font-semibold text-foreground sm:text-lg" title={event.name}>{event.name}</p>
       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm">
         <span className="font-mono text-emerald-400">{event.symbol}</span>
         <span className="text-muted-foreground">·</span>
