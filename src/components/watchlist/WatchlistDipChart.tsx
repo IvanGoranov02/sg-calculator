@@ -56,16 +56,16 @@ function lerpColor(from: string, to: string, t: number): string {
   return `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Red-orange for dips, light-blue to blue for gains (matches dip-finder mock). */
+/** Red for negative % change, green for positive (intensity scales with magnitude). */
 export function dipBarColor(pct: number, yMin: number, yMax: number): string {
   if (pct < 0) {
     const span = yMin < 0 ? -yMin : 1;
     const t = Math.min(1, Math.max(0, (pct - yMin) / span));
-    return lerpColor("#7f1d1d", "#fdba74", t);
+    return lerpColor("#7f1d1d", "#fca5a5", t);
   }
   const span = yMax > 0 ? yMax : 1;
   const t = Math.min(1, Math.max(0, pct / span));
-  return lerpColor("#e2e8f0", "#3b82f6", t);
+  return lerpColor("#14532d", "#4ade80", t);
 }
 
 type AngledXTickProps = {

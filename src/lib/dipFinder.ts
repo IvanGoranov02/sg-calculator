@@ -122,33 +122,68 @@ export type DipChartRow = {
   sma200: number | null;
 };
 
-export const DIP_CHART_Y_BASE_MIN = -50;
-export const DIP_CHART_Y_BASE_MAX = 25;
+/** Default Y domain when there is no data to plot. */
+export const DIP_CHART_Y_EMPTY_MIN = -5;
+export const DIP_CHART_Y_EMPTY_MAX = 5;
 
-/** Y domain: mock defaults (-50/+25) unless data exceeds them, then expand in 5% steps. */
+function roundDownToStep(value: number, step: number): number {
+  return Math.floor(value / step) * step;
+}
+
+function roundUpToStep(value: number, step: number): number {
+  return Math.ceil(value / step) * step;
+}
+
+/** Tick step sized to the padded domain so short ranges zoom in (e.g. ±5%). */
+export function dipChartTickStep(min: number, max: number): number {
+  const span = max - min;
+  if (span <= 8) return 1;
+  if (span <= 20) return 2;
+  if (span <= 50) return 5;
+  return 10;
+}
+
+/** Y domain: fit plotted values with ~10% padding; no fixed ±45% window. */
 export function dipChartYDomain(values: number[]): { min: number; max: number } {
   if (values.length === 0) {
-    return { min: DIP_CHART_Y_BASE_MIN, max: DIP_CHART_Y_BASE_MAX };
+    return { min: DIP_CHART_Y_EMPTY_MIN, max: DIP_CHART_Y_EMPTY_MAX };
   }
+
   const dataMin = Math.min(...values);
   const dataMax = Math.max(...values);
-  let min = DIP_CHART_Y_BASE_MIN;
-  let max = DIP_CHART_Y_BASE_MAX;
-  if (dataMin < DIP_CHART_Y_BASE_MIN) {
-    min = Math.floor(dataMin / 5) * 5;
-    if (min > dataMin) min -= 5;
+
+  let lo = dataMin;
+  let hi = dataMax;
+
+  if (lo === hi) {
+    const pad = Math.max(1, Math.abs(lo) * 0.15) || 2;
+    lo -= pad;
+    hi += pad;
+  } else {
+    const span = hi - lo;
+    const pad = Math.max(span * 0.1, 0.5);
+    lo -= pad;
+    hi += pad;
   }
-  if (dataMax > DIP_CHART_Y_BASE_MAX) {
-    max = Math.ceil(dataMax / 5) * 5;
-    if (max < dataMax) max += 5;
+
+  if (dataMin <= 0 && dataMax >= 0) {
+    lo = Math.min(lo, 0);
+    hi = Math.max(hi, 0);
   }
+
+  const step = dipChartTickStep(lo, hi);
+  let min = roundDownToStep(lo, step);
+  let max = roundUpToStep(hi, step);
+  if (min >= max) max = min + step;
+
   return { min, max };
 }
 
 export function dipChartYTicks(min: number, max: number): number[] {
-  const start = Math.ceil(min / 5) * 5;
+  const step = dipChartTickStep(min, max);
+  const start = roundUpToStep(min, step);
   const ticks: number[] = [];
-  for (let v = start; v <= max; v += 5) ticks.push(v);
+  for (let v = start; v <= max; v += step) ticks.push(v);
   return ticks;
 }
 
