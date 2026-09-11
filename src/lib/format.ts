@@ -79,3 +79,37 @@ const perShareFmt = new Intl.NumberFormat("en-US", {
 export function formatCurrencyPerShare(n: number): string {
   return perShareFmt.format(n);
 }
+
+/** Extract yyyy-mm-dd from ISO date or datetime; null if missing or unparseable. */
+export function normalizeIsoDateString(raw: string | null | undefined): string | null {
+  if (raw == null || !raw.trim()) return null;
+  const s = raw.trim();
+  const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (dateOnly) {
+    const d = new Date(`${dateOnly[1]}T12:00:00Z`);
+    return Number.isNaN(d.getTime()) ? null : dateOnly[1];
+  }
+  const parsed = Date.parse(s);
+  if (Number.isNaN(parsed)) return null;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+/** Locale date for portfolio dividend fields; never returns "Invalid Date". */
+export function formatLocaleDate(iso: string | null | undefined, locale: string): string {
+  const normalized = normalizeIsoDateString(iso);
+  if (!normalized) return "—";
+  const d = new Date(`${normalized}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US");
+}
+
+/** Short month label from yyyy-mm; dash when unparseable. */
+export function formatMonthKeyLabel(month: string, locale: string): string {
+  if (!/^\d{4}-\d{2}$/.test(month)) return "—";
+  const d = new Date(`${month}-01T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
+    month: "short",
+    year: "2-digit",
+  });
+}
