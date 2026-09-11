@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDecimalAsPercent, formatDividendYieldPercent, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
+import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import {
   convertPortfolioMoney,
@@ -90,6 +92,8 @@ function formatEarnings(iso: string, locale: string): string {
 
 export function PortfolioClient() {
   const { t, locale } = useI18n();
+  const { displayCurrency } = usePreferences();
+  const preferredPortfolioCurrency = displayCurrencyToPortfolioCode(displayCurrency);
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -119,7 +123,7 @@ export function PortfolioClient() {
   const [sym, setSym] = useState("");
   const [qty, setQty] = useState("");
   const [avg, setAvg] = useState("");
-  const [manualCurrency, setManualCurrency] = useState<string>("EUR");
+  const [manualCurrency, setManualCurrency] = useState<string>(preferredPortfolioCurrency);
   const [adding, setAdding] = useState(false);
 
   const [fx, setFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
@@ -135,6 +139,10 @@ export function PortfolioClient() {
   const [portfolioInfo, setPortfolioInfo] = useState<string | null>(null);
   const [dividendsReloadToken, setDividendsReloadToken] = useState(0);
   const [dividendsLiveRefreshToken, setDividendsLiveRefreshToken] = useState(0);
+
+  useEffect(() => {
+    setManualCurrency(preferredPortfolioCurrency);
+  }, [preferredPortfolioCurrency]);
 
   const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
     setLoading(true);

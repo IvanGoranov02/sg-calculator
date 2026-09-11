@@ -46,6 +46,16 @@ export const messages: Record<AppLocale, MessageDict> = {
       sidebarCollapse: "Collapse sidebar",
       sidebarExpand: "Expand sidebar",
     },
+    settings: {
+      title: "Settings",
+      openMenu: "Open settings",
+      account: "Account",
+      guestHint: "Sign in to sync your watchlist across devices.",
+      theme: "Theme",
+      themeLight: "Light",
+      themeDark: "Dark",
+      currency: "Portfolio currency",
+    },
     login: {
       title: "Sign in",
       subtitle: "Use your Google account. Your watchlist syncs when you are signed in.",
@@ -916,6 +926,16 @@ export const messages: Record<AppLocale, MessageDict> = {
       closeMenu: "Затвори меню",
       sidebarCollapse: "Прибери менюто",
       sidebarExpand: "Разгъни менюто",
+    },
+    settings: {
+      title: "Настройки",
+      openMenu: "Отвори настройки",
+      account: "Акаунт",
+      guestHint: "Влез, за да синхронизираш списъка за наблюдение на всички устройства.",
+      theme: "Тема",
+      themeLight: "Светла",
+      themeDark: "Тъмна",
+      currency: "Валута на портфолиото",
     },
     login: {
       title: "Вход",
