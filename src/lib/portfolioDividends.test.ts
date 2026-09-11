@@ -159,6 +159,44 @@ describe("buildMonthlyChartSeries", () => {
     const chart = buildMonthlyChartSeries(monthly, "USD", { eurPerUsd: 0.5, gbpPerUsd: null });
     assert.equal(chart[0]!.income, 20);
   });
+
+  it("converts pre-2026 BGN dividends to EUR for the chart", () => {
+    const monthly = buildMonthlyIncome([
+      {
+        id: "1",
+        source: "t212",
+        ticker: "SXR8",
+        symbolYahoo: "SXR8.DE",
+        amount: 19.5583,
+        currency: "BGN",
+        paidOn: "2025-06-15",
+      },
+      {
+        id: "2",
+        source: "t212",
+        ticker: "SXR8",
+        symbolYahoo: "SXR8.DE",
+        amount: 10,
+        currency: "EUR",
+        paidOn: "2026-02-15",
+      },
+    ]);
+    const chart = buildMonthlyChartSeries(monthly, "EUR", { eurPerUsd: null, gbpPerUsd: null });
+    assert.deepEqual(
+      chart.map((p) => ({ month: p.month, income: p.income })),
+      [
+        { month: "2025-06", income: 10 },
+        { month: "2025-07", income: 0 },
+        { month: "2025-08", income: 0 },
+        { month: "2025-09", income: 0 },
+        { month: "2025-10", income: 0 },
+        { month: "2025-11", income: 0 },
+        { month: "2025-12", income: 0 },
+        { month: "2026-01", income: 0 },
+        { month: "2026-02", income: 10 },
+      ],
+    );
+  });
 });
 
 describe("incomeGrowthPillsFromMonthly", () => {
