@@ -39,7 +39,7 @@ export function MobileTabBar({ onMore }: Props) {
               )}
             >
               <Icon className="size-5" aria-hidden />
-              <span className="truncate">{t(labelKey)}</span>
+              <span className="truncate" title={t(labelKey)}>{t(labelKey)}</span>
             </Link>
           );
         })}
@@ -49,7 +49,7 @@ export function MobileTabBar({ onMore }: Props) {
           className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <MoreHorizontal className="size-5" aria-hidden />
-          <span className="truncate">{t("mobileNav.more")}</span>
+          <span className="truncate" title={t("mobileNav.more")}>{t("mobileNav.more")}</span>
         </button>
       </div>
     </nav>

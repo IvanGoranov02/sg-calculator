@@ -66,6 +66,7 @@ export function StockNewsSection({ symbol, name }: Props) {
                   target="_blank"
                   rel="noreferrer"
                   className="group rounded-lg border border-border bg-muted/50 px-3 py-2.5 transition-colors hover:border-emerald-500/30 hover:bg-card"
+                  title={item.title}
                 >
                   <p className="line-clamp-2 text-sm text-foreground/90 group-hover:text-foreground">
                     {item.title}

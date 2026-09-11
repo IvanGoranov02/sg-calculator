@@ -378,7 +378,7 @@ export function PortfolioDividendsView({
                                 {p.symbol}
                               </Link>
                               {p.name ? (
-                                <p className="max-w-[12rem] truncate text-xs text-muted-foreground">{p.name}</p>
+                                <p className="max-w-[12rem] truncate text-xs text-muted-foreground" title={p.name}>{p.name}</p>
                               ) : null}
                             </div>
                           </div>

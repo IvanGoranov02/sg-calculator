@@ -27,7 +27,7 @@ export function StockLoadProgressBar({ event, percent, connecting }: Props) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span className="min-w-0 truncate">{label}</span>
+        <span className="min-w-0 truncate" title={label}>{label}</span>
         <span className="shrink-0 font-mono tabular-nums text-foreground/90">{Math.round(pct)}%</span>
       </div>
       <div

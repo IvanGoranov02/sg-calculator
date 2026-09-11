@@ -195,7 +195,7 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
                     <Link href={`/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-emerald-400 hover:underline">
                       {r.symbol}
                     </Link>
-                    <p className="max-w-[10rem] truncate text-right text-[11px] font-normal text-muted-foreground">{r.name}</p>
+                    <p className="max-w-[10rem] truncate text-right text-[11px] font-normal text-muted-foreground" title={r.name}>{r.name}</p>
                     <p
                       className={cn(
                         "text-right font-mono text-xs tabular-nums",

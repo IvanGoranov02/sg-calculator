@@ -144,7 +144,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
         {isAdmin ? (
           <Link
             href="/admin/cache"
-            title={collapsed ? t("admin.link") : undefined}
+            title={t("admin.link")}
             onClick={() => onNavigate?.()}
             className={cn(
               "mt-1 flex min-h-9 items-center rounded-lg py-2 text-xs font-medium text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300",

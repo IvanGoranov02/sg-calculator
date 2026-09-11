@@ -232,7 +232,7 @@ export function WatchlistClient() {
                 return (
                   <TableRow key={sym} className="border-white/10">
                     <TableCell className="font-mono font-medium">{q.symbol}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-muted-foreground">{q.name}</TableCell>
+                    <TableCell className="max-w-[220px] truncate text-muted-foreground" title={q.name}>{q.name}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {formatCurrency(q.price)}
                     </TableCell>

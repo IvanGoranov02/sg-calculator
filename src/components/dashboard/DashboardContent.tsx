@@ -92,7 +92,7 @@ function MarketQuoteCard({
           {formatPercent(quote.changesPercentage)}
         </span>
       </div>
-      <p className="truncate text-xs text-muted-foreground">{quote.name}</p>
+      <p className="truncate text-xs text-muted-foreground" title={quote.name}>{quote.name}</p>
       <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-foreground">
         {formatQuoteValue(quote, valueKind)}
       </p>
@@ -152,6 +152,7 @@ function OilNews({ items }: { items: MarketNewsItem[] }) {
             target="_blank"
             rel="noreferrer"
             className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-emerald-500/30 hover:bg-card"
+            title={item.title}
           >
             <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{item.title}</span>
             {item.publisher ? <span className="mt-1 block text-[10px] text-muted-foreground/80">{item.publisher}</span> : null}

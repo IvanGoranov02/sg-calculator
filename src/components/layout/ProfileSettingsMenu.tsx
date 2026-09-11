@@ -79,9 +79,11 @@ function ProfileSettingsPanel() {
               size="lg"
             />
             <div className="min-w-0 flex-1">
-              <PopoverTitle className="truncate">{user.name ?? user.email ?? t("settings.account")}</PopoverTitle>
+              <PopoverTitle className="truncate" title={user.name ?? user.email ?? t("settings.account")}>
+                {user.name ?? user.email ?? t("settings.account")}
+              </PopoverTitle>
               {user.email ? (
-                <PopoverDescription className="truncate">{user.email}</PopoverDescription>
+                <PopoverDescription className="truncate" title={user.email}>{user.email}</PopoverDescription>
               ) : null}
             </div>
           </div>
