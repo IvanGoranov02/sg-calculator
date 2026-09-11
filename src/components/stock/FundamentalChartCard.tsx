@@ -166,7 +166,7 @@ export function FundamentalChartCard({
     <ResponsiveContainer width="100%" height="100%">
       {resolvedType === "bar" ? (
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
             tick={(props) => (
@@ -178,7 +178,7 @@ export function FundamentalChartCard({
               />
             )}
             tickLine={false}
-            axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+            axisLine={{ stroke: "var(--border)" }}
             interval={0}
             minTickGap={0}
             height={28}
@@ -195,7 +195,7 @@ export function FundamentalChartCard({
             labelFormatter={(label) => formatCategoryLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              border: "1px solid var(--border)",
               borderRadius: "8px",
               fontSize: "12px",
             }}
@@ -215,7 +215,7 @@ export function FundamentalChartCard({
         </BarChart>
       ) : (
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
             tick={(props) => (
@@ -227,7 +227,7 @@ export function FundamentalChartCard({
               />
             )}
             tickLine={false}
-            axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+            axisLine={{ stroke: "var(--border)" }}
             interval={0}
             minTickGap={0}
             height={28}
@@ -244,7 +244,7 @@ export function FundamentalChartCard({
             labelFormatter={(label) => formatCategoryLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              border: "1px solid var(--border)",
               borderRadius: "8px",
               fontSize: "12px",
             }}
@@ -304,7 +304,7 @@ export function FundamentalChartCard({
 
   return (
     <Dialog>
-      <Card className={cn("min-w-0 border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15", className)}>
+      <Card className={cn("min-w-0 border-border bg-card shadow-lg shadow-sm", className)}>
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-base">{title}</CardTitle>
@@ -312,7 +312,7 @@ export function FundamentalChartCard({
               {sparseBadge}
               {hasPoints ? (
                 <DialogTrigger
-                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
                   aria-label={t("chartsFund.chartExpand")}
                   title={t("chartsFund.chartExpand")}
                 >
@@ -325,7 +325,7 @@ export function FundamentalChartCard({
         </CardHeader>
         <CardContent className="min-h-0 min-w-0 pt-0">
           {!hasPoints ? (
-            <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
+            <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border px-4 text-center">
               <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
               <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
             </div>
@@ -358,10 +358,10 @@ export function FundamentalChartCard({
         </div>
         <div className="flex min-h-0 flex-col gap-4">
           <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart(16)}</div>
-          <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-white/10">
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
             <table className="w-full min-w-[18rem] text-sm">
-              <thead className="sticky top-0 bg-zinc-950/95 text-xs text-muted-foreground">
-                <tr className="border-b border-white/10">
+              <thead className="sticky top-0 bg-popover text-xs text-muted-foreground">
+                <tr className="border-b border-border">
                   <th className="px-3 py-2 text-left font-medium">{t("chartsFund.chartTablePeriod")}</th>
                   {series.map((s) => (
                     <th key={s.dataKey} className="px-3 py-2 text-right font-medium" style={{ color: s.color }}>
@@ -372,7 +372,7 @@ export function FundamentalChartCard({
               </thead>
               <tbody>
                 {tableRows.map((row, i) => (
-                  <tr key={i} className="border-b border-white/5 last:border-0 hover:bg-white/5">
+                  <tr key={i} className="border-b border-border/60 last:border-0 hover:bg-muted/50">
                     <td className="px-3 py-1.5 text-left font-mono text-xs text-muted-foreground">
                       {String(
                         row.label ??

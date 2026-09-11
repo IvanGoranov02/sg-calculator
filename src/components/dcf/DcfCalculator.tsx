@@ -34,7 +34,7 @@ function decimalToPct(dec: number): number {
 
 function SnapshotMetric({ label, sub, value }: { label: string; sub?: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+    <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
       <p className="text-xs text-muted-foreground">{label}</p>
       {sub ? <p className="text-[10px] text-muted-foreground/80">{sub}</p> : null}
       <p className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{value}</p>
@@ -162,7 +162,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
       </div>
 
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle>{t("dcf.snapshotTitle")}</CardTitle>
         </CardHeader>
@@ -204,7 +204,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader>
           <CardTitle>{t("dcf.assumptionsTitle")}</CardTitle>
         </CardHeader>
@@ -290,7 +290,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
             />
           </div>
 
-          <Separator className="bg-white/10 sm:col-span-2" />
+          <Separator className="bg-border sm:col-span-2" />
 
           <div className="space-y-3 sm:col-span-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm">
@@ -298,7 +298,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
                 type="checkbox"
                 checked={addTangibleBook}
                 onChange={(e) => setAddTangibleBook(e.target.checked)}
-                className="size-4 rounded border-white/20 bg-zinc-900"
+                className="size-4 rounded border-border bg-background"
               />
               {t("dcf.addTangibleBook")}
             </label>
@@ -320,7 +320,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
         </CardContent>
       </Card>
 
-      <Card className="border-emerald-500/20 bg-zinc-900/50">
+      <Card className="border-emerald-500/20 bg-card">
         <CardHeader>
           <CardTitle>{t("dcf.resultTitle")}</CardTitle>
         </CardHeader>
@@ -360,7 +360,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
 
               {seed && seed.currentPrice > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-3 py-2">
+                  <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
                     <p className="text-xs text-muted-foreground">{t("dcf.stockPrice")}</p>
                     <p className="font-mono text-lg tabular-nums">{formatCurrency(seed.currentPrice)}</p>
                   </div>

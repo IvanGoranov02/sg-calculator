@@ -51,14 +51,14 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 min-w-0 shrink-0 flex-col border-r border-white/10 bg-sidebar transition-[width] duration-200 ease-out lg:h-dvh lg:max-h-dvh",
+        "flex h-full min-h-0 min-w-0 shrink-0 flex-col border-r border-border bg-sidebar transition-[width] duration-200 ease-out lg:h-dvh lg:max-h-dvh",
         collapsed ? "w-[4.25rem]" : "w-[10rem]",
         className,
       )}
     >
       <div
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-white/10",
+          "flex h-14 shrink-0 items-center border-b border-border",
           collapsed ? "justify-center px-1" : "justify-between gap-1 px-2",
         )}
       >
@@ -79,7 +79,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
             variant="ghost"
             size="icon"
             className={cn(
-              "size-8 shrink-0 text-muted-foreground hover:bg-white/10 hover:text-foreground",
+              "size-8 shrink-0 text-muted-foreground hover:bg-muted hover:text-foreground",
               collapsed && "hidden",
             )}
             aria-label={t("header.sidebarCollapse")}
@@ -91,12 +91,12 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
         ) : null}
       </div>
       {collapsed && onToggleCollapsed ? (
-        <div className="flex justify-center border-b border-white/10 py-2">
+        <div className="flex justify-center border-b border-border py-2">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-8 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+            className="size-8 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={t("header.sidebarExpand")}
             title={t("header.sidebarExpand")}
             onClick={onToggleCollapsed}
@@ -158,7 +158,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
         ) : null}
       </nav>
       {!collapsed ? (
-        <div className="border-t border-white/10 p-2 text-[10px] leading-snug text-muted-foreground">{t("nav.footer")}</div>
+        <div className="border-t border-border p-2 text-[10px] leading-snug text-muted-foreground">{t("nav.footer")}</div>
       ) : null}
     </aside>
   );

@@ -103,7 +103,7 @@ function BreakdownRow({
   accent?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/5 py-2.5 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2.5 last:border-0">
       <div className="flex items-center gap-2">
         {accent ? <span className="size-2.5 shrink-0 rounded-full" style={{ background: accent }} /> : null}
         <span className="text-sm text-muted-foreground">{label}</span>
@@ -118,7 +118,7 @@ function BreakdownRow({
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
@@ -208,7 +208,7 @@ export function DividendCalculator({ seed }: Props) {
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         {/* Inputs */}
-        <Card className="border-white/10 bg-zinc-900/40">
+        <Card className="border-border bg-card">
           <CardHeader>
             <CardTitle>{t("dividendCalc.inputsTitle")}</CardTitle>
           </CardHeader>
@@ -235,7 +235,7 @@ export function DividendCalculator({ seed }: Props) {
                 id="years"
                 value={years}
                 onChange={(e) => setYears(Number(e.target.value))}
-                className="h-9 w-full rounded-md border border-white/10 bg-zinc-950 px-3 text-sm font-mono tabular-nums text-foreground"
+                className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm font-mono tabular-nums text-foreground"
               >
                 {HOLDING_YEARS.map((y) => (
                   <option key={y} value={y}>
@@ -309,7 +309,7 @@ export function DividendCalculator({ seed }: Props) {
         </Card>
 
         {/* Results */}
-        <Card className="border-emerald-500/20 bg-zinc-900/50">
+        <Card className="border-emerald-500/20 bg-card">
           <CardHeader>
             <CardTitle>{t("dividendCalc.resultTitle")}</CardTitle>
           </CardHeader>
@@ -327,7 +327,7 @@ export function DividendCalculator({ seed }: Props) {
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-zinc-950/40 px-4 py-1">
+                <div className="rounded-lg border border-border bg-muted/50 px-4 py-1">
                   <BreakdownRow
                     label={t("dividendCalc.breakdownDividends")}
                     value={formatCurrency(result.breakdown.dividends)}
@@ -354,7 +354,7 @@ export function DividendCalculator({ seed }: Props) {
                   />
                 </div>
 
-                <Separator className="bg-white/10" />
+                <Separator className="bg-border" />
 
                 <div>
                   <p className="mb-3 text-sm font-medium text-foreground">{t("dividendCalc.incomeTableTitle")}</p>
@@ -362,7 +362,7 @@ export function DividendCalculator({ seed }: Props) {
                     {[yearColA, yearColB].map((col, colIdx) => (
                       <Table key={colIdx}>
                         <TableHeader>
-                          <TableRow className="border-white/10 hover:bg-transparent">
+                          <TableRow className="border-border hover:bg-transparent">
                             <TableHead className="text-muted-foreground">{t("dividendCalc.tableYear")}</TableHead>
                             <TableHead className="text-right text-muted-foreground">
                               {t("dividendCalc.tableMonthly")}
@@ -371,7 +371,7 @@ export function DividendCalculator({ seed }: Props) {
                         </TableHeader>
                         <TableBody>
                           {col.map((row) => (
-                            <TableRow key={row.year} className="border-white/5">
+                            <TableRow key={row.year} className="border-border/60">
                               <TableCell className="font-medium">
                                 {t("dividendCalc.yearLabel", { year: row.year })}
                               </TableCell>
@@ -402,7 +402,7 @@ export function DividendCalculator({ seed }: Props) {
                     <stop offset="100%" stopColor={CHART_COLORS.dividends} stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
                 <Tooltip
@@ -410,7 +410,7 @@ export function DividendCalculator({ seed }: Props) {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload as (typeof chartData)[0];
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
                           {t("dividendCalc.cumulativeDividends")}: {formatCurrency(p.cumulativeIncome)}
@@ -427,7 +427,7 @@ export function DividendCalculator({ seed }: Props) {
           <ChartCard title={t("dividendCalc.chartPortfolio")}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
                 <Tooltip
@@ -435,7 +435,7 @@ export function DividendCalculator({ seed }: Props) {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload as (typeof chartData)[0];
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
                           {t("dividendCalc.portfolioValue")}: {formatCurrency(p.portfolioValue)}
@@ -452,7 +452,7 @@ export function DividendCalculator({ seed }: Props) {
           <ChartCard title={t("dividendCalc.chartAnnualIncome")}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
                 <Tooltip
@@ -460,7 +460,7 @@ export function DividendCalculator({ seed }: Props) {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload as (typeof chartData)[0];
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
                           {t("dividendCalc.annualIncome")}: {formatCurrency(p.annualIncome)}
@@ -477,7 +477,7 @@ export function DividendCalculator({ seed }: Props) {
           <ChartCard title={t("dividendCalc.chartComposition")}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
                 <Tooltip
@@ -485,7 +485,7 @@ export function DividendCalculator({ seed }: Props) {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload as (typeof chartData)[0];
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="mb-1 font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p style={{ color: CHART_COLORS.principal }}>{t("dividendCalc.breakdownPrincipal")}: {formatCurrency(p.principal)}</p>
                         <p style={{ color: CHART_COLORS.contributions }}>{t("dividendCalc.breakdownContributions")}: {formatCurrency(p.contributions)}</p>
@@ -507,7 +507,7 @@ export function DividendCalculator({ seed }: Props) {
           <ChartCard title={t("dividendCalc.chartMonthly")}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
                 <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
                 <Tooltip
@@ -515,7 +515,7 @@ export function DividendCalculator({ seed }: Props) {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload as (typeof chartData)[0];
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-sky-300">
                           {t("dividendCalc.tableMonthly")}: {formatCurrency(p.monthlyIncome)}

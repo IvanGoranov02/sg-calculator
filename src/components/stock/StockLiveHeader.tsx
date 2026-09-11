@@ -72,7 +72,7 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
   }, [ccy, canEur, eurPerUsd, quote.change]);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4 shadow-lg shadow-black/20 sm:p-5">
+    <div className="rounded-xl border border-border bg-card p-4 shadow-lg shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">

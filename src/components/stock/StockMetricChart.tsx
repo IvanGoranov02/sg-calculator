@@ -336,7 +336,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
       : "—";
 
   return (
-    <Card className="min-w-0 border-white/10 bg-zinc-900/40 shadow-xl shadow-black/20">
+    <Card className="min-w-0 border-border bg-card shadow-xl shadow-sm">
       <CardHeader className="flex flex-col gap-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -375,7 +375,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 title={r.title}
                 className={cn(
                   "h-8 min-w-11 rounded-md px-2 font-mono text-xs",
-                  range === r.id && "bg-zinc-700 text-white hover:bg-zinc-700",
+                  range === r.id && "bg-background text-foreground shadow-sm hover:bg-background",
                 )}
                 onClick={() => setRange(r.id)}
               >
@@ -386,7 +386,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 gap-3 rounded-lg border border-white/10 bg-zinc-950/50 px-3 py-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/50 px-3 py-3 sm:grid-cols-4">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.periodChange")}
@@ -441,12 +441,12 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                     <stop offset="100%" stopColor={stroke} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                 <XAxis
                   dataKey="label"
                   tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: "rgba(255,255,255,0.08)" }}
+                  axisLine={{ stroke: "var(--border)" }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
@@ -461,7 +461,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                     if (!active || !payload?.length) return null;
                     const v = payload[0].value as number;
                     return (
-                      <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="text-muted-foreground">{label}</p>
                         <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(v)}</p>
                       </div>

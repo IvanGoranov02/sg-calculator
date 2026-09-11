@@ -46,7 +46,7 @@ export function StockAnalysisView({
     return (
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
         {loadProgress ? (
-          <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/70 p-4 shadow-inner shadow-black/20">
+          <div className="rounded-xl border border-emerald-500/20 bg-card p-4 shadow-inner shadow-sm">
             <StockLoadProgressBar
               event={loadProgress.event}
               percent={loadProgress.percent}
@@ -54,16 +54,16 @@ export function StockAnalysisView({
             />
           </div>
         ) : null}
-        <div className="space-y-3 rounded-xl border border-white/10 bg-zinc-900/40 p-5 animate-pulse">
-          <div className="h-8 w-2/3 rounded bg-zinc-800" />
-          <div className="h-4 w-1/3 rounded bg-zinc-800/80" />
-          <div className="mt-4 h-24 rounded-lg bg-zinc-800/60" />
+        <div className="space-y-3 rounded-xl border border-border bg-card p-5 animate-pulse">
+          <div className="h-8 w-2/3 rounded bg-muted" />
+          <div className="h-4 w-1/3 rounded bg-muted" />
+          <div className="mt-4 h-24 rounded-lg bg-muted" />
         </div>
-        <div className="h-12 w-40 rounded-lg bg-zinc-800/70 animate-pulse" />
-        <div className="h-72 rounded-xl border border-white/5 bg-zinc-900/30 animate-pulse" />
+        <div className="h-12 w-40 rounded-lg bg-muted animate-pulse" />
+        <div className="h-72 rounded-xl border border-border/60 bg-card/80 animate-pulse" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-56 rounded-xl border border-white/5 bg-zinc-900/25 animate-pulse" />
+            <div key={i} className="h-56 rounded-xl border border-border/60 bg-card/60 animate-pulse" />
           ))}
         </div>
         {!loadProgress ? (
@@ -75,7 +75,7 @@ export function StockAnalysisView({
 
   if (error && !bundle) {
     return (
-      <Card className="max-w-lg border-red-500/20 bg-zinc-900/50">
+      <Card className="max-w-lg border-red-500/20 bg-card">
         <CardHeader>
           <CardTitle>{t("stock.couldNotLoad", { symbol })}</CardTitle>
           <CardDescription className="text-red-300/90">{errorText}</CardDescription>
@@ -98,7 +98,7 @@ export function StockAnalysisView({
 
   if (!bundle) {
     return (
-      <Card className="max-w-lg border-white/10 bg-zinc-900/50">
+      <Card className="max-w-lg border-border bg-card">
         <CardHeader>
           <CardTitle>{t("stock.noData")}</CardTitle>
           <CardDescription>{t("stock.searchValid")}</CardDescription>
@@ -113,7 +113,7 @@ export function StockAnalysisView({
     <StockAnalysisPeriodProvider key={symbol}>
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
         {loading && loadProgress ? (
-          <div className="rounded-xl border border-emerald-500/20 bg-zinc-900/70 p-4 shadow-inner shadow-black/20">
+          <div className="rounded-xl border border-emerald-500/20 bg-card p-4 shadow-inner shadow-sm">
             <StockLoadProgressBar
               event={loadProgress.event}
               percent={loadProgress.percent}

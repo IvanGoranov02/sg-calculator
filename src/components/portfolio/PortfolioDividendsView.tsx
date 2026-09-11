@@ -27,6 +27,7 @@ import {
   formatMonthKeyLabel,
 } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import {
   buildHoldingMonthlyTimeline,
   type PortfolioDividendsPayload,
@@ -57,6 +58,7 @@ export function PortfolioDividendsView({
   liveRefreshToken = 0,
 }: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
+  const { dateFormat } = usePreferences();
   const [data, setData] = useState<PortfolioDividendsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +216,7 @@ export function PortfolioDividendsView({
     <div className="relative space-y-6 sm:space-y-8">
       {loading && data ? (
         <div className="absolute inset-x-0 top-0 z-10 flex justify-center pt-2">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-900/90 px-3 py-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
             <Loader2 className="size-3 animate-spin" aria-hidden />
             {t("portfolio.loading")}
           </span>
@@ -243,7 +245,7 @@ export function PortfolioDividendsView({
           );
         })}
         {data.summary.portfolioYieldOnValue != null ? (
-          <div className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+          <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnValue")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
               {formatDecimalAsPercent(data.summary.portfolioYieldOnValue / 100)}
@@ -251,7 +253,7 @@ export function PortfolioDividendsView({
           </div>
         ) : null}
         {data.summary.portfolioYieldOnCost != null ? (
-          <div className="rounded-xl border border-white/10 bg-zinc-900/40 px-4 py-3">
+          <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnCost")}</p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
               {formatDecimalAsPercent(data.summary.portfolioYieldOnCost / 100)}
@@ -261,7 +263,7 @@ export function PortfolioDividendsView({
       </div>
 
       {data.summary.incomeGrowthPills ? (
-        <Card className="border-white/10 bg-zinc-900/40">
+        <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">{t("portfolioDividends.incomeGrowthTitle")}</CardTitle>
             <CardDescription className="text-xs sm:text-sm">
@@ -275,36 +277,41 @@ export function PortfolioDividendsView({
       ) : null}
 
       {chartData.length > 0 ? (
-        <Card className="border-white/10 bg-zinc-900/40">
+        <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">{t("portfolioDividends.chartTitle")}</CardTitle>
           </CardHeader>
           <div className="h-64 px-2 pb-4 sm:px-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#a1a1aa", fontSize: 11 }} interval="preserveStartEnd" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  interval="preserveStartEnd"
+                />
                 <YAxis
-                  tick={{ fill: "#a1a1aa", fontSize: 11 }}
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                   tickFormatter={(v: number) =>
                     fmtMoney(v, data.summary.baseCurrency).replace(/\.\d+$/, "")
                   }
                   width={72}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "#18181b",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 8,
-                  }}
-                  formatter={(value: unknown) => {
-                    const n = typeof value === "number" ? value : Number(value);
-                    if (!Number.isFinite(n)) return "—";
-                    return [fmtMoney(n, data.summary.baseCurrency), t("portfolioDividends.chartIncome")];
-                  }}
-                  labelFormatter={(_, payload) => {
-                    const raw = payload?.[0]?.payload?.rawMonth as string | undefined;
-                    return raw ? formatMonthKeyLabel(raw, locale) : "";
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const n = typeof payload[0].value === "number" ? payload[0].value : Number(payload[0].value);
+                    const raw = payload[0]?.payload?.rawMonth as string | undefined;
+                    const monthLabel = raw ? formatMonthKeyLabel(raw, locale) : String(label ?? "");
+                    return (
+                      <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
+                        <p className="font-medium text-popover-foreground">{monthLabel}</p>
+                        <p className="text-emerald-600 dark:text-emerald-400">
+                          {t("portfolioDividends.chartIncome")}:{" "}
+                          {Number.isFinite(n) ? fmtMoney(n, data.summary.baseCurrency) : "—"}
+                        </p>
+                      </div>
+                    );
                   }}
                 />
                 <Bar dataKey="income" fill="#34d399" radius={[4, 4, 0, 0]} />
@@ -314,7 +321,7 @@ export function PortfolioDividendsView({
         </Card>
       ) : null}
 
-      <Card className="border-white/10 bg-zinc-900/40">
+      <Card className="border-border bg-card">
         <CardHeader className="space-y-1 pb-2">
           <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.positionsTitle")}</CardTitle>
         </CardHeader>
@@ -324,7 +331,7 @@ export function PortfolioDividendsView({
           <div className="-mx-px overflow-x-auto">
             <Table className="min-w-[40rem]">
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
+                <TableRow className="border-border hover:bg-transparent">
                   <TableHead>{t("portfolio.colSymbol")}</TableHead>
                   <TableHead className="text-right">{t("portfolio.colDivYld")}</TableHead>
                   <TableHead className="text-right">{t("portfolioDividends.yieldOnCost")}</TableHead>
@@ -342,8 +349,8 @@ export function PortfolioDividendsView({
                     <Fragment key={p.symbol}>
                       <TableRow
                         className={cn(
-                          "border-white/10",
-                          canExpand && "cursor-pointer hover:bg-white/[0.03]",
+                          "border-border",
+                          canExpand && "cursor-pointer hover:bg-muted/50",
                         )}
                         onClick={
                           canExpand
@@ -399,7 +406,7 @@ export function PortfolioDividendsView({
                         </TableCell>
                       </TableRow>
                       {isExpanded && holdingMonths.length > 0 ? (
-                        <TableRow className="border-white/10 bg-zinc-950/40 hover:bg-zinc-950/40">
+                        <TableRow className="border-border bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={6} className="py-3">
                             <div className="flex flex-wrap gap-x-4 gap-y-2">
                               {holdingMonths.map((row) => (
@@ -429,7 +436,7 @@ export function PortfolioDividendsView({
       </Card>
 
       {hasPayments ? (
-        <Card className="border-white/10 bg-zinc-900/40">
+        <Card className="border-border bg-card">
           <CardHeader className="space-y-1 pb-2">
             <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.paymentsTitle")}</CardTitle>
             <CardDescription className="text-xs sm:text-sm">{t("portfolioDividends.paymentsHint")}</CardDescription>
@@ -437,7 +444,7 @@ export function PortfolioDividendsView({
           <div className="-mx-px overflow-x-auto">
             <Table className="min-w-[32rem]">
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
+                <TableRow className="border-border hover:bg-transparent">
                   <TableHead>{t("portfolio.t212DivColTicker")}</TableHead>
                   <TableHead>{t("portfolioDividends.source")}</TableHead>
                   <TableHead className="text-right">{t("portfolio.t212DivColAmount")}</TableHead>
@@ -448,7 +455,7 @@ export function PortfolioDividendsView({
               </TableHeader>
               <TableBody>
                 {data.payments.slice(0, 50).map((p) => (
-                  <TableRow key={p.id} className="border-white/10">
+                  <TableRow key={p.id} className="border-border">
                     <TableCell className="font-mono font-medium">{p.ticker}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
@@ -456,7 +463,7 @@ export function PortfolioDividendsView({
                     <TableCell className="text-right tabular-nums">{fmtMoney(p.amount, p.currency)}</TableCell>
                     <TableCell className="text-muted-foreground">{p.currency}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatLocaleDate(p.paidOn, locale)}
+                      {formatLocaleDate(p.paidOn, locale, dateFormat)}
                     </TableCell>
                     <TableCell>
                       {p.source === "manual" ? (
@@ -487,7 +494,7 @@ export function PortfolioDividendsView({
 
       <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
 
-      <Card className="border-white/10 bg-zinc-900/50">
+      <Card className="border-border bg-card">
         <CardHeader className="space-y-1 pb-2 sm:pb-6">
           <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.manualTitle")}</CardTitle>
           <CardDescription className="text-xs sm:text-sm">{t("portfolioDividends.manualHint")}</CardDescription>
@@ -507,7 +514,7 @@ export function PortfolioDividendsView({
               id="d-ticker"
               value={ticker}
               onChange={(e) => setTicker(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -517,7 +524,7 @@ export function PortfolioDividendsView({
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -527,7 +534,7 @@ export function PortfolioDividendsView({
               type="date"
               value={paidOn}
               onChange={(e) => setPaidOn(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="grid gap-1.5">
@@ -536,7 +543,7 @@ export function PortfolioDividendsView({
               id="d-ccy"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
-              className="h-9 rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground"
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
             >
               {MANUAL_CURRENCIES.map((c) => (
                 <option key={c} value={c}>
@@ -551,7 +558,7 @@ export function PortfolioDividendsView({
               id="d-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="border-white/10 bg-zinc-950"
+              className="border-border bg-background"
             />
           </div>
           <div className="flex items-end">

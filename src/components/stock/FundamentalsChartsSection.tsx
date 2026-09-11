@@ -393,17 +393,17 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
   const empty = chartRows.length === 0;
 
   const selectClass =
-    "h-9 min-w-[8.5rem] rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-emerald-500/50";
+    "h-9 min-w-[8.5rem] rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-emerald-500/50";
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-white/10 bg-zinc-900/35 p-4 shadow-sm shadow-black/10">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm shadow-black/10">
         <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
       </div>
 
       <div
         className={cn(
-          "sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b border-white/10 bg-zinc-950/90 px-4 py-3 shadow-[0_6px_28px_rgba(0,0,0,0.5)] backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:border-white/10",
+          "sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b border-border bg-background/90 px-4 py-3 shadow-[0_6px_28px_rgba(0,0,0,0.5)] backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:border-border",
         )}
       >
         <div className="flex w-full flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">

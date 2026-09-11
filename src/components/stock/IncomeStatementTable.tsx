@@ -42,16 +42,16 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
-      <div className="space-y-2 border-b border-white/10 px-4 py-5 sm:px-6">
+    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-sm">
+      <div className="space-y-2 border-b border-border px-4 py-5 sm:px-6">
         <h2 className="text-lg font-semibold tracking-tight">{t("income.title")}</h2>
       </div>
       <div className="relative">
         <div className="overflow-x-auto px-1 py-1">
           <Table className="min-w-[26rem]">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="sticky left-0 z-20 h-12 min-w-[8rem] bg-zinc-900 px-3 py-3 text-left text-muted-foreground sm:px-4">
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="sticky left-0 z-20 h-12 min-w-[8rem] bg-card px-3 py-3 text-left text-muted-foreground sm:px-4">
                   {t("income.metricCol")}
                 </TableHead>
                 {years.map((y) => (
@@ -69,11 +69,11 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
                 <TableRow
                   key={key}
                   className={cn(
-                    "border-white/10 transition-colors hover:bg-white/[0.04]",
-                    idx % 2 === 1 && "bg-white/[0.02]",
+                    "border-border transition-colors hover:bg-muted/50",
+                    idx % 2 === 1 && "bg-muted/30",
                   )}
                 >
-                  <TableCell className="sticky left-0 z-10 bg-zinc-900 px-3 py-3.5 align-middle text-sm font-medium leading-snug sm:px-4">
+                  <TableCell className="sticky left-0 z-10 bg-card px-3 py-3.5 align-middle text-sm font-medium leading-snug sm:px-4">
                     {t(`income.${key}`)}
                   </TableCell>
                   {years.map((y) => {
@@ -94,7 +94,7 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
             </TableBody>
           </Table>
         </div>
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-zinc-950 to-transparent lg:hidden" aria-hidden />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent lg:hidden" aria-hidden />
       </div>
     </div>
   );

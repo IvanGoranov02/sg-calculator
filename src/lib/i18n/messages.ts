@@ -55,6 +55,9 @@ export const messages: Record<AppLocale, MessageDict> = {
       themeLight: "Light",
       themeDark: "Dark",
       currency: "Portfolio currency",
+      dateFormat: "Date format",
+      dateFormatDmy: "DD/MM/YYYY",
+      dateFormatMdy: "MM/DD/YYYY",
     },
     login: {
       title: "Sign in",
@@ -936,6 +939,9 @@ export const messages: Record<AppLocale, MessageDict> = {
       themeLight: "Светла",
       themeDark: "Тъмна",
       currency: "Валута на портфолиото",
+      dateFormat: "Формат на датата",
+      dateFormatDmy: "ДД/ММ/ГГГГ",
+      dateFormatMdy: "ММ/ДД/ГГГГ",
     },
     login: {
       title: "Вход",

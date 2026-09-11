@@ -148,10 +148,10 @@ function StockSearch({ target }: StockSearchProps) {
   return (
     <form
       onSubmit={onSubmit}
-      className="relative flex w-full max-w-xl flex-col gap-2 rounded-xl border border-white/10 bg-zinc-900/80 px-3 py-2 shadow-inner shadow-black/20 backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20 sm:flex-row sm:items-center sm:gap-2 sm:py-1.5"
+      className="relative flex w-full max-w-xl flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20 sm:flex-row sm:items-center sm:gap-2 sm:py-1.5"
     >
       <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2">
-        <Search className="size-4 shrink-0 text-zinc-500" aria-hidden />
+        <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <Input
           ref={inputRef}
           name="ticker"
@@ -204,14 +204,14 @@ function StockSearch({ target }: StockSearchProps) {
       {open && suggestions.length > 0 ? (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-white/10 bg-zinc-900/95 py-1 shadow-lg shadow-black/40 backdrop-blur-sm"
+          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg shadow-md backdrop-blur-sm"
         >
           {suggestions.map((c, i) => (
             <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
                 className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm ${
-                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-white/5"
+                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
