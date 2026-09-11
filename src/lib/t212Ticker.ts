@@ -220,3 +220,35 @@ export function t212TickerToYahoo(ticker: string): string {
   const candidates = t212TickerToYahooCandidates(ticker);
   return candidates[0] ?? ticker.trim().replace(/_EQ$/i, "").replace(/_/g, "-").toUpperCase();
 }
+
+/**
+ * Listing currency for Yahoo quote resolution (instrument listing, not wallet/account).
+ * Using wallet currency here mis-ranks US tickers toward EU listings (e.g. META → FB2A.DE).
+ */
+export function t212QuoteCurrency(symbolT212: string | null, fallback = "USD"): string {
+  if (!symbolT212) return fallback.trim().toUpperCase().slice(0, 3) || "USD";
+  const parsed = parseT212Ticker(symbolT212);
+  if (!parsed.isNonUsListing) return "USD";
+  const suf = parsed.yahooSuffix;
+  if (suf === ".L") return "GBP";
+  if (suf === ".SW") return "CHF";
+  if (suf === ".TO") return "CAD";
+  if (
+    suf === ".DE" ||
+    suf === ".F" ||
+    suf === ".PA" ||
+    suf === ".AS" ||
+    suf === ".MI" ||
+    suf === ".VI" ||
+    suf === ".ST" ||
+    suf === ".OL" ||
+    suf === ".HE" ||
+    suf === ".HA" ||
+    suf === ".IR" ||
+    suf === ".BR"
+  ) {
+    return "EUR";
+  }
+  const fb = fallback.trim().toUpperCase().slice(0, 3);
+  return fb || "USD";
+}

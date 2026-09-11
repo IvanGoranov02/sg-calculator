@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   germanListingYahooSymbols,
   parseT212Ticker,
+  t212QuoteCurrency,
   t212TickerToYahoo,
   t212TickerToYahooCandidates,
 } from "@/lib/t212Ticker";
@@ -127,6 +128,22 @@ describe("t212TickerToYahoo", () => {
       yahooSuffix: null,
       isNonUsListing: false,
     });
+  });
+});
+
+describe("t212QuoteCurrency", () => {
+  it("uses USD for US listings even when wallet currency is EUR", () => {
+    assert.equal(t212QuoteCurrency("META_US_EQ", "EUR"), "USD");
+    assert.equal(t212QuoteCurrency("AAPL_US_EQ", "EUR"), "USD");
+  });
+
+  it("uses EUR for Xetra listings", () => {
+    assert.equal(t212QuoteCurrency("FB2Ad_EQ", "EUR"), "EUR");
+    assert.equal(t212QuoteCurrency("MSFTd_EQ", "EUR"), "EUR");
+  });
+
+  it("uses GBP for London listings", () => {
+    assert.equal(t212QuoteCurrency("BPl_EQ", "GBP"), "GBP");
   });
 });
 

@@ -16,7 +16,12 @@ import {
   searchQueryForPortfolioSymbol,
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
-import { parseT212Ticker, t212TickerToYahooCandidates, germanListingYahooSymbols } from "@/lib/t212Ticker";
+import {
+  parseT212Ticker,
+  t212QuoteCurrency,
+  t212TickerToYahooCandidates,
+  germanListingYahooSymbols,
+} from "@/lib/t212Ticker";
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["ripHistorical", "yahooSurvey"],
@@ -314,28 +319,32 @@ async function fetchOnePortfolioQuote(
   holdingCurrency: string | null,
   brokerPrice: number | null,
   brokerCurrency: string | null,
+  brokerFirst: boolean,
 ): Promise<PortfolioQuoteRow | null> {
   const blocked = buildBlockedYahooSymbols(portfolioSymbol, symbolT212);
+  const quoteCurrency = t212QuoteCurrency(symbolT212, holdingCurrency ?? "USD");
   const broker =
     brokerPrice != null && Number.isFinite(brokerPrice) && brokerPrice > 0
       ? normalizeQuotePrice(brokerPrice, brokerCurrency ?? holdingCurrency)
       : null;
 
-  const candidates = buildOrderedCandidates(portfolioSymbol, symbolT212, holdingCurrency, blocked);
+  const candidates = buildOrderedCandidates(portfolioSymbol, symbolT212, quoteCurrency, blocked);
   const rows: QuoteRowWithType[] = [];
   for (const c of candidates) {
     const row = await tryQuoteSymbol(portfolioSymbol, c);
     if (row) rows.push(row);
   }
 
-  let best = pickBestQuoteRow(rows, holdingCurrency, symbolT212, blocked);
+  let best = pickBestQuoteRow(rows, quoteCurrency, symbolT212, blocked);
   if (!best) {
-    best = await searchFallbackQuote(portfolioSymbol, symbolT212, holdingCurrency, blocked);
+    best = await searchFallbackQuote(portfolioSymbol, symbolT212, quoteCurrency, blocked);
   }
 
   if (
     broker &&
-    shouldPreferBrokerPrice(best, broker, holdingCurrency, symbolT212, blocked)
+    shouldPreferBrokerPrice(best, broker, holdingCurrency, symbolT212, blocked, {
+      brokerFirst,
+    })
   ) {
     return mergeBrokerQuote(portfolioSymbol, best, broker);
   }
@@ -353,6 +362,8 @@ export type PortfolioHoldingQuoteKey = {
   symbolT212: string | null;
   currency?: string | null;
   brokerPrice?: number | null;
+  /** When `t212`, prefer broker price so MV matches Trading 212 after sync. */
+  source?: string | null;
 };
 
 export async function fetchPortfolioQuotesForHoldings(
@@ -360,7 +371,12 @@ export async function fetchPortfolioQuotesForHoldings(
 ): Promise<Record<string, PortfolioQuoteRow | null>> {
   const metaByYahoo = new Map<
     string,
-    { symbolT212: string | null; currency: string | null; brokerPrice: number | null }
+    {
+      symbolT212: string | null;
+      currency: string | null;
+      brokerPrice: number | null;
+      brokerFirst: boolean;
+    }
   >();
   for (const h of holdings) {
     const k = h.symbolYahoo.trim().toUpperCase();
@@ -370,16 +386,19 @@ export async function fetchPortfolioQuotesForHoldings(
       h.brokerPrice != null && Number.isFinite(h.brokerPrice) && h.brokerPrice > 0
         ? h.brokerPrice
         : null;
+    const brokerFirst = h.source === "t212";
     if (!prev) {
       metaByYahoo.set(k, {
         symbolT212: h.symbolT212 ?? null,
         currency: h.currency ?? null,
         brokerPrice,
+        brokerFirst,
       });
     } else {
       if (!prev.symbolT212 && h.symbolT212) prev.symbolT212 = h.symbolT212;
       if (!prev.currency && h.currency) prev.currency = h.currency;
       if (brokerPrice != null) prev.brokerPrice = brokerPrice;
+      if (brokerFirst) prev.brokerFirst = true;
     }
   }
 
@@ -395,6 +414,7 @@ export async function fetchPortfolioQuotesForHoldings(
         meta.currency,
         meta.brokerPrice,
         meta.currency,
+        meta.brokerFirst,
       );
     }),
   );

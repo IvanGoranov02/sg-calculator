@@ -165,6 +165,21 @@ describe("shouldPreferBrokerPrice", () => {
     };
     assert.equal(shouldPreferBrokerPrice(us, { price: 220, currency: "EUR" }, "EUR", "AMZd_EQ", blocked), true);
   });
+
+  it("prefers broker when brokerFirst is set (T212 synced holdings)", () => {
+    const yahoo = {
+      resolvedYahooSymbol: "AMZ.DE",
+      currency: "EUR",
+      price: 222,
+      name: "AMAZON.COM INC.",
+    };
+    assert.equal(
+      shouldPreferBrokerPrice(yahoo, { price: 220, currency: "EUR" }, "EUR", "AMZd_EQ", blocked, {
+        brokerFirst: true,
+      }),
+      true,
+    );
+  });
 });
 
 describe("isTrapQuoteRow", () => {
