@@ -88,7 +88,7 @@ export function DashboardClient() {
       : null;
 
   return (
-    <Card className="border-white/10 bg-zinc-900/40">
+    <Card className="border-border bg-card">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4">
         <div>
           <CardTitle className="flex items-center gap-2">
@@ -142,7 +142,7 @@ export function DashboardClient() {
           <div className="overflow-x-auto" aria-label={t("dashboard.watchlistSnapshotAria")}>
             <Table>
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
+                <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground">{t("dashboard.colSymbol")}</TableHead>
                   <TableHead className="text-right text-muted-foreground">{t("dashboard.colPrice")}</TableHead>
                   <TableHead className="text-right text-muted-foreground">{t("dashboard.colChange")}</TableHead>
@@ -151,7 +151,7 @@ export function DashboardClient() {
               </TableHeader>
               <TableBody>
                 {quotes.map((q) => (
-                  <TableRow key={q.symbol} className="border-white/10">
+                  <TableRow key={q.symbol} className="border-border">
                     <TableCell className="font-mono font-medium">{q.symbol}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatCurrency(q.price)}</TableCell>
                     <TableCell
