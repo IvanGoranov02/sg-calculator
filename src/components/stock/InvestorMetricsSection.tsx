@@ -140,8 +140,6 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
     <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
       <div className="border-b border-white/10 px-5 py-4">
         <h2 className="text-lg font-semibold tracking-tight">{t("investor.title")}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{t("investor.subtitle")}</p>
-        <p className="mt-1 text-xs text-muted-foreground/80">{t("investor.currencyNote", { currency: m.currency })}</p>
       </div>
       <div className="space-y-8 px-5 py-6">
         <div className="grid gap-8 lg:grid-cols-2">

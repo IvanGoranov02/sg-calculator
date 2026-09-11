@@ -68,7 +68,12 @@ function StockSearch({ target }: StockSearchProps) {
     .trim()
     .toUpperCase();
   const fromUrl = searchParams.get("ticker")?.trim() ?? "";
-  const [query, setQuery] = useState(() => fromPath || fromUrl || "AAPL");
+  const [query, setQuery] = useState(() => {
+    if (target === "dcf" || target === "dividend") {
+      return fromUrl;
+    }
+    return fromPath || fromUrl || "AAPL";
+  });
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);

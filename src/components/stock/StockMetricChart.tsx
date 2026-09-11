@@ -12,7 +12,7 @@ import {
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import {
   formatCurrency,
@@ -341,7 +341,6 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="text-lg">{t("chart.performance")}</CardTitle>
-            <CardDescription>{t("chart.performanceDesc")}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {metricOptions.map((m) => (

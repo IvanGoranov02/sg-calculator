@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { DcfProjectionCharts } from "@/components/dcf/DcfProjectionCharts";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -160,24 +160,11 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
     <div className="mx-auto flex max-w-4xl flex-col gap-6 sm:gap-8">
       <div>
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
-        <p className="mt-2 text-muted-foreground">{t("dcf.intro")}</p>
-        {seed ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t("dcf.seedLine", {
-              symbol: seed.symbol,
-              name: seed.name,
-              price: formatCurrency(seed.currentPrice),
-            })}
-          </p>
-        ) : (
-          <p className="mt-2 text-sm text-amber-200/80">{t("dcf.noSeed", { ticker })}</p>
-        )}
       </div>
 
       <Card className="border-white/10 bg-zinc-900/40">
         <CardHeader>
           <CardTitle>{t("dcf.snapshotTitle")}</CardTitle>
-          <CardDescription>{t("dcf.snapshotDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <SnapshotMetric
@@ -220,7 +207,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
       <Card className="border-white/10 bg-zinc-900/40">
         <CardHeader>
           <CardTitle>{t("dcf.assumptionsTitle")}</CardTitle>
-          <CardDescription>{t("dcf.assumptionsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-2 sm:col-span-2">
@@ -239,7 +225,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
 
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="base">{baseMetricLabel}</Label>
-            <p className="text-xs text-muted-foreground">{t("dcf.baseHint")}</p>
             <Input
               id="base"
               type="number"
@@ -252,7 +237,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
 
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="dr">{t("dcf.discount")}</Label>
-            <p className="text-xs text-muted-foreground">{t("dcf.discountHint")}</p>
             <Input
               id="dr"
               type="number"
@@ -339,7 +323,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
       <Card className="border-emerald-500/20 bg-zinc-900/50">
         <CardHeader>
           <CardTitle>{t("dcf.resultTitle")}</CardTitle>
-          <CardDescription>{t("dcf.resultDisclaimer")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {validationError ? (
@@ -396,14 +379,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
                   </div>
                 </div>
               )}
-
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer">{t("dcf.detailPv")}</summary>
-                <ul className="mt-2 list-inside list-disc space-y-1">
-                  <li>{t("dcf.pvGrowth", { v: formatCurrency(result.growthValue) })}</li>
-                  <li>{t("dcf.pvTerminal", { v: formatCurrency(result.terminalValue) })}</li>
-                </ul>
-              </details>
             </>
           )}
         </CardContent>

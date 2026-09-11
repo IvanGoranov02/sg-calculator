@@ -45,8 +45,6 @@ export function IncomeStatementTable({ bundle }: IncomeStatementTableProps) {
     <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-900/40 shadow-lg shadow-black/15">
       <div className="space-y-2 border-b border-white/10 px-4 py-5 sm:px-6">
         <h2 className="text-lg font-semibold tracking-tight">{t("income.title")}</h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">{t("income.subtitle")}</p>
-        <p className="text-xs leading-relaxed text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
       </div>
       <div className="relative">
         <div className="overflow-x-auto px-1 py-1">

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { Gauge } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -104,7 +104,6 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
             {t(`valuation.verdict.${result.verdict}`)}
           </span>
         </CardTitle>
-        <CardDescription>{t("valuation.subtitle")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-0.5">
@@ -137,7 +136,6 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
           />
         </div>
 
-        <p className="text-[11px] text-muted-foreground/80">{t("valuation.disclaimer")}</p>
       </CardContent>
     </Card>
   );

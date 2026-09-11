@@ -328,9 +328,6 @@ export function FundamentalChartCard({
             <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 px-4 text-center">
               <CircleOff className="size-5 text-muted-foreground/50" aria-hidden />
               <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
-              <p className="text-xs leading-relaxed text-muted-foreground/80">
-                {t("chartsFund.chartMetricNoDataDetail")}
-              </p>
             </div>
           ) : (
             <div className="relative h-[220px] min-h-0 min-w-0 w-full">

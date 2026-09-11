@@ -17,7 +17,7 @@ import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   computeTtmDpsGrowthPills,
   rollingSum4Quarterly,
@@ -188,9 +188,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.dividendSectionTitle")}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{t("chartsFund.dividendSectionSubtitle")}</p>
-          <p className="mt-2 text-xs text-muted-foreground/90">{t("chartsFund.periodFilterTablesHint")}</p>
-          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{t("chartsFund.dividendRefreshHint")}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button
@@ -232,7 +229,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             <div className="rounded-lg border border-white/10 bg-zinc-900/50 p-4">
               <p className="text-xs font-medium text-muted-foreground">{t("chartsFund.dividendAiContextTitle")}</p>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">{aiNote}</p>
-              <p className="mt-3 text-[11px] text-muted-foreground">{t("chartsFund.dividendAiDisclaimer")}</p>
             </div>
           ) : null}
         </div>
@@ -241,12 +237,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
           <Card className="border-white/10 bg-zinc-900/40 sm:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{t("chartsFund.dividendTtmTitle")}</CardTitle>
-              <CardDescription className="text-xs">
-                {t("chartsFund.dividendTtmDesc")}
-                {pack.anyTtmPartial ? (
-                  <span className="mt-1 block text-[11px] text-amber-200/80">{t("chartsFund.dividendTtmPartialNote")}</span>
-                ) : null}
-              </CardDescription>
             </CardHeader>
             <CardContent className="min-h-0 min-w-0">
               <div className="relative h-[240px] w-full min-h-[240px] min-w-0">
