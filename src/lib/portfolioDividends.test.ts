@@ -8,6 +8,7 @@ import {
   buildMonthlyIncome,
   buildPortfolioDividendsPayload,
   calendarMonthsBetween,
+  dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
   incomeGrowthPillsFromMonthly,
   paymentMatchesSymbol,
@@ -339,6 +340,15 @@ describe("paymentMatchesSymbol", () => {
   });
 });
 
+describe("dividendPaymentDisplayCurrency", () => {
+  it("keeps BGN before 2026 and maps BGN to EUR from 2026-01", () => {
+    assert.equal(dividendPaymentDisplayCurrency("2025-12-31", "BGN"), "BGN");
+    assert.equal(dividendPaymentDisplayCurrency("2026-01-01", "BGN"), "EUR");
+    assert.equal(dividendPaymentDisplayCurrency("2026-03-15", "BGN"), "EUR");
+    assert.equal(dividendPaymentDisplayCurrency("2026-03-15", "EUR"), "EUR");
+  });
+});
+
 describe("buildHoldingMonthlyTimeline", () => {
   it("fills quiet calendar months with null amounts", () => {
     const payments: PortfolioDividendPayment[] = [
@@ -370,6 +380,48 @@ describe("buildHoldingMonthlyTimeline", () => {
         { month: "2024-03", amount: 20 },
       ],
     );
+  });
+
+  it("labels each month with its payment currency (BGN pre-2026, EUR from 2026)", () => {
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "t212",
+        ticker: "SXR8",
+        symbolYahoo: "SXR8.DE",
+        amount: 10,
+        currency: "BGN",
+        paidOn: "2025-06-15",
+      },
+      {
+        id: "2",
+        source: "t212",
+        ticker: "SXR8",
+        symbolYahoo: "SXR8.DE",
+        amount: 6.71,
+        currency: "EUR",
+        paidOn: "2026-03-15",
+      },
+    ];
+    const timeline = buildHoldingMonthlyTimeline(payments, "SXR8.DE");
+    assert.equal(timeline.find((r) => r.month === "2025-06")?.currency, "BGN");
+    assert.equal(timeline.find((r) => r.month === "2026-03")?.currency, "EUR");
+  });
+
+  it("maps mislabeled 2026 BGN payments to EUR in the timeline", () => {
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "t212",
+        ticker: "SXR8",
+        symbolYahoo: "SXR8.DE",
+        amount: 6.71,
+        currency: "BGN",
+        paidOn: "2026-03-15",
+      },
+    ];
+    const timeline = buildHoldingMonthlyTimeline(payments, "SXR8.DE");
+    assert.equal(timeline[0]?.currency, "EUR");
   });
 
   it("normalizes datetime paidOn from T212", () => {
