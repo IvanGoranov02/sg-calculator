@@ -231,14 +231,20 @@ export function EventsClient() {
               <summary className="cursor-pointer text-muted-foreground">
                 {t("events.noDate", { count: undated.length })}
               </summary>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {undated.map((r) => (
                   <Link
                     key={r.symbol}
                     href={`/stock/${encodeURIComponent(r.symbol)}`}
-                    className="rounded-md border border-white/10 px-2 py-1 hover:bg-muted/50"
+                    className="rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2.5 transition-colors hover:bg-zinc-900/60"
                   >
-                    <CompanyIdentity symbol={r.symbol} name={r.name} size="sm" />
+                    <CompanyIdentity
+                      symbol={r.symbol}
+                      name={r.name}
+                      size="sm"
+                      primaryLabel="name"
+                      className="min-w-0"
+                    />
                   </Link>
                 ))}
               </div>
@@ -275,7 +281,13 @@ function EventCard({
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span>{kindLabel(event.kind)}</span>
       </div>
-      <CompanyIdentity symbol={event.symbol} name={event.name} size="sm" />
+      <CompanyIdentity
+        symbol={event.symbol}
+        name={event.name}
+        size="md"
+        primaryLabel="name"
+        className="min-w-0"
+      />
       <p className="mt-2 text-sm">
         <span className={cn("tabular-nums", soon ? "text-amber-400" : "text-muted-foreground")}>
           {relative(event.days)}
