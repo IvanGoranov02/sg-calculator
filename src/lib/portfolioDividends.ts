@@ -58,8 +58,8 @@ export type PortfolioDividendsPayload = {
   payments: PortfolioDividendPayment[];
   monthlyIncome: PortfolioDividendMonth[];
   chartSeries: PortfolioDividendChartPoint[];
+  fx: PortfolioFxRates;
   summary: {
-    estAnnualByCurrency: { currency: string; amount: number }[];
     portfolioYieldOnValue: number | null;
     portfolioYieldOnCost: number | null;
     incomeGrowthPills: GrowthPills | null;
@@ -275,22 +275,6 @@ export function rollingTtmMonthly(amounts: number[]): (number | null)[] {
   });
 }
 
-/** True TTM income growth from calendar months (zeros in quiet months). */
-export function incomeGrowthPillsFromMonthly(
-  monthly: PortfolioDividendMonth[],
-  currency: string,
-): GrowthPills | null {
-  const filled = buildFilledMonthlyAmounts(monthly, currency);
-  if (filled.length < 24) return null;
-  const ttm = rollingTtmMonthly(filled);
-  const pills = computeGrowthPills(ttm, 12);
-  const any =
-    pills.oneYear != null ||
-    pills.twoYear != null ||
-    pills.threeYear != null;
-  return any ? pills : null;
-}
-
 function monthIncomeInBaseCurrency(
   m: PortfolioDividendMonth,
   base: string,
@@ -306,15 +290,15 @@ function monthIncomeInBaseCurrency(
   return total;
 }
 
-/** Chart series with every calendar month from first to last payment; quiet months have income 0. */
-export function buildMonthlyChartSeries(
+/** Zero-filled calendar month amounts in one display currency; null if any paid month cannot convert. */
+export function buildFilledMonthlyAmountsInCurrency(
   monthly: PortfolioDividendMonth[],
-  baseCurrency: string,
+  targetCurrency: string,
   fx: PortfolioFxRates,
-): PortfolioDividendChartPoint[] {
+): number[] | null {
   if (monthly.length === 0) return [];
 
-  const base = normalizePortfolioCurrency(baseCurrency);
+  const base = normalizePortfolioCurrency(targetCurrency);
   const minMonth = monthly[0]!.month;
   const maxMonth = monthly[monthly.length - 1]!.month;
   const calendar = calendarMonthsBetween(minMonth, maxMonth);
@@ -323,13 +307,78 @@ export function buildMonthlyChartSeries(
     incomeByMonth.set(m.month, monthIncomeInBaseCurrency(m, base, fx));
   }
 
-  return calendar.map((month) => {
+  const out: number[] = [];
+  for (const month of calendar) {
     const income = incomeByMonth.get(month);
-    return {
-      month,
-      income: income !== undefined ? income : 0,
-    };
-  });
+    if (income === undefined) {
+      out.push(0);
+    } else if (income === null) {
+      return null;
+    } else {
+      out.push(income);
+    }
+  }
+  return out;
+}
+
+/** True TTM income growth from calendar months (zeros in quiet months), FX-converted like the chart. */
+export function incomeGrowthPillsFromMonthly(
+  monthly: PortfolioDividendMonth[],
+  currency: string,
+  fx: PortfolioFxRates,
+): GrowthPills | null {
+  const filled = buildFilledMonthlyAmountsInCurrency(monthly, currency, fx);
+  if (filled == null || filled.length < 24) return null;
+  const ttm = rollingTtmMonthly(filled);
+  const pills = computeGrowthPills(ttm, 12);
+  const any =
+    pills.oneYear != null ||
+    pills.twoYear != null ||
+    pills.threeYear != null;
+  return any ? pills : null;
+}
+
+/** Chart series with every calendar month from first to last payment; quiet months have income 0. */
+export function buildMonthlyChartSeries(
+  monthly: PortfolioDividendMonth[],
+  baseCurrency: string,
+  fx: PortfolioFxRates,
+): PortfolioDividendChartPoint[] {
+  if (monthly.length === 0) return [];
+
+  const filled = buildFilledMonthlyAmountsInCurrency(monthly, baseCurrency, fx);
+  if (filled == null) {
+    const minMonth = monthly[0]!.month;
+    const maxMonth = monthly[monthly.length - 1]!.month;
+    return calendarMonthsBetween(minMonth, maxMonth).map((month) => ({ month, income: null }));
+  }
+
+  const minMonth = monthly[0]!.month;
+  const maxMonth = monthly[monthly.length - 1]!.month;
+  const calendar = calendarMonthsBetween(minMonth, maxMonth);
+  return calendar.map((month, i) => ({
+    month,
+    income: filled[i] ?? 0,
+  }));
+}
+
+/** Sum estimated annual dividend income in one display currency (EUR/USD preference). */
+export function mergeEstAnnualIncome(
+  positions: PortfolioDividendPosition[],
+  targetCurrency: string,
+  fx: PortfolioFxRates,
+): number | null {
+  const target = normalizePortfolioCurrency(targetCurrency);
+  let total = 0;
+  let any = false;
+  for (const p of positions) {
+    if (p.estAnnualIncome == null || !Number.isFinite(p.estAnnualIncome) || p.estAnnualIncome <= 0) continue;
+    any = true;
+    const converted = convertPortfolioMoney(p.estAnnualIncome, p.currency, target, fx);
+    if (converted == null) return null;
+    total += converted;
+  }
+  return any ? total : null;
 }
 
 function pickBaseCurrency(holdings: HoldingRow[]): string {
@@ -493,26 +542,17 @@ export function buildPortfolioDividendsPayload(input: {
   const monthlyIncome = buildMonthlyIncome(payments);
   const chartSeries = buildMonthlyChartSeries(monthlyIncome, baseCurrency, input.fx);
 
-  const estMap = new Map<string, number>();
-  for (const p of positions) {
-    if (p.estAnnualIncome == null || !Number.isFinite(p.estAnnualIncome)) continue;
-    estMap.set(p.currency, (estMap.get(p.currency) ?? 0) + p.estAnnualIncome);
-  }
-  const estAnnualByCurrency = [...estMap.entries()]
-    .map(([currency, amount]) => ({ currency, amount }))
-    .sort((a, b) => a.currency.localeCompare(b.currency));
-
   const portfolioYieldOnValue = totalValue > 0 ? (totalIncome / totalValue) * 100 : null;
   const portfolioYieldOnCost = totalCost > 0 ? (totalIncome / totalCost) * 100 : null;
-  const incomeGrowthPills = incomeGrowthPillsFromMonthly(monthlyIncome, baseCurrency);
+  const incomeGrowthPills = incomeGrowthPillsFromMonthly(monthlyIncome, baseCurrency, input.fx);
 
   return {
     positions,
     payments,
     monthlyIncome,
     chartSeries,
+    fx: input.fx,
     summary: {
-      estAnnualByCurrency,
       portfolioYieldOnValue,
       portfolioYieldOnCost,
       incomeGrowthPills,
