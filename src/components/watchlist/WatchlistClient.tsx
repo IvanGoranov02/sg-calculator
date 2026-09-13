@@ -4,6 +4,7 @@ import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -195,8 +196,7 @@ export function WatchlistClient() {
           <Table>
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="w-[100px]">{t("watchlist.colSymbol")}</TableHead>
-                <TableHead>{t("watchlist.colName")}</TableHead>
+                <TableHead>{t("watchlist.colSymbol")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colPrice")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colChange")}</TableHead>
                 <TableHead className="hidden text-right sm:table-cell">{t("watchlist.colDip")}</TableHead>
@@ -209,8 +209,10 @@ export function WatchlistClient() {
                 if (!q) {
                   return (
                     <TableRow key={sym} className="border-white/10">
-                      <TableCell className="font-mono font-medium">{sym}</TableCell>
-                      <TableCell className="text-muted-foreground" colSpan={4}>
+                      <TableCell>
+                        <CompanyIdentity symbol={sym} size="sm" />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground" colSpan={3}>
                         {loading ? t("watchlist.loading") : t("watchlist.quoteUnavailable")}
                       </TableCell>
                       <TableCell className="text-right">
@@ -231,8 +233,14 @@ export function WatchlistClient() {
                 const positive = q.changesPercentage >= 0;
                 return (
                   <TableRow key={sym} className="border-white/10">
-                    <TableCell className="font-mono font-medium">{q.symbol}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-muted-foreground" title={q.name}>{q.name}</TableCell>
+                    <TableCell className="max-w-[240px]">
+                      <CompanyIdentity
+                        symbol={q.symbol}
+                        name={q.name}
+                        href={`/stock/${encodeURIComponent(sym)}`}
+                        size="sm"
+                      />
+                    </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {formatCurrency(q.price)}
                     </TableCell>

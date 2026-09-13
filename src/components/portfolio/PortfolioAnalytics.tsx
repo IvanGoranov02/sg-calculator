@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { convertPortfolioMoney, type PortfolioFxRates } from "@/lib/portfolioFx";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -179,7 +180,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
         {a.holdings.slice(0, 8).map((h) => (
           <BarRow
             key={h.symbol}
-            label={h.symbol}
+            symbol={h.symbol}
             pct={pctOf(a.totalValue, h.value)}
             value={money(h.value, a.base)}
             color="#34d399"
@@ -270,10 +271,29 @@ function SummaryCard({
   );
 }
 
-function BarRow({ label, pct, value, color }: { label: string; pct: number; value: string; color: string }) {
+function BarRow({
+  symbol,
+  label,
+  pct,
+  value,
+  color,
+}: {
+  symbol?: string;
+  label?: string;
+  pct: number;
+  value: string;
+  color: string;
+}) {
+  const rowLabel = symbol ?? label ?? "";
   return (
     <div className="flex items-center gap-2 sm:gap-3">
-      <span className="w-20 shrink-0 truncate font-mono text-xs text-foreground/90 sm:w-28" title={label}>{label}</span>
+      <div className="w-24 shrink-0 sm:w-32">
+        {symbol ? (
+          <CompanyIdentity symbol={symbol} size="sm" />
+        ) : (
+          <span className="truncate text-xs text-foreground/90" title={rowLabel}>{rowLabel}</span>
+        )}
+      </div>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>
@@ -289,7 +309,7 @@ function MoverList({ title, items, tone }: { title: string; items: { symbol: str
       <ul className="space-y-1.5">
         {items.map((m) => (
           <li key={m.symbol} className="flex items-center justify-between gap-2 text-sm">
-            <span className="font-mono">{m.symbol}</span>
+            <CompanyIdentity symbol={m.symbol} size="sm" />
             <span className={cn("font-mono tabular-nums", m.plPct >= 0 ? "text-emerald-400" : "text-red-400")}>
               {m.plPct >= 0 ? "+" : ""}
               {m.plPct.toFixed(1)}%

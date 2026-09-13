@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, Trash2 } from "lucide-react";
 import {
@@ -13,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -369,18 +369,13 @@ export function PortfolioDividendsView({
                                 aria-hidden
                               />
                             ) : null}
-                            <div className="min-w-0">
-                              <Link
-                                href={`/stock/${encodeURIComponent(p.symbol)}`}
-                                className="text-emerald-400 hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {p.symbol}
-                              </Link>
-                              {p.name ? (
-                                <p className="max-w-[12rem] truncate text-xs text-muted-foreground" title={p.name}>{p.name}</p>
-                              ) : null}
-                            </div>
+                            <CompanyIdentity
+                              symbol={p.symbol}
+                              name={p.name}
+                              href={`/stock/${encodeURIComponent(p.symbol)}`}
+                              size="sm"
+                              onLinkClick={(e) => e.stopPropagation()}
+                            />
                           </div>
                         </TableCell>
                         <TableCell className="text-right text-muted-foreground">
@@ -456,7 +451,9 @@ export function PortfolioDividendsView({
               <TableBody>
                 {data.payments.slice(0, 50).map((p) => (
                   <TableRow key={p.id} className="border-border">
-                    <TableCell className="font-mono font-medium">{p.ticker}</TableCell>
+                    <TableCell>
+                      <CompanyIdentity symbol={p.ticker} size="sm" />
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                     </TableCell>

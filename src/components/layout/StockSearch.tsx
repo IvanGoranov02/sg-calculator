@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -210,7 +211,7 @@ function StockSearch({ target }: StockSearchProps) {
             <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
-                className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm ${
+                className={`flex w-full px-3 py-1.5 text-left text-sm ${
                   i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
                 onMouseDown={(e) => {
@@ -219,8 +220,7 @@ function StockSearch({ target }: StockSearchProps) {
                 }}
                 onMouseEnter={() => setHighlighted(i)}
               >
-                <span className="font-mono font-medium">{c.s}</span>
-                <span className="truncate text-xs text-muted-foreground" title={c.n}>{c.n}</span>
+                <CompanyIdentity symbol={c.s} name={c.n} size="sm" />
               </button>
             </li>
           ))}

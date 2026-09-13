@@ -4,6 +4,7 @@ import { Loader2, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CompareRow } from "@/lib/yahooCompare";
@@ -139,9 +140,11 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {symbols.map((s) => (
+        {symbols.map((s) => {
+          const row = rows.find((r) => r.symbol.toUpperCase() === s);
+          return (
           <span key={s} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-zinc-900/60 px-2.5 py-1 text-sm">
-            <span className="font-mono font-medium">{s}</span>
+            <CompanyIdentity symbol={s} name={row?.name} size="sm" />
             <button
               type="button"
               onClick={() => removeSymbol(s)}
@@ -151,7 +154,8 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
               <X className="size-3.5" />
             </button>
           </span>
-        ))}
+          );
+        })}
         {symbols.length < MAX ? (
           <form onSubmit={addSymbol} className="flex items-center gap-1.5">
             <Input
@@ -192,10 +196,9 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
                 <th className="sticky left-0 z-10 bg-zinc-900 px-3 py-3 text-left font-medium text-muted-foreground">{t("compare.metric")}</th>
                 {rows.map((r) => (
                   <th key={r.symbol} className="px-3 py-3 text-right">
-                    <Link href={`/stock/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-emerald-400 hover:underline">
-                      {r.symbol}
+                    <Link href={`/stock/${encodeURIComponent(r.symbol)}`} className="inline-flex justify-end">
+                      <CompanyIdentity symbol={r.symbol} name={r.name} size="sm" align="end" />
                     </Link>
-                    <p className="max-w-[10rem] truncate text-right text-[11px] font-normal text-muted-foreground" title={r.name}>{r.name}</p>
                     <p
                       className={cn(
                         "text-right font-mono text-xs tabular-nums",

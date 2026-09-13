@@ -3,6 +3,7 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,11 +76,8 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
     <div className="rounded-xl border border-border bg-card p-4 shadow-lg shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">{quote.name}</h1>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {quote.symbol}
-            </Badge>
+          <div className="flex flex-wrap items-center gap-3">
+            <CompanyIdentity symbol={quote.symbol} name={quote.name} size="md" />
             <WatchlistToggle symbol={quote.symbol} />
             {quote.marketState ? (
               <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
