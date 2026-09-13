@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { convertPortfolioMoney, type PortfolioFxRates } from "@/lib/portfolioFx";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 
 export type AnalyticsRow = {
   symbol: string;
+  name: string | null;
   sector: string | null;
   holdingCcy: string;
   mv: number | null;
@@ -30,7 +31,7 @@ export type PortfolioAnalyticsData = {
   totalIncome: number;
   portfolioYield: number | null;
   unconverted: number;
-  holdings: { symbol: string; value: number }[];
+  holdings: { symbol: string; name: string | null; value: number }[];
   sectors: { name: string; value: number }[];
   hasRealSectors: boolean;
   best: { symbol: string; plPct: number }[];
@@ -71,7 +72,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
     let totalCost = 0;
     let totalIncome = 0;
     let unconverted = 0;
-    const holdings: { symbol: string; value: number }[] = [];
+    const holdings: { symbol: string; name: string | null; value: number }[] = [];
     const sectorMap = new Map<string, number>();
     const movers: { symbol: string; plPct: number }[] = [];
 
@@ -82,7 +83,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
       if (r.mv != null && mvBase == null) unconverted++;
       if (mvBase != null) {
         totalValue += mvBase;
-        holdings.push({ symbol: r.symbol, value: mvBase });
+        holdings.push({ symbol: r.symbol, name: r.name, value: mvBase });
         const sector = r.sector ?? t("portfolioAnalytics.unknownSector");
         sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + mvBase);
       }
@@ -165,57 +166,50 @@ export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAna
   );
 }
 
-/** 1. Holdings bars visualization (paired with summary metrics at top). */
+/** Holdings + sector allocation side by side. */
 export function PortfolioAllocationSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
 
   return (
-    <Card className="border-border bg-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
-        <CardDescription>{t("portfolioAnalytics.allocationDesc", { base: a.base })}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {a.holdings.slice(0, 8).map((h) => (
-          <BarRow
-            key={h.symbol}
-            symbol={h.symbol}
-            pct={pctOf(a.totalValue, h.value)}
-            value={money(h.value, a.base)}
-            color="#34d399"
-          />
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
+    <div className={cn("grid gap-4", a.hasRealSectors && "lg:grid-cols-2")}>
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {a.holdings.slice(0, 8).map((h) => (
+            <BarRow
+              key={h.symbol}
+              symbol={h.symbol}
+              name={h.name}
+              pct={pctOf(a.totalValue, h.value)}
+              value={money(h.value, a.base)}
+              color="#34d399"
+            />
+          ))}
+        </CardContent>
+      </Card>
 
-/** 3. Sector allocation */
-export function PortfolioSectorSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
-  const { t } = useI18n();
-  const a = analytics;
-
-  if (!a.hasRealSectors) return null;
-
-  return (
-    <Card className="border-border bg-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
-        <CardDescription>{t("portfolioAnalytics.sectorDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {a.sectors.map((s, i) => (
-          <BarRow
-            key={s.name}
-            label={s.name}
-            pct={pctOf(a.totalValue, s.value)}
-            value={`${pctOf(a.totalValue, s.value).toFixed(0)}%`}
-            color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-          />
-        ))}
-      </CardContent>
-    </Card>
+      {a.hasRealSectors ? (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {a.sectors.map((s, i) => (
+              <BarRow
+                key={s.name}
+                label={s.name}
+                pct={pctOf(a.totalValue, s.value)}
+                value={`${pctOf(a.totalValue, s.value).toFixed(0)}%`}
+                color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
   );
 }
 
@@ -273,23 +267,25 @@ function SummaryCard({
 
 function BarRow({
   symbol,
+  name,
   label,
   pct,
   value,
   color,
 }: {
   symbol?: string;
+  name?: string | null;
   label?: string;
   pct: number;
   value: string;
   color: string;
 }) {
-  const rowLabel = symbol ?? label ?? "";
+  const rowLabel = name?.trim() || symbol || label || "";
   return (
     <div className="flex items-center gap-2 sm:gap-3">
-      <div className="w-24 shrink-0 sm:w-32">
+      <div className="w-28 shrink-0 sm:w-40">
         {symbol ? (
-          <CompanyIdentity symbol={symbol} size="sm" />
+          <CompanyIdentity symbol={symbol} name={name} size="sm" primaryLabel="name" />
         ) : (
           <span className="truncate text-xs text-foreground/90" title={rowLabel}>{rowLabel}</span>
         )}

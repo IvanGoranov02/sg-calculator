@@ -33,7 +33,6 @@ import { cn } from "@/lib/utils";
 import {
   PortfolioAllocationSection,
   PortfolioMoversSection,
-  PortfolioSectorSection,
   PortfolioSummarySection,
   usePortfolioAnalytics,
   type AnalyticsRow,
@@ -460,6 +459,7 @@ export function PortfolioClient() {
     () =>
       rows.map(({ h, q, mv, cost, pl, estAnnual, holdingCcy }) => ({
         symbol: h.symbolYahoo,
+        name: q?.name ?? null,
         sector: q?.sector ?? null,
         holdingCcy,
         mv,
@@ -827,8 +827,6 @@ export function PortfolioClient() {
           </Table>
         </div>
       )}
-
-      {analytics ? <PortfolioSectorSection analytics={analytics} /> : null}
 
       {holdings.length > 0 ? (
         <div className="rounded-lg border border-border px-4 py-4">

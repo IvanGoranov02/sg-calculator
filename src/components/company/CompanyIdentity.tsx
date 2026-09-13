@@ -17,6 +17,8 @@ type CompanyIdentityProps = {
   onLinkClick?: (e: React.MouseEvent) => void;
   /** Stack ticker/name to the right of the logo (default) or center for table headers. */
   align?: "start" | "end";
+  /** Which label is primary when both symbol and name are available. */
+  primaryLabel?: "symbol" | "name";
 };
 
 const logoSizes = {
@@ -68,9 +70,12 @@ export function CompanyIdentity({
   className,
   onLinkClick,
   align = "start",
+  primaryLabel = "symbol",
 }: CompanyIdentityProps) {
   const sym = symbol.trim().toUpperCase();
   const displayName = name?.trim() || null;
+  const mainLabel = primaryLabel === "name" && displayName ? displayName : sym;
+  const subLabel = primaryLabel === "name" && displayName ? sym : displayName;
 
   const body = (
     <div
@@ -82,10 +87,10 @@ export function CompanyIdentity({
     >
       <CompanyLogo symbol={sym} size={size} />
       <div className={cn("min-w-0", align === "end" && "items-end")}>
-        <p className="truncate font-semibold leading-tight text-foreground">{sym}</p>
-        {displayName ? (
-          <p className="truncate text-xs leading-tight text-muted-foreground" title={displayName}>
-            {displayName}
+        <p className="truncate font-semibold leading-tight text-foreground" title={mainLabel}>{mainLabel}</p>
+        {subLabel ? (
+          <p className="truncate text-xs leading-tight text-muted-foreground" title={subLabel}>
+            {subLabel}
           </p>
         ) : null}
       </div>
