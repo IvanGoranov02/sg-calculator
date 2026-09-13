@@ -374,6 +374,7 @@ export function PortfolioDividendsView({
                               name={p.name}
                               href={`/stock/${encodeURIComponent(p.symbol)}`}
                               size="sm"
+                              primaryLabel="name"
                               onLinkClick={(e) => e.stopPropagation()}
                             />
                           </div>
@@ -452,7 +453,17 @@ export function PortfolioDividendsView({
                 {data.payments.slice(0, 50).map((p) => (
                   <TableRow key={p.id} className="border-border">
                     <TableCell>
-                      <CompanyIdentity symbol={p.ticker} size="sm" />
+                      <CompanyIdentity
+                        symbol={p.symbolYahoo ?? p.ticker}
+                        name={p.name}
+                        href={
+                          p.symbolYahoo
+                            ? `/stock/${encodeURIComponent(p.symbolYahoo)}`
+                            : undefined
+                        }
+                        size="sm"
+                        primaryLabel="name"
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {p.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}

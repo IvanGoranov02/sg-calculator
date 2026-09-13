@@ -108,6 +108,7 @@ export function dipMetricsForRange(
 
 export type DipFinderQuoteInput = {
   symbol: string;
+  name?: string | null;
   price: number;
   dipVsSma200Pct: number | null;
   twoHundredDayAverage: number | null;
@@ -115,12 +116,22 @@ export type DipFinderQuoteInput = {
 
 export type DipChartRow = {
   symbol: string;
+  name: string | null;
+  axisLabel: string;
   dipPct: number;
   dipVsSma200Pct: number | null;
   lookbackChangePct: number | null;
   windowSma: number | null;
   sma200: number | null;
 };
+
+/** Compact chart axis label: company name when available, else ticker. */
+export function dipChartAxisLabel(symbol: string, name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed) return symbol;
+  if (trimmed.length <= 14) return trimmed;
+  return `${trimmed.slice(0, 12)}…`;
+}
 
 /** Default Y domain when there is no data to plot. */
 export const DIP_CHART_Y_EMPTY_MIN = -5;
@@ -255,6 +266,8 @@ export function dipChartRowForQuote(
   if (dipPct == null || !Number.isFinite(dipPct)) return null;
   return {
     symbol: quote.symbol,
+    name: quote.name?.trim() || null,
+    axisLabel: dipChartAxisLabel(quote.symbol, quote.name),
     dipPct,
     dipVsSma200Pct: quote.dipVsSma200Pct,
     lookbackChangePct: m.lookbackChangePct,

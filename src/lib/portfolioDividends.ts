@@ -16,6 +16,7 @@ export type PortfolioDividendPayment = {
   source: "t212" | "manual";
   ticker: string;
   symbolYahoo: string | null;
+  name: string | null;
   amount: number;
   currency: string;
   paidOn: string;
@@ -172,6 +173,24 @@ export function calendarMonthsBetween(minMonth: string, maxMonth: string): strin
     }
   }
   return out;
+}
+
+function resolveQuoteName(
+  symbolYahoo: string | null,
+  ticker: string,
+  quotes: Record<string, PortfolioQuoteRow | null>,
+  holdings: HoldingRow[],
+): string | null {
+  const candidates = new Set<string>();
+  if (symbolYahoo?.trim()) candidates.add(symbolYahoo.trim().toUpperCase());
+  const fromT212 = resolveYahooFromT212Ticker(ticker, holdings);
+  if (fromT212?.trim()) candidates.add(fromT212.trim().toUpperCase());
+  if (ticker.trim()) candidates.add(ticker.trim().toUpperCase());
+  for (const sym of candidates) {
+    const name = quotes[sym]?.name?.trim();
+    if (name) return name;
+  }
+  return null;
 }
 
 function resolveYahooFromT212Ticker(ticker: string, holdings: HoldingRow[]): string | null {
@@ -442,11 +461,13 @@ export function buildPortfolioDividendsPayload(input: {
     const ticker = row.ticker === "—" ? `T212-${i}` : row.ticker;
     const paidOn = normalizeIsoDateString(row.paidOn) ?? "";
     const storedCurrency = row.currency === "—" ? "USD" : row.currency;
+    const symbolYahoo = resolveYahooFromT212Ticker(ticker, input.holdings);
     return {
       id: `t212:${ticker}:${row.paidOn ?? i}`,
       source: "t212" as const,
       ticker,
-      symbolYahoo: resolveYahooFromT212Ticker(ticker, input.holdings),
+      symbolYahoo,
+      name: resolveQuoteName(symbolYahoo, ticker, input.quotes, input.holdings),
       amount: row.amount ?? 0,
       currency: dividendPaymentDisplayCurrency(paidOn, storedCurrency),
       paidOn,
@@ -458,6 +479,7 @@ export function buildPortfolioDividendsPayload(input: {
     source: "manual" as const,
     ticker: r.ticker,
     symbolYahoo: r.symbolYahoo,
+    name: resolveQuoteName(r.symbolYahoo, r.ticker, input.quotes, input.holdings),
     amount: Number(r.amount),
     currency: normalizePortfolioCurrency(r.currency),
     paidOn: r.paidOn.toISOString().slice(0, 10),

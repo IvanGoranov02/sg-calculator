@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { tickCoord } from "@/lib/chartSeriesUtils";
@@ -25,6 +26,8 @@ import { cn } from "@/lib/utils";
 
 export type DipChartDatum = {
   symbol: string;
+  name: string | null;
+  axisLabel: string;
   dipPct: number;
   dipVsSma200Pct: number | null;
   lookbackChangePct: number | null;
@@ -146,7 +149,7 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
-                  dataKey="symbol"
+                  dataKey="axisLabel"
                   tick={(props) => <AngledXTick {...props} />}
                   tickLine={false}
                   axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
@@ -170,8 +173,8 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
                     const p = payload[0].payload as (typeof sorted)[0];
                     return (
                       <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
-                        <p className="font-mono font-medium text-foreground">{p.symbol}</p>
-                        <p className="text-muted-foreground">
+                        <CompanyIdentity symbol={p.symbol} name={p.name} size="sm" primaryLabel="name" />
+                        <p className="mt-2 text-muted-foreground">
                           {t("watchlist.dipVsWindowSma", { range: rangeLabel })}: {formatPercent(p.dipPct)}
                         </p>
                         {p.lookbackChangePct != null ? (
