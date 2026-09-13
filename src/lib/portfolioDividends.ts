@@ -58,6 +58,7 @@ export type PortfolioDividendsPayload = {
   payments: PortfolioDividendPayment[];
   monthlyIncome: PortfolioDividendMonth[];
   chartSeries: PortfolioDividendChartPoint[];
+  fx: PortfolioFxRates;
   summary: {
     estAnnualByCurrency: { currency: string; amount: number }[];
     portfolioYieldOnValue: number | null;
@@ -332,6 +333,25 @@ export function buildMonthlyChartSeries(
   });
 }
 
+/** Sum estimated annual dividend income in one display currency (EUR/USD preference). */
+export function mergeEstAnnualIncome(
+  positions: PortfolioDividendPosition[],
+  targetCurrency: string,
+  fx: PortfolioFxRates,
+): number | null {
+  const target = normalizePortfolioCurrency(targetCurrency);
+  let total = 0;
+  let any = false;
+  for (const p of positions) {
+    if (p.estAnnualIncome == null || !Number.isFinite(p.estAnnualIncome) || p.estAnnualIncome <= 0) continue;
+    const converted = convertPortfolioMoney(p.estAnnualIncome, p.currency, target, fx);
+    if (converted == null) continue;
+    total += converted;
+    any = true;
+  }
+  return any ? total : null;
+}
+
 function pickBaseCurrency(holdings: HoldingRow[]): string {
   const counts = new Map<string, number>();
   for (const h of holdings) {
@@ -511,6 +531,7 @@ export function buildPortfolioDividendsPayload(input: {
     payments,
     monthlyIncome,
     chartSeries,
+    fx: input.fx,
     summary: {
       estAnnualByCurrency,
       portfolioYieldOnValue,

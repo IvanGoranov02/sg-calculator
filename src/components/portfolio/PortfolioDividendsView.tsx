@@ -28,8 +28,12 @@ import {
 } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
+import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
 import {
   buildHoldingMonthlyTimeline,
+  buildMonthlyChartSeries,
+  incomeGrowthPillsFromMonthly,
+  mergeEstAnnualIncome,
   type PortfolioDividendsPayload,
 } from "@/lib/portfolioDividends";
 import { cn } from "@/lib/utils";
@@ -58,7 +62,8 @@ export function PortfolioDividendsView({
   liveRefreshToken = 0,
 }: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
-  const { dateFormat } = usePreferences();
+  const { dateFormat, displayCurrency } = usePreferences();
+  const preferredCurrency = displayCurrencyToPortfolioCode(displayCurrency);
   const [data, setData] = useState<PortfolioDividendsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,14 +131,25 @@ export function PortfolioDividendsView({
     [t],
   );
 
+  const mergedEstAnnual = useMemo(() => {
+    if (!data) return null;
+    return mergeEstAnnualIncome(data.positions, preferredCurrency, data.fx);
+  }, [data, preferredCurrency]);
+
+  const incomeGrowthPills = useMemo(() => {
+    if (!data?.monthlyIncome.length) return null;
+    return incomeGrowthPillsFromMonthly(data.monthlyIncome, preferredCurrency);
+  }, [data, preferredCurrency]);
+
   const chartData = useMemo(() => {
-    if (!data?.chartSeries.length) return [];
-    return data.chartSeries.map((p) => ({
+    if (!data?.monthlyIncome.length) return [];
+    const series = buildMonthlyChartSeries(data.monthlyIncome, preferredCurrency, data.fx);
+    return series.map((p) => ({
       month: formatMonthKeyLabel(p.month, locale),
       income: p.income != null && Number.isFinite(p.income) ? p.income : 0,
       rawMonth: p.month,
     }));
-  }, [data, locale]);
+  }, [data, locale, preferredCurrency]);
 
   async function onDeleteManual(id: string) {
     if (!window.confirm(t("portfolioDividends.deleteConfirm"))) return;
@@ -229,21 +245,23 @@ export function PortfolioDividendsView({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {data.summary.estAnnualByCurrency.map(({ currency: ccy, amount: amt }) => {
-          const parts = periodizeAnnualDividend(amt);
+        {mergedEstAnnual != null ? (() => {
+          const parts = periodizeAnnualDividend(mergedEstAnnual);
           if (!parts) return null;
           return (
-            <div key={ccy} className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-4 py-3">
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-4 py-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {ccy} · {t("portfolio.dividendPerYearLabel")}
+                {preferredCurrency} · {t("portfolio.dividendPerYearLabel")}
               </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">{fmtMoney(parts.annual, ccy)}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
+                {fmtMoney(parts.annual, preferredCurrency)}
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(parts.month, ccy)}
+                {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(parts.month, preferredCurrency)}
               </p>
             </div>
           );
-        })}
+        })() : null}
         {data.summary.portfolioYieldOnValue != null ? (
           <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnValue")}</p>
@@ -262,7 +280,7 @@ export function PortfolioDividendsView({
         ) : null}
       </div>
 
-      {data.summary.incomeGrowthPills ? (
+      {incomeGrowthPills ? (
         <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">{t("portfolioDividends.incomeGrowthTitle")}</CardTitle>
@@ -271,7 +289,7 @@ export function PortfolioDividendsView({
             </CardDescription>
           </CardHeader>
           <div className="px-4 pb-6 sm:px-6">
-            <GrowthPillsRow pills={data.summary.incomeGrowthPills} labels={pillLabels} />
+            <GrowthPillsRow pills={incomeGrowthPills} labels={pillLabels} />
           </div>
         </Card>
       ) : null}
@@ -293,7 +311,7 @@ export function PortfolioDividendsView({
                 <YAxis
                   tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                   tickFormatter={(v: number) =>
-                    fmtMoney(v, data.summary.baseCurrency).replace(/\.\d+$/, "")
+                    fmtMoney(v, preferredCurrency).replace(/\.\d+$/, "")
                   }
                   width={72}
                 />
@@ -308,7 +326,7 @@ export function PortfolioDividendsView({
                         <p className="font-medium text-popover-foreground">{monthLabel}</p>
                         <p className="text-emerald-600 dark:text-emerald-400">
                           {t("portfolioDividends.chartIncome")}:{" "}
-                          {Number.isFinite(n) ? fmtMoney(n, data.summary.baseCurrency) : "—"}
+                          {Number.isFinite(n) ? fmtMoney(n, preferredCurrency) : "—"}
                         </p>
                       </div>
                     );

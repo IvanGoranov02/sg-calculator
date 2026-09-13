@@ -11,9 +11,11 @@ import {
   dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
   incomeGrowthPillsFromMonthly,
+  mergeEstAnnualIncome,
   paymentMatchesSymbol,
   rollingTtmMonthly,
   type PortfolioDividendPayment,
+  type PortfolioDividendPosition,
 } from "@/lib/portfolioDividends";
 
 describe("calendarMonthsBetween", () => {
@@ -229,6 +231,81 @@ describe("incomeGrowthPillsFromMonthly", () => {
   });
 });
 
+describe("mergeEstAnnualIncome", () => {
+  const fx = { eurPerUsd: 0.5, gbpPerUsd: 0.8 };
+
+  it("merges multi-currency positions into the target display currency", () => {
+    const positions: PortfolioDividendPosition[] = [
+      {
+        symbol: "AAPL",
+        name: "Apple",
+        quantity: 10,
+        avgPrice: 100,
+        currency: "USD",
+        price: 150,
+        dividendYield: 0.01,
+        dividendPerShare: 1,
+        yieldOnCost: 1,
+        estAnnualIncome: 100,
+        growthPills: null,
+      },
+      {
+        symbol: "VOW3.DE",
+        name: "VW",
+        quantity: 5,
+        avgPrice: 100,
+        currency: "EUR",
+        price: 120,
+        dividendYield: 0.02,
+        dividendPerShare: 2,
+        yieldOnCost: 2,
+        estAnnualIncome: 50,
+        growthPills: null,
+      },
+    ];
+    assert.equal(mergeEstAnnualIncome(positions, "USD", fx), 200);
+    assert.equal(mergeEstAnnualIncome(positions, "EUR", fx), 100);
+  });
+
+  it("converts BGN estimated income when merging to EUR", () => {
+    const positions: PortfolioDividendPosition[] = [
+      {
+        symbol: "SXR8.DE",
+        name: "iShares Core",
+        quantity: 10,
+        avgPrice: 100,
+        currency: "BGN",
+        price: 200,
+        dividendYield: 0.01,
+        dividendPerShare: 1,
+        yieldOnCost: 1,
+        estAnnualIncome: 19.5583,
+        growthPills: null,
+      },
+    ];
+    assert.ok(Math.abs((mergeEstAnnualIncome(positions, "EUR", fx) ?? 0) - 10) < 1e-6);
+  });
+
+  it("returns null when no convertible income exists", () => {
+    const positions: PortfolioDividendPosition[] = [
+      {
+        symbol: "AAPL",
+        name: "Apple",
+        quantity: 10,
+        avgPrice: 100,
+        currency: "EUR",
+        price: 150,
+        dividendYield: 0.01,
+        dividendPerShare: 1,
+        yieldOnCost: 1,
+        estAnnualIncome: 100,
+        growthPills: null,
+      },
+    ];
+    assert.equal(mergeEstAnnualIncome(positions, "USD", { eurPerUsd: null, gbpPerUsd: null }), null);
+  });
+});
+
 describe("buildPortfolioDividendsPayload", () => {
   it("includes dividend payers with yield on cost", () => {
     const payload = buildPortfolioDividendsPayload({
@@ -268,6 +345,7 @@ describe("buildPortfolioDividendsPayload", () => {
     assert.equal(payload.positions[0]!.yieldOnCost, 1);
     assert.ok(Math.abs((payload.summary.portfolioYieldOnValue ?? 0) - 10 / 15) < 1e-6);
     assert.ok(Array.isArray(payload.chartSeries));
+    assert.ok(payload.fx);
   });
 
   it("uses all holdings in portfolio yield denominator", () => {
