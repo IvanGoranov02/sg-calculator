@@ -38,6 +38,11 @@ import {
   type AnalyticsRow,
 } from "@/components/portfolio/PortfolioAnalytics";
 import { PortfolioDividendsView } from "@/components/portfolio/PortfolioDividendsView";
+import {
+  PortfolioManualMonthlyValueCard,
+  PortfolioValueChartCard,
+  type PortfolioValueHistoryPayload,
+} from "@/components/portfolio/PortfolioValueHistory";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -137,6 +142,10 @@ export function PortfolioClient() {
   const [dividendsReloadToken, setDividendsReloadToken] = useState(0);
   const [dividendsLiveRefreshToken, setDividendsLiveRefreshToken] = useState(0);
 
+  const [valueHistory, setValueHistory] = useState<PortfolioValueHistoryPayload | null>(null);
+  const [valueHistoryLoading, setValueHistoryLoading] = useState(false);
+  const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
+
   useEffect(() => {
     setManualCurrency(preferredPortfolioCurrency);
   }, [preferredPortfolioCurrency]);
@@ -210,10 +219,28 @@ export function PortfolioClient() {
     }
   }, [t]);
 
+  const loadValueHistory = useCallback(async () => {
+    setValueHistoryLoading(true);
+    try {
+      const res = await fetch("/api/portfolio/value-history");
+      if (!res.ok) {
+        setValueHistory(null);
+        return;
+      }
+      const data = (await res.json()) as PortfolioValueHistoryPayload;
+      setValueHistory(data);
+    } catch {
+      setValueHistory(null);
+    } finally {
+      setValueHistoryLoading(false);
+    }
+  }, []);
+
   const refreshPortfolioData = useCallback(async () => {
     await load();
+    await loadValueHistory();
     setDividendsLiveRefreshToken((n) => n + 1);
-  }, [load]);
+  }, [load, loadValueHistory]);
 
   const reloadDividendsFromCache = useCallback(() => {
     setDividendsReloadToken((n) => n + 1);
@@ -232,6 +259,7 @@ export function PortfolioClient() {
         return false;
       }
       await load();
+      await loadValueHistory();
       reloadDividendsFromCache();
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
         setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
@@ -244,10 +272,13 @@ export function PortfolioClient() {
     } finally {
       setSyncing(false);
     }
-  }, [load, reloadDividendsFromCache, t]);
+  }, [load, loadValueHistory, reloadDividendsFromCache, t]);
 
   useEffect(() => {
-    if (status === "authenticated") void load();
+    if (status === "authenticated") {
+      void load();
+      void loadValueHistory();
+    }
     else if (status === "unauthenticated") {
       setHoldings([]);
       setQuotes({});
@@ -255,7 +286,7 @@ export function PortfolioClient() {
       setError(null);
       setLoading(false);
     }
-  }, [status, load]);
+  }, [status, load, loadValueHistory]);
 
   const signedIn = status === "authenticated";
 
@@ -316,6 +347,48 @@ export function PortfolioClient() {
     void runSync();
   }
 
+  async function onSaveMonthlyValue(month: string, amount: string, currency: string) {
+    setSavingMonthlyValue(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/portfolio/value-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month, amount, currency }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? t("portfolio.valueManualSaveFailed"));
+        return;
+      }
+      await loadValueHistory();
+    } catch {
+      setError(t("portfolio.valueManualSaveFailed"));
+    } finally {
+      setSavingMonthlyValue(false);
+    }
+  }
+
+  async function onDeleteMonthlyValue(month: string) {
+    setSavingMonthlyValue(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portfolio/value-history/${encodeURIComponent(month)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setError(data.error ?? t("portfolio.valueManualDeleteFailed"));
+        return;
+      }
+      await loadValueHistory();
+    } catch {
+      setError(t("portfolio.valueManualDeleteFailed"));
+    } finally {
+      setSavingMonthlyValue(false);
+    }
+  }
+
   async function onAddManual(e: FormEvent) {
     e.preventDefault();
     const s = sym.trim().toUpperCase();
@@ -342,6 +415,7 @@ export function PortfolioClient() {
       setQty("");
       setAvg("");
       await load();
+      await loadValueHistory();
       if (data.replacedBrokerRow) {
         setPortfolioInfo(t("portfolio.manualReplacedBroker"));
       }
@@ -361,6 +435,7 @@ export function PortfolioClient() {
         return;
       }
       await load();
+      await loadValueHistory();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     }
@@ -394,6 +469,7 @@ export function PortfolioClient() {
       }
       setEditingId(null);
       await load();
+      await loadValueHistory();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
@@ -629,6 +705,8 @@ export function PortfolioClient() {
           <PortfolioAllocationSection analytics={analytics} />
         </div>
       ) : null}
+
+      <PortfolioValueChartCard data={valueHistory} loading={valueHistoryLoading} />
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -900,6 +978,13 @@ export function PortfolioClient() {
           </div>
         </form>
       </Card>
+
+      <PortfolioManualMonthlyValueCard
+        data={valueHistory}
+        saving={savingMonthlyValue}
+        onSubmit={onSaveMonthlyValue}
+        onDelete={onDeleteMonthlyValue}
+      />
 
       <details className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-muted/50 sm:px-6 sm:py-4 sm:text-base">
