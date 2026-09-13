@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatLocaleDate } from "@/lib/format";
@@ -92,7 +93,9 @@ export function T212RecentDividends({ connected }: T212RecentDividendsProps) {
             <TableBody>
               {rows.map((r, i) => (
                 <TableRow key={`${r.ticker}-${r.paidOn ?? i}`} className="border-border">
-                  <TableCell className="font-mono font-medium">{r.ticker}</TableCell>
+                  <TableCell>
+                    <CompanyIdentity symbol={r.ticker} size="sm" />
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {r.amount != null ? fmtMoney(r.amount, r.currency === "—" ? "USD" : r.currency) : "—"}
                   </TableCell>

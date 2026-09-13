@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -669,15 +670,13 @@ export function PortfolioClient() {
                     {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                   </TableCell>
                   <TableCell className="font-medium">
-                    <div className="flex min-w-0 max-w-[11rem] flex-col gap-0.5 sm:max-w-none">
-                      <span>
-                        <Link
-                          href={`/stock/${encodeURIComponent(q?.resolvedYahooSymbol ?? h.symbolYahoo)}`}
-                          className="text-emerald-400 hover:underline"
-                        >
-                          {h.symbolYahoo}
-                        </Link>
-                      </span>
+                    <div className="flex min-w-0 max-w-[14rem] flex-col gap-0.5 sm:max-w-none">
+                      <CompanyIdentity
+                        symbol={h.symbolYahoo}
+                        name={q?.name}
+                        href={`/stock/${encodeURIComponent(q?.resolvedYahooSymbol ?? h.symbolYahoo)}`}
+                        size="sm"
+                      />
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                       </span>

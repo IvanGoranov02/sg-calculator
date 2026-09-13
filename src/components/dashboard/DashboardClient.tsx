@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -152,7 +153,14 @@ export function DashboardClient() {
               <TableBody>
                 {quotes.map((q) => (
                   <TableRow key={q.symbol} className="border-border">
-                    <TableCell className="font-mono font-medium">{q.symbol}</TableCell>
+                    <TableCell className="max-w-[220px]">
+                      <CompanyIdentity
+                        symbol={q.symbol}
+                        name={q.name}
+                        href={`/stock/${encodeURIComponent(q.symbol)}`}
+                        size="sm"
+                      />
+                    </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatCurrency(q.price)}</TableCell>
                     <TableCell
                       className={cn(

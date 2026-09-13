@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { SymbolEventRow } from "@/lib/calendarEvents";
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -235,9 +236,9 @@ export function EventsClient() {
                   <Link
                     key={r.symbol}
                     href={`/stock/${encodeURIComponent(r.symbol)}`}
-                    className="rounded-md border border-white/10 px-2 py-1 font-mono text-xs text-muted-foreground hover:text-foreground"
+                    className="rounded-md border border-white/10 px-2 py-1 hover:bg-muted/50"
                   >
-                    {r.symbol}
+                    <CompanyIdentity symbol={r.symbol} name={r.name} size="sm" />
                   </Link>
                 ))}
               </div>
@@ -274,10 +275,8 @@ function EventCard({
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span>{kindLabel(event.kind)}</span>
       </div>
-      <p className="truncate text-base leading-snug font-semibold text-foreground sm:text-lg" title={event.name}>{event.name}</p>
-      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm">
-        <span className="font-mono text-emerald-400">{event.symbol}</span>
-        <span className="text-muted-foreground">·</span>
+      <CompanyIdentity symbol={event.symbol} name={event.name} size="sm" />
+      <p className="mt-2 text-sm">
         <span className={cn("tabular-nums", soon ? "text-amber-400" : "text-muted-foreground")}>
           {relative(event.days)}
         </span>
