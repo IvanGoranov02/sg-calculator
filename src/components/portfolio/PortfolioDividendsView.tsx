@@ -138,15 +138,20 @@ export function PortfolioDividendsView({
 
   const incomeGrowthPills = useMemo(() => {
     if (!data?.monthlyIncome.length) return null;
-    return incomeGrowthPillsFromMonthly(data.monthlyIncome, preferredCurrency);
+    return incomeGrowthPillsFromMonthly(data.monthlyIncome, preferredCurrency, data.fx);
   }, [data, preferredCurrency]);
+
+  const mergedEstAnnualParts = useMemo(() => {
+    if (mergedEstAnnual == null) return null;
+    return periodizeAnnualDividend(mergedEstAnnual);
+  }, [mergedEstAnnual]);
 
   const chartData = useMemo(() => {
     if (!data?.monthlyIncome.length) return [];
     const series = buildMonthlyChartSeries(data.monthlyIncome, preferredCurrency, data.fx);
     return series.map((p) => ({
       month: formatMonthKeyLabel(p.month, locale),
-      income: p.income != null && Number.isFinite(p.income) ? p.income : 0,
+      income: p.income != null && Number.isFinite(p.income) ? p.income : null,
       rawMonth: p.month,
     }));
   }, [data, locale, preferredCurrency]);
@@ -245,23 +250,19 @@ export function PortfolioDividendsView({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {mergedEstAnnual != null ? (() => {
-          const parts = periodizeAnnualDividend(mergedEstAnnual);
-          if (!parts) return null;
-          return (
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-4 py-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {preferredCurrency} · {t("portfolio.dividendPerYearLabel")}
-              </p>
-              <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
-                {fmtMoney(parts.annual, preferredCurrency)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(parts.month, preferredCurrency)}
-              </p>
-            </div>
-          );
-        })() : null}
+        {mergedEstAnnualParts ? (
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {preferredCurrency} · {t("portfolio.dividendPerYearLabel")}
+            </p>
+            <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
+              {fmtMoney(mergedEstAnnualParts.annual, preferredCurrency)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(mergedEstAnnualParts.month, preferredCurrency)}
+            </p>
+          </div>
+        ) : null}
         {data.summary.portfolioYieldOnValue != null ? (
           <div className="rounded-xl border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnValue")}</p>

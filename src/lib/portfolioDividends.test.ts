@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildFilledMonthlyAmounts,
+  buildFilledMonthlyAmountsInCurrency,
   buildHoldingMonthlyTimeline,
   buildMonthlyChartSeries,
   buildMonthlyIncome,
@@ -214,6 +215,8 @@ describe("buildMonthlyChartSeries", () => {
 });
 
 describe("incomeGrowthPillsFromMonthly", () => {
+  const fx = { eurPerUsd: 0.5, gbpPerUsd: null };
+
   it("returns null when fewer than 24 calendar months", () => {
     const monthly = buildMonthlyIncome([
       {
@@ -227,7 +230,49 @@ describe("incomeGrowthPillsFromMonthly", () => {
         paidOn: "2024-01-15",
       },
     ]);
-    assert.equal(incomeGrowthPillsFromMonthly(monthly, "USD"), null);
+    assert.equal(incomeGrowthPillsFromMonthly(monthly, "USD", fx), null);
+  });
+
+  it("converts foreign-currency history into the display currency before computing pills", () => {
+    const payments: PortfolioDividendPayment[] = [];
+    for (let i = 0; i < 24; i++) {
+      const year = 2022 + Math.floor(i / 12);
+      const month = String((i % 12) + 1).padStart(2, "0");
+      payments.push({
+        id: String(i),
+        source: "manual",
+        ticker: "VOW3",
+        symbolYahoo: "VOW3.DE",
+        name: null,
+        amount: 10 + i,
+        currency: "EUR",
+        paidOn: `${year}-${month}-15`,
+      });
+    }
+    const monthly = buildMonthlyIncome(payments);
+    const pills = incomeGrowthPillsFromMonthly(monthly, "USD", fx);
+    assert.ok(pills != null);
+    assert.ok(pills.oneYear != null);
+  });
+
+  it("returns null when FX conversion is unavailable for foreign currency history", () => {
+    const payments: PortfolioDividendPayment[] = [];
+    for (let i = 0; i < 24; i++) {
+      const year = 2022 + Math.floor(i / 12);
+      const month = String((i % 12) + 1).padStart(2, "0");
+      payments.push({
+        id: String(i),
+        source: "manual",
+        ticker: "VOW3",
+        symbolYahoo: "VOW3.DE",
+        name: null,
+        amount: 10,
+        currency: "EUR",
+        paidOn: `${year}-${month}-15`,
+      });
+    }
+    const monthly = buildMonthlyIncome(payments);
+    assert.equal(incomeGrowthPillsFromMonthly(monthly, "USD", { eurPerUsd: null, gbpPerUsd: null }), null);
   });
 });
 
@@ -303,6 +348,82 @@ describe("mergeEstAnnualIncome", () => {
       },
     ];
     assert.equal(mergeEstAnnualIncome(positions, "USD", { eurPerUsd: null, gbpPerUsd: null }), null);
+  });
+
+  it("returns null for mixed currencies when FX cannot convert every position", () => {
+    const positions: PortfolioDividendPosition[] = [
+      {
+        symbol: "AAPL",
+        name: "Apple",
+        quantity: 10,
+        avgPrice: 100,
+        currency: "USD",
+        price: 150,
+        dividendYield: 0.01,
+        dividendPerShare: 1,
+        yieldOnCost: 1,
+        estAnnualIncome: 100,
+        growthPills: null,
+      },
+      {
+        symbol: "VOW3.DE",
+        name: "VW",
+        quantity: 5,
+        avgPrice: 100,
+        currency: "EUR",
+        price: 120,
+        dividendYield: 0.02,
+        dividendPerShare: 2,
+        yieldOnCost: 2,
+        estAnnualIncome: 50,
+        growthPills: null,
+      },
+    ];
+    assert.equal(mergeEstAnnualIncome(positions, "EUR", { eurPerUsd: null, gbpPerUsd: null }), null);
+  });
+
+  it("returns null for empty positions", () => {
+    assert.equal(mergeEstAnnualIncome([], "EUR", fx), null);
+  });
+
+  it("converts BGN estimated income when merging to USD", () => {
+    const positions: PortfolioDividendPosition[] = [
+      {
+        symbol: "SXR8.DE",
+        name: "iShares Core",
+        quantity: 10,
+        avgPrice: 100,
+        currency: "BGN",
+        price: 200,
+        dividendYield: 0.01,
+        dividendPerShare: 1,
+        yieldOnCost: 1,
+        estAnnualIncome: 19.5583,
+        growthPills: null,
+      },
+    ];
+    assert.ok(Math.abs((mergeEstAnnualIncome(positions, "USD", fx) ?? 0) - 20) < 1e-6);
+  });
+});
+
+describe("buildFilledMonthlyAmountsInCurrency", () => {
+  it("returns null when a paid month cannot be converted", () => {
+    const monthly = buildMonthlyIncome([
+      {
+        id: "1",
+        source: "manual",
+        ticker: "VOW3",
+        symbolYahoo: "VOW3.DE",
+        name: null,
+        amount: 20,
+        currency: "EUR",
+        paidOn: "2024-04-01",
+      },
+    ]);
+    assert.equal(
+      buildFilledMonthlyAmountsInCurrency(monthly, "USD", { eurPerUsd: null, gbpPerUsd: null }),
+      null,
+    );
   });
 });
 
