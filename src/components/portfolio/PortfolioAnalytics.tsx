@@ -34,8 +34,8 @@ export type PortfolioAnalyticsData = {
   holdings: { symbol: string; name: string | null; value: number }[];
   sectors: { name: string; value: number }[];
   hasRealSectors: boolean;
-  best: { symbol: string; plPct: number }[];
-  worst: { symbol: string; plPct: number }[];
+  best: { symbol: string; name: string | null; plPct: number }[];
+  worst: { symbol: string; name: string | null; plPct: number }[];
 };
 
 function money(n: number, currency: string): string {
@@ -74,7 +74,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
     let unconverted = 0;
     const holdings: { symbol: string; name: string | null; value: number }[] = [];
     const sectorMap = new Map<string, number>();
-    const movers: { symbol: string; plPct: number }[] = [];
+    const movers: { symbol: string; name: string | null; plPct: number }[] = [];
 
     for (const r of rows) {
       const mvBase = conv(r.mv, r.holdingCcy);
@@ -90,7 +90,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
       if (costBase != null) totalCost += costBase;
       if (incomeBase != null && incomeBase > 0) totalIncome += incomeBase;
       if (r.cost > 0 && r.pl != null && r.mv != null) {
-        movers.push({ symbol: r.symbol, plPct: (r.pl / r.cost) * 100 });
+        movers.push({ symbol: r.symbol, name: r.name, plPct: (r.pl / r.cost) * 100 });
       }
     }
 
@@ -298,14 +298,22 @@ function BarRow({
   );
 }
 
-function MoverList({ title, items, tone }: { title: string; items: { symbol: string; plPct: number }[]; tone: "pos" | "neg" }) {
+function MoverList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: { symbol: string; name: string | null; plPct: number }[];
+  tone: "pos" | "neg";
+}) {
   return (
     <div>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
       <ul className="space-y-1.5">
         {items.map((m) => (
           <li key={m.symbol} className="flex items-center justify-between gap-2 text-sm">
-            <CompanyIdentity symbol={m.symbol} size="sm" />
+            <CompanyIdentity symbol={m.symbol} name={m.name} size="sm" primaryLabel="name" />
             <span className={cn("font-mono tabular-nums", m.plPct >= 0 ? "text-emerald-400" : "text-red-400")}>
               {m.plPct >= 0 ? "+" : ""}
               {m.plPct.toFixed(1)}%

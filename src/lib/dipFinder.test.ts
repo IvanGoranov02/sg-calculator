@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   DIP_RANGES,
   buildDipHistorySymbolMappings,
+  dipChartAxisLabel,
   dipChartRowForQuote,
   dipChartTickStep,
   dipChartYDomain,
@@ -187,6 +188,14 @@ describe("remapPortfolioDipHistory", () => {
   });
 });
 
+describe("dipChartAxisLabel", () => {
+  it("prefers company name and truncates long labels", () => {
+    assert.equal(dipChartAxisLabel("AAPL", "Apple Inc."), "Apple Inc.");
+    assert.equal(dipChartAxisLabel("AAPL", "International Business Machines Corporation"), "Internationa…");
+    assert.equal(dipChartAxisLabel("AAPL", null), "AAPL");
+  });
+});
+
 describe("dipChartRowForQuote", () => {
   it("omits symbols without window SMA instead of falling back to 200d", () => {
     const quote = {
@@ -209,12 +218,15 @@ describe("dipChartRowForQuote", () => {
     ];
     const quote = {
       symbol: "TEST",
+      name: "Test Corp",
       price: 90,
       dipVsSma200Pct: -15,
       twoHundredDayAverage: 100,
     };
     const row = dipChartRowForQuote(quote, bars, "5d");
     assert.ok(row);
+    assert.equal(row!.name, "Test Corp");
+    assert.equal(row!.axisLabel, "Test Corp");
     assert.notEqual(row!.dipPct, quote.dipVsSma200Pct);
     assert.ok(row!.windowSma != null);
     assert.equal(row!.dipPct, ((90 - row!.windowSma!) / row!.windowSma!) * 100);

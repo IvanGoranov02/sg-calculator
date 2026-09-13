@@ -595,6 +595,7 @@ export function PortfolioClient() {
         return [
           {
             symbol: sym,
+            name: q.name,
             price: q.price,
             dipVsSma200Pct: q.dipVsSma200Pct,
             twoHundredDayAverage: q.twoHundredDayAverage,
@@ -754,6 +755,7 @@ export function PortfolioClient() {
                         name={q?.name}
                         href={`/stock/${encodeURIComponent(q?.resolvedYahooSymbol ?? h.symbolYahoo)}`}
                         size="sm"
+                        primaryLabel="name"
                       />
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}

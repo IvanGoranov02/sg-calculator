@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 export type DipFinderQuote = {
   symbol: string;
+  name?: string | null;
   price: number;
   dipVsSma200Pct: number | null;
   twoHundredDayAverage: number | null;
