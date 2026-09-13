@@ -19,9 +19,33 @@ import {
   type FlatEvent,
   unionEventSymbols,
 } from "@/lib/calendarEvents";
+import { buildEventDividendEstimatesBySymbol, type EventDividendEstimate } from "@/lib/dividendEstimate";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { initialPortfolioReady } from "@/lib/eventsSession";
+import { usePreferences } from "@/lib/preferences/PreferencesProvider";
+import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
+import type { PortfolioFxRates } from "@/lib/portfolioFx";
+import type { PortfolioDividendPayment } from "@/lib/portfolioDividends";
+import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import { cn } from "@/lib/utils";
+
+type PortfolioHoldingApi = {
+  symbolYahoo: string;
+  quantity: string;
+  currency: string;
+};
+
+function fmtMoney(n: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.length === 3 ? currency : "USD",
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return n.toFixed(2);
+  }
+}
 
 const KIND_META: Record<
   EventKind,
@@ -46,9 +70,15 @@ const KIND_META: Record<
 
 export function EventsClient() {
   const { t, locale } = useI18n();
+  const { displayCurrency } = usePreferences();
+  const preferredCurrency = displayCurrencyToPortfolioCode(displayCurrency);
   const { symbols: watchlistSymbols } = useWatchlist();
   const { status: sessionStatus } = useSession();
   const [portfolioSymbols, setPortfolioSymbols] = useState<string[]>([]);
+  const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingApi[]>([]);
+  const [portfolioQuotes, setPortfolioQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
+  const [portfolioFx, setPortfolioFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
+  const [dividendPayments, setDividendPayments] = useState<PortfolioDividendPayment[]>([]);
   const [portfolioReady, setPortfolioReady] = useState(() => initialPortfolioReady(sessionStatus));
   const [rows, setRows] = useState<SymbolEventRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,14 +100,42 @@ export function EventsClient() {
     setPortfolioReady(false);
     void (async () => {
       try {
-        const res = await fetch("/api/portfolio", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as { holdings?: { symbolYahoo: string }[] };
+        const [portfolioRes, dividendsRes] = await Promise.all([
+          fetch("/api/portfolio", { cache: "no-store" }),
+          fetch("/api/portfolio/dividends", { cache: "no-store" }),
+        ]);
         if (cancelled) return;
-        const syms = (data.holdings ?? []).map((h) => h.symbolYahoo);
-        setPortfolioSymbols(syms);
+        if (portfolioRes.ok) {
+          const data = (await portfolioRes.json()) as {
+            holdings?: PortfolioHoldingApi[];
+            quotes?: Record<string, PortfolioQuoteRow | null>;
+            fx?: PortfolioFxRates;
+          };
+          const holdings = data.holdings ?? [];
+          setPortfolioHoldings(holdings);
+          setPortfolioQuotes(data.quotes ?? {});
+          setPortfolioFx(data.fx ?? { eurPerUsd: null, gbpPerUsd: null });
+          setPortfolioSymbols(holdings.map((h) => h.symbolYahoo));
+        } else {
+          setPortfolioHoldings([]);
+          setPortfolioQuotes({});
+          setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
+          setPortfolioSymbols([]);
+        }
+        if (dividendsRes.ok) {
+          const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
+          setDividendPayments(divData.payments ?? []);
+        } else {
+          setDividendPayments([]);
+        }
       } catch {
-        if (!cancelled) setPortfolioSymbols([]);
+        if (!cancelled) {
+          setPortfolioHoldings([]);
+          setPortfolioQuotes({});
+          setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
+          setPortfolioSymbols([]);
+          setDividendPayments([]);
+        }
       } finally {
         if (!cancelled) setPortfolioReady(true);
       }
@@ -119,6 +177,19 @@ export function EventsClient() {
 
   const { upcoming, undated } = useMemo(() => flattenUpcomingEvents(rows), [rows]);
   const weekGroups = useMemo(() => groupEventsByWeek(upcoming), [upcoming]);
+  const dividendEstimates = useMemo(
+    () =>
+      portfolioHoldings.length > 0
+        ? buildEventDividendEstimatesBySymbol({
+            holdings: portfolioHoldings,
+            quotes: portfolioQuotes,
+            fx: portfolioFx,
+            payments: dividendPayments,
+            displayCurrency: preferredCurrency,
+          })
+        : new Map<string, EventDividendEstimate>(),
+    [portfolioHoldings, portfolioQuotes, portfolioFx, dividendPayments, preferredCurrency],
+  );
 
   const relative = (days: number) =>
     formatEventRelativeDays(days, {
@@ -215,6 +286,10 @@ export function EventsClient() {
                               event={event}
                               kindLabel={kindLabel}
                               relative={relative}
+                              estimate={
+                                dividendEstimates.get(event.symbol.trim().toUpperCase()) ?? null
+                              }
+                              estDividendLabel={t("events.estDividend")}
                             />
                           ))}
                         </div>
@@ -260,14 +335,20 @@ function EventCard({
   event,
   kindLabel,
   relative,
+  estimate,
+  estDividendLabel,
 }: {
   event: FlatEvent;
   kindLabel: (kind: EventKind) => string;
   relative: (days: number) => string;
+  estimate: EventDividendEstimate | null;
+  estDividendLabel: string;
 }) {
   const meta = KIND_META[event.kind];
   const Icon = meta.icon;
   const soon = event.days <= 14;
+  const showEstimate =
+    estimate != null && (event.kind === "exDividend" || event.kind === "dividendPay");
 
   return (
     <Link
@@ -293,6 +374,11 @@ function EventCard({
           {relative(event.days)}
         </span>
       </p>
+      {showEstimate ? (
+        <p className="mt-1 text-sm tabular-nums text-emerald-400/90">
+          {estDividendLabel}: {fmtMoney(estimate.amount, estimate.currency)}
+        </p>
+      ) : null}
     </Link>
   );
 }

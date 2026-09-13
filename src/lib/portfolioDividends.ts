@@ -397,6 +397,60 @@ function pickBaseCurrency(holdings: HoldingRow[]): string {
   return best;
 }
 
+export type HoldingAnnualDividendInput = {
+  quantity: number | string;
+  avgPrice?: number | string;
+  currency: string;
+};
+
+export type HoldingAnnualDividendEstimate = {
+  estAnnualIncome: number;
+  currency: string;
+  dividendPerShare: number | null;
+};
+
+/** Estimated annual dividend income for one holding (same logic as portfolio holdings / dividends views). */
+export function estimateHoldingAnnualDividend(
+  holding: HoldingAnnualDividendInput,
+  quote: PortfolioQuoteRow | null | undefined,
+  fx: PortfolioFxRates,
+): HoldingAnnualDividendEstimate | null {
+  const qQty = Number(holding.quantity);
+  if (!Number.isFinite(qQty) || qQty <= 0) return null;
+  const holdingCcy = normalizePortfolioCurrency(holding.currency);
+  const quoteCcy = quote ? normalizePortfolioCurrency(quote.currency) : holdingCcy;
+  const hasValidQuote = quote != null && Number.isFinite(quote.price) && quote.price > 0;
+  const priceInHolding =
+    hasValidQuote && quote ? convertPortfolioMoney(quote.price, quoteCcy, holdingCcy, fx) : null;
+  const mv =
+    priceInHolding != null && Number.isFinite(priceInHolding) ? priceInHolding * qQty : null;
+
+  let dividendPerShare: number | null = null;
+  let estAnnual: number | null = null;
+  if (hasValidQuote && quote) {
+    if (quote.dividendRate != null && Number.isFinite(quote.dividendRate)) {
+      const rateInHolding = convertPortfolioMoney(quote.dividendRate, quoteCcy, holdingCcy, fx);
+      if (rateInHolding != null) {
+        dividendPerShare = rateInHolding;
+        estAnnual = rateInHolding * qQty;
+      }
+    }
+    if (
+      estAnnual == null &&
+      quote.dividendYield != null &&
+      Number.isFinite(quote.dividendYield) &&
+      mv != null &&
+      mv > 0
+    ) {
+      estAnnual = mv * quote.dividendYield;
+      if (qQty > 0) dividendPerShare = estAnnual / qQty;
+    }
+  }
+
+  if (estAnnual == null || !Number.isFinite(estAnnual) || estAnnual <= 0) return null;
+  return { estAnnualIncome: estAnnual, currency: holdingCcy, dividendPerShare };
+}
+
 function computeHoldingMetrics(
   h: HoldingRow,
   quotes: Record<string, PortfolioQuoteRow | null>,
@@ -413,21 +467,13 @@ function computeHoldingMetrics(
   const cost = qAvg * qQty;
   const mv = priceInHolding != null && Number.isFinite(priceInHolding) ? priceInHolding * qQty : null;
 
-  let dividendPerShare: number | null = null;
-  let estAnnual: number | null = null;
-  if (hasValidQuote && q) {
-    if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
-      const rateInHolding = convertPortfolioMoney(q.dividendRate, quoteCcy, holdingCcy, fx);
-      if (rateInHolding != null) {
-        dividendPerShare = rateInHolding;
-        estAnnual = rateInHolding * qQty;
-      }
-    }
-    if (estAnnual == null && q.dividendYield != null && Number.isFinite(q.dividendYield) && mv != null && mv > 0) {
-      estAnnual = mv * q.dividendYield;
-      if (qQty > 0) dividendPerShare = estAnnual / qQty;
-    }
-  }
+  const annual = estimateHoldingAnnualDividend(
+    { quantity: h.quantity.toString(), avgPrice: h.avgPrice.toString(), currency: h.currency },
+    q,
+    fx,
+  );
+  const estAnnual = annual?.estAnnualIncome ?? null;
+  const dividendPerShare = annual?.dividendPerShare ?? null;
 
   const yieldOnCost =
     estAnnual != null && cost > 0 && Number.isFinite(estAnnual) ? (estAnnual / cost) * 100 : null;
