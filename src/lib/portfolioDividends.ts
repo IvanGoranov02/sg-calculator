@@ -104,6 +104,17 @@ function monthKey(isoDate: string): string | null {
   return normalized ? normalized.slice(0, 7) : null;
 }
 
+/** Bulgaria euro adoption: dividend payouts from 2026-01 are labeled EUR in the UI. */
+export const BULGARIA_EURO_DIVIDEND_MONTH = "2026-01";
+
+/** Cosmetic display currency for dividend rows; amounts are not converted here. */
+export function dividendPaymentDisplayCurrency(paidOn: string, storedCurrency: string): string {
+  const ccy = normalizePortfolioCurrency(storedCurrency);
+  const mk = monthKey(paidOn);
+  if (mk && mk >= BULGARIA_EURO_DIVIDEND_MONTH && ccy === "BGN") return "EUR";
+  return ccy;
+}
+
 export function paymentMatchesSymbol(p: PortfolioDividendPayment, symbol: string): boolean {
   const sym = symbol.trim().toUpperCase();
   if (!sym) return false;
@@ -123,12 +134,12 @@ export function buildHoldingMonthlyTimeline(
   if (symPayments.length === 0) return [];
 
   const monthAmounts = new Map<string, number>();
-  let currency = "USD";
+  const monthCurrencies = new Map<string, string>();
   for (const p of symPayments) {
     const key = monthKey(p.paidOn);
     if (!key) continue;
-    currency = normalizePortfolioCurrency(p.currency);
     monthAmounts.set(key, (monthAmounts.get(key) ?? 0) + p.amount);
+    monthCurrencies.set(key, dividendPaymentDisplayCurrency(p.paidOn, p.currency));
   }
 
   const months = [...monthAmounts.keys()].sort();
@@ -138,7 +149,7 @@ export function buildHoldingMonthlyTimeline(
   return calendar.map((month) => ({
     month,
     amount: monthAmounts.get(month) ?? null,
-    currency,
+    currency: monthCurrencies.get(month) ?? "USD",
   }));
 }
 
@@ -429,14 +440,16 @@ export function buildPortfolioDividendsPayload(input: {
   const t212Payments: PortfolioDividendPayment[] = sortT212DividendsRecent(input.t212Items).map((item, i) => {
     const row = mapT212DividendItem(item);
     const ticker = row.ticker === "—" ? `T212-${i}` : row.ticker;
+    const paidOn = normalizeIsoDateString(row.paidOn) ?? "";
+    const storedCurrency = row.currency === "—" ? "USD" : row.currency;
     return {
       id: `t212:${ticker}:${row.paidOn ?? i}`,
       source: "t212" as const,
       ticker,
       symbolYahoo: resolveYahooFromT212Ticker(ticker, input.holdings),
       amount: row.amount ?? 0,
-      currency: row.currency === "—" ? "USD" : row.currency,
-      paidOn: normalizeIsoDateString(row.paidOn) ?? "",
+      currency: dividendPaymentDisplayCurrency(paidOn, storedCurrency),
+      paidOn,
     };
   });
 
