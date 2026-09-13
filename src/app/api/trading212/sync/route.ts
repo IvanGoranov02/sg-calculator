@@ -105,6 +105,15 @@ export async function POST() {
           lastError: null,
         },
       });
+      if (summary?.totalValue != null && Number.isFinite(summary.totalValue) && summary.totalValue >= 0) {
+        await tx.portfolioAccountSnapshot.create({
+          data: {
+            userId,
+            totalValue: new Prisma.Decimal(summary.totalValue),
+            currency: summary.currency ?? accountCurrency ?? "USD",
+          },
+        });
+      }
     });
 
     try {
