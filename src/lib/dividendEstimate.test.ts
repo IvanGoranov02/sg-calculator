@@ -5,6 +5,7 @@ import {
   buildEventDividendEstimatesBySymbol,
   estimateEventDividendPayment,
   inferPaymentsPerYearFromHistory,
+  lookupPortfolioQuote,
   periodizeAnnualDividend,
   type EventDividendHoldingInput,
 } from "@/lib/dividendEstimate";
@@ -104,6 +105,26 @@ describe("inferPaymentsPerYearFromHistory", () => {
   it("defaults to quarterly when no matching payments exist", () => {
     assert.equal(inferPaymentsPerYearFromHistory(payments, "MSFT"), 4);
   });
+
+  it("defaults to quarterly when trailing-year payment count exceeds 12", () => {
+    const asOf = Date.now();
+    const monthly: PortfolioDividendPayment[] = [];
+    for (let i = 0; i < 13; i++) {
+      const d = new Date(asOf);
+      d.setUTCDate(d.getUTCDate() - i * 14);
+      monthly.push({
+        id: String(i),
+        source: "manual",
+        ticker: "MONTH",
+        symbolYahoo: "MONTH",
+        name: null,
+        amount: 1,
+        currency: "USD",
+        paidOn: d.toISOString().slice(0, 10),
+      });
+    }
+    assert.equal(inferPaymentsPerYearFromHistory(monthly, "MONTH", asOf), 4);
+  });
 });
 
 describe("estimateEventDividendPayment", () => {
@@ -138,6 +159,95 @@ describe("estimateEventDividendPayment", () => {
       fx: FX,
     });
     assert.equal(estimate, null);
+  });
+
+  it("uses payment history to refine per-payment amount", () => {
+    const asOf = Date.now();
+    const payments: PortfolioDividendPayment[] = [90, 60, 30, 0].map((daysAgo, i) => {
+      const d = new Date(asOf);
+      d.setUTCDate(d.getUTCDate() - daysAgo);
+      return {
+        id: String(i + 1),
+        source: "manual" as const,
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        name: null,
+        amount: 10,
+        currency: "USD",
+        paidOn: d.toISOString().slice(0, 10),
+      };
+    });
+
+    const withoutHistory = estimateEventDividendPayment({
+      symbol: "AAPL",
+      quantity: 10,
+      currency: "USD",
+      quote: quote({ dividendRate: 8 }),
+      fx: FX,
+    });
+    const withHistory = estimateEventDividendPayment({
+      symbol: "AAPL",
+      quantity: 10,
+      currency: "USD",
+      quote: quote({ dividendRate: 8 }),
+      fx: FX,
+      payments,
+    });
+
+    assert.deepEqual(withoutHistory, { amount: 20, currency: "USD" });
+    assert.equal(inferPaymentsPerYearFromHistory(payments, "AAPL", asOf), 4);
+    assert.deepEqual(withHistory, { amount: 20, currency: "USD" });
+  });
+
+  it("lowers per-payment amount when history shows monthly dividends", () => {
+    const asOf = Date.now();
+    const payments: PortfolioDividendPayment[] = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(asOf);
+      d.setUTCMonth(d.getUTCMonth() - i);
+      return {
+        id: String(i),
+        source: "manual" as const,
+        ticker: "MONTH",
+        symbolYahoo: "MONTH",
+        name: null,
+        amount: 1,
+        currency: "USD",
+        paidOn: d.toISOString().slice(0, 10),
+      };
+    });
+
+    const quarterlyDefault = estimateEventDividendPayment({
+      symbol: "MONTH",
+      quantity: 12,
+      currency: "USD",
+      quote: quote({ symbol: "MONTH", dividendRate: 12 }),
+      fx: FX,
+    });
+    const monthlyHistory = estimateEventDividendPayment({
+      symbol: "MONTH",
+      quantity: 12,
+      currency: "USD",
+      quote: quote({ symbol: "MONTH", dividendRate: 12 }),
+      fx: FX,
+      payments,
+    });
+
+    assert.deepEqual(quarterlyDefault, { amount: 36, currency: "USD" });
+    assert.deepEqual(monthlyHistory, { amount: 12, currency: "USD" });
+  });
+});
+
+describe("lookupPortfolioQuote", () => {
+  it("finds quotes by uppercase holding key", () => {
+    const q = quote({ symbol: "AAPL" });
+    const found = lookupPortfolioQuote({ AAPL: q }, "aapl");
+    assert.equal(found, q);
+  });
+
+  it("finds quotes by resolved Yahoo symbol", () => {
+    const q = quote({ symbol: "BRK-B", resolvedYahooSymbol: "BRK.B" });
+    const found = lookupPortfolioQuote({ "BRK-B": q }, "BRK.B");
+    assert.equal(found, q);
   });
 });
 
@@ -186,5 +296,38 @@ describe("buildEventDividendEstimatesBySymbol", () => {
       displayCurrency: "USD",
     });
     assert.equal(map.size, 0);
+  });
+
+  it("converts aggregated estimates to EUR display currency", () => {
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings: [{ symbolYahoo: "AAPL", quantity: "10", currency: "USD" }],
+      quotes: { AAPL: quote({ dividendRate: 4 }) },
+      fx: { eurPerUsd: 0.5, gbpPerUsd: null },
+      displayCurrency: "EUR",
+    });
+    const est = map.get("AAPL");
+    assert.ok(est);
+    assert.equal(est.currency, "EUR");
+    assert.equal(est.amount, 5);
+  });
+
+  it("does not double-count dual-alias holdings (BRK-B and BRK.B)", () => {
+    const brkQuote = quote({
+      symbol: "BRK-B",
+      resolvedYahooSymbol: "BRK.B",
+      dividendRate: 8,
+      price: 400,
+    });
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings: [
+        { symbolYahoo: "BRK-B", quantity: "2", currency: "USD" },
+        { symbolYahoo: "BRK.B", quantity: "3", currency: "USD" },
+      ],
+      quotes: { "BRK-B": brkQuote, "BRK.B": brkQuote },
+      fx: FX,
+      displayCurrency: "USD",
+    });
+    assert.deepEqual(map.get("BRK-B"), { amount: 10, currency: "USD" });
+    assert.deepEqual(map.get("BRK.B"), { amount: 10, currency: "USD" });
   });
 });

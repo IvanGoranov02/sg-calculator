@@ -40,6 +40,59 @@ export type EventDividendHoldingInput = {
 const DEFAULT_PAYMENTS_PER_YEAR = 4;
 const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
 
+/** Resolve a portfolio quote by holding or event symbol (case-insensitive, includes resolved Yahoo aliases). */
+export function lookupPortfolioQuote(
+  quotes: Record<string, PortfolioQuoteRow | null>,
+  symbol: string,
+): PortfolioQuoteRow | null | undefined {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return null;
+
+  const direct = quotes[symbol] ?? quotes[sym];
+  if (direct) return direct;
+
+  for (const q of Object.values(quotes)) {
+    if (!q) continue;
+    if (q.symbol.trim().toUpperCase() === sym) return q;
+    if (q.resolvedYahooSymbol?.trim().toUpperCase() === sym) return q;
+  }
+
+  return null;
+}
+
+function holdingSymbolKeys(
+  symbolYahoo: string,
+  quote: PortfolioQuoteRow | null | undefined,
+): string[] {
+  const sym = symbolYahoo.trim().toUpperCase();
+  if (!sym) return [];
+  const resolved = quote?.resolvedYahooSymbol?.trim().toUpperCase();
+  if (resolved && resolved !== sym) return [sym, resolved];
+  return [sym];
+}
+
+function resolveCanonicalSymbol(
+  symbolYahoo: string,
+  quote: PortfolioQuoteRow | null | undefined,
+  aliasToCanonical: Map<string, string>,
+  canonicalEstimates: Map<string, EventDividendEstimate>,
+): string {
+  const keys = holdingSymbolKeys(symbolYahoo, quote);
+  const sym = keys[0] ?? symbolYahoo.trim().toUpperCase();
+
+  for (const key of keys) {
+    const mapped = aliasToCanonical.get(key);
+    if (mapped) return mapped;
+  }
+  for (const key of keys) {
+    if (canonicalEstimates.has(key)) return key;
+  }
+
+  const canonical = sym;
+  for (const key of keys) aliasToCanonical.set(key, canonical);
+  return canonical;
+}
+
 /** Count dividend payments in the trailing year to infer payment frequency. */
 export function inferPaymentsPerYearFromHistory(
   payments: PortfolioDividendPayment[],
@@ -117,29 +170,40 @@ export function buildEventDividendEstimatesBySymbol(input: {
   payments?: PortfolioDividendPayment[];
   displayCurrency: string;
 }): Map<string, EventDividendEstimate> {
-  const bySymbol = new Map<string, EventDividendEstimate>();
+  const canonicalEstimates = new Map<string, EventDividendEstimate>();
+  const aliasToCanonical = new Map<string, string>();
 
   for (const h of input.holdings) {
     const sym = h.symbolYahoo.trim().toUpperCase();
     if (!sym) continue;
 
+    const quote = lookupPortfolioQuote(input.quotes, h.symbolYahoo);
+    const canonical = resolveCanonicalSymbol(h.symbolYahoo, quote, aliasToCanonical, canonicalEstimates);
+
     const estimate = estimateEventDividendPayment({
       symbol: sym,
       quantity: h.quantity,
       currency: h.currency,
-      quote: input.quotes[h.symbolYahoo],
+      quote,
       fx: input.fx,
       payments: input.payments,
     });
     if (!estimate) continue;
 
-    accumulateEventDividendEstimate(bySymbol, sym, estimate, input.displayCurrency, input.fx);
+    accumulateEventDividendEstimate(
+      canonicalEstimates,
+      canonical,
+      estimate,
+      input.displayCurrency,
+      input.fx,
+    );
+  }
 
-    const resolved = input.quotes[h.symbolYahoo]?.resolvedYahooSymbol?.trim().toUpperCase();
-    if (resolved && resolved !== sym) {
-      const entry = bySymbol.get(sym);
-      if (entry) bySymbol.set(resolved, entry);
-    }
+  const bySymbol = new Map(canonicalEstimates);
+  for (const [alias, canonical] of aliasToCanonical) {
+    if (alias === canonical) continue;
+    const entry = canonicalEstimates.get(canonical);
+    if (entry) bySymbol.set(alias, entry);
   }
 
   return bySymbol;

@@ -93,17 +93,20 @@ export function EventsClient() {
     if (sessionStatus === "loading") return;
     if (sessionStatus !== "authenticated") {
       setPortfolioSymbols([]);
+      setPortfolioHoldings([]);
+      setPortfolioQuotes({});
+      setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
+      setDividendPayments([]);
       setPortfolioReady(true);
       return;
     }
+
     let cancelled = false;
     setPortfolioReady(false);
+
     void (async () => {
       try {
-        const [portfolioRes, dividendsRes] = await Promise.all([
-          fetch("/api/portfolio", { cache: "no-store" }),
-          fetch("/api/portfolio/dividends", { cache: "no-store" }),
-        ]);
+        const portfolioRes = await fetch("/api/portfolio", { cache: "no-store" });
         if (cancelled) return;
         if (portfolioRes.ok) {
           const data = (await portfolioRes.json()) as {
@@ -122,24 +125,33 @@ export function EventsClient() {
           setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
           setPortfolioSymbols([]);
         }
-        if (dividendsRes.ok) {
-          const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
-          setDividendPayments(divData.payments ?? []);
-        } else {
-          setDividendPayments([]);
-        }
       } catch {
         if (!cancelled) {
           setPortfolioHoldings([]);
           setPortfolioQuotes({});
           setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
           setPortfolioSymbols([]);
-          setDividendPayments([]);
         }
       } finally {
         if (!cancelled) setPortfolioReady(true);
       }
     })();
+
+    void (async () => {
+      try {
+        const dividendsRes = await fetch("/api/portfolio/dividends", { cache: "no-store" });
+        if (cancelled) return;
+        if (dividendsRes.ok) {
+          const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
+          setDividendPayments(divData.payments ?? []);
+        } else if (!cancelled) {
+          setDividendPayments([]);
+        }
+      } catch {
+        if (!cancelled) setDividendPayments([]);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
