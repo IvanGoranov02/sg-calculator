@@ -1,15 +1,33 @@
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { withTimeoutFallback } from "@/lib/asyncTimeout";
 import { prisma } from "@/lib/prisma";
 import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuoteHistory } from "@/lib/portfolioQuoteHistoryServer";
+import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
+import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import {
   buildPortfolioValueChartSeries,
+  calendarMonthsForEvents,
+  computeLiveHoldingsValue,
+  currentMonthKey,
   isValidMonthKey,
+  listingPriceCurrency,
+  parseChartBaseCurrency,
   pickBaseCurrencyFromHoldings,
+  pickPortfolioHistorySymbols,
+  prepareHistoryBarsForValue,
+  quantitiesByMonthFromEvents,
+  quantityTimelineMatchesHoldings,
 } from "@/lib/portfolioValueHistory";
+import {
+  isT212OrdersCacheStale,
+  mapT212OrderItemsToQtyEvents,
+  readT212OrdersCache,
+  refreshT212OrdersCache,
+} from "@/lib/t212OrderHistory";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 
 export const maxDuration = 60;
@@ -22,18 +40,21 @@ function parsePositiveDecimal(raw: unknown, label: string): Prisma.Decimal {
   return new Prisma.Decimal(n);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  const requestedBase = url.searchParams.get("base");
+
   try {
-    const [holdings, snapshots, manualRows, fx] = await Promise.all([
+    const [holdings, snapshots, manualRows, fx, t212] = await Promise.all([
       prisma.portfolioHolding.findMany({
         where: { userId },
-        select: { symbolYahoo: true, quantity: true, currency: true },
+        select: { symbolYahoo: true, symbolT212: true, quantity: true, currency: true, brokerPrice: true, source: true },
       }),
       prisma.portfolioAccountSnapshot.findMany({
         where: { userId },
@@ -44,13 +65,101 @@ export async function GET() {
         orderBy: { month: "asc" },
       }),
       fetchPortfolioFxRates(),
+      prisma.trading212Connection.findUnique({ where: { userId } }),
     ]);
 
-    const symbols = [...new Set(holdings.map((h) => h.symbolYahoo))];
-    const historyBySymbol = symbols.length > 0 ? await fetchPortfolioQuoteHistory(symbols) : {};
+    const fallbackBase =
+      snapshots[snapshots.length - 1]?.currency ??
+      (holdings.length > 0 ? pickBaseCurrencyFromHoldings(holdings) : "USD");
+    const baseCurrency = parseChartBaseCurrency(requestedBase, fallbackBase);
 
-    const baseCurrency =
-      holdings.length > 0 ? pickBaseCurrencyFromHoldings(holdings) : "USD";
+    let ordersRead = t212 ? readT212OrdersCache(t212) : null;
+    let orderItems = ordersRead?.items ?? [];
+    let ordersPartial = ordersRead?.partial ?? false;
+    if (
+      t212 &&
+      isPortfolioEncryptionConfigured() &&
+      isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial)
+    ) {
+      const refreshed = await withTimeoutFallback(
+        refreshT212OrdersCache({
+          userId,
+          environment: t212.environment,
+          apiKeyEnc: t212.apiKeyEnc,
+          apiSecretEnc: t212.apiSecretEnc,
+          maxPages: 5,
+        }),
+        35_000,
+        "t212-orders-cache",
+        null,
+      );
+      if (refreshed) {
+        orderItems = refreshed.items;
+        ordersPartial = refreshed.partial;
+      } else {
+        ordersRead = readT212OrdersCache(t212);
+        orderItems = ordersRead.items;
+        ordersPartial = ordersRead.partial;
+      }
+    }
+
+    const qtyEvents = mapT212OrderItemsToQtyEvents(orderItems);
+    const eventMonths = calendarMonthsForEvents(qtyEvents);
+    const thisMonth = currentMonthKey();
+    let qtyByMonth =
+      !ordersPartial && eventMonths.length > 0
+        ? quantitiesByMonthFromEvents(qtyEvents, eventMonths)
+        : undefined;
+    if (qtyByMonth && !quantityTimelineMatchesHoldings(qtyByMonth, thisMonth, holdings)) {
+      qtyByMonth = undefined;
+    }
+
+    const quotes =
+      holdings.length > 0
+        ? await fetchPortfolioQuotesForHoldings(
+            holdings.map((h) => ({
+              symbolYahoo: h.symbolYahoo,
+              symbolT212: h.symbolT212,
+              currency: h.currency,
+              brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
+              source: h.source,
+            })),
+          )
+        : {};
+
+    const liveValue = computeLiveHoldingsValue(holdings, quotes, fx, baseCurrency);
+
+    const { symbols: historySymbols, complete: historyComplete } = pickPortfolioHistorySymbols(
+      holdings,
+      qtyByMonth,
+    );
+    if (qtyByMonth && !historyComplete) {
+      qtyByMonth = undefined;
+    }
+
+    let historyBySymbol: Record<string, import("@/lib/dipFinder").QuoteHistoryBar[]> = {};
+    if (qtyByMonth && historySymbols.length > 0) {
+      const firstEvent = qtyEvents
+        .map((e) => e.date)
+        .filter(Boolean)
+        .sort()[0];
+      const period1 = firstEvent ? new Date(`${firstEvent}T00:00:00Z`) : undefined;
+      const raw = await fetchPortfolioQuoteHistory(historySymbols, period1);
+      historyBySymbol = {};
+      for (const sym of historySymbols) {
+        const h = holdings.find((x) => x.symbolYahoo.trim().toUpperCase() === sym.trim().toUpperCase());
+        const liveQuote = quotes[sym] ?? quotes[h?.symbolYahoo ?? ""];
+        const livePx = liveQuote?.price ?? null;
+        const listingCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
+        const liveCcy = liveQuote?.currency ? normalizePortfolioCurrency(liveQuote.currency) : null;
+        historyBySymbol[sym] = prepareHistoryBarsForValue(
+          raw[sym] ?? raw[h?.symbolYahoo ?? ""] ?? [],
+          h?.symbolYahoo ?? sym,
+          h?.symbolT212,
+          liveCcy === listingCcy ? livePx : null,
+        );
+      }
+    }
 
     const chartSeries = buildPortfolioValueChartSeries({
       snapshots: snapshots.map((s) => ({
@@ -67,6 +176,8 @@ export async function GET() {
       historyBySymbol,
       fx,
       baseCurrency,
+      qtyByMonth,
+      liveValue,
     });
 
     return Response.json({
@@ -77,7 +188,7 @@ export async function GET() {
         amount: r.amount.toString(),
         currency: r.currency,
       })),
-      computedHint: holdings.length > 0,
+      computedHint: holdings.length > 0 || snapshots.length > 0,
     });
   } catch (e) {
     if (isPrismaInfrastructureError(e)) {

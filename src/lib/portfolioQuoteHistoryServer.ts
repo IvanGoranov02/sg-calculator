@@ -3,15 +3,21 @@
  */
 
 import type { QuoteHistoryBar } from "@/lib/dipFinder";
+import { normalizeIsoDateString } from "@/lib/format";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 const HISTORY_YEARS = 5;
+const MAX_SYMBOLS = 40;
 
 function toIsoDate(d: unknown): string | null {
   if (d == null || d === "") return null;
+  if (typeof d === "string") return normalizeIsoDateString(d);
   const dt = d instanceof Date ? d : new Date(String(d));
   if (Number.isNaN(dt.getTime())) return null;
-  return dt.toISOString().slice(0, 10);
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(dt.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function mapChartQuotes(quotes: Array<{ date?: Date; close?: number | null }>): QuoteHistoryBar[] {
@@ -59,18 +65,24 @@ async function fetchDailyCloses(symbol: string, period1: Date): Promise<QuoteHis
 
 export async function fetchPortfolioQuoteHistory(
   symbols: string[],
+  period1?: Date,
 ): Promise<Record<string, QuoteHistoryBar[]>> {
-  const unique = [...new Set(symbols.map((s) => s.trim()).filter(Boolean))];
+  const unique = [...new Set(symbols.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_SYMBOLS);
   if (unique.length === 0) return {};
 
-  const period1 = new Date();
-  period1.setFullYear(period1.getFullYear() - HISTORY_YEARS);
+  const from =
+    period1 ??
+    (() => {
+      const d = new Date();
+      d.setUTCFullYear(d.getUTCFullYear() - HISTORY_YEARS);
+      return d;
+    })();
 
   const history: Record<string, QuoteHistoryBar[]> = {};
   await Promise.all(
     unique.map(async (sym) => {
       try {
-        history[sym] = await fetchDailyCloses(sym, period1);
+        history[sym] = await fetchDailyCloses(sym, from);
       } catch {
         history[sym] = [];
       }

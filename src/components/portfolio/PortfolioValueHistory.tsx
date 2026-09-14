@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { formatMonthKeyLabel, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { PortfolioValueChartPoint, PortfolioValueMonthSource } from "@/lib/portfolioValueHistory";
+import { cn } from "@/lib/utils";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -143,19 +144,49 @@ type FormProps = {
   onDelete: (month: string) => Promise<void>;
 };
 
+function monthKeyFromParts(year: number, month: number): string | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function monthName(monthIndex: number, locale: string): string {
+  return new Date(Date.UTC(2020, monthIndex - 1, 1)).toLocaleString(locale === "bg" ? "bg-BG" : "en-US", {
+    month: "long",
+    timeZone: "UTC",
+  });
+}
+
+function yearOptions(entries: { month: string }[]): number[] {
+  const now = new Date();
+  const years = new Set<number>();
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 15; y--) years.add(y);
+  for (const e of entries) {
+    const y = Number(e.month.slice(0, 4));
+    if (Number.isFinite(y)) years.add(y);
+  }
+  return [...years].sort((a, b) => b - a);
+}
+
 export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDelete }: FormProps) {
   const { t, locale } = useI18n();
-  const [month, setMonth] = useState(currentMonthInputValue);
+  const now = new Date();
+  const [enabled, setEnabled] = useState(true);
+  const [year, setYear] = useState(now.getFullYear());
+  const [monthNum, setMonthNum] = useState(now.getMonth() + 1);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("EUR");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    const month = monthKeyFromParts(year, monthNum);
+    if (!month) return;
     await onSubmit(month, amount, currency);
     setAmount("");
   }
 
   const entries = data?.manualEntries ?? [];
+  const years = yearOptions(entries);
+  const selectClass = "h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground";
 
   return (
     <Card className="border-border bg-card">
@@ -163,20 +194,65 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
         <CardTitle className="text-base sm:text-lg">{t("portfolio.valueManualTitle")}</CardTitle>
         <CardDescription className="text-xs sm:text-sm">{t("portfolio.valueManualHint")}</CardDescription>
       </CardHeader>
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 sm:px-6">
+        <Label htmlFor="pv-toggle" className="text-sm font-medium">
+          {t("portfolio.valueManualToggle")}
+        </Label>
+        <button
+          type="button"
+          id="pv-toggle"
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => setEnabled((v) => !v)}
+          className={cn(
+            "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+            enabled ? "bg-emerald-500" : "bg-muted",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
+              enabled ? "translate-x-5" : "translate-x-0.5",
+            )}
+          />
+        </button>
+      </div>
+      {enabled ? (
       <form
         onSubmit={(e) => void handleSubmit(e)}
-        className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-5"
       >
         <div className="grid gap-1.5">
-          <Label htmlFor="pv-month">{t("portfolio.valueManualMonth")}</Label>
-          <Input
-            id="pv-month"
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="border-border bg-background"
+          <Label htmlFor="pv-year">{t("portfolio.valueManualYear")}</Label>
+          <select
+            id="pv-year"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className={selectClass}
             required
-          />
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="pv-month">{t("portfolio.valueManualMonth")}</Label>
+          <select
+            id="pv-month"
+            value={monthNum}
+            onChange={(e) => setMonthNum(Number(e.target.value))}
+            className={selectClass}
+            required
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                {monthName(m, locale)}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="pv-amount">{t("portfolio.valueManualAmount")}</Label>
@@ -195,7 +271,7 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
             id="pv-ccy"
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            className={selectClass}
           >
             {MANUAL_CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -210,6 +286,7 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
           </Button>
         </div>
       </form>
+      ) : null}
       {entries.length > 0 ? (
         <ul className="space-y-2 border-t border-border px-4 py-4 sm:px-6">
           {entries.map((e) => (
@@ -233,9 +310,4 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
       ) : null}
     </Card>
   );
-}
-
-function currentMonthInputValue(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
