@@ -149,9 +149,9 @@ function StockSearch({ target }: StockSearchProps) {
   return (
     <form
       onSubmit={onSubmit}
-      className="relative flex w-full max-w-xl flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20 sm:flex-row sm:items-center sm:gap-2 sm:py-1.5"
+      className="relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm"
     >
-      <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2">
+      <div className="flex h-8 min-w-0 flex-1 items-center gap-1.5 lg:h-9 lg:gap-2">
         <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <Input
           ref={inputRef}
@@ -185,7 +185,7 @@ function StockSearch({ target }: StockSearchProps) {
             }
           }}
           placeholder={t("search.placeholder")}
-          className="min-h-9 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-8 sm:text-sm"
+          className="h-8 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 lg:h-9 lg:text-sm"
           autoComplete="off"
           spellCheck={false}
           inputMode="text"
@@ -198,20 +198,22 @@ function StockSearch({ target }: StockSearchProps) {
         type="submit"
         size="sm"
         variant="secondary"
-        className="h-10 w-full shrink-0 sm:h-8 sm:w-auto"
+        className="size-8 shrink-0 px-0 lg:h-9 lg:w-auto lg:px-3"
+        aria-label={t("search.submit")}
       >
-        {t("search.submit")}
+        <Search className="size-4 lg:hidden" aria-hidden />
+        <span className="hidden lg:inline">{t("search.submit")}</span>
       </Button>
       {open && suggestions.length > 0 ? (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg shadow-md backdrop-blur-sm"
+          className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38vh,10.5rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-0.5 shadow-lg backdrop-blur-sm lg:max-h-60 lg:py-1"
         >
           {suggestions.map((c, i) => (
             <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
-                className={`flex w-full px-3 py-1.5 text-left text-sm ${
+                className={`flex w-full px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
                   i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
                 onMouseDown={(e) => {
@@ -227,7 +229,7 @@ function StockSearch({ target }: StockSearchProps) {
         </ul>
       ) : null}
       {symbolError ? (
-        <p className="w-full text-xs text-red-400" role="alert">
+        <p className="basis-full text-xs text-red-400" role="alert">
           {t("errors.invalidTickerSymbol")}
         </p>
       ) : null}
