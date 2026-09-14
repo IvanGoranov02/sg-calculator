@@ -51,8 +51,6 @@ export function CompareMetricTables({ rows }: { rows: CompareRow[] }) {
 
   if (groups.length === 0) return null;
 
-  const colMin = rows.length >= 4 ? "min-w-[8.5rem]" : "min-w-[9.5rem]";
-
   return (
     <div className="flex flex-col gap-5">
       {groups.map(({ group, metrics }) => (
@@ -67,7 +65,7 @@ export function CompareMetricTables({ rows }: { rows: CompareRow[] }) {
                   {t("compare.metric")}
                 </TableHead>
                 {rows.map((r) => (
-                  <TableHead key={r.symbol} className={cn("bg-card text-right whitespace-normal", colMin)}>
+                  <TableHead key={r.symbol} className="min-w-[9.5rem] bg-card text-right whitespace-normal">
                     <div className="flex flex-col items-end gap-1">
                       <CompanyIdentity
                         symbol={r.symbol}

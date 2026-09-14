@@ -1,9 +1,9 @@
 /**
- * Server-only: lightweight side-by-side metrics for the stock comparison view.
- * Uses quote + quoteSummary (no EDGAR/Gemini pipeline), so comparing several
- * tickers stays fast and cheap.
+ * Server-only: lightweight side-by-side metrics for the two-stock comparison view.
+ * Uses quote + quoteSummary (no EDGAR/Gemini pipeline), so a pair of tickers stays fast.
  */
 
+import { compareFetchSymbols } from "@/lib/compareMetrics";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import type { InvestorMetrics } from "@/lib/stockAnalysisTypes";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
@@ -74,7 +74,7 @@ async function fetchOne(symbol: string): Promise<CompareRow | null> {
 }
 
 export async function fetchCompareRows(symbols: string[]): Promise<CompareRow[]> {
-  const uniq = Array.from(new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))).slice(0, 4);
+  const uniq = compareFetchSymbols(symbols);
   const rows = await Promise.all(uniq.map(fetchOne));
   return rows.filter((r): r is CompareRow => r !== null);
 }

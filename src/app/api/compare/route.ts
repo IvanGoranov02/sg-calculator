@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { parseCompareSymbols } from "@/lib/compareMetrics";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 import { fetchCompareRows } from "@/lib/yahooCompare";
 
@@ -11,10 +12,7 @@ export async function GET(request: Request) {
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
 
   const { searchParams } = new URL(request.url);
-  const symbols = (searchParams.get("symbols") ?? "")
-    .split(",")
-    .map((s) => s.trim().toUpperCase())
-    .filter((s) => /^[A-Z0-9.\-^]+$/.test(s));
+  const symbols = parseCompareSymbols(searchParams.get("symbols"));
 
   if (symbols.length === 0) return NextResponse.json({ rows: [] });
   const rows = await fetchCompareRows(symbols);

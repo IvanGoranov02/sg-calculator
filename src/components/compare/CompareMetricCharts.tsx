@@ -1,0 +1,314 @@
+"use client";
+
+import { Check } from "lucide-react";
+import { useMemo } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  COMPARE_GROUPS,
+  COMPARE_GROWTH_CHART_KEYS,
+  COMPARE_PERCENT_CHART_KEYS,
+  COMPARE_SLOT_HEX,
+  buildGroupBarPoints,
+  buildOverviewBarRows,
+  type CompareGroup,
+  type CompareSlots,
+  type OverviewBarRow,
+} from "@/lib/compareMetrics";
+import { useI18n } from "@/lib/i18n/LocaleProvider";
+import type { CompareRow } from "@/lib/yahooCompare";
+import { cn } from "@/lib/utils";
+
+const GROUP_LABEL: Record<CompareGroup, string> = {
+  valuation: "compare.groupValuation",
+  profitability: "compare.groupProfit",
+  growth: "compare.groupGrowth",
+  balance: "compare.groupBalance",
+  income: "compare.groupIncome",
+  market: "compare.groupMarket",
+};
+
+type ChartTooltipPayload = { dataKey?: string | number; value?: number; color?: string; name?: string };
+
+function SlotLegend({ slots }: { slots: CompareSlots }) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      {slots.map((sym, i) =>
+        sym ? (
+          <span key={`${i}-${sym}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="size-2.5 rounded-sm" style={{ background: COMPARE_SLOT_HEX[i] }} />
+            {sym}
+          </span>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  valueFormatter,
+}: {
+  active?: boolean;
+  payload?: readonly ChartTooltipPayload[];
+  label?: string | number;
+  valueFormatter: (v: number) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-lg">
+      <p className="mb-1 font-medium text-foreground">{label}</p>
+      {payload.map((p) =>
+        p.value != null ? (
+          <p key={String(p.dataKey)} style={{ color: p.color }}>
+            {p.name}: {valueFormatter(p.value)}
+          </p>
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function OverviewBarCard({
+  title,
+  hint,
+  slots,
+  data,
+  valueFormatter,
+}: {
+  title: string;
+  hint: string;
+  slots: CompareSlots;
+  data: OverviewBarRow[];
+  valueFormatter: (v: number) => string;
+}) {
+  const { t } = useI18n();
+  const chartData = useMemo(
+    () =>
+      data.map((d) => ({
+        label: t(d.labelKey),
+        a: d.a,
+        b: d.b,
+      })),
+    [data, t],
+  );
+
+  if (chartData.length === 0) return null;
+  const aSym = slots[0];
+  const bSym = slots[1];
+  const crowded = chartData.length > 4;
+
+  return (
+    <Card className="border-border bg-card shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <CardDescription>{hint}</CardDescription>
+      </CardHeader>
+      <CardContent className="min-h-0 min-w-0">
+        <div className="relative h-[240px] w-full min-h-[240px] min-w-0">
+          <div className="absolute inset-0 min-h-0 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: crowded ? 12 : 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--border)" }}
+                  interval={0}
+                  angle={crowded ? -18 : 0}
+                  textAnchor={crowded ? "end" : "middle"}
+                  height={crowded ? 52 : 32}
+                />
+                <YAxis
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                  tickFormatter={(v: number) => valueFormatter(v)}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => (
+                    <ChartTooltip
+                      active={active}
+                      payload={payload as readonly ChartTooltipPayload[] | undefined}
+                      label={label}
+                      valueFormatter={valueFormatter}
+                    />
+                  )}
+                />
+                {aSym && bSym ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
+                {aSym ? (
+                  <Bar
+                    dataKey="a"
+                    name={aSym}
+                    fill={COMPARE_SLOT_HEX[0]}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={48}
+                  />
+                ) : null}
+                {bSym ? (
+                  <Bar
+                    dataKey="b"
+                    name={bSym}
+                    fill={COMPARE_SLOT_HEX[1]}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={48}
+                  />
+                ) : null}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricBarCard({
+  label,
+  rows,
+  values,
+  labels,
+  pcts,
+  best,
+}: {
+  label: string;
+  rows: (CompareRow | null)[];
+  values: (number | null)[];
+  labels: string[];
+  pcts: (number | null)[];
+  best: number;
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <p className="mb-3 text-sm font-medium tracking-tight">{label}</p>
+      <div className="flex flex-col gap-2.5">
+        {rows.map((r, i) => {
+          if (!r) return null;
+          const v = values[i];
+          const pct = pcts[i];
+          const isBest = i === best;
+          const negative = v != null && v < 0;
+          const width = pct == null ? 0 : Math.max(8, Math.min(100, pct));
+          return (
+            <div key={`${i}-${r.symbol}`}>
+              <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                <span className="font-medium text-muted-foreground">{r.symbol}</span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 font-mono tabular-nums",
+                    isBest
+                      ? "font-semibold text-emerald-700 dark:text-emerald-400"
+                      : "text-foreground",
+                  )}
+                >
+                  {labels[i]}
+                  {isBest ? <Check className="size-3" aria-hidden /> : null}
+                </span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full transition-[width] duration-300"
+                  style={{
+                    width: `${width}%`,
+                    background: negative ? "#f87171" : COMPARE_SLOT_HEX[i] ?? COMPARE_SLOT_HEX[0],
+                    opacity: pct == null ? 0 : 1,
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function CompareMetricCharts({
+  slots,
+  rows,
+}: {
+  slots: CompareSlots;
+  rows: (CompareRow | null)[];
+}) {
+  const { t } = useI18n();
+  const percentRows = useMemo(
+    () => buildOverviewBarRows(rows, COMPARE_PERCENT_CHART_KEYS, "percent"),
+    [rows],
+  );
+  const growthRows = useMemo(
+    () => buildOverviewBarRows(rows, COMPARE_GROWTH_CHART_KEYS, "percent"),
+    [rows],
+  );
+  const groups = useMemo(
+    () =>
+      COMPARE_GROUPS.map((group) => ({
+        group,
+        points: buildGroupBarPoints(rows, group),
+      })).filter((g) => g.points.length > 0),
+    [rows],
+  );
+
+  if (!rows.some(Boolean)) return null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-base font-semibold tracking-tight">{t("compare.chartsTitle")}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t("compare.chartsHint")}</p>
+        <div className="mt-2">
+          <SlotLegend slots={slots} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <OverviewBarCard
+          title={t("compare.chartMargins")}
+          hint={t("compare.chartMarginsHint")}
+          slots={slots}
+          data={percentRows}
+          valueFormatter={(v) => `${v.toFixed(0)}%`}
+        />
+        <OverviewBarCard
+          title={t("compare.chartGrowth")}
+          hint={t("compare.chartGrowthHint")}
+          slots={slots}
+          data={growthRows}
+          valueFormatter={(v) => `${v.toFixed(0)}%`}
+        />
+      </div>
+
+      {groups.map(({ group, points }) => (
+        <section key={group} className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold tracking-tight">{t(GROUP_LABEL[group])}</h3>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {points.map((p) => (
+              <MetricBarCard
+                key={p.key}
+                label={t(p.labelKey)}
+                rows={rows}
+                values={p.values}
+                labels={p.labels}
+                pcts={p.pcts}
+                best={p.best}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
