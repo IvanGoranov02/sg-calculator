@@ -86,6 +86,8 @@ export type T212PaginatedFetchResult<T> = {
   /** True when pagination stopped early (rate limit, error, or maxPages). */
   partial: boolean;
   error?: string;
+  /** Cursor to resume older pages when `partial` is true. */
+  nextPagePath?: string | null;
 };
 
 const T212_MIN_REQUEST_INTERVAL_MS = 10_000;
@@ -283,13 +285,16 @@ export async function fetchT212HistoryOrders(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
-  options?: { maxPages?: number; minRequestIntervalMs?: number },
+  options?: { maxPages?: number; minRequestIntervalMs?: number; startPath?: string | null },
 ): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
+  const initialPath =
+    options?.startPath?.trim() ||
+    "/api/v0/equity/history/orders";
   return fetchAllT212Paginated<T212HistoryOrderItem>(
     environment,
     apiKey,
     apiSecret,
-    "/api/v0/equity/history/orders",
+    initialPath,
     {
       maxPages: options?.maxPages ?? 6,
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
@@ -378,10 +383,12 @@ export async function fetchAllT212Paginated<T>(
     }
   }
 
+  let nextPagePath: string | null = null;
   if (path && pages >= maxPages) {
     partial = true;
-    if (!error) error = "Trading 212 dividend history truncated (page limit reached).";
+    nextPagePath = path;
+    if (!error) error = "Trading 212 history truncated (page limit reached).";
   }
 
-  return { items: out, partial, error };
+  return { items: out, partial, error, nextPagePath };
 }

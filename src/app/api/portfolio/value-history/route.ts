@@ -17,6 +17,7 @@ import {
   listingPriceCurrency,
   parseChartBaseCurrency,
   pickBaseCurrencyFromHoldings,
+  pickPortfolioHistorySymbols,
   prepareHistoryBarsForValue,
   quantitiesByMonthFromEvents,
   quantityTimelineMatchesHoldings,
@@ -72,11 +73,13 @@ export async function GET(request: Request) {
       (holdings.length > 0 ? pickBaseCurrencyFromHoldings(holdings) : "USD");
     const baseCurrency = parseChartBaseCurrency(requestedBase, fallbackBase);
 
-    let orderItems = t212 ? readT212OrdersCache(t212).items : [];
+    let ordersRead = t212 ? readT212OrdersCache(t212) : null;
+    let orderItems = ordersRead?.items ?? [];
+    let ordersPartial = ordersRead?.partial ?? false;
     if (
       t212 &&
       isPortfolioEncryptionConfigured() &&
-      isT212OrdersCacheStale(t212.ordersCachedAt)
+      isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial)
     ) {
       const refreshed = await withTimeoutFallback(
         refreshT212OrdersCache({
@@ -90,14 +93,23 @@ export async function GET(request: Request) {
         "t212-orders-cache",
         null,
       );
-      if (refreshed) orderItems = refreshed.items;
-      else orderItems = readT212OrdersCache(t212).items;
+      if (refreshed) {
+        orderItems = refreshed.items;
+        ordersPartial = refreshed.partial;
+      } else {
+        ordersRead = readT212OrdersCache(t212);
+        orderItems = ordersRead.items;
+        ordersPartial = ordersRead.partial;
+      }
     }
 
     const qtyEvents = mapT212OrderItemsToQtyEvents(orderItems);
     const eventMonths = calendarMonthsForEvents(qtyEvents);
     const thisMonth = currentMonthKey();
-    let qtyByMonth = eventMonths.length > 0 ? quantitiesByMonthFromEvents(qtyEvents, eventMonths) : undefined;
+    let qtyByMonth =
+      !ordersPartial && eventMonths.length > 0
+        ? quantitiesByMonthFromEvents(qtyEvents, eventMonths)
+        : undefined;
     if (qtyByMonth && !quantityTimelineMatchesHoldings(qtyByMonth, thisMonth, holdings)) {
       qtyByMonth = undefined;
     }
@@ -117,21 +129,22 @@ export async function GET(request: Request) {
 
     const liveValue = computeLiveHoldingsValue(holdings, quotes, fx, baseCurrency);
 
-    const historySymbols = new Set<string>(holdings.map((h) => h.symbolYahoo));
-    if (qtyByMonth) {
-      for (const bySym of qtyByMonth.values()) {
-        for (const sym of bySym.keys()) historySymbols.add(sym);
-      }
+    const { symbols: historySymbols, complete: historyComplete } = pickPortfolioHistorySymbols(
+      holdings,
+      qtyByMonth,
+    );
+    if (qtyByMonth && !historyComplete) {
+      qtyByMonth = undefined;
     }
 
     let historyBySymbol: Record<string, import("@/lib/dipFinder").QuoteHistoryBar[]> = {};
-    if (qtyByMonth && historySymbols.size > 0) {
+    if (qtyByMonth && historySymbols.length > 0) {
       const firstEvent = qtyEvents
         .map((e) => e.date)
         .filter(Boolean)
         .sort()[0];
       const period1 = firstEvent ? new Date(`${firstEvent}T00:00:00Z`) : undefined;
-      const raw = await fetchPortfolioQuoteHistory([...historySymbols], period1);
+      const raw = await fetchPortfolioQuoteHistory(historySymbols, period1);
       historyBySymbol = {};
       for (const sym of historySymbols) {
         const h = holdings.find((x) => x.symbolYahoo.trim().toUpperCase() === sym.trim().toUpperCase());

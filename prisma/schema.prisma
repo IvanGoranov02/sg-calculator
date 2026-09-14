@@ -80,6 +80,8 @@ model Trading212Connection {
   ordersCachedAt         DateTime?
   ordersCacheError       String?         @db.Text
   ordersCachePartial     Boolean         @default(false)
+  /** Pagination cursor for growing a partial orders cache toward older fills. */
+  ordersCacheNextPath    String?         @db.Text
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 }

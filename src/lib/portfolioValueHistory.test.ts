@@ -18,6 +18,7 @@ import {
   parseChartBaseCurrency,
   parseMonthKey,
   prepareHistoryBarsForValue,
+  pickPortfolioHistorySymbols,
   quantitiesByMonthFromEvents,
   quantityTimelineMatchesHoldings,
 } from "@/lib/portfolioValueHistory";
@@ -178,6 +179,77 @@ describe("portfolioValueHistory quantity timeline", () => {
       true,
     );
   });
+
+  it("rejects extra reconstructed tickers not in live holdings", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [
+        { symbolYahoo: "AAPL", date: "2024-01-15", delta: 10 },
+        { symbolYahoo: "MSFT", date: "2024-02-01", delta: 5 },
+      ],
+      ["2024-03"],
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(
+        qtyByMonth,
+        "2024-03",
+        [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }],
+      ),
+      false,
+    );
+  });
+
+  it("uses absolute share tolerance, not a relative percent", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [{ symbolYahoo: "AAPL", date: "2024-01-15", delta: 10.1 }],
+      ["2024-03"],
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(
+        qtyByMonth,
+        "2024-03",
+        [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }],
+      ),
+      true,
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(
+        qtyByMonth,
+        "2024-03",
+        [{ symbolYahoo: "AAPL", quantity: 9, currency: "USD" }],
+      ),
+      false,
+    );
+  });
+});
+
+describe("computeMonthlyValuesFromHoldings coverage", () => {
+  it("returns null when any contributor lacks a month-end close", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      {
+        AAPL: [{ date: "2024-03-28", close: 100 }],
+        MSFT: [],
+      },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+      ["2024-03"],
+    );
+    assert.equal(byMonth.get("2024-03"), null);
+  });
+
+  it("returns null when FX conversion is unavailable for a listing currency", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [{ symbolYahoo: "NESN.SW", symbolT212: "NESNs_EQ", quantity: 10, currency: "EUR" }],
+      { "NESN.SW": [{ date: "2024-03-28", close: 80 }] },
+      { eurPerUsd: 0.92, gbpPerUsd: 0.79 },
+      "EUR",
+      ["2024-03"],
+    );
+    assert.equal(byMonth.get("2024-03"), null);
+  });
 });
 
 describe("buildPortfolioValueChartSeries", () => {
@@ -295,6 +367,32 @@ describe("computeLiveHoldingsValue", () => {
       "EUR",
     );
     assert.equal(v, 2000 * 0.92);
+  });
+
+  it("returns null when any holding lacks a convertible quote", () => {
+    const v = computeLiveHoldingsValue(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      { AAPL: { price: 100, currency: "USD" }, MSFT: null },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+    );
+    assert.equal(v, null);
+  });
+});
+
+describe("pickPortfolioHistorySymbols", () => {
+  it("marks incomplete when the Yahoo symbol cap would drop names", () => {
+    const holdings = Array.from({ length: 41 }, (_, i) => ({
+      symbolYahoo: `SYM${i}`,
+      quantity: 1,
+      currency: "USD",
+    }));
+    const picked = pickPortfolioHistorySymbols(holdings, undefined, 40);
+    assert.equal(picked.complete, false);
+    assert.equal(picked.symbols.length, 40);
   });
 });
 

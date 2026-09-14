@@ -211,12 +211,15 @@ export function quantitiesByMonthFromEvents(events: QtyEvent[], months: string[]
   return out;
 }
 
+/** Absolute share tolerance when comparing reconstructed vs live quantities. */
+export const QTY_TIMELINE_SHARE_TOLERANCE = 0.2;
+
 /** True when reconstructed current-month qty matches live holdings (incomplete order history fails). */
 export function quantityTimelineMatchesHoldings(
   qtyByMonth: Map<string, Map<string, number>>,
   currentMonth: string,
   holdings: HoldingRow[],
-  tolerance = 0.2,
+  toleranceShares = QTY_TIMELINE_SHARE_TOLERANCE,
 ): boolean {
   const atMonth = qtyByMonth.get(currentMonth);
   if (!atMonth || atMonth.size === 0) return false;
@@ -230,12 +233,42 @@ export function quantityTimelineMatchesHoldings(
   }
   if (live.size === 0) return false;
 
+  for (const [sym, reconstructed] of atMonth) {
+    if (reconstructed <= 1e-8) continue;
+    const liveQty = live.get(sym);
+    if (liveQty == null) return false;
+    if (Math.abs(reconstructed - liveQty) > toleranceShares) return false;
+  }
+
   for (const [sym, liveQty] of live) {
     const reconstructed = atMonth.get(sym) ?? 0;
-    const denom = Math.max(liveQty, reconstructed, 1e-9);
-    if (Math.abs(reconstructed - liveQty) / denom > tolerance) return false;
+    if (Math.abs(reconstructed - liveQty) > toleranceShares) return false;
   }
+
   return true;
+}
+
+/** Prioritize live holdings, then event symbols; false when the Yahoo cap would drop names. */
+export function pickPortfolioHistorySymbols(
+  holdings: HoldingRow[],
+  qtyByMonth?: Map<string, Map<string, number>>,
+  max = 40,
+): { symbols: string[]; complete: boolean } {
+  const holdingSyms = holdings
+    .map((h) => h.symbolYahoo.trim().toUpperCase())
+    .filter(Boolean);
+  const eventSyms = new Set<string>();
+  if (qtyByMonth) {
+    for (const bySym of qtyByMonth.values()) {
+      for (const sym of bySym.keys()) eventSyms.add(sym);
+    }
+  }
+  const ordered = [...holdingSyms];
+  for (const sym of eventSyms) {
+    if (!ordered.includes(sym)) ordered.push(sym);
+  }
+  if (ordered.length <= max) return { symbols: ordered, complete: true };
+  return { symbols: ordered.slice(0, max), complete: false };
 }
 
 export function computeMonthlyValuesFromHoldings(
@@ -259,24 +292,42 @@ export function computeMonthlyValuesFromHoldings(
       ? [...qtyMap.keys()]
       : holdings.map((h) => h.symbolYahoo.trim().toUpperCase()).filter(Boolean);
 
-    let total = 0;
-    let any = false;
+    const contributors = symbols
+      .map((sym) => {
+        const qty = qtyMap
+          ? (qtyMap.get(sym) ?? 0)
+          : holdingQuantity(
+              holdingBySymbol.get(sym) ?? { symbolYahoo: sym, quantity: 0, currency: "USD" },
+            );
+        return { sym, qty };
+      })
+      .filter((row) => Number.isFinite(row.qty) && row.qty > 0);
 
-    for (const sym of symbols) {
-      const qty = qtyMap ? (qtyMap.get(sym) ?? 0) : holdingQuantity(holdingBySymbol.get(sym) ?? { symbolYahoo: sym, quantity: 0, currency: "USD" });
-      if (!Number.isFinite(qty) || qty <= 0) continue;
+    if (contributors.length === 0) {
+      out.set(month, null);
+      continue;
+    }
+
+    let total = 0;
+    let complete = true;
+    for (const { sym, qty } of contributors) {
       const h = holdingBySymbol.get(sym);
       const bars = historyBySymbol[sym] ?? historyBySymbol[h?.symbolYahoo ?? ""] ?? [];
       const close = monthEndCloseFromBars(bars, month);
-      if (close == null) continue;
+      if (close == null) {
+        complete = false;
+        break;
+      }
       const pxCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
       const mv = convertPortfolioMoney(close * qty, pxCcy, base, fx);
-      if (mv == null) continue;
+      if (mv == null) {
+        complete = false;
+        break;
+      }
       total += mv;
-      any = true;
     }
 
-    out.set(month, any ? total : null);
+    out.set(month, complete ? total : null);
   }
 
   return out;
@@ -291,18 +342,18 @@ export function computeLiveHoldingsValue(
 ): number | null {
   const base = normalizePortfolioCurrency(baseCurrency);
   let total = 0;
-  let any = false;
+  let expected = 0;
   for (const h of holdings) {
     const qty = holdingQuantity(h);
     if (!Number.isFinite(qty) || qty <= 0) continue;
+    expected += 1;
     const q = quotes[h.symbolYahoo] ?? quotes[h.symbolYahoo.trim().toUpperCase()];
-    if (!q || !Number.isFinite(q.price) || q.price <= 0) continue;
+    if (!q || !Number.isFinite(q.price) || q.price <= 0) return null;
     const mv = convertPortfolioMoney(q.price * qty, q.currency, base, fx);
-    if (mv == null) continue;
+    if (mv == null) return null;
     total += mv;
-    any = true;
   }
-  return any ? total : null;
+  return expected > 0 ? total : null;
 }
 
 export function pickBaseCurrencyFromHoldings(holdings: HoldingRow[]): string {
