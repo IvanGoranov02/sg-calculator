@@ -427,26 +427,14 @@ export function buildGroupBarPoints(rows: CompareRow[], group: CompareGroup): Co
   });
 }
 
-/** Percent-scale metrics for the grouped overview chart (Yahoo stores most as decimals). */
+/** Same-scale families so grouped charts stay readable (ROE would dwarf margins). */
 export const COMPARE_PERCENT_CHART_KEYS = [
   "grossMargins",
   "operatingMargins",
   "profitMargins",
-  "returnOnEquity",
-  "returnOnAssets",
-  "revenueGrowth",
-  "earningsGrowth",
-  "dividendYield",
 ] as const;
 
-export const COMPARE_RATIO_CHART_KEYS = [
-  "trailingPE",
-  "forwardPE",
-  "pegRatio",
-  "priceToSales",
-  "priceToBook",
-  "evEbitda",
-] as const;
+export const COMPARE_GROWTH_CHART_KEYS = ["revenueGrowth", "earningsGrowth"] as const;
 
 export type OverviewBarRow = {
   key: string;

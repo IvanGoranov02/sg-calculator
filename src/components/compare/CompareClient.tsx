@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { CompareLeads } from "@/components/compare/CompareLeads";
 import { CompareMetricCharts } from "@/components/compare/CompareMetricCharts";
 import { CompareMetricTables } from "@/components/compare/CompareMetricTables";
-import { CompareSnapshotCards } from "@/components/compare/CompareSnapshotCards";
 import { CompareTickerSlot } from "@/components/compare/CompareTickerSlot";
 import { MAX_COMPARE, twelveMonthLead } from "@/lib/compareMetrics";
 import usCompanies from "@/data/usCompanies.json";
@@ -204,7 +203,6 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         <p className="text-sm text-muted-foreground">{t("compare.empty")}</p>
       ) : displayRows.length > 0 ? (
         <>
-          <CompareSnapshotCards rows={displayRows} />
           <CompareMetricCharts rows={displayRows} />
           <CompareLeads rows={displayRows} />
           <div>

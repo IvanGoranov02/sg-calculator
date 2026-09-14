@@ -16,15 +16,14 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   COMPARE_GROUPS,
+  COMPARE_GROWTH_CHART_KEYS,
   COMPARE_PERCENT_CHART_KEYS,
-  COMPARE_RATIO_CHART_KEYS,
   COMPARE_SLOT_HEX,
   buildGroupBarPoints,
   buildOverviewBarRows,
   type CompareGroup,
   type OverviewBarRow,
 } from "@/lib/compareMetrics";
-import { formatRatio } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { CompareRow } from "@/lib/yahooCompare";
 import { cn } from "@/lib/utils";
@@ -107,6 +106,8 @@ function OverviewBarCard({
   const aSym = rows[0]?.symbol ?? "A";
   const bSym = rows[1]?.symbol;
 
+  const crowded = chartData.length > 4;
+
   return (
     <Card className="border-border bg-card shadow-sm">
       <CardHeader className="pb-2">
@@ -116,17 +117,17 @@ function OverviewBarCard({
       <CardContent>
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 12 }}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: crowded ? 12 : 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 tickLine={false}
                 axisLine={{ stroke: "var(--border)" }}
                 interval={0}
-                angle={-18}
-                textAnchor="end"
-                height={52}
+                angle={crowded ? -18 : 0}
+                textAnchor={crowded ? "end" : "middle"}
+                height={crowded ? 52 : 32}
               />
               <YAxis
                 tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
@@ -151,7 +152,7 @@ function OverviewBarCard({
                 name={aSym}
                 fill={COMPARE_SLOT_HEX[0]}
                 radius={[3, 3, 0, 0]}
-                maxBarSize={28}
+                maxBarSize={48}
               />
               {bSym ? (
                 <Bar
@@ -159,7 +160,7 @@ function OverviewBarCard({
                   name={bSym}
                   fill={COMPARE_SLOT_HEX[1]}
                   radius={[3, 3, 0, 0]}
-                  maxBarSize={28}
+                  maxBarSize={48}
                 />
               ) : null}
             </BarChart>
@@ -235,8 +236,8 @@ export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
     () => buildOverviewBarRows(rows, COMPARE_PERCENT_CHART_KEYS, "percent"),
     [rows],
   );
-  const ratioRows = useMemo(
-    () => buildOverviewBarRows(rows, COMPARE_RATIO_CHART_KEYS, "raw"),
+  const growthRows = useMemo(
+    () => buildOverviewBarRows(rows, COMPARE_GROWTH_CHART_KEYS, "percent"),
     [rows],
   );
   const groups = useMemo(
@@ -269,11 +270,11 @@ export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
           valueFormatter={(v) => `${v.toFixed(0)}%`}
         />
         <OverviewBarCard
-          title={t("compare.chartMultiples")}
-          hint={t("compare.chartMultiplesHint")}
+          title={t("compare.chartGrowth")}
+          hint={t("compare.chartGrowthHint")}
           rows={rows}
-          data={ratioRows}
-          valueFormatter={(v) => formatRatio(v)}
+          data={growthRows}
+          valueFormatter={(v) => `${v.toFixed(0)}%`}
         />
       </div>
 
