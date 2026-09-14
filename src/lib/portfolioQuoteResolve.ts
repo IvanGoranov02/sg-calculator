@@ -29,6 +29,16 @@ const ALPHABET_XETRA_TRAP_SYMBOLS = new Set(["ABE.F", "ABE.DE"]);
 /** Wrong Yahoo symbols for Uber on Xetra (truncated UBE.* ≠ Uber ~€70). */
 const UBER_XETRA_TRAP_SYMBOLS = new Set(["UBE.F", "UBE.DE"]);
 
+/** Wrong 3-char truncations for US names whose Xetra ticker is a local code. */
+const US_XETRA_TRUNCATION_TRAPS: Record<string, Set<string>> = {
+  AAPL: new Set(["AAP.DE", "AAP.F"]),
+  TSLA: new Set(["TSL.DE", "TSL.F"]),
+  NFLX: new Set(["NFL.DE", "NFL.F"]),
+  INTC: new Set(["INT.DE", "INT.F"]),
+  GOOGL: new Set(["GOO.DE", "GOO.F"]),
+  GOOG: new Set(["GOO.DE", "GOO.F"]),
+};
+
 /** Legacy portfolio keys for Uber on Xetra (UBERD-EQ). */
 const EU_UBER_STUB_KEY = /^UBERD(-EQ)?$/i;
 
@@ -89,6 +99,10 @@ export function buildBlockedYahooSymbols(
 
   if (/UBERd|UBERD/i.test(symbolT212)) {
     for (const sym of UBER_XETRA_TRAP_SYMBOLS) blocked.add(sym);
+  }
+
+  if (parsed.isNonUsListing && US_XETRA_TRUNCATION_TRAPS[parsed.base]) {
+    for (const sym of US_XETRA_TRUNCATION_TRAPS[parsed.base]!) blocked.add(sym);
   }
 
   for (const sym of KNOWN_TRAP_SYMBOLS) {

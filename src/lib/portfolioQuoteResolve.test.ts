@@ -155,6 +155,27 @@ describe("pickBestQuoteRow", () => {
     assert.equal(pickBestQuoteRow([trap], "EUR", "UBERd_EQ", blocked), null);
     assert.equal(pickBestQuoteRow([trap, eu], "EUR", "UBERd_EQ", blocked)?.resolvedYahooSymbol, "UBER.DE");
   });
+
+  it("rejects AAP.DE trap for Xetra Apple (AAPLd_EQ)", () => {
+    const blocked = buildBlockedYahooSymbols("APC.DE", "AAPLd_EQ");
+    const trap = {
+      resolvedYahooSymbol: "AAP.DE",
+      currency: "EUR",
+      price: 9.1,
+      name: "Something else",
+      quoteType: "EQUITY",
+    };
+    const eu = {
+      resolvedYahooSymbol: "APC.DE",
+      currency: "EUR",
+      price: 175,
+      name: "Apple Inc.",
+      quoteType: "EQUITY",
+    };
+    assert.ok(blocked.has("AAP.DE"));
+    assert.equal(pickBestQuoteRow([trap], "EUR", "AAPLd_EQ", blocked), null);
+    assert.equal(pickBestQuoteRow([trap, eu], "EUR", "AAPLd_EQ", blocked)?.resolvedYahooSymbol, "APC.DE");
+  });
 });
 
 describe("shouldPreferBrokerPrice", () => {

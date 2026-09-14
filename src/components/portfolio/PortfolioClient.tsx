@@ -50,6 +50,7 @@ import {
   remapPortfolioDipHistory,
   type QuoteHistoryBar,
 } from "@/lib/dipFinder";
+import { t212ListingVenueLabel } from "@/lib/t212Ticker";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -236,12 +237,6 @@ export function PortfolioClient() {
     }
   }, []);
 
-  const refreshPortfolioData = useCallback(async () => {
-    await load();
-    await loadValueHistory();
-    setDividendsLiveRefreshToken((n) => n + 1);
-  }, [load, loadValueHistory]);
-
   const reloadDividendsFromCache = useCallback(() => {
     setDividendsReloadToken((n) => n + 1);
   }, []);
@@ -273,6 +268,16 @@ export function PortfolioClient() {
       setSyncing(false);
     }
   }, [load, loadValueHistory, reloadDividendsFromCache, t]);
+
+  const refreshPortfolioData = useCallback(async () => {
+    if (trading212?.connected && trading212.encryptionConfigured) {
+      await runSync();
+      return;
+    }
+    await load();
+    await loadValueHistory();
+    setDividendsLiveRefreshToken((n) => n + 1);
+  }, [load, loadValueHistory, runSync, trading212?.connected, trading212?.encryptionConfigured]);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -479,7 +484,7 @@ export function PortfolioClient() {
 
   const rows = useMemo(() => {
     const mapped = holdings.map((h) => {
-      const q = quotes[h.symbolYahoo];
+      const q = quotes[h.symbolYahoo] ?? quotes[h.symbolYahoo.trim().toUpperCase()] ?? null;
       const qQty = Number(h.quantity);
       const qAvg = Number(h.avgPrice);
       const holdingCcy = normalizePortfolioCurrency(h.currency);
@@ -642,10 +647,10 @@ export function PortfolioClient() {
           variant="outline"
           className="w-full shrink-0 border-border sm:w-auto"
           onClick={() => void refreshPortfolioData()}
-          disabled={loading}
-          aria-busy={loading}
+          disabled={loading || syncing}
+          aria-busy={loading || syncing}
         >
-          <RefreshCw className={cn("mr-2 size-4", loading && "animate-spin")} aria-hidden />
+          <RefreshCw className={cn("mr-2 size-4", (loading || syncing) && "animate-spin")} aria-hidden />
           {t("portfolio.refreshData")}
         </Button>
       </div>
@@ -757,6 +762,11 @@ export function PortfolioClient() {
                         size="sm"
                         primaryLabel="name"
                       />
+                      {h.symbolT212 ? (
+                        <span className="text-[11px] leading-tight text-muted-foreground">
+                          {[t212ListingVenueLabel(h.symbolT212), h.symbolT212].filter(Boolean).join(" · ")}
+                        </span>
+                      ) : null}
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                       </span>

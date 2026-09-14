@@ -3,13 +3,17 @@
  *
  * T212 appends a lowercase exchange letter before `_EQ` (l = London, d = Xetra, a = Amsterdam, …)
  * or a `_US`-style country code for US listings. German venues often truncate symbols to 3 chars
- * on Yahoo (MSFT → MSF.DE, AMZN → AMZ.DE).
+ * on Yahoo (MSFT → MSF.DE, AMZN → AMZ.DE). US companies on EU exchanges use a different listing
+ * ticker than Nasdaq — those must stay distinct so both legs appear in Holdings.
  */
 
 /** Lowercase exchange letter (before `_EQ`) → Yahoo suffix. */
 const T212_EXCHANGE_SUFFIX: Record<string, string> = {
   a: ".AS", // Amsterdam
+  b: ".BR", // Brussels
+  c: ".CO", // Copenhagen
   d: ".DE", // Xetra / Deutsche Börse
+  e: ".MC", // Madrid
   f: ".F", // Frankfurt
   h: ".HE", // Helsinki
   i: ".IR", // Dublin
@@ -20,34 +24,36 @@ const T212_EXCHANGE_SUFFIX: Record<string, string> = {
   s: ".SW", // Swiss
   t: ".TO", // Toronto
   v: ".VI", // Vienna
+  w: ".WA", // Warsaw
   x: ".ST", // Stockholm
 };
 
-const T212_COUNTRY_CODES = new Set([
-  "US",
-  "UK",
-  "DE",
-  "FR",
-  "NL",
-  "CH",
-  "IT",
-  "ES",
-  "SE",
-  "NO",
-  "DK",
-  "FI",
-  "BE",
-  "AT",
-  "IE",
-  "PT",
-  "CA",
-  "AU",
-  "HK",
-  "JP",
-]);
+/** ISO country code from `_US_EQ` / `_DE_EQ` tickers → Yahoo suffix (empty = US/Nasdaq). */
+const T212_COUNTRY_YAHOO_SUFFIX: Record<string, string | null> = {
+  US: null,
+  UK: ".L",
+  GB: ".L",
+  DE: ".DE",
+  NL: ".AS",
+  FR: ".PA",
+  CH: ".SW",
+  IT: ".MI",
+  ES: ".MC",
+  SE: ".ST",
+  NO: ".OL",
+  DK: ".CO",
+  FI: ".HE",
+  BE: ".BR",
+  AT: ".VI",
+  IE: ".IR",
+  PT: ".LS",
+  CA: ".TO",
+  AU: ".AX",
+  HK: ".HK",
+  JP: ".T",
+};
 
-/** Legacy uppercase Xetra venue stubs (FB2AD_EQ), not US tickers ending in D (GILD_US_EQ). */
-const UPPERCASE_XETRA_STUBS = new Set(["FB2AD", "METAD", "MSFTD", "AMZD", "ABEAD", "UBERD"]);
+const T212_COUNTRY_CODES = new Set(Object.keys(T212_COUNTRY_YAHOO_SUFFIX));
 
 function pushUnique(out: string[], sym: string) {
   const x = sym.trim().toUpperCase();
@@ -55,19 +61,60 @@ function pushUnique(out: string[], sym: string) {
   out.push(x);
 }
 
-/** Known German Yahoo symbols where generic 3-char truncation is wrong (FB2A → FB2.DE). */
+/**
+ * Known German Yahoo symbols where generic 3-char truncation is wrong, or the
+ * Xetra ticker is a local code rather than the US symbol (AAPL → APC.DE).
+ */
 const GERMAN_YAHOO_SYMBOL_OVERRIDES: Record<string, string[]> = {
   FB2A: ["FB2A.DE", "FB2A.F", "FB2AD.XC", "FB2AD.XD"],
   // Meta on Xetra trades as FB2A; META.* / MET.* are stale or missing on Yahoo.
   META: ["FB2A.DE", "FB2A.F", "FB2AD.XC", "FB2AD.XD"],
   // Alphabet Class A on Xetra trades as ABEA; generic ABE.* is a different ~€8 instrument.
   ABEA: ["ABEA.DE", "ABEA.F", "ABEAD.XC"],
+  ABEC: ["ABEC.DE", "ABEC.F"],
+  GOOGL: ["ABEA.DE", "ABEA.F", "ABEAD.XC"],
+  GOOG: ["ABEC.DE", "ABEC.F"],
   // Uber on Xetra keeps the full UBER ticker; generic UBE.* is a different instrument.
   UBER: ["UBER.DE", "UBER.F"],
+  // US names whose Xetra ticker is not the 3-char US prefix.
+  AAPL: ["APC.DE", "APC.F"],
+  APC: ["APC.DE", "APC.F"],
+  TSLA: ["TL0.DE", "TL0.F"],
+  TL0: ["TL0.DE", "TL0.F"],
+  NFLX: ["NFC.DE", "NFC.F"],
+  NFC: ["NFC.DE", "NFC.F"],
+  INTC: ["INL.DE", "INL.F"],
+  PYPL: ["2PP.DE", "2PP.F"],
+  KO: ["CCC3.DE", "CCC3.F"],
+  CCC3: ["CCC3.DE", "CCC3.F"],
 };
 
 const EUR_LISTING_SUFFIX =
   /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM|MU|BE|MC|LS|IC|WA|CO|IR|AT|HA|HE)$/i;
+
+const VENUE_LABEL: Record<string, string> = {
+  ".DE": "Xetra",
+  ".F": "Frankfurt",
+  ".L": "LSE",
+  ".AS": "Amsterdam",
+  ".PA": "Paris",
+  ".SW": "Swiss",
+  ".MI": "Milan",
+  ".MC": "Madrid",
+  ".BR": "Brussels",
+  ".VI": "Vienna",
+  ".ST": "Stockholm",
+  ".OL": "Oslo",
+  ".HE": "Helsinki",
+  ".IR": "Dublin",
+  ".LS": "Lisbon",
+  ".TO": "Toronto",
+  ".AX": "ASX",
+  ".HK": "HKEX",
+  ".T": "Tokyo",
+  ".WA": "Warsaw",
+  ".CO": "Copenhagen",
+};
 
 /** Yahoo symbols for German listings (Xetra / Frankfurt), including 3-char truncation. */
 export function germanListingYahooSymbols(base: string): string[] {
@@ -113,6 +160,13 @@ export type T212ParsedTicker = {
   isNonUsListing: boolean;
 };
 
+/** True when a T212 body looks like a legacy uppercase Xetra stub (`UBERD`, `NFLXD`). */
+export function isUppercaseXetraStub(body: string): boolean {
+  const u = body.trim().toUpperCase();
+  // 4+ char US root + trailing D, e.g. UBERD / AAPLD. 3-char GOLD stays untouched.
+  return /^[A-Z0-9]{4,}D$/.test(u);
+}
+
 /** Parse a T212 API ticker into base symbol and listing hints. */
 export function parseT212Ticker(ticker: string): T212ParsedTicker {
   const t = ticker.trim();
@@ -131,12 +185,8 @@ export function parseT212Ticker(ticker: string): T212ParsedTicker {
       countryCodeConsumed = true;
       if (code !== "US") {
         isNonUsListing = true;
-        if (code === "UK") yahooSuffix = ".L";
-        else if (code === "DE") yahooSuffix = ".DE";
-        else if (code === "NL") yahooSuffix = ".AS";
-        else if (code === "FR") yahooSuffix = ".PA";
-        else if (code === "CH") yahooSuffix = ".SW";
-        else if (code === "IT") yahooSuffix = ".MI";
+        const mapped = T212_COUNTRY_YAHOO_SUFFIX[code];
+        if (mapped) yahooSuffix = mapped;
       }
     }
   }
@@ -151,13 +201,9 @@ export function parseT212Ticker(ticker: string): T212ParsedTicker {
     }
   }
 
-  // Legacy uppercase Xetra stubs (FB2AD_EQ). Skip when _US/_DE was already parsed (GILD_US_EQ).
+  // Legacy uppercase Xetra stubs (FB2AD_EQ, NFLXD_EQ). Skip when _US/_DE was already parsed (GILD_US_EQ).
   const upperBody = body.toUpperCase();
-  if (
-    !isNonUsListing &&
-    !countryCodeConsumed &&
-    UPPERCASE_XETRA_STUBS.has(upperBody)
-  ) {
+  if (!isNonUsListing && !countryCodeConsumed && isUppercaseXetraStub(upperBody)) {
     body = body.slice(0, -1);
     yahooSuffix = ".DE";
     isNonUsListing = true;
@@ -181,6 +227,10 @@ export function t212TickerToYahooCandidates(
   const out: string[] = [];
   if (yahooSuffix) {
     for (const s of listingSymbolsForExchange(base, yahooSuffix)) pushUnique(out, s);
+  }
+  // Keep the listing-specific identity even when truncation is preferred for quotes.
+  if (isNonUsListing && yahooSuffix) {
+    pushUnique(out, `${base}${yahooSuffix}`);
   }
   pushUnique(out, base);
 
@@ -217,10 +267,25 @@ export function t212TickerToYahooCandidates(
   return [...prefer, ...rest.filter((s) => !prefer.has(s))];
 }
 
-/** Best-effort primary Yahoo symbol for a T212 ticker. */
+/**
+ * Stored portfolio Yahoo key for a T212 ticker.
+ * Non-US listings always keep an exchange suffix so Nasdaq and EU legs do not collide.
+ */
 export function t212TickerToYahoo(ticker: string): string {
+  const { base, yahooSuffix, isNonUsListing } = parseT212Ticker(ticker);
+  if (!base) {
+    return ticker.trim().replace(/_EQ$/i, "").replace(/_/g, "-").toUpperCase();
+  }
+  if (isNonUsListing) {
+    const suffix = yahooSuffix ?? ".DE";
+    // Prefer known local Xetra codes (AAPL → APC.DE). Otherwise keep the full
+    // T212 base + venue so Nasdaq `MSFT` and Xetra `MSFT.DE` stay two rows.
+    const override = GERMAN_YAHOO_SYMBOL_OVERRIDES[base];
+    if (override?.[0]) return override[0].toUpperCase();
+    return `${base}${suffix}`.toUpperCase();
+  }
   const candidates = t212TickerToYahooCandidates(ticker);
-  return candidates[0] ?? ticker.trim().replace(/_EQ$/i, "").replace(/_/g, "-").toUpperCase();
+  return candidates[0] ?? base;
 }
 
 /**
@@ -235,6 +300,9 @@ export function t212QuoteCurrency(symbolT212: string | null, fallback = "USD"): 
   if (suf === ".L") return "GBP";
   if (suf === ".SW") return "CHF";
   if (suf === ".TO") return "CAD";
+  if (suf === ".AX") return "AUD";
+  if (suf === ".HK") return "HKD";
+  if (suf === ".T") return "JPY";
   if (
     suf === ".DE" ||
     suf === ".F" ||
@@ -247,10 +315,24 @@ export function t212QuoteCurrency(symbolT212: string | null, fallback = "USD"): 
     suf === ".HE" ||
     suf === ".HA" ||
     suf === ".IR" ||
-    suf === ".BR"
+    suf === ".BR" ||
+    suf === ".MC" ||
+    suf === ".LS" ||
+    suf === ".CO" ||
+    suf === ".WA"
   ) {
     return "EUR";
   }
   const fb = fallback.trim().toUpperCase().slice(0, 3);
   return fb || "USD";
+}
+
+/** Short venue label for Holdings (Nasdaq vs Xetra, etc.). */
+export function t212ListingVenueLabel(symbolT212: string | null | undefined): string | null {
+  if (!symbolT212?.trim()) return null;
+  const parsed = parseT212Ticker(symbolT212);
+  if (!parsed.base) return null;
+  if (!parsed.isNonUsListing) return "Nasdaq";
+  if (parsed.yahooSuffix && VENUE_LABEL[parsed.yahooSuffix]) return VENUE_LABEL[parsed.yahooSuffix];
+  return "EU";
 }
