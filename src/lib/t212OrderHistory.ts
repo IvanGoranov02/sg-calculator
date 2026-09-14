@@ -153,6 +153,8 @@ export function decideT212OrdersCacheWrite(
   fetch: T212PaginatedFetchResult<T212HistoryOrderItem>,
   prevNextPagePath: string | null,
 ): T212OrdersCacheWriteDecision {
+  const resumingOlderPages = Boolean(prevNextPagePath?.trim());
+
   if (fetch.items.length === 0 && fetch.partial) {
     return {
       items: prevItems,
@@ -171,7 +173,17 @@ export function decideT212OrdersCacheWrite(
       partial: true,
       error: fetch.error ?? null,
       replaced: merged.length > prevItems.length,
-      nextPagePath: fetch.nextPagePath ?? null,
+      nextPagePath: fetch.nextPagePath ?? prevNextPagePath,
+    };
+  }
+
+  if (resumingOlderPages) {
+    return {
+      items: merged,
+      partial: false,
+      error: null,
+      replaced: true,
+      nextPagePath: null,
     };
   }
 

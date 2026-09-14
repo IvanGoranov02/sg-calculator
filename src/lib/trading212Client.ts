@@ -339,6 +339,7 @@ export async function fetchAllT212Paginated<T>(
   let lastRequestAt = 0;
   let partial = false;
   let error: string | undefined;
+  let nextPagePath: string | null = null;
 
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
@@ -377,13 +378,13 @@ export async function fetchAllT212Paginated<T>(
         partial = true;
         error =
           e instanceof Error ? e.message.slice(0, 500) : "Trading 212 request failed during pagination";
+        nextPagePath = pagePath;
         path = null;
         break;
       }
     }
   }
 
-  let nextPagePath: string | null = null;
   if (path && pages >= maxPages) {
     partial = true;
     nextPagePath = path;

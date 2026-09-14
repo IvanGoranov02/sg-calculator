@@ -100,11 +100,68 @@ describe("decideT212OrdersCacheWrite", () => {
     const decision = decideT212OrdersCacheWrite(prev, {
       items: incoming,
       partial: false,
-    }, "/api/v0/equity/history/orders?cursor=1");
+    }, null);
     assert.equal(decision.items.length, prev.length + 1);
     assert.equal(decision.partial, false);
     assert.equal(decision.replaced, true);
     assert.equal(decision.nextPagePath, null);
+  });
+
+  it("completes a resume walk by merging older pages into the larger newest cache", () => {
+    const newestCache: T212HistoryOrderItem[] = Array.from({ length: 250 }, (_, i) => ({
+      fill: { filledAt: `2024-09-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`, quantity: 1, type: "TRADE" },
+      order: { ticker: `N${i}_US_EQ`, side: "BUY", status: "FILLED" },
+    }));
+    const olderPages: T212HistoryOrderItem[] = Array.from({ length: 40 }, (_, i) => ({
+      fill: { filledAt: `2020-01-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z`, quantity: 1, type: "TRADE" },
+      order: { ticker: `OLD${i}_US_EQ`, side: "BUY", status: "FILLED" },
+    }));
+    const resumeCursor = "/api/v0/equity/history/orders?cursor=older";
+
+    const decision = decideT212OrdersCacheWrite(
+      newestCache,
+      { items: olderPages, partial: false },
+      resumeCursor,
+    );
+
+    assert.equal(decision.items.length, newestCache.length + olderPages.length);
+    assert.equal(decision.partial, false);
+    assert.equal(decision.replaced, true);
+    assert.equal(decision.nextPagePath, null);
+    assert.ok(decision.items.some((i) => t212OrderItemKey(i).startsWith("OLD0_US_EQ")));
+    assert.ok(decision.items.some((i) => t212OrderItemKey(i).startsWith("N0_US_EQ")));
+  });
+
+  it("preserves the resume cursor when pagination errors mid-walk", () => {
+    const resumeCursor = "/api/v0/equity/history/orders?cursor=50";
+    const decision = decideT212OrdersCacheWrite(
+      prev,
+      {
+        items: prev.slice(0, 2),
+        partial: true,
+        error: "Trading 212 rate limit exceeded. Try again later.",
+        nextPagePath: resumeCursor,
+      },
+      "/api/v0/equity/history/orders?cursor=40",
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.nextPagePath, resumeCursor);
+    assert.equal(decision.items.length, prev.length);
+  });
+
+  it("falls back to the previous cursor when an error fetch omits nextPagePath", () => {
+    const resumeCursor = "/api/v0/equity/history/orders?cursor=77";
+    const decision = decideT212OrdersCacheWrite(
+      prev,
+      {
+        items: [],
+        partial: true,
+        error: "Trading 212 429: rate limit",
+      },
+      resumeCursor,
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.nextPagePath, resumeCursor);
   });
 });
 
