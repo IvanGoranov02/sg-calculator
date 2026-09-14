@@ -22,6 +22,7 @@ import {
   buildGroupBarPoints,
   buildOverviewBarRows,
   type CompareGroup,
+  type CompareSlots,
   type OverviewBarRow,
 } from "@/lib/compareMetrics";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -39,15 +40,17 @@ const GROUP_LABEL: Record<CompareGroup, string> = {
 
 type ChartTooltipPayload = { dataKey?: string | number; value?: number; color?: string; name?: string };
 
-function SlotLegend({ rows }: { rows: CompareRow[] }) {
+function SlotLegend({ slots }: { slots: CompareSlots }) {
   return (
     <div className="flex flex-wrap gap-3">
-      {rows.map((r, i) => (
-        <span key={r.symbol} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="size-2.5 rounded-sm" style={{ background: COMPARE_SLOT_HEX[i] ?? COMPARE_SLOT_HEX[0] }} />
-          {r.symbol}
-        </span>
-      ))}
+      {slots.map((sym, i) =>
+        sym ? (
+          <span key={`${i}-${sym}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="size-2.5 rounded-sm" style={{ background: COMPARE_SLOT_HEX[i] }} />
+            {sym}
+          </span>
+        ) : null,
+      )}
     </div>
   );
 }
@@ -81,13 +84,13 @@ function ChartTooltip({
 function OverviewBarCard({
   title,
   hint,
-  rows,
+  slots,
   data,
   valueFormatter,
 }: {
   title: string;
   hint: string;
-  rows: CompareRow[];
+  slots: CompareSlots;
   data: OverviewBarRow[];
   valueFormatter: (v: number) => string;
 }) {
@@ -103,9 +106,8 @@ function OverviewBarCard({
   );
 
   if (chartData.length === 0) return null;
-  const aSym = rows[0]?.symbol ?? "A";
-  const bSym = rows[1]?.symbol;
-
+  const aSym = slots[0];
+  const bSym = slots[1];
   const crowded = chartData.length > 4;
 
   return (
@@ -114,57 +116,61 @@ function OverviewBarCard({
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>{hint}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="h-64 w-full min-w-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: crowded ? 12 : 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: "var(--border)" }}
-                interval={0}
-                angle={crowded ? -18 : 0}
-                textAnchor={crowded ? "end" : "middle"}
-                height={crowded ? 52 : 32}
-              />
-              <YAxis
-                tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                width={44}
-                tickFormatter={(v: number) => valueFormatter(v)}
-              />
-              <Tooltip
-                content={({ active, payload, label }) => (
-                  <ChartTooltip
-                    active={active}
-                    payload={payload as readonly ChartTooltipPayload[] | undefined}
-                    label={label}
-                    valueFormatter={valueFormatter}
-                  />
-                )}
-              />
-              {rows.length > 1 ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
-              <Bar
-                dataKey="a"
-                name={aSym}
-                fill={COMPARE_SLOT_HEX[0]}
-                radius={[3, 3, 0, 0]}
-                maxBarSize={48}
-              />
-              {bSym ? (
-                <Bar
-                  dataKey="b"
-                  name={bSym}
-                  fill={COMPARE_SLOT_HEX[1]}
-                  radius={[3, 3, 0, 0]}
-                  maxBarSize={48}
+      <CardContent className="min-h-0 min-w-0">
+        <div className="relative h-[240px] w-full min-h-[240px] min-w-0">
+          <div className="absolute inset-0 min-h-0 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: crowded ? 12 : 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--border)" }}
+                  interval={0}
+                  angle={crowded ? -18 : 0}
+                  textAnchor={crowded ? "end" : "middle"}
+                  height={crowded ? 52 : 32}
                 />
-              ) : null}
-            </BarChart>
-          </ResponsiveContainer>
+                <YAxis
+                  tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                  tickFormatter={(v: number) => valueFormatter(v)}
+                />
+                <Tooltip
+                  content={({ active, payload, label }) => (
+                    <ChartTooltip
+                      active={active}
+                      payload={payload as readonly ChartTooltipPayload[] | undefined}
+                      label={label}
+                      valueFormatter={valueFormatter}
+                    />
+                  )}
+                />
+                {aSym && bSym ? <Legend wrapperStyle={{ fontSize: 11 }} /> : null}
+                {aSym ? (
+                  <Bar
+                    dataKey="a"
+                    name={aSym}
+                    fill={COMPARE_SLOT_HEX[0]}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={48}
+                  />
+                ) : null}
+                {bSym ? (
+                  <Bar
+                    dataKey="b"
+                    name={bSym}
+                    fill={COMPARE_SLOT_HEX[1]}
+                    radius={[3, 3, 0, 0]}
+                    maxBarSize={48}
+                  />
+                ) : null}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -180,7 +186,7 @@ function MetricBarCard({
   best,
 }: {
   label: string;
-  rows: CompareRow[];
+  rows: (CompareRow | null)[];
   values: (number | null)[];
   labels: string[];
   pcts: (number | null)[];
@@ -191,13 +197,14 @@ function MetricBarCard({
       <p className="mb-3 text-sm font-medium tracking-tight">{label}</p>
       <div className="flex flex-col gap-2.5">
         {rows.map((r, i) => {
+          if (!r) return null;
           const v = values[i];
           const pct = pcts[i];
           const isBest = i === best;
           const negative = v != null && v < 0;
           const width = pct == null ? 0 : Math.max(8, Math.min(100, pct));
           return (
-            <div key={r.symbol}>
+            <div key={`${i}-${r.symbol}`}>
               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
                 <span className="font-medium text-muted-foreground">{r.symbol}</span>
                 <span
@@ -230,7 +237,13 @@ function MetricBarCard({
   );
 }
 
-export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
+export function CompareMetricCharts({
+  slots,
+  rows,
+}: {
+  slots: CompareSlots;
+  rows: (CompareRow | null)[];
+}) {
   const { t } = useI18n();
   const percentRows = useMemo(
     () => buildOverviewBarRows(rows, COMPARE_PERCENT_CHART_KEYS, "percent"),
@@ -249,7 +262,7 @@ export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
     [rows],
   );
 
-  if (rows.length === 0) return null;
+  if (!rows.some(Boolean)) return null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -257,7 +270,7 @@ export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
         <h2 className="text-base font-semibold tracking-tight">{t("compare.chartsTitle")}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{t("compare.chartsHint")}</p>
         <div className="mt-2">
-          <SlotLegend rows={rows} />
+          <SlotLegend slots={slots} />
         </div>
       </div>
 
@@ -265,14 +278,14 @@ export function CompareMetricCharts({ rows }: { rows: CompareRow[] }) {
         <OverviewBarCard
           title={t("compare.chartMargins")}
           hint={t("compare.chartMarginsHint")}
-          rows={rows}
+          slots={slots}
           data={percentRows}
           valueFormatter={(v) => `${v.toFixed(0)}%`}
         />
         <OverviewBarCard
           title={t("compare.chartGrowth")}
           hint={t("compare.chartGrowthHint")}
-          rows={rows}
+          slots={slots}
           data={growthRows}
           valueFormatter={(v) => `${v.toFixed(0)}%`}
         />

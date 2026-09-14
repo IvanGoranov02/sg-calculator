@@ -7,7 +7,13 @@ import { CompareLeads } from "@/components/compare/CompareLeads";
 import { CompareMetricCharts } from "@/components/compare/CompareMetricCharts";
 import { CompareMetricTables } from "@/components/compare/CompareMetricTables";
 import { CompareTickerSlot } from "@/components/compare/CompareTickerSlot";
-import { MAX_COMPARE, twelveMonthLead } from "@/lib/compareMetrics";
+import {
+  assignCompareSlot,
+  serializeCompareSlots,
+  slotAlignedRows,
+  twelveMonthLead,
+  type CompareSlots,
+} from "@/lib/compareMetrics";
 import usCompanies from "@/data/usCompanies.json";
 import { formatPercent } from "@/lib/format";
 import type { CompareRow } from "@/lib/yahooCompare";
@@ -27,28 +33,24 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
   return fullCompaniesPromise;
 }
 
-function syncCompareUrl(symbols: string[]) {
+function syncCompareUrl(slots: CompareSlots) {
   if (typeof window === "undefined") return;
-  const qs = symbols.length ? `?symbols=${encodeURIComponent(symbols.join(","))}` : "";
+  const serialized = serializeCompareSlots(slots);
+  const qs = serialized ? `?symbols=${encodeURIComponent(serialized)}` : "";
   const next = `/compare${qs}`;
   const cur = `${window.location.pathname}${window.location.search}`;
   if (cur !== next) window.history.replaceState(null, "", next);
 }
 
-function toSlots(symbols: string[]): [string | null, string | null] {
-  return [symbols[0] ?? null, symbols[1] ?? null];
-}
-
-export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) {
+export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) {
   const { t } = useI18n();
-  const [slots, setSlots] = useState<[string | null, string | null]>(() =>
-    toSlots(initialSymbols.slice(0, MAX_COMPARE)),
-  );
+  const [slots, setSlots] = useState<CompareSlots>(initialSlots);
   const [rows, setRows] = useState<CompareRow[]>([]);
-  const [loading, setLoading] = useState(() => initialSymbols.length > 0);
+  const [loading, setLoading] = useState(() => Boolean(initialSlots[0] || initialSlots[1]));
   const [error, setError] = useState<string | null>(null);
   const [companies, setCompanies] = useState<CompanyEntry[]>(INSTANT_COMPANIES);
 
+  const fetchKey = useMemo(() => serializeCompareSlots(slots), [slots]);
   const symbols = useMemo(() => slots.filter((s): s is string => s != null), [slots]);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
 
   useEffect(() => {
     let cancelled = false;
-    syncCompareUrl(symbols);
+    syncCompareUrl(slots);
 
     async function load() {
       if (symbols.length === 0) {
@@ -75,7 +77,7 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/compare?symbols=${encodeURIComponent(symbols.join(","))}`, {
+        const res = await fetch(`/api/compare?symbols=${encodeURIComponent(fetchKey)}`, {
           cache: "no-store",
         });
         const data = (await res.json()) as { rows?: CompareRow[]; error?: string };
@@ -98,37 +100,24 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
     return () => {
       cancelled = true;
     };
-  }, [symbols, t]);
-
-  const selected = useMemo(() => new Set(symbols), [symbols]);
+  }, [fetchKey, symbols, slots, t]);
 
   function setSlot(index: 0 | 1, ticker: string) {
-    const s = ticker.toUpperCase();
-    setSlots((prev) => {
-      const other = (1 - index) as 0 | 1;
-      if (prev[other] === s) {
-        return index === 0 ? [s, prev[0]] : [prev[1], s];
-      }
-      const next: [string | null, string | null] = [...prev];
-      next[index] = s;
-      return next;
-    });
+    setSlots((prev) => assignCompareSlot(prev, index, ticker));
   }
 
   function clearSlot(index: 0 | 1) {
     setSlots((prev) => {
-      const next: [string | null, string | null] = [...prev];
+      const next: CompareSlots = [...prev];
       next[index] = null;
       return next;
     });
   }
 
-  const loadedSet = new Set(rows.map((r) => r.symbol.toUpperCase()));
-  const unresolved = symbols.filter((s) => !loadedSet.has(s));
-  const displayRows = symbols
-    .map((s) => rows.find((r) => r.symbol.toUpperCase() === s))
-    .filter((r): r is CompareRow => r != null);
-  const lead = twelveMonthLead(displayRows);
+  const aligned = slotAlignedRows(slots, rows);
+  const filledRows = aligned.filter((r): r is CompareRow => r != null);
+  const unresolved = slots.filter((s, i): s is string => s != null && aligned[i] == null);
+  const lead = twelveMonthLead(filledRows);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -141,9 +130,9 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         <CompareTickerSlot
           slotIndex={0}
           symbol={slots[0]}
-          row={rows.find((r) => r.symbol.toUpperCase() === slots[0])}
+          row={aligned[0] ?? undefined}
+          loading={loading}
           companies={companies}
-          exclude={selected}
           onSelect={(s) => setSlot(0, s)}
           onClear={() => clearSlot(0)}
         />
@@ -155,9 +144,9 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         <CompareTickerSlot
           slotIndex={1}
           symbol={slots[1]}
-          row={rows.find((r) => r.symbol.toUpperCase() === slots[1])}
+          row={aligned[1] ?? undefined}
+          loading={loading}
           companies={companies}
-          exclude={selected}
           onSelect={(s) => setSlot(1, s)}
           onClear={() => clearSlot(1)}
         />
@@ -188,26 +177,26 @@ export function CompareClient({ initialSymbols }: { initialSymbols: string[] }) 
         </p>
       ) : null}
 
-      {lead && displayRows[lead.winner] && displayRows[lead.loser] ? (
+      {lead && filledRows[lead.winner] && filledRows[lead.loser] ? (
         <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm shadow-sm">
           {t("compare.perfLead", {
-            winner: displayRows[lead.winner].symbol,
-            winnerRet: formatPercent(displayRows[lead.winner].weekChangePercent ?? 0, 1),
-            loser: displayRows[lead.loser].symbol,
-            loserRet: formatPercent(displayRows[lead.loser].weekChangePercent ?? 0, 1),
+            winner: filledRows[lead.winner].symbol,
+            winnerRet: formatPercent(filledRows[lead.winner].weekChangePercent ?? 0, 1),
+            loser: filledRows[lead.loser].symbol,
+            loserRet: formatPercent(filledRows[lead.loser].weekChangePercent ?? 0, 1),
           })}
         </p>
       ) : null}
 
-      {displayRows.length === 0 && !loading ? (
+      {filledRows.length === 0 && !loading ? (
         <p className="text-sm text-muted-foreground">{t("compare.empty")}</p>
-      ) : displayRows.length > 0 ? (
+      ) : filledRows.length > 0 ? (
         <>
-          <CompareMetricCharts rows={displayRows} />
-          <CompareLeads rows={displayRows} />
+          <CompareMetricCharts slots={slots} rows={aligned} />
+          <CompareLeads rows={filledRows} />
           <div>
             <h2 className="mb-3 text-base font-semibold tracking-tight">{t("compare.numbersTitle")}</h2>
-            <CompareMetricTables rows={displayRows} />
+            <CompareMetricTables rows={filledRows} />
           </div>
         </>
       ) : null}

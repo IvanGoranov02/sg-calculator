@@ -21,22 +21,84 @@ export const DEFAULT_COMPARE_SYMBOLS = ["AAPL", "MSFT"] as const;
 /** Slot 0 emerald, slot 1 sky — matches other StockGauge charts. */
 export const COMPARE_SLOT_HEX = ["#10b981", "#38bdf8"] as const;
 
-export function parseCompareSymbols(raw: string | null | undefined): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
+/** Same ticker filter as `/api/compare`. */
+export const COMPARE_TICKER_RE = /^[A-Z0-9.\-^]+$/;
+
+export type CompareSlots = [string | null, string | null];
+
+/**
+ * Two-slot parse: empty tokens occupy a slot (`",MSFT"` → B only).
+ * Duplicates are skipped so `AAPL,AAPL,MSFT` stays AAPL vs MSFT.
+ */
+export function parseCompareSlots(raw: string | null | undefined): CompareSlots {
+  const slots: CompareSlots = [null, null];
+  let slotIdx = 0;
   for (const part of (raw ?? "").split(",")) {
+    if (slotIdx >= MAX_COMPARE) break;
     const s = part.trim().toUpperCase();
-    if (!s || seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-    if (out.length >= MAX_COMPARE) break;
+    if (!s) {
+      slotIdx += 1;
+      continue;
+    }
+    if (!COMPARE_TICKER_RE.test(s)) continue;
+    if (slots[0] === s || slots[1] === s) continue;
+    slots[slotIdx] = s;
+    slotIdx += 1;
   }
-  return out;
+  return slots;
+}
+
+export function serializeCompareSlots(slots: CompareSlots): string {
+  const [a, b] = slots;
+  if (!a && !b) return "";
+  if (a && !b) return a;
+  if (!a && b) return `,${b}`;
+  return `${a},${b}`;
+}
+
+export function parseCompareSymbols(raw: string | null | undefined): string[] {
+  return parseCompareSlots(raw).filter((s): s is string => s != null);
+}
+
+export function initialCompareSlots(raw: string | null | undefined): CompareSlots {
+  if (raw == null) return [...DEFAULT_COMPARE_SYMBOLS];
+  return parseCompareSlots(raw);
 }
 
 export function initialCompareSymbols(raw: string | null | undefined): string[] {
-  const parsed = parseCompareSymbols(raw);
-  return parsed.length > 0 ? parsed : [...DEFAULT_COMPARE_SYMBOLS];
+  return initialCompareSlots(raw).filter((s): s is string => s != null);
+}
+
+/** Shared by the page, API, and Yahoo fetch: dedupe, then cap at two. */
+export function compareFetchSymbols(symbols: string[]): string[] {
+  return parseCompareSymbols(symbols.join(","));
+}
+
+export function assignCompareSlot(slots: CompareSlots, index: 0 | 1, ticker: string): CompareSlots {
+  const s = ticker.trim().toUpperCase();
+  if (!s || !COMPARE_TICKER_RE.test(s)) return slots;
+  const other = (1 - index) as 0 | 1;
+  if (slots[other] === s) {
+    return index === 0 ? [s, slots[0]] : [slots[1], s];
+  }
+  const next: CompareSlots = [...slots];
+  next[index] = s;
+  return next;
+}
+
+export function slotAlignedRows(slots: CompareSlots, rows: CompareRow[]): (CompareRow | null)[] {
+  const bySym = new Map(rows.map((r) => [r.symbol.toUpperCase(), r]));
+  return [slots[0] ? (bySym.get(slots[0]) ?? null) : null, slots[1] ? (bySym.get(slots[1]) ?? null) : null];
+}
+
+export function compareSlotStatus(
+  hasSymbol: boolean,
+  loading: boolean,
+  hasRow: boolean,
+): "empty" | "loading" | "ready" | "unresolved" {
+  if (!hasSymbol) return "empty";
+  if (hasRow) return "ready";
+  return loading ? "loading" : "unresolved";
 }
 
 export type CompareBetter = "high" | "low" | "none";
@@ -395,9 +457,10 @@ export function categoryLeaderIndex(rows: CompareRow[], group: CompareGroup): nu
   return scored[0].i;
 }
 
-export function visibleMetricsForGroup(rows: CompareRow[], group: CompareGroup): CompareMetricDef[] {
+export function visibleMetricsForGroup(rows: (CompareRow | null)[], group: CompareGroup): CompareMetricDef[] {
   return COMPARE_METRICS.filter((m) => m.group === group).filter((m) =>
     rows.some((r) => {
+      if (!r) return false;
       const v = m.get(r);
       return v != null && Number.isFinite(v);
     }),
@@ -413,9 +476,9 @@ export type CompareBarPoint = {
   best: number;
 };
 
-export function buildGroupBarPoints(rows: CompareRow[], group: CompareGroup): CompareBarPoint[] {
+export function buildGroupBarPoints(rows: (CompareRow | null)[], group: CompareGroup): CompareBarPoint[] {
   return visibleMetricsForGroup(rows, group).map((m) => {
-    const values = rows.map((r) => m.get(r));
+    const values = rows.map((r) => (r ? m.get(r) : null));
     return {
       key: m.key,
       labelKey: m.labelKey,
@@ -444,7 +507,7 @@ export type OverviewBarRow = {
 };
 
 export function buildOverviewBarRows(
-  rows: CompareRow[],
+  rows: (CompareRow | null)[],
   keys: readonly string[],
   scale: "percent" | "raw",
 ): OverviewBarRow[] {
@@ -452,7 +515,10 @@ export function buildOverviewBarRows(
   for (const key of keys) {
     const m = COMPARE_METRICS.find((d) => d.key === key);
     if (!m) continue;
-    const vals = rows.map((r) => m.get(r));
+    const vals = [0, 1].map((i) => {
+      const r = rows[i] ?? null;
+      return r ? m.get(r) : null;
+    });
     if (!vals.some((v) => v != null && Number.isFinite(v))) continue;
     const axis = (v: number | null): number | null => {
       if (v == null || !Number.isFinite(v)) return null;

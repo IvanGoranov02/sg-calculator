@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  assignCompareSlot,
   bestIndex,
   buildGroupBarPoints,
   buildOverviewBarRows,
   categoryLeaderIndex,
+  compareFetchSymbols,
+  compareSlotStatus,
+  initialCompareSlots,
   initialCompareSymbols,
   MAX_COMPARE,
+  parseCompareSlots,
   parseCompareSymbols,
   relativeBarPct,
+  serializeCompareSlots,
+  slotAlignedRows,
   twelveMonthLead,
   weekRangePosition,
   analystUpside,
@@ -83,16 +90,62 @@ describe("weekRangePosition / analystUpside", () => {
   });
 });
 
-describe("parseCompareSymbols / MAX_COMPARE", () => {
-  it("caps at two unique tickers", () => {
+describe("parseCompareSymbols / slots", () => {
+  it("caps at two unique tickers after skipping duplicates", () => {
     assert.equal(MAX_COMPARE, 2);
     assert.deepEqual(parseCompareSymbols("aapl, msft, googl, aapl"), ["AAPL", "MSFT"]);
+    assert.deepEqual(parseCompareSymbols("AAPL,AAPL,MSFT"), ["AAPL", "MSFT"]);
     assert.deepEqual(parseCompareSymbols("  "), []);
   });
 
-  it("falls back to AAPL vs MSFT when empty", () => {
+  it("keeps an empty first slot so B does not jump to A", () => {
+    assert.deepEqual(parseCompareSlots(",MSFT"), [null, "MSFT"]);
+    assert.deepEqual(serializeCompareSlots([null, "MSFT"]), ",MSFT");
+    assert.deepEqual(parseCompareSlots(serializeCompareSlots([null, "MSFT"])), [null, "MSFT"]);
+  });
+
+  it("falls back to AAPL vs MSFT only when the query is missing", () => {
+    assert.deepEqual(initialCompareSlots(undefined), ["AAPL", "MSFT"]);
     assert.deepEqual(initialCompareSymbols(undefined), ["AAPL", "MSFT"]);
     assert.deepEqual(initialCompareSymbols("nvda"), ["NVDA"]);
+    assert.deepEqual(initialCompareSlots(",MSFT"), [null, "MSFT"]);
+  });
+
+  it("uses the same dedupe-then-cap path the API and Yahoo fetch share", () => {
+    assert.deepEqual(compareFetchSymbols(["AAPL", "AAPL", "MSFT"]), ["AAPL", "MSFT"]);
+    assert.deepEqual(compareFetchSymbols(["AAPL", "MSFT", "GOOGL"]), ["AAPL", "MSFT"]);
+  });
+});
+
+describe("assignCompareSlot", () => {
+  it("swaps when the other slot already has the ticker", () => {
+    assert.deepEqual(assignCompareSlot(["AAPL", "MSFT"], 0, "MSFT"), ["MSFT", "AAPL"]);
+    assert.deepEqual(assignCompareSlot(["AAPL", "MSFT"], 1, "AAPL"), ["MSFT", "AAPL"]);
+  });
+
+  it("fills an empty slot without collapsing the other", () => {
+    assert.deepEqual(assignCompareSlot([null, "MSFT"], 0, "AAPL"), ["AAPL", "MSFT"]);
+  });
+});
+
+describe("slotAlignedRows / colors", () => {
+  it("keeps company B in slot 1 when A is empty", () => {
+    const msft = row({ symbol: "MSFT", investor: { grossMargins: 0.6 } });
+    const aligned = slotAlignedRows([null, "MSFT"], [msft]);
+    assert.equal(aligned[0], null);
+    assert.equal(aligned[1]?.symbol, "MSFT");
+    const overview = buildOverviewBarRows(aligned, ["grossMargins"], "percent");
+    assert.equal(overview[0].a, null);
+    assert.equal(overview[0].b, 60);
+  });
+});
+
+describe("compareSlotStatus", () => {
+  it("does not treat a failed ticker as still loading", () => {
+    assert.equal(compareSlotStatus(true, true, false), "loading");
+    assert.equal(compareSlotStatus(true, false, false), "unresolved");
+    assert.equal(compareSlotStatus(true, false, true), "ready");
+    assert.equal(compareSlotStatus(false, true, false), "empty");
   });
 });
 
