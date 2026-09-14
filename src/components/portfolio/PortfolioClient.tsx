@@ -223,7 +223,9 @@ export function PortfolioClient() {
   const loadValueHistory = useCallback(async () => {
     setValueHistoryLoading(true);
     try {
-      const res = await fetch("/api/portfolio/value-history");
+      const res = await fetch(
+        `/api/portfolio/value-history?base=${encodeURIComponent(preferredPortfolioCurrency)}`,
+      );
       if (!res.ok) {
         setValueHistory(null);
         return;
@@ -235,7 +237,7 @@ export function PortfolioClient() {
     } finally {
       setValueHistoryLoading(false);
     }
-  }, []);
+  }, [preferredPortfolioCurrency]);
 
   const reloadDividendsFromCache = useCallback(() => {
     setDividendsReloadToken((n) => n + 1);

@@ -59,6 +59,23 @@ export type T212HistoryDividendItem = {
   paidOn?: string;
 };
 
+export type T212HistoryOrderItem = {
+  fill?: {
+    filledAt?: string;
+    quantity?: number;
+    type?: string;
+  };
+  order?: {
+    createdAt?: string;
+    filledQuantity?: number;
+    quantity?: number;
+    side?: string;
+    status?: string;
+    ticker?: string;
+    instrument?: { ticker?: string; currency?: string };
+  };
+};
+
 export type T212RequestError = Error & {
   status?: number;
   rateLimitReset?: number;
@@ -259,6 +276,25 @@ export async function fetchT212AccountSummary(
   } catch {
     return null;
   }
+}
+
+/** Historical orders/fills. Rate limit is 6/min — keep maxPages small. */
+export async function fetchT212HistoryOrders(
+  environment: Trading212Environment,
+  apiKey: string,
+  apiSecret: string,
+  options?: { maxPages?: number; minRequestIntervalMs?: number },
+): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
+  return fetchAllT212Paginated<T212HistoryOrderItem>(
+    environment,
+    apiKey,
+    apiSecret,
+    "/api/v0/equity/history/orders",
+    {
+      maxPages: options?.maxPages ?? 6,
+      minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
+    },
+  );
 }
 
 /** Paid-out dividends. Rate limit is 6/min — keep maxPages small. */

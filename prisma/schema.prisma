@@ -75,6 +75,11 @@ model Trading212Connection {
   dividendsCachedAt      DateTime?
   dividendsCacheError    String?         @db.Text
   dividendsCachePartial  Boolean         @default(false)
+  /** Cached T212 order/fill history JSON (used for monthly portfolio quantity reconstruction). */
+  ordersCache            Json?
+  ordersCachedAt         DateTime?
+  ordersCacheError       String?         @db.Text
+  ordersCachePartial     Boolean         @default(false)
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
 }

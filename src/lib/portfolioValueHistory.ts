@@ -1,6 +1,9 @@
 import type { QuoteHistoryBar } from "@/lib/dipFinder";
+import { scaleHistoryBarsToQuotePrice } from "@/lib/dipFinder";
+import { normalizeIsoDateString } from "@/lib/format";
 import { calendarMonthsBetween } from "@/lib/portfolioDividends";
-import { convertPortfolioMoney, normalizePortfolioCurrency, type PortfolioFxRates } from "@/lib/portfolioFx";
+import { convertPortfolioMoney, inferCurrencyFromSymbol, normalizePortfolioCurrency, type PortfolioFxRates } from "@/lib/portfolioFx";
+import { parseT212Ticker, t212QuoteCurrency } from "@/lib/t212Ticker";
 
 export type PortfolioValueMonthSource = "manual" | "t212" | "computed";
 
@@ -11,9 +14,21 @@ export type PortfolioValueChartPoint = {
   changePct: number | null;
 };
 
-type HoldingRow = {
+export type HoldingRow = {
   symbolYahoo: string;
+  symbolT212?: string | null;
   quantity: number | { toString(): string };
+  currency: string;
+};
+
+export type QtyEvent = {
+  symbolYahoo: string;
+  date: string;
+  delta: number;
+};
+
+export type LiveQuote = {
+  price: number;
   currency: string;
 };
 
@@ -29,12 +44,35 @@ type ManualMonthRow = {
   currency: string;
 };
 
+const BASE_CURRENCIES = new Set(["EUR", "USD", "GBP"]);
+
+/** Calendar yyyy-mm from a timestamp using UTC date parts (snapshots / capturedAt). */
 export function monthKeyFromDate(d: Date): string {
-  return d.toISOString().slice(0, 7);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth() + 1;
+  return `${y}-${String(m).padStart(2, "0")}`;
 }
 
-export function currentMonthKey(): string {
-  return monthKeyFromDate(new Date());
+/** Calendar yyyy-mm from an ISO date or datetime (fill dates, bar dates). */
+export function monthKeyFromIsoDate(raw: string): string | null {
+  const iso = normalizeIsoDateString(raw);
+  return iso ? iso.slice(0, 7) : null;
+}
+
+export function monthKeyFromParts(year: number, month: number): string | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+  if (year < 1990 || year > 2100) return null;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+export function parseMonthKey(month: string): { year: number; month: number } | null {
+  if (!isValidMonthKey(month)) return null;
+  const [y, m] = month.split("-").map(Number);
+  return { year: y, month: m };
+}
+
+export function currentMonthKey(now = new Date()): string {
+  return monthKeyFromDate(now);
 }
 
 export function isValidMonthKey(month: string): boolean {
@@ -43,7 +81,59 @@ export function isValidMonthKey(month: string): boolean {
   return Number.isFinite(y) && Number.isFinite(m) && m >= 1 && m <= 12;
 }
 
-/** Last snapshot in each calendar month (T212 sync captures). */
+/** Inclusive calendar months from the first fill through the current UTC month. */
+export function calendarMonthsForEvents(events: QtyEvent[], now = new Date()): string[] {
+  const months = events
+    .map((e) => monthKeyFromIsoDate(e.date))
+    .filter((m): m is string => !!m);
+  if (months.length === 0) return [];
+  months.sort();
+  const end = currentMonthKey(now);
+  const last = months[months.length - 1]!;
+  return calendarMonthsBetween(months[0]!, last.localeCompare(end) > 0 ? last : end);
+}
+
+export function lastIsoDateOfMonth(month: string): string | null {
+  const parsed = parseMonthKey(month);
+  if (!parsed) return null;
+  const d = new Date(Date.UTC(parsed.year, parsed.month, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+export function parseChartBaseCurrency(raw: string | null | undefined, fallback = "USD"): string {
+  const c = normalizePortfolioCurrency(raw);
+  return BASE_CURRENCIES.has(c) ? c : normalizePortfolioCurrency(fallback);
+}
+
+/** Listing currency for Yahoo/T212 prices — not T212 wallet/account currency. */
+export function listingPriceCurrency(symbolYahoo: string, symbolT212?: string | null): string {
+  if (symbolT212) return t212QuoteCurrency(symbolT212, inferCurrencyFromSymbol(symbolYahoo));
+  return inferCurrencyFromSymbol(symbolYahoo);
+}
+
+export function isYahooPenceHistory(symbolYahoo: string, symbolT212?: string | null): boolean {
+  if (/\.L$/i.test(symbolYahoo.trim())) return true;
+  if (symbolT212) return parseT212Ticker(symbolT212).yahooSuffix === ".L";
+  return false;
+}
+
+/** Scale Yahoo daily closes into listing-currency units (GBp → GBP). */
+export function prepareHistoryBarsForValue(
+  bars: QuoteHistoryBar[],
+  symbolYahoo: string,
+  symbolT212?: string | null,
+  livePrice?: number | null,
+): QuoteHistoryBar[] {
+  if (livePrice != null && Number.isFinite(livePrice) && livePrice > 0) {
+    return scaleHistoryBarsToQuotePrice(bars, livePrice);
+  }
+  if (isYahooPenceHistory(symbolYahoo, symbolT212)) {
+    return bars.map((b) => ({ ...b, close: b.close / 100 }));
+  }
+  return bars;
+}
+
+/** Last snapshot in each UTC calendar month (T212 sync captures). */
 export function aggregateSnapshotsByMonth(
   snapshots: SnapshotRow[],
   baseCurrency: string,
@@ -70,11 +160,82 @@ export function aggregateSnapshotsByMonth(
 export function monthEndCloseFromBars(bars: QuoteHistoryBar[], month: string): number | null {
   let best: QuoteHistoryBar | null = null;
   for (const b of bars) {
-    if (!b.date.startsWith(month)) continue;
+    const barMonth = b.date.length >= 7 ? b.date.slice(0, 7) : monthKeyFromIsoDate(b.date);
+    if (barMonth !== month) continue;
     if (!Number.isFinite(b.close)) continue;
     if (!best || b.date.localeCompare(best.date) > 0) best = b;
   }
   return best ? best.close : null;
+}
+
+export function holdingQuantity(h: HoldingRow): number {
+  const qty = Number(h.quantity);
+  return Number.isFinite(qty) ? qty : NaN;
+}
+
+/**
+ * Running share count at each month-end from signed fill events (buys +, sells −, splits +).
+ * Month → symbolYahoo → quantity.
+ */
+export function quantitiesByMonthFromEvents(events: QtyEvent[], months: string[]): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  if (months.length === 0) return out;
+
+  const sorted = [...events]
+    .filter((e) => Number.isFinite(e.delta) && e.delta !== 0 && normalizeIsoDateString(e.date))
+    .sort((a, b) => {
+      const da = normalizeIsoDateString(a.date) ?? "";
+      const db = normalizeIsoDateString(b.date) ?? "";
+      return da.localeCompare(db);
+    });
+
+  const running = new Map<string, number>();
+  let i = 0;
+  for (const month of months) {
+    const cutoff = lastIsoDateOfMonth(month);
+    if (!cutoff) continue;
+    while (i < sorted.length) {
+      const ev = sorted[i]!;
+      const d = normalizeIsoDateString(ev.date)!;
+      if (d > cutoff) break;
+      const sym = ev.symbolYahoo.trim().toUpperCase();
+      running.set(sym, (running.get(sym) ?? 0) + ev.delta);
+      i += 1;
+    }
+    const snap = new Map<string, number>();
+    for (const [sym, qty] of running) {
+      if (qty > 1e-8) snap.set(sym, qty);
+    }
+    out.set(month, snap);
+  }
+  return out;
+}
+
+/** True when reconstructed current-month qty matches live holdings (incomplete order history fails). */
+export function quantityTimelineMatchesHoldings(
+  qtyByMonth: Map<string, Map<string, number>>,
+  currentMonth: string,
+  holdings: HoldingRow[],
+  tolerance = 0.2,
+): boolean {
+  const atMonth = qtyByMonth.get(currentMonth);
+  if (!atMonth || atMonth.size === 0) return false;
+
+  const live = new Map<string, number>();
+  for (const h of holdings) {
+    const qty = holdingQuantity(h);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const k = h.symbolYahoo.trim().toUpperCase();
+    live.set(k, (live.get(k) ?? 0) + qty);
+  }
+  if (live.size === 0) return false;
+
+  for (const [sym, liveQty] of live) {
+    const reconstructed = atMonth.get(sym) ?? 0;
+    const denom = Math.max(liveQty, reconstructed, 1e-9);
+    if (Math.abs(reconstructed - liveQty) / denom > tolerance) return false;
+  }
+  return true;
 }
 
 export function computeMonthlyValuesFromHoldings(
@@ -83,35 +244,65 @@ export function computeMonthlyValuesFromHoldings(
   fx: PortfolioFxRates,
   baseCurrency: string,
   months: string[],
+  qtyByMonth?: Map<string, Map<string, number>>,
 ): Map<string, number | null> {
   const base = normalizePortfolioCurrency(baseCurrency);
   const out = new Map<string, number | null>();
+  const holdingBySymbol = new Map<string, HoldingRow>();
+  for (const h of holdings) {
+    holdingBySymbol.set(h.symbolYahoo.trim().toUpperCase(), h);
+  }
 
   for (const month of months) {
+    const qtyMap = qtyByMonth?.get(month);
+    const symbols = qtyMap
+      ? [...qtyMap.keys()]
+      : holdings.map((h) => h.symbolYahoo.trim().toUpperCase()).filter(Boolean);
+
     let total = 0;
     let any = false;
-    let missingFx = false;
 
-    for (const h of holdings) {
-      const qty = Number(h.quantity);
+    for (const sym of symbols) {
+      const qty = qtyMap ? (qtyMap.get(sym) ?? 0) : holdingQuantity(holdingBySymbol.get(sym) ?? { symbolYahoo: sym, quantity: 0, currency: "USD" });
       if (!Number.isFinite(qty) || qty <= 0) continue;
-      const bars = historyBySymbol[h.symbolYahoo] ?? [];
+      const h = holdingBySymbol.get(sym);
+      const bars = historyBySymbol[sym] ?? historyBySymbol[h?.symbolYahoo ?? ""] ?? [];
       const close = monthEndCloseFromBars(bars, month);
       if (close == null) continue;
-      const holdingCcy = normalizePortfolioCurrency(h.currency);
-      const mv = convertPortfolioMoney(close * qty, holdingCcy, base, fx);
-      if (mv == null) {
-        missingFx = true;
-        continue;
-      }
+      const pxCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
+      const mv = convertPortfolioMoney(close * qty, pxCcy, base, fx);
+      if (mv == null) continue;
       total += mv;
       any = true;
     }
 
-    out.set(month, any && !missingFx ? total : any ? total : null);
+    out.set(month, any ? total : null);
   }
 
   return out;
+}
+
+/** Current holdings × live quotes in listing/quote currency, converted to base (matches Holdings tab). */
+export function computeLiveHoldingsValue(
+  holdings: HoldingRow[],
+  quotes: Record<string, LiveQuote | null | undefined>,
+  fx: PortfolioFxRates,
+  baseCurrency: string,
+): number | null {
+  const base = normalizePortfolioCurrency(baseCurrency);
+  let total = 0;
+  let any = false;
+  for (const h of holdings) {
+    const qty = holdingQuantity(h);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const q = quotes[h.symbolYahoo] ?? quotes[h.symbolYahoo.trim().toUpperCase()];
+    if (!q || !Number.isFinite(q.price) || q.price <= 0) continue;
+    const mv = convertPortfolioMoney(q.price * qty, q.currency, base, fx);
+    if (mv == null) continue;
+    total += mv;
+    any = true;
+  }
+  return any ? total : null;
 }
 
 export function pickBaseCurrencyFromHoldings(holdings: HoldingRow[]): string {
@@ -147,38 +338,13 @@ function manualValuesByMonth(
   return out;
 }
 
-function monthsFromQuoteHistory(
-  holdings: HoldingRow[],
-  historyBySymbol: Record<string, QuoteHistoryBar[]>,
-): string[] {
-  const months = new Set<string>();
-  for (const h of holdings) {
-    const bars = historyBySymbol[h.symbolYahoo] ?? [];
-    for (const b of bars) {
-      if (b.date.length >= 7) months.add(b.date.slice(0, 7));
-    }
-  }
-  if (months.size === 0) return [];
-  const sorted = [...months].sort();
-  const last = sorted[sorted.length - 1]!;
-  const end = last.localeCompare(currentMonthKey()) > 0 ? last : currentMonthKey();
-  return calendarMonthsBetween(sorted[0]!, end);
-}
-
-function resolveMonthRange(input: {
-  t212ByMonth: Map<string, number>;
-  manualByMonth: Map<string, number>;
-  computedByMonth: Map<string, number | null>;
-}): string[] {
-  const keys = new Set<string>([
-    ...input.t212ByMonth.keys(),
-    ...input.manualByMonth.keys(),
-    ...[...input.computedByMonth.entries()].filter(([, v]) => v != null).map(([m]) => m),
-  ]);
-  if (keys.size === 0) return [];
-  const sorted = [...keys].sort();
+function resolveMonthRange(keys: string[], now = new Date()): string[] {
+  if (keys.length === 0) return [];
+  const sorted = [...new Set(keys.filter(isValidMonthKey))].sort();
+  if (sorted.length === 0) return [];
   const maxMonth = sorted[sorted.length - 1]!;
-  const end = maxMonth.localeCompare(currentMonthKey()) > 0 ? maxMonth : currentMonthKey();
+  const cur = currentMonthKey(now);
+  const end = maxMonth.localeCompare(cur) > 0 ? maxMonth : cur;
   return calendarMonthsBetween(sorted[0]!, end);
 }
 
@@ -189,26 +355,57 @@ export function buildPortfolioValueChartSeries(input: {
   historyBySymbol: Record<string, QuoteHistoryBar[]>;
   fx: PortfolioFxRates;
   baseCurrency?: string;
+  qtyByMonth?: Map<string, Map<string, number>>;
+  liveValue?: number | null;
+  now?: Date;
 }): PortfolioValueChartPoint[] {
+  const now = input.now ?? new Date();
+  const thisMonth = currentMonthKey(now);
   const baseCurrency =
     input.baseCurrency ??
     (input.holdings.length > 0 ? pickBaseCurrencyFromHoldings(input.holdings) : "USD");
   const t212ByMonth = aggregateSnapshotsByMonth(input.snapshots, baseCurrency, input.fx);
   const manualByMonth = manualValuesByMonth(input.manualRows, baseCurrency, input.fx);
 
-  const computedMonths = monthsFromQuoteHistory(input.holdings, input.historyBySymbol);
+  const useQtyTimeline = input.qtyByMonth != null && input.qtyByMonth.size > 0;
+  const historicalMonths = useQtyTimeline
+    ? [...input.qtyByMonth!.keys()].sort()
+    : [];
+  const computedMonths = useQtyTimeline ? historicalMonths : [];
   const computedByMonth =
-    input.holdings.length > 0 && computedMonths.length > 0
+    computedMonths.length > 0
       ? computeMonthlyValuesFromHoldings(
           input.holdings,
           input.historyBySymbol,
           input.fx,
           baseCurrency,
           computedMonths,
+          input.qtyByMonth,
         )
       : new Map<string, number | null>();
 
-  const months = resolveMonthRange({ t212ByMonth, manualByMonth, computedByMonth });
+  if (input.liveValue != null && Number.isFinite(input.liveValue) && input.liveValue >= 0) {
+    computedByMonth.set(thisMonth, input.liveValue);
+  } else if (!computedByMonth.has(thisMonth) && input.holdings.length > 0) {
+    const currentOnly = computeMonthlyValuesFromHoldings(
+      input.holdings,
+      input.historyBySymbol,
+      input.fx,
+      baseCurrency,
+      [thisMonth],
+    );
+    const v = currentOnly.get(thisMonth);
+    if (v != null) computedByMonth.set(thisMonth, v);
+  }
+
+  const months = resolveMonthRange(
+    [
+      ...t212ByMonth.keys(),
+      ...manualByMonth.keys(),
+      ...[...computedByMonth.entries()].filter(([, v]) => v != null).map(([m]) => m),
+    ],
+    now,
+  );
   if (months.length === 0) return [];
 
   const points: PortfolioValueChartPoint[] = [];

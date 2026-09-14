@@ -670,7 +670,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       tabDividends: "Dividends",
       valueChartTitle: "Portfolio value over time",
       valueChartHint:
-        "Auto values use Trading 212 account snapshots when synced, otherwise estimated from current holdings and historical prices. Manual entries override auto for that month.",
+        "Trading 212 account snapshots and live holdings (same currency as the rest of this tab). Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
       valueChartLoading: "Loading portfolio history…",
       valueChartValue: "Portfolio value",
       valueChartChange: "Change vs prior month",
@@ -680,6 +680,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueManualTitle: "Set portfolio value for a month",
       valueManualHint:
         "For multi-broker portfolios or months without Trading 212 data. Overrides auto values for that month.",
+      valueManualToggle: "Set a monthly value",
+      valueManualYear: "Year",
       valueManualMonth: "Month",
       valueManualAmount: "Total portfolio value",
       valueManualSave: "Save monthly value",
@@ -1598,7 +1600,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       tabDividends: "Дивиденти",
       valueChartTitle: "Стойност на портфолиото във времето",
       valueChartHint:
-        "Автоматичните стойности идват от снимки на Trading 212 при синхронизация, иначе се оценяват от текущите позиции и исторически цени. Ръчните записи заменят авто за този месец.",
+        "Снимки от Trading 212 и текущите позиции (същата валута като таба). Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
       valueChartLoading: "Зареждане на история на портфолиото…",
       valueChartValue: "Стойност на портфолиото",
       valueChartChange: "Промяна спрямо предишния месец",
@@ -1608,6 +1610,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueManualTitle: "Задай стойност на портфолиото за месец",
       valueManualHint:
         "За мулти-брокер портфейли или месеци без данни от Trading 212. Заменя авто стойността за този месец.",
+      valueManualToggle: "Задай месечна стойност",
+      valueManualYear: "Година",
       valueManualMonth: "Месец",
       valueManualAmount: "Обща стойност на портфолиото",
       valueManualSave: "Запази месечна стойност",
