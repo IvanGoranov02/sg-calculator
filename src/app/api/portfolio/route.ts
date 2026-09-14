@@ -4,6 +4,9 @@ import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
+import { logApiException } from "@/lib/serverDebugLog";
+
+export const maxDuration = 60;
 
 function serializeHolding(h: {
   id: string;
@@ -45,20 +48,26 @@ export async function GET() {
       prisma.trading212Connection.findUnique({ where: { userId } }),
     ]);
 
-    const [quotes, fx] = await Promise.all([
-      holdings.length > 0
-        ? fetchPortfolioQuotesForHoldings(
-            holdings.map((h) => ({
-              symbolYahoo: h.symbolYahoo,
-              symbolT212: h.symbolT212,
-              currency: h.currency,
-              brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
-              source: h.source,
-            })),
-          )
-        : Promise.resolve({} as Record<string, import("@/lib/portfolioMarketData").PortfolioQuoteRow | null>),
-      fetchPortfolioFxRates(),
-    ]);
+    let quotes: Record<string, import("@/lib/portfolioMarketData").PortfolioQuoteRow | null> = {};
+    const fx = await fetchPortfolioFxRates().catch(() => ({
+      eurPerUsd: null as number | null,
+      gbpPerUsd: null as number | null,
+    }));
+    try {
+      if (holdings.length > 0) {
+        quotes = await fetchPortfolioQuotesForHoldings(
+          holdings.map((h) => ({
+            symbolYahoo: h.symbolYahoo,
+            symbolT212: h.symbolT212,
+            currency: h.currency,
+            brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
+            source: h.source,
+          })),
+        );
+      }
+    } catch (e) {
+      logApiException("GET /api/portfolio quotes", e, { userId, holdingCount: holdings.length });
+    }
 
     return Response.json({
       holdings: holdings.map(serializeHolding),

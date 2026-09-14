@@ -80,18 +80,33 @@ export async function POST() {
     }
 
     const accountCurrency = summary?.currency ?? null;
-    const rows: Prisma.PortfolioHoldingCreateManyInput[] = [];
+    const mapped: Prisma.PortfolioHoldingCreateManyInput[] = [];
     for (const p of positions) {
       const row = mapT212PositionToHolding(p, userId, accountCurrency);
-      if (!row) continue;
-      if (manualSymbols.has(row.symbolYahoo)) {
-        if (!skippedDueToManual.includes(row.symbolYahoo)) skippedDueToManual.push(row.symbolYahoo);
-        continue;
-      }
-      rows.push(row);
+      if (row) mapped.push(row);
     }
 
-    const mergedRows = mergeT212HoldingRows(rows);
+    if (positions.length > 0 && mapped.length === 0) {
+      const existingT212 = await prisma.portfolioHolding.count({
+        where: { userId, source: "t212" },
+      });
+      if (existingT212 > 0) {
+        return Response.json(
+          {
+            error:
+              "Trading 212 returned positions that could not be mapped; your synced holdings were not changed.",
+            positionsReceived: positions.length,
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    const mergedRows = mergeT212HoldingRows(mapped).filter((row) => {
+      if (!manualSymbols.has(row.symbolYahoo)) return true;
+      if (!skippedDueToManual.includes(row.symbolYahoo)) skippedDueToManual.push(row.symbolYahoo);
+      return false;
+    });
 
     await prisma.$transaction(async (tx) => {
       await tx.portfolioHolding.deleteMany({ where: { userId, source: "t212" } });
@@ -129,6 +144,8 @@ export async function POST() {
 
     return Response.json({
       ok: true,
+      positionsReceived: positions.length,
+      positionsMapped: mapped.length,
       positionsSynced: mergedRows.length,
       skippedDueToManual,
       accountCurrency: summary?.currency ?? null,
