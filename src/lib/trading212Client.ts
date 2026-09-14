@@ -12,12 +12,19 @@ const BASE: Record<Trading212Environment, string> = {
 
 export type T212Position = {
   averagePricePaid?: number;
+  /** Legacy /equity/portfolio field. */
+  averagePrice?: number;
   createdAt?: string;
   currentPrice?: number;
+  /** Some payloads put the unique ticker on the position instead of `instrument`. */
+  ticker?: string;
+  instrumentCode?: string;
   instrument?: { currency?: string; isin?: string; name?: string; ticker?: string };
   quantity?: number;
   quantityAvailableForTrading?: number;
   quantityInPies?: number;
+  /** Legacy pie quantity field. */
+  pieQuantity?: number;
   walletImpact?: {
     currency?: string;
     currentValue?: number;
@@ -144,26 +151,96 @@ export async function t212FetchJson<T>(
   }
 }
 
-function normalizePositionsPayload(data: unknown): T212Position[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && Array.isArray((data as { items?: unknown }).items)) {
-    return (data as { items: T212Position[] }).items;
-  }
-  return [];
+function asPositionArray(value: unknown): T212Position[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((x) => x && typeof x === "object") as T212Position[];
 }
+
+/** Normalize a legacy /equity/portfolio row onto the current Position shape. */
+export function normalizeT212Position(raw: T212Position): T212Position {
+  const ticker =
+    (typeof raw.instrument?.ticker === "string" && raw.instrument.ticker.trim()) ||
+    (typeof raw.ticker === "string" && raw.ticker.trim()) ||
+    (typeof raw.instrumentCode === "string" && raw.instrumentCode.trim()) ||
+    undefined;
+  const instrument = raw.instrument ? { ...raw.instrument } : {};
+  if (ticker && !instrument.ticker) instrument.ticker = ticker;
+  return {
+    ...raw,
+    ticker,
+    instrument: Object.keys(instrument).length > 0 ? instrument : raw.instrument,
+    averagePricePaid: raw.averagePricePaid ?? raw.averagePrice,
+    quantityInPies: raw.quantityInPies ?? raw.pieQuantity,
+  };
+}
+
+export type T212PositionsPage = {
+  positions: T212Position[];
+  nextPagePath: string | null;
+};
+
+/** Parse array, `{ items }`, `{ positions }`, or a single position object. */
+export function normalizePositionsPayload(data: unknown): T212PositionsPage {
+  if (Array.isArray(data)) {
+    return { positions: data.map(normalizeT212Position), nextPagePath: null };
+  }
+  if (!data || typeof data !== "object") {
+    return { positions: [], nextPagePath: null };
+  }
+  const o = data as Record<string, unknown>;
+  const next =
+    typeof o.nextPagePath === "string" && o.nextPagePath.trim() && o.nextPagePath !== "null"
+      ? o.nextPagePath
+      : null;
+  for (const key of ["items", "positions", "data"] as const) {
+    const arr = asPositionArray(o[key]);
+    if (arr) return { positions: arr.map(normalizeT212Position), nextPagePath: next };
+  }
+  if (o.instrument || o.ticker || o.instrumentCode || o.quantity != null) {
+    return { positions: [normalizeT212Position(o as T212Position)], nextPagePath: next };
+  }
+  return { positions: [], nextPagePath: next };
+}
+
+const T212_POSITIONS_MIN_INTERVAL_MS = 1_100;
 
 export async function fetchT212Positions(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
 ): Promise<T212Position[]> {
-  const { data } = await t212FetchJson<unknown>(
+  const first = await t212FetchJson<unknown>(
     environment,
     apiKey,
     apiSecret,
     "/api/v0/equity/positions",
   );
-  return normalizePositionsPayload(data);
+  const page = normalizePositionsPayload(first.data);
+  const out: T212Position[] = [...page.positions];
+
+  if (page.nextPagePath) {
+    const rest = await fetchAllT212Paginated<T212Position>(environment, apiKey, apiSecret, page.nextPagePath, {
+      maxPages: 40,
+      minRequestIntervalMs: T212_POSITIONS_MIN_INTERVAL_MS,
+    });
+    out.push(...rest.items.map(normalizeT212Position));
+  }
+
+  if (out.length > 0) return out;
+
+  // Legacy open-positions endpoint used by older API keys / docs.
+  try {
+    await sleep(T212_POSITIONS_MIN_INTERVAL_MS);
+    const legacy = await t212FetchJson<unknown>(
+      environment,
+      apiKey,
+      apiSecret,
+      "/api/v0/equity/portfolio",
+    );
+    return normalizePositionsPayload(legacy.data).positions;
+  } catch {
+    return out;
+  }
 }
 
 export async function fetchT212AccountSummary(

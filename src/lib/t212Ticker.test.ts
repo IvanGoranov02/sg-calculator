@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   germanListingYahooSymbols,
   parseT212Ticker,
+  t212ListingVenueLabel,
   t212QuoteCurrency,
   t212TickerToYahoo,
   t212TickerToYahooCandidates,
@@ -71,6 +72,73 @@ describe("parseT212Ticker", () => {
       isNonUsListing: true,
     });
   });
+
+  it("parses local Xetra tickers for US companies (APC, TL0, NFC)", () => {
+    assert.deepEqual(parseT212Ticker("APCd_EQ"), {
+      base: "APC",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("TL0d_EQ"), {
+      base: "TL0",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("NFCd_EQ"), {
+      base: "NFC",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+  });
+
+  it("parses US ticker + Xetra letter (AAPLd_EQ, TSLAd_EQ, NFLXd_EQ)", () => {
+    assert.deepEqual(parseT212Ticker("AAPLd_EQ"), {
+      base: "AAPL",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("TSLAd_EQ"), {
+      base: "TSLA",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("NFLXd_EQ"), {
+      base: "NFLX",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+  });
+
+  it("parses uppercase Xetra stubs beyond the original allowlist (NFLXD_EQ, AAPLD_EQ)", () => {
+    assert.deepEqual(parseT212Ticker("NFLXD_EQ"), {
+      base: "NFLX",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("AAPLD_EQ"), {
+      base: "AAPL",
+      yahooSuffix: ".DE",
+      isNonUsListing: true,
+    });
+  });
+
+  it("parses extra EU country codes and exchange letters", () => {
+    assert.deepEqual(parseT212Ticker("IBE_ES_EQ"), {
+      base: "IBE",
+      yahooSuffix: ".MC",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("SANe_EQ"), {
+      base: "SAN",
+      yahooSuffix: ".MC",
+      isNonUsListing: true,
+    });
+    assert.deepEqual(parseT212Ticker("ABIb_EQ"), {
+      base: "ABI",
+      yahooSuffix: ".BR",
+      isNonUsListing: true,
+    });
+  });
 });
 
 describe("germanListingYahooSymbols", () => {
@@ -106,11 +174,20 @@ describe("germanListingYahooSymbols", () => {
     assert.ok(!germanListingYahooSymbols("UBER").includes("UBE.DE"));
     assert.ok(!germanListingYahooSymbols("UBER").includes("UBE.F"));
   });
+
+  it("maps Apple/Tesla/Netflix US roots to Xetra local Yahoo symbols", () => {
+    assert.deepEqual(germanListingYahooSymbols("AAPL"), ["APC.DE", "APC.F"]);
+    assert.deepEqual(germanListingYahooSymbols("TSLA"), ["TL0.DE", "TL0.F"]);
+    assert.deepEqual(germanListingYahooSymbols("NFLX"), ["NFC.DE", "NFC.F"]);
+    assert.ok(!germanListingYahooSymbols("AAPL").includes("AAP.DE"));
+    assert.ok(!germanListingYahooSymbols("TSLA").includes("TSL.DE"));
+    assert.ok(!germanListingYahooSymbols("NFLX").includes("NFL.DE"));
+  });
 });
 
 describe("t212TickerToYahoo", () => {
   it("maps Xetra US names to German Yahoo symbols", () => {
-    assert.equal(t212TickerToYahoo("MSFTd_EQ"), "MSF.DE");
+    assert.equal(t212TickerToYahoo("MSFTd_EQ"), "MSFT.DE");
     assert.equal(t212TickerToYahoo("AMZd_EQ"), "AMZ.DE");
     assert.equal(t212TickerToYahoo("FB2Ad_EQ"), "FB2A.DE");
     assert.equal(t212TickerToYahoo("FB2AD_EQ"), "FB2A.DE");
@@ -118,6 +195,13 @@ describe("t212TickerToYahoo", () => {
     assert.equal(t212TickerToYahoo("ABEAD_EQ"), "ABEA.DE");
     assert.equal(t212TickerToYahoo("UBERd_EQ"), "UBER.DE");
     assert.equal(t212TickerToYahoo("UBERD_EQ"), "UBER.DE");
+    assert.equal(t212TickerToYahoo("APCd_EQ"), "APC.DE");
+    assert.equal(t212TickerToYahoo("AAPLd_EQ"), "APC.DE");
+    assert.equal(t212TickerToYahoo("TL0d_EQ"), "TL0.DE");
+    assert.equal(t212TickerToYahoo("TSLAd_EQ"), "TL0.DE");
+    assert.equal(t212TickerToYahoo("NFCd_EQ"), "NFC.DE");
+    assert.equal(t212TickerToYahoo("NFLXd_EQ"), "NFC.DE");
+    assert.equal(t212TickerToYahoo("NFLXD_EQ"), "NFC.DE");
   });
 
   it("maps Amsterdam and London listings", () => {
@@ -128,6 +212,9 @@ describe("t212TickerToYahoo", () => {
   it("keeps US tickers bare", () => {
     assert.equal(t212TickerToYahoo("AAPL_US_EQ"), "AAPL");
     assert.equal(t212TickerToYahoo("BRK_B_US_EQ"), "BRK-B");
+    assert.equal(t212TickerToYahoo("UBER_US_EQ"), "UBER");
+    assert.equal(t212TickerToYahoo("TSLA_US_EQ"), "TSLA");
+    assert.equal(t212TickerToYahoo("NFLX_US_EQ"), "NFLX");
   });
 
   it("does not remap US tickers ending in D to Xetra (GILD, CRWD, SCHD)", () => {
@@ -162,6 +249,8 @@ describe("t212QuoteCurrency", () => {
     assert.equal(t212QuoteCurrency("FB2Ad_EQ", "EUR"), "EUR");
     assert.equal(t212QuoteCurrency("MSFTd_EQ", "EUR"), "EUR");
     assert.equal(t212QuoteCurrency("UBERd_EQ", "EUR"), "EUR");
+    assert.equal(t212QuoteCurrency("AAPLd_EQ", "EUR"), "EUR");
+    assert.equal(t212QuoteCurrency("SANe_EQ", "EUR"), "EUR");
   });
 
   it("uses GBP for London listings", () => {
@@ -210,5 +299,26 @@ describe("t212TickerToYahooCandidates", () => {
     const upper = t212TickerToYahooCandidates("UBERD_EQ", "EUR");
     assert.equal(upper[0], "UBER.DE");
     assert.ok(!upper.includes("UBE.DE"));
+  });
+
+  it("maps AAPL/TSLA/NFLX Xetra candidates to local codes not 3-char traps", () => {
+    const aapl = t212TickerToYahooCandidates("AAPLd_EQ", "EUR");
+    assert.equal(aapl[0], "APC.DE");
+    assert.ok(!aapl.includes("AAP.DE"));
+    const tsla = t212TickerToYahooCandidates("TSLAd_EQ", "EUR");
+    assert.equal(tsla[0], "TL0.DE");
+    assert.ok(!tsla.includes("TSL.DE"));
+    const nflx = t212TickerToYahooCandidates("NFLXd_EQ", "EUR");
+    assert.equal(nflx[0], "NFC.DE");
+    assert.ok(!nflx.includes("NFL.DE"));
+  });
+});
+
+describe("t212ListingVenueLabel", () => {
+  it("labels Nasdaq vs Xetra listings", () => {
+    assert.equal(t212ListingVenueLabel("AAPL_US_EQ"), "Nasdaq");
+    assert.equal(t212ListingVenueLabel("UBERd_EQ"), "Xetra");
+    assert.equal(t212ListingVenueLabel("BPl_EQ"), "LSE");
+    assert.equal(t212ListingVenueLabel("SANe_EQ"), "Madrid");
   });
 });

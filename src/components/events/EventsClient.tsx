@@ -387,9 +387,17 @@ function EventCard({
         </span>
       </p>
       {showEstimate ? (
-        <p className="mt-1 text-sm tabular-nums text-emerald-400/90">
-          {estDividendLabel}: {fmtMoney(estimate.amount, estimate.currency)}
-        </p>
+        <div
+          className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-950/50 px-3 py-2.5"
+          aria-label={`${estDividendLabel}: ${fmtMoney(estimate.amount, estimate.currency)}`}
+        >
+          <p className="text-[11px] font-medium tracking-wide text-emerald-200/75 uppercase">
+            {estDividendLabel}
+          </p>
+          <p className="mt-0.5 text-lg font-semibold tracking-tight text-emerald-300 tabular-nums sm:text-xl">
+            {fmtMoney(estimate.amount, estimate.currency)}
+          </p>
+        </div>
       ) : null}
     </Link>
   );
