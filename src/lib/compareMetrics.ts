@@ -13,7 +13,31 @@ import {
 import type { InvestorMetrics } from "@/lib/stockAnalysisTypes";
 import type { CompareRow } from "@/lib/yahooCompare";
 
-export const MAX_COMPARE = 4;
+/** Head-to-head only — AlphaSpread-style compare is two companies. */
+export const MAX_COMPARE = 2;
+
+export const DEFAULT_COMPARE_SYMBOLS = ["AAPL", "MSFT"] as const;
+
+/** Slot 0 emerald, slot 1 sky — matches other StockGauge charts. */
+export const COMPARE_SLOT_HEX = ["#10b981", "#38bdf8"] as const;
+
+export function parseCompareSymbols(raw: string | null | undefined): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of (raw ?? "").split(",")) {
+    const s = part.trim().toUpperCase();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= MAX_COMPARE) break;
+  }
+  return out;
+}
+
+export function initialCompareSymbols(raw: string | null | undefined): string[] {
+  const parsed = parseCompareSymbols(raw);
+  return parsed.length > 0 ? parsed : [...DEFAULT_COMPARE_SYMBOLS];
+}
 
 export type CompareBetter = "high" | "low" | "none";
 
@@ -378,4 +402,89 @@ export function visibleMetricsForGroup(rows: CompareRow[], group: CompareGroup):
       return v != null && Number.isFinite(v);
     }),
   );
+}
+
+export type CompareBarPoint = {
+  key: string;
+  labelKey: string;
+  values: (number | null)[];
+  labels: string[];
+  pcts: (number | null)[];
+  best: number;
+};
+
+export function buildGroupBarPoints(rows: CompareRow[], group: CompareGroup): CompareBarPoint[] {
+  return visibleMetricsForGroup(rows, group).map((m) => {
+    const values = rows.map((r) => m.get(r));
+    return {
+      key: m.key,
+      labelKey: m.labelKey,
+      values,
+      labels: values.map((v) => (v != null && Number.isFinite(v) ? m.fmt(v) : "—")),
+      pcts: values.map((v) => relativeBarPct(values, v)),
+      best: bestIndex(values, m.better),
+    };
+  });
+}
+
+/** Percent-scale metrics for the grouped overview chart (Yahoo stores most as decimals). */
+export const COMPARE_PERCENT_CHART_KEYS = [
+  "grossMargins",
+  "operatingMargins",
+  "profitMargins",
+  "returnOnEquity",
+  "returnOnAssets",
+  "revenueGrowth",
+  "earningsGrowth",
+  "dividendYield",
+] as const;
+
+export const COMPARE_RATIO_CHART_KEYS = [
+  "trailingPE",
+  "forwardPE",
+  "pegRatio",
+  "priceToSales",
+  "priceToBook",
+  "evEbitda",
+] as const;
+
+export type OverviewBarRow = {
+  key: string;
+  labelKey: string;
+  a: number | null;
+  b: number | null;
+};
+
+export function buildOverviewBarRows(
+  rows: CompareRow[],
+  keys: readonly string[],
+  scale: "percent" | "raw",
+): OverviewBarRow[] {
+  const out: OverviewBarRow[] = [];
+  for (const key of keys) {
+    const m = COMPARE_METRICS.find((d) => d.key === key);
+    if (!m) continue;
+    const vals = rows.map((r) => m.get(r));
+    if (!vals.some((v) => v != null && Number.isFinite(v))) continue;
+    const axis = (v: number | null): number | null => {
+      if (v == null || !Number.isFinite(v)) return null;
+      return scale === "percent" ? v * 100 : v;
+    };
+    out.push({
+      key: m.key,
+      labelKey: m.labelKey,
+      a: axis(vals[0] ?? null),
+      b: axis(vals[1] ?? null),
+    });
+  }
+  return out;
+}
+
+/** Winner of 52-week return when both sides have data and they differ. */
+export function twelveMonthLead(rows: CompareRow[]): { winner: number; loser: number } | null {
+  if (rows.length < 2) return null;
+  const a = rows[0].weekChangePercent;
+  const b = rows[1].weekChangePercent;
+  if (a == null || b == null || !Number.isFinite(a) || !Number.isFinite(b) || a === b) return null;
+  return a > b ? { winner: 0, loser: 1 } : { winner: 1, loser: 0 };
 }

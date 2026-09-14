@@ -44,15 +44,7 @@ export function CompareSnapshotCards({ rows }: { rows: CompareRow[] }) {
   const { t } = useI18n();
 
   return (
-    <div
-      className={cn(
-        "grid gap-3",
-        rows.length === 1 && "grid-cols-1 sm:max-w-sm",
-        rows.length === 2 && "grid-cols-1 sm:grid-cols-2",
-        rows.length === 3 && "grid-cols-1 sm:grid-cols-3",
-        rows.length >= 4 && "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4",
-      )}
-    >
+    <div className={cn("grid gap-3", rows.length === 1 ? "sm:max-w-sm" : "sm:grid-cols-2")}>
       {rows.map((r) => {
         const up = r.changesPercentage >= 0;
         const rec = recLabel(r.investor.recommendationKey);

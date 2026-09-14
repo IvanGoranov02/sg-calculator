@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
+import { MAX_COMPARE } from "@/lib/compareMetrics";
 import { fetchCompareRows } from "@/lib/yahooCompare";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,8 @@ export async function GET(request: Request) {
   const symbols = (searchParams.get("symbols") ?? "")
     .split(",")
     .map((s) => s.trim().toUpperCase())
-    .filter((s) => /^[A-Z0-9.\-^]+$/.test(s));
+    .filter((s) => /^[A-Z0-9.\-^]+$/.test(s))
+    .slice(0, MAX_COMPARE);
 
   if (symbols.length === 0) return NextResponse.json({ rows: [] });
   const rows = await fetchCompareRows(symbols);

@@ -3,8 +3,14 @@ import { describe, it } from "node:test";
 
 import {
   bestIndex,
+  buildGroupBarPoints,
+  buildOverviewBarRows,
   categoryLeaderIndex,
+  initialCompareSymbols,
+  MAX_COMPARE,
+  parseCompareSymbols,
   relativeBarPct,
+  twelveMonthLead,
   weekRangePosition,
   analystUpside,
 } from "@/lib/compareMetrics";
@@ -74,6 +80,64 @@ describe("weekRangePosition / analystUpside", () => {
   it("computes analyst upside vs last price", () => {
     const r = row({ symbol: "A", price: 80, investor: { targetMeanPrice: 100 } });
     assert.ok(Math.abs((analystUpside(r) as number) - 0.25) < 1e-9);
+  });
+});
+
+describe("parseCompareSymbols / MAX_COMPARE", () => {
+  it("caps at two unique tickers", () => {
+    assert.equal(MAX_COMPARE, 2);
+    assert.deepEqual(parseCompareSymbols("aapl, msft, googl, aapl"), ["AAPL", "MSFT"]);
+    assert.deepEqual(parseCompareSymbols("  "), []);
+  });
+
+  it("falls back to AAPL vs MSFT when empty", () => {
+    assert.deepEqual(initialCompareSymbols(undefined), ["AAPL", "MSFT"]);
+    assert.deepEqual(initialCompareSymbols("nvda"), ["NVDA"]);
+  });
+});
+
+describe("buildGroupBarPoints", () => {
+  it("scales bars against the pair max and marks the better reading", () => {
+    const cheap = row({ symbol: "CHEAP", investor: { trailingPE: 10, forwardPE: 9 } });
+    const rich = row({ symbol: "RICH", investor: { trailingPE: 20, forwardPE: 18 } });
+    const points = buildGroupBarPoints([cheap, rich], "valuation");
+    const pe = points.find((p) => p.key === "trailingPE");
+    assert.ok(pe);
+    assert.equal(pe?.best, 0);
+    assert.equal(pe?.pcts[0], 50);
+    assert.equal(pe?.pcts[1], 100);
+  });
+});
+
+describe("buildOverviewBarRows", () => {
+  it("converts decimal margins to percent points", () => {
+    const a = row({ symbol: "A", investor: { grossMargins: 0.4, operatingMargins: 0.2 } });
+    const b = row({ symbol: "B", investor: { grossMargins: 0.6, operatingMargins: 0.3 } });
+    const rows = buildOverviewBarRows([a, b], ["grossMargins", "operatingMargins"], "percent");
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].a, 40);
+    assert.equal(rows[0].b, 60);
+  });
+
+  it("omits metrics with no data", () => {
+    const a = row({ symbol: "A", investor: { trailingPE: 18 } });
+    const rows = buildOverviewBarRows([a], ["pegRatio"], "raw");
+    assert.equal(rows.length, 0);
+  });
+});
+
+describe("twelveMonthLead", () => {
+  it("picks the stronger 52-week return", () => {
+    const a = row({ symbol: "A", weekChangePercent: 12 });
+    const b = row({ symbol: "B", weekChangePercent: -4 });
+    assert.deepEqual(twelveMonthLead([a, b]), { winner: 0, loser: 1 });
+  });
+
+  it("returns null on a tie or missing data", () => {
+    const a = row({ symbol: "A", weekChangePercent: 5 });
+    const b = row({ symbol: "B", weekChangePercent: 5 });
+    assert.equal(twelveMonthLead([a, b]), null);
+    assert.equal(twelveMonthLead([a]), null);
   });
 });
 
