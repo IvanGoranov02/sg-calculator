@@ -5,6 +5,10 @@ import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "luci
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  allocationPercentOfTotal,
+  formatAllocationPercent,
+} from "@/lib/portfolioAllocation";
 import { convertPortfolioMoney, type PortfolioFxRates } from "@/lib/portfolioFx";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -127,10 +131,6 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
   return a;
 }
 
-function pctOf(totalValue: number, v: number) {
-  return totalValue > 0 ? (v / totalValue) * 100 : 0;
-}
-
 /** 1. Summary metrics (Total value, Total P&L, Est. income, holdings count). */
 export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
@@ -178,16 +178,19 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
           <CardTitle className="text-base">{t("portfolioAnalytics.allocationTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {a.holdings.slice(0, 8).map((h) => (
-            <BarRow
-              key={h.symbol}
-              symbol={h.symbol}
-              name={h.name}
-              pct={pctOf(a.totalValue, h.value)}
-              value={money(h.value, a.base)}
-              color="#34d399"
-            />
-          ))}
+          {a.holdings.slice(0, 8).map((h) => {
+            const pct = allocationPercentOfTotal(a.totalValue, h.value);
+            return (
+              <BarRow
+                key={h.symbol}
+                symbol={h.symbol}
+                name={h.name}
+                pct={pct}
+                value={formatAllocationPercent(pct)}
+                color="#34d399"
+              />
+            );
+          })}
         </CardContent>
       </Card>
 
@@ -197,15 +200,18 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
             <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {a.sectors.map((s, i) => (
-              <BarRow
-                key={s.name}
-                label={s.name}
-                pct={pctOf(a.totalValue, s.value)}
-                value={`${pctOf(a.totalValue, s.value).toFixed(0)}%`}
-                color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-              />
-            ))}
+            {a.sectors.map((s, i) => {
+              const pct = allocationPercentOfTotal(a.totalValue, s.value);
+              return (
+                <BarRow
+                  key={s.name}
+                  label={s.name}
+                  pct={pct}
+                  value={formatAllocationPercent(pct)}
+                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+                />
+              );
+            })}
           </CardContent>
         </Card>
       ) : null}
