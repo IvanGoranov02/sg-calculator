@@ -149,9 +149,9 @@ function StockSearch({ target }: StockSearchProps) {
   return (
     <form
       onSubmit={onSubmit}
-      className="relative flex w-full max-w-xl flex-col gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20 sm:flex-row sm:items-center sm:gap-2 sm:py-1.5"
+      className="relative flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-card px-3 py-1.5 shadow-inner shadow-sm backdrop-blur-sm transition-colors focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20"
     >
-      <div className="flex min-h-10 min-w-0 flex-1 items-center gap-2">
+      <div className="flex h-9 min-w-0 flex-1 items-center gap-2">
         <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <Input
           ref={inputRef}
@@ -185,7 +185,7 @@ function StockSearch({ target }: StockSearchProps) {
             }
           }}
           placeholder={t("search.placeholder")}
-          className="min-h-9 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-8 sm:text-sm"
+          className="h-9 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 sm:h-8 sm:text-sm"
           autoComplete="off"
           spellCheck={false}
           inputMode="text"
@@ -198,14 +198,16 @@ function StockSearch({ target }: StockSearchProps) {
         type="submit"
         size="sm"
         variant="secondary"
-        className="h-10 w-full shrink-0 sm:h-8 sm:w-auto"
+        className="size-9 shrink-0 px-0 sm:h-8 sm:w-auto sm:px-3"
+        aria-label={t("search.submit")}
       >
-        {t("search.submit")}
+        <Search className="size-4 sm:hidden" aria-hidden />
+        <span className="hidden sm:inline">{t("search.submit")}</span>
       </Button>
       {open && suggestions.length > 0 ? (
         <ul
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-popover py-1 shadow-lg shadow-md backdrop-blur-sm"
+          className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(50vh,16rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-1 shadow-lg shadow-md backdrop-blur-sm"
         >
           {suggestions.map((c, i) => (
             <li key={c.s} role="option" aria-selected={i === highlighted}>
@@ -227,7 +229,7 @@ function StockSearch({ target }: StockSearchProps) {
         </ul>
       ) : null}
       {symbolError ? (
-        <p className="w-full text-xs text-red-400" role="alert">
+        <p className="basis-full text-xs text-red-400" role="alert">
           {t("errors.invalidTickerSymbol")}
         </p>
       ) : null}

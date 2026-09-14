@@ -16,25 +16,25 @@ function TopHeaderTagline() {
 }
 
 function SearchFallback() {
-  return <div className="h-11 w-full animate-pulse rounded-xl bg-muted/60" />;
+  return <div className="h-10 w-full animate-pulse rounded-xl bg-muted/60" />;
 }
 
 export function TopHeader() {
   return (
     <header className="sticky top-0 z-10 shrink-0 border-b border-border bg-background/90 pt-[max(0px,env(safe-area-inset-top,0px))] backdrop-blur-md">
-      <div className="hidden h-14 items-center gap-4 px-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,42rem)_auto]">
+      <div className="hidden h-14 items-center gap-3 px-4 sm:gap-4 sm:px-6 lg:flex">
         <TopHeaderTagline />
-        <div className="min-w-0 justify-self-center">
+        <div className="min-w-0 flex-1 max-w-2xl">
           <Suspense fallback={<SearchFallback />}>
             <StockSearchWithRoute />
           </Suspense>
         </div>
-        <div className="justify-self-end">
+        <div className="ml-auto shrink-0">
           <ProfileSettingsMenu />
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 px-4 py-2.5 sm:gap-3 sm:px-6 sm:py-3 lg:hidden">
+      <div className="flex flex-col gap-2 px-4 py-2 sm:px-6 lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
           <TopHeaderTagline />
           <div className="ml-auto shrink-0">
