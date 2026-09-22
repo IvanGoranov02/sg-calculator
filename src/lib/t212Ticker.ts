@@ -109,6 +109,20 @@ const GERMAN_TRUNCATED_US_LOGO: Record<string, string> = {
   AMZ: "AMZN",
 };
 
+/**
+ * Wrong 3-char Yahoo truncations for dual-listed US names (must not be used for logos).
+ * Mirrors portfolioQuoteResolve trap sets.
+ */
+const GERMAN_TRUNCATION_TRAP_TO_US: Record<string, string> = {
+  UBE: "UBER",
+  NFL: "NFLX",
+  AAP: "AAPL",
+  TSL: "TSLA",
+  INT: "INTC",
+  GOO: "GOOGL",
+  ABE: "GOOGL",
+};
+
 function germanOverrideArraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
@@ -119,7 +133,10 @@ let euListingToUsLogoMapCache: Record<string, string> | null = null;
 function euListingToUsLogoMap(): Record<string, string> {
   if (euListingToUsLogoMapCache) return euListingToUsLogoMapCache;
 
-  const map: Record<string, string> = { ...GERMAN_TRUNCATED_US_LOGO };
+  const map: Record<string, string> = {
+    ...GERMAN_TRUNCATED_US_LOGO,
+    ...GERMAN_TRUNCATION_TRAP_TO_US,
+  };
 
   for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
     const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
@@ -176,6 +193,12 @@ export function usPrimarySymbolForLogo(normalizedBase: string): string {
     const stripped = base.slice(0, -1);
     const fromStub = map[stripped];
     if (fromStub) return fromStub;
+  }
+
+  // T212 lowercase Xetra suffix on 3-char local codes (NFCd → NFCD).
+  if (/^[A-Z0-9]{3}D$/.test(base)) {
+    const fromLocal = map[base.slice(0, -1)];
+    if (fromLocal) return fromLocal;
   }
 
   return base;

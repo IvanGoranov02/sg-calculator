@@ -5,7 +5,7 @@
  * via the same German listing table as quote resolution (t212Ticker).
  */
 
-import { usPrimarySymbolForLogo } from "@/lib/t212Ticker";
+import { t212TickerToYahoo, usPrimarySymbolForLogo } from "@/lib/t212Ticker";
 
 const FMP_LOGO_BASE = "https://financialmodelingprep.com/image-stock";
 
@@ -18,7 +18,17 @@ function normalizeLogoSymbolInput(symbol: string): string {
   return s.replace(/_/g, "-");
 }
 
+function germanYahooBaseForLogo(symbol: string): string {
+  const yahoo = t212TickerToYahoo(symbol).trim().toUpperCase();
+  const dot = yahoo.indexOf(".");
+  return dot > 0 ? yahoo.slice(0, dot) : yahoo;
+}
+
 export function fmpLogoSymbol(symbol: string): string {
+  const raw = symbol.trim();
+  if (/_EQ$/i.test(raw)) {
+    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw));
+  }
   const base = normalizeLogoSymbolInput(symbol);
   return usPrimarySymbolForLogo(base);
 }
