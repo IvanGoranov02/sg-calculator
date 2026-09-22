@@ -215,7 +215,7 @@ export function DashboardDividendsPanel() {
 
   if (sessionStatus === "unauthenticated") {
     return (
-      <Card className="h-full border-border bg-card/80">
+      <Card className="h-full gap-3 border-border bg-card py-3">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Coins className="size-4 text-violet-400" aria-hidden />
@@ -236,7 +236,7 @@ export function DashboardDividendsPanel() {
   }
 
   return (
-    <Card className="flex h-full flex-col border-border bg-card/80">
+    <Card className="flex h-full flex-col gap-3 border-border bg-card py-3">
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -254,7 +254,7 @@ export function DashboardDividendsPanel() {
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-5 pb-5">
+      <CardContent className="flex flex-1 flex-col gap-4 pb-4">
         {loadingPortfolio ? (
           <div className="flex flex-1 items-center justify-center gap-2 py-10 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
