@@ -131,6 +131,17 @@
   }
 }
 
+.tradingview-widget-copyright {
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  padding: 0.2rem 0.4rem 0.35rem;
+  color: var(--muted-foreground);
+}
+.tradingview-widget-copyright .blue-text {
+  color: #5b9cf6;
+}
+
 @layer utilities {
   /* Subtle lift for interactive cards/tiles. */
   .hover-lift {
