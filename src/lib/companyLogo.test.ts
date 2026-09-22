@@ -67,5 +67,11 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("CRWD"), "CRWD");
     assert.equal(fmpLogoSymbol("SCHD"), "SCHD");
     assert.equal(fmpLogoSymbol("KOD"), "KOD");
+    assert.equal(fmpLogoSymbol("GOOD"), "GOOD");
+  });
+
+  it("does not map truncated Alphabet trap ABE to GOOGL", () => {
+    assert.equal(fmpLogoSymbol("ABE.DE"), "ABE");
+    assert.equal(fmpLogoSymbol("ABE.F"), "ABE");
   });
 });

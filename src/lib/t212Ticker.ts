@@ -113,6 +113,7 @@ const GERMAN_TRUNCATED_US_LOGO: Record<string, string> = {
  * Wrong 3-char Yahoo truncations for dual-listed US names (must not be used for logos).
  * Mirrors portfolioQuoteResolve trap sets.
  */
+/** Wrong 3-char Yahoo truncations → US primary (explicit symbol only, not *D stub stripping). */
 const GERMAN_TRUNCATION_TRAP_TO_US: Record<string, string> = {
   UBE: "UBER",
   NFL: "NFLX",
@@ -120,14 +121,44 @@ const GERMAN_TRUNCATION_TRAP_TO_US: Record<string, string> = {
   TSL: "TSLA",
   INT: "INTC",
   GOO: "GOOGL",
-  ABE: "GOOGL",
 };
+
+const GERMAN_TRUNCATION_TRAP_KEYS = new Set(Object.keys(GERMAN_TRUNCATION_TRAP_TO_US));
 
 function germanOverrideArraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
 let euListingToUsLogoMapCache: Record<string, string> | null = null;
+let localXetraThreeCharStubPrefixesCache: Set<string> | null = null;
+
+/** 3-char local Xetra roots that may appear as `{code}D` after T212 uppercasing (NFCd → NFCD). */
+function localXetraThreeCharStubPrefixes(): Set<string> {
+  if (localXetraThreeCharStubPrefixesCache) return localXetraThreeCharStubPrefixesCache;
+
+  const out = new Set<string>();
+  for (const key of Object.keys(GERMAN_TRUNCATED_US_LOGO)) {
+    if (key.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(key)) out.add(key);
+  }
+  for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
+    const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
+    if (!syms) continue;
+    for (const yahoo of syms) {
+      const germanBase = yahoo.split(".")[0]?.toUpperCase();
+      if (germanBase?.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(germanBase)) {
+        out.add(germanBase);
+      }
+    }
+  }
+  for (const localKey of Object.keys(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
+    if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
+    const ku = localKey.toUpperCase();
+    if (ku.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(ku)) out.add(ku);
+  }
+
+  localXetraThreeCharStubPrefixesCache = out;
+  return out;
+}
 
 /** EU / German listing ticker → US primary symbol for FMP logo URLs. */
 function euListingToUsLogoMap(): Record<string, string> {
@@ -195,10 +226,13 @@ export function usPrimarySymbolForLogo(normalizedBase: string): string {
     if (fromStub) return fromStub;
   }
 
-  // T212 lowercase Xetra suffix on 3-char local codes (NFCd → NFCD).
+  // T212 lowercase Xetra suffix on known 3-char local codes (NFCd → NFCD), not US tickers (GOOD).
   if (/^[A-Z0-9]{3}D$/.test(base)) {
-    const fromLocal = map[base.slice(0, -1)];
-    if (fromLocal) return fromLocal;
+    const prefix = base.slice(0, -1);
+    if (localXetraThreeCharStubPrefixes().has(prefix)) {
+      const fromLocal = map[prefix];
+      if (fromLocal) return fromLocal;
+    }
   }
 
   return base;
