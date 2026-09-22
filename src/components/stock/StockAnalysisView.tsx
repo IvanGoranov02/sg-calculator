@@ -2,10 +2,8 @@
 
 import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
 import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
-import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
-import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
@@ -141,10 +139,7 @@ export function StockAnalysisView({
           </div>
         </div>
 
-        <StockAiSection symbol={symbol} />
-
         <StockMetricChart data={bundle} />
-        <FundamentalsChartsSection data={bundle} symbol={symbol} />
         <DividendChartsSection data={bundle} />
 
         {/* Valuation sits after the charts and before the reference tables. */}
