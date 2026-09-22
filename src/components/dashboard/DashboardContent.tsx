@@ -43,15 +43,7 @@ function formatQuoteTime(quote: QuickQuote): string | null {
   });
 }
 
-function MarketQuoteTile({
-  quote,
-  hint,
-  compact = false,
-}: {
-  quote: QuickQuote;
-  hint: string;
-  compact?: boolean;
-}) {
+function MarketQuoteTile({ quote, hint }: { quote: QuickQuote; hint: string }) {
   const time = formatQuoteTime(quote);
   const up = quote.changesPercentage >= 0;
   const TrendIcon = up ? TrendingUp : TrendingDown;
@@ -59,8 +51,7 @@ function MarketQuoteTile({
   return (
     <div
       className={cn(
-        "group relative min-w-[9.5rem] shrink-0 overflow-hidden rounded-lg border border-border bg-card/90 backdrop-blur-sm transition-colors hover:border-emerald-500/30",
-        compact ? "px-3 py-2.5" : "px-3.5 py-3",
+        "group relative min-w-[9.5rem] shrink-0 overflow-hidden rounded-lg border border-border bg-card/90 backdrop-blur-sm px-3 py-2.5 transition-colors hover:border-emerald-500/30",
       )}
       title={hint}
     >
@@ -83,12 +74,10 @@ function MarketQuoteTile({
       <p className="mt-1 font-mono text-base font-semibold tabular-nums leading-none text-foreground sm:text-lg">
         {formatQuoteValue(quote, "money")}
       </p>
-      {!compact ? (
-        <p className="mt-1 truncate text-[10px] text-muted-foreground" title={quote.name}>
-          {quote.name}
-        </p>
-      ) : null}
-      {time ? <p className="mt-1 text-[9px] text-muted-foreground/75">{time}</p> : null}
+      <p className="mt-1 truncate text-[9px] leading-snug text-muted-foreground" title={quote.name}>
+        {quote.name}
+      </p>
+      {time ? <p className="mt-0.5 text-[9px] text-muted-foreground/75">{time}</p> : null}
     </div>
   );
 }
@@ -198,7 +187,7 @@ export function DashboardContent({ benchmarks, marketNews }: DashboardContentPro
         {hasBenchmarks ? (
           <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {quotes.map(({ quote, hint }) => (
-              <MarketQuoteTile key={quote.symbol} quote={quote} hint={hint} compact />
+              <MarketQuoteTile key={quote.symbol} quote={quote} hint={hint} />
             ))}
           </div>
         ) : (

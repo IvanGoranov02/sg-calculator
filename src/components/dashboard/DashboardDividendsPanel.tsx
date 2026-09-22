@@ -65,7 +65,8 @@ export function DashboardDividendsPanel() {
   const [payments, setPayments] = useState<PortfolioDividendPayment[]>([]);
   const [eventRows, setEventRows] = useState<SymbolEventRow[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionStatus === "loading") return;
@@ -81,6 +82,7 @@ export function DashboardDividendsPanel() {
 
     let cancelled = false;
     setPortfolioReady(false);
+    setLoadError(null);
 
     void (async () => {
       try {
@@ -89,6 +91,8 @@ export function DashboardDividendsPanel() {
           fetch("/api/portfolio/dividends", { cache: "no-store" }),
         ]);
         if (cancelled) return;
+
+        let fetchFailed = false;
 
         if (portfolioRes.ok) {
           const data = (await portfolioRes.json()) as {
@@ -100,6 +104,7 @@ export function DashboardDividendsPanel() {
           setQuotes(data.quotes ?? {});
           setFx(data.fx ?? { eurPerUsd: null, gbpPerUsd: null });
         } else {
+          fetchFailed = true;
           setHoldings([]);
           setQuotes({});
           setFx({ eurPerUsd: null, gbpPerUsd: null });
@@ -109,12 +114,18 @@ export function DashboardDividendsPanel() {
           const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
           setPayments(divData.payments ?? []);
         } else {
+          fetchFailed = true;
           setPayments([]);
+        }
+
+        if (fetchFailed) {
+          setLoadError(t("dashboard.divLoadError"));
         }
       } catch {
         if (!cancelled) {
           setHoldings([]);
           setPayments([]);
+          setLoadError(t("dashboard.divLoadError"));
         }
       } finally {
         if (!cancelled) setPortfolioReady(true);
@@ -124,7 +135,7 @@ export function DashboardDividendsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [sessionStatus]);
+  }, [sessionStatus, t]);
 
   const symbols = useMemo(
     () => [...new Set(holdings.map((h) => h.symbolYahoo.trim().toUpperCase()).filter(Boolean))],
@@ -137,7 +148,7 @@ export function DashboardDividendsPanel() {
       return;
     }
     setLoadingEvents(true);
-    setError(null);
+    setEventsError(null);
     try {
       const res = await fetch(`/api/events?symbols=${encodeURIComponent(symbols.join(","))}`, {
         cache: "no-store",
@@ -145,13 +156,13 @@ export function DashboardDividendsPanel() {
       const data = (await res.json()) as { rows?: SymbolEventRow[]; error?: string };
       if (!res.ok) {
         setEventRows([]);
-        setError(data.error ?? t("dashboard.divEventsError"));
+        setEventsError(data.error ?? t("dashboard.divEventsError"));
         return;
       }
       setEventRows(data.rows ?? []);
     } catch {
       setEventRows([]);
-      setError(t("dashboard.divEventsError"));
+      setEventsError(t("dashboard.divEventsError"));
     } finally {
       setLoadingEvents(false);
     }
@@ -199,8 +210,8 @@ export function DashboardDividendsPanel() {
       inDays: t("events.inDays"),
     });
 
-  const loading =
-    sessionStatus === "loading" || (sessionStatus === "authenticated" && !portfolioReady) || loadingEvents;
+  const loadingPortfolio =
+    sessionStatus === "loading" || (sessionStatus === "authenticated" && !portfolioReady);
 
   if (sessionStatus === "unauthenticated") {
     return (
@@ -213,8 +224,11 @@ export function DashboardDividendsPanel() {
           <CardDescription>{t("dashboard.divSignInDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/portfolio" className="text-sm text-emerald-400 underline-offset-4 hover:underline">
-            {t("dashboard.divOpenPortfolio")}
+          <Link
+            href="/login?callbackUrl=/dashboard"
+            className="text-sm text-emerald-400 underline-offset-4 hover:underline"
+          >
+            {t("login.title")}
           </Link>
         </CardContent>
       </Card>
@@ -239,18 +253,20 @@ export function DashboardDividendsPanel() {
             {t("dashboard.divViewAll")}
           </Link>
         </div>
-        {error ? (
-          <p className="mt-2 text-xs text-amber-400/90" role="status">
-            {error}
-          </p>
-        ) : null}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-5 pb-5">
-        {loading ? (
+        {loadingPortfolio ? (
           <div className="flex flex-1 items-center justify-center gap-2 py-10 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
             {t("dashboard.divLoading")}
           </div>
+        ) : loadError ? (
+          <p
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-4 text-sm text-destructive"
+            role="alert"
+          >
+            {loadError}
+          </p>
         ) : holdings.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t("dashboard.divNoHoldingsBefore")}{" "}
@@ -305,7 +321,19 @@ export function DashboardDividendsPanel() {
               <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {t("dashboard.divUpcomingTitle")}
               </h3>
-              {upcomingEvents.length === 0 ? (
+              {loadingEvents ? (
+                <div
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground"
+                  role="status"
+                >
+                  <Loader2 className="size-4 animate-spin text-emerald-500" aria-hidden />
+                  {t("dashboard.divUpcomingLoading")}
+                </div>
+              ) : eventsError ? (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-4 text-xs text-amber-400/90" role="status">
+                  {eventsError}
+                </p>
+              ) : upcomingEvents.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
                   {t("dashboard.divUpcomingEmpty")}
                 </p>
