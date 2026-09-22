@@ -80,7 +80,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
     if (target === "dcf" || target === "dividend") {
       return fromUrl;
     }
-    return fromPath || fromUrl || "AAPL";
+    return fromPath || fromUrl || "";
   });
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
