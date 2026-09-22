@@ -66,7 +66,11 @@ function BenchmarkCard({
           {formatPercent(quote.changesPercentage)}
         </p>
       </div>
-      <DashboardSparkline points={quote.sparkline} className="hidden h-10 w-[5.5rem] shrink-0 sm:block" />
+      <DashboardSparkline
+        points={quote.sparkline}
+        up={up}
+        className="hidden h-10 w-[5.5rem] shrink-0 sm:block"
+      />
     </Link>
   );
 }

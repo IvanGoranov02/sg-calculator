@@ -3,9 +3,11 @@ import { cn } from "@/lib/utils";
 type DashboardSparklineProps = {
   points: number[];
   className?: string;
+  /** When set, stroke follows session change instead of the long sparkline slope. */
+  up?: boolean;
 };
 
-export function DashboardSparkline({ points, className }: DashboardSparklineProps) {
+export function DashboardSparkline({ points, className, up }: DashboardSparklineProps) {
   if (points.length < 2) {
     return <div className={cn("h-9 w-full rounded bg-muted/40", className)} aria-hidden />;
   }
@@ -22,8 +24,8 @@ export function DashboardSparkline({ points, className }: DashboardSparklineProp
       return `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
     })
     .join(" ");
-  const up = points[points.length - 1] >= points[0];
-  const color = up ? "#22c55e" : "#f87171";
+  const rising = up ?? points[points.length - 1] >= points[0];
+  const color = rising ? "#22c55e" : "#f87171";
 
   return (
     <svg

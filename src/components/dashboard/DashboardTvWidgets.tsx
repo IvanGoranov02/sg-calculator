@@ -10,8 +10,9 @@ const OVERVIEW_SCRIPT = "https://s3.tradingview.com/external-embedding/embed-wid
 const CHART_SCRIPT = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
 const HEATMAP_SCRIPT = "https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js";
 
-const PANEL_H = 620;
-const HEATMAP_H = 460;
+const PANEL_H = 580;
+const HEATMAP_H = 520;
+const WIDGET_CHROME = 28;
 
 export function DashboardTvWidgets() {
   const { t } = useI18n();
@@ -22,14 +23,14 @@ export function DashboardTvWidgets() {
     () => ({
       colorTheme,
       dateRange: "12M",
-      showChart: true,
+      showChart: false,
       locale: "en",
       largeChartUrl: "",
       isTransparent: false,
       showSymbolLogo: true,
       showFloatingTooltip: true,
       width: "100%",
-      height: "100%",
+      height: PANEL_H - WIDGET_CHROME,
       plotLineColorGrowing: "rgba(34, 197, 94, 1)",
       plotLineColorFalling: "rgba(248, 113, 113, 1)",
       gridLineColor: "rgba(240, 243, 250, 0.06)",
@@ -42,6 +43,7 @@ export function DashboardTvWidgets() {
       tabs: [
         {
           title: t("dashboard.indicesTab"),
+          originalTitle: "Indices",
           symbols: [
             { s: "FOREXCOM:SPXUSD", d: "S&P 500" },
             { s: "FOREXCOM:NSXUSD", d: "Nasdaq 100" },
@@ -55,11 +57,12 @@ export function DashboardTvWidgets() {
         },
         {
           title: t("dashboard.commoditiesTab"),
+          originalTitle: "Futures",
           symbols: [
-            { s: "COMEX:GC1!", d: t("dashboard.benchGold") },
-            { s: "COMEX:SI1!", d: t("dashboard.benchSilver") },
-            { s: "NYMEX:CL1!", d: t("dashboard.benchOil") },
-            { s: "NYMEX:BZ1!", d: t("dashboard.benchBrent") },
+            { s: "TVC:GOLD", d: t("dashboard.benchGold") },
+            { s: "TVC:SILVER", d: t("dashboard.benchSilver") },
+            { s: "TVC:USOIL", d: t("dashboard.benchOil") },
+            { s: "TVC:UKOIL", d: t("dashboard.benchBrent") },
           ],
         },
       ],
@@ -105,14 +108,14 @@ export function DashboardTvWidgets() {
       hasSymbolTooltip: true,
       isMonoSize: false,
       width: "100%",
-      height: "100%",
+      height: HEATMAP_H - WIDGET_CHROME,
     }),
     [colorTheme],
   );
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(22rem,0.92fr)_minmax(0,1.35fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(26rem,0.95fr)_minmax(0,1.25fr)]">
         <section
           aria-label={t("dashboard.overviewAria")}
           className="overflow-hidden rounded-lg border border-border"

@@ -10,7 +10,7 @@ export default async function DashboardPage() {
     fetchSparkQuote("GC=F"),
     fetchSparkQuote("SI=F"),
     fetchSparkQuote("CL=F"),
-    fetchMarketNews("US stock market economy", 5),
+    fetchMarketNews("S&P 500", 5),
   ]);
 
   return (
