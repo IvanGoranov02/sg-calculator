@@ -40,17 +40,12 @@ function BenchmarkCard({
 }: {
   quote: SparkQuote;
   label: string;
-  href: string;
+  href?: string;
 }) {
   const up = quote.changesPercentage >= 0;
   const TrendIcon = up ? TrendingUp : TrendingDown;
-
-  return (
-    <Link
-      href={href}
-      title={quote.name}
-      className="group flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:border-emerald-500/35"
-    >
+  const body = (
+    <>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[11px] font-semibold tracking-wide text-muted-foreground">{label}</p>
         <p className="mt-0.5 font-mono text-base font-semibold tabular-nums leading-none text-foreground sm:text-lg">
@@ -71,7 +66,25 @@ function BenchmarkCard({
         up={up}
         className="hidden h-10 w-[5.5rem] shrink-0 sm:block"
       />
-    </Link>
+    </>
+  );
+  const className = cn(
+    "flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5",
+    href && "group transition-colors hover:border-emerald-500/35",
+  );
+
+  if (href) {
+    return (
+      <Link href={href} title={quote.name} className={className}>
+        {body}
+      </Link>
+    );
+  }
+
+  return (
+    <div title={quote.name} className={className}>
+      {body}
+    </div>
   );
 }
 
@@ -148,15 +161,15 @@ export function DashboardContent({ benchmarks, marketNews }: DashboardContentPro
       ? { quote: benchmarks.qqq, label: t("dashboard.benchQqq"), href: "/stock/QQQ" }
       : null,
     benchmarks.gold
-      ? { quote: benchmarks.gold, label: t("dashboard.benchGold"), href: "/stock/GC=F" }
+      ? { quote: benchmarks.gold, label: t("dashboard.benchGold"), href: undefined }
       : null,
     benchmarks.silver
-      ? { quote: benchmarks.silver, label: t("dashboard.benchSilver"), href: "/stock/SI=F" }
+      ? { quote: benchmarks.silver, label: t("dashboard.benchSilver"), href: undefined }
       : null,
     benchmarks.oil
-      ? { quote: benchmarks.oil, label: t("dashboard.benchOil"), href: "/stock/CL=F" }
+      ? { quote: benchmarks.oil, label: t("dashboard.benchOil"), href: undefined }
       : null,
-  ].filter((x): x is { quote: SparkQuote; label: string; href: string } => x !== null);
+  ].filter((x): x is { quote: SparkQuote; label: string; href?: string } => x !== null);
 
   return (
     <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-3 pb-4">

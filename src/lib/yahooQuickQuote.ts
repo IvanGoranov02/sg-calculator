@@ -53,9 +53,15 @@ export async function fetchQuickQuote(symbol: string): Promise<QuickQuote | null
   }
 }
 
+const SPARKLINE_TTL_MS = 5 * 60_000;
+const sparklineCache = new Map<string, { at: number; points: number[] }>();
+
 export async function fetchSparkline(symbol: string, days = 180): Promise<number[]> {
   const sym = symbol.trim().toUpperCase();
   if (!sym) return [];
+  const cacheKey = `${sym}:${days}`;
+  const cached = sparklineCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < SPARKLINE_TTL_MS) return cached.points;
   try {
     const period1 = new Date(Date.now() - days * 86_400_000);
     const chart = await yahooFinance
@@ -72,6 +78,7 @@ export async function fetchSparkline(symbol: string, days = 180): Promise<number
       const close = bar?.close != null ? Number(bar.close) : NaN;
       if (Number.isFinite(close)) out.push(close);
     }
+    sparklineCache.set(cacheKey, { at: Date.now(), points: out });
     return out;
   } catch {
     return [];

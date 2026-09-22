@@ -14,17 +14,23 @@ const PANEL_H = 580;
 const HEATMAP_H = 520;
 const WIDGET_CHROME = 28;
 
+/** TradingView widget locale ids; bg maps to their bg_BG pack. */
+function tvLocale(locale: string): string {
+  return locale === "bg" ? "bg_BG" : "en";
+}
+
 export function DashboardTvWidgets() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { theme } = usePreferences();
   const colorTheme = theme === "light" ? "light" : "dark";
+  const widgetLocale = tvLocale(locale);
 
   const overviewConfig = useMemo(
     () => ({
       colorTheme,
       dateRange: "12M",
       showChart: false,
-      locale: "en",
+      locale: widgetLocale,
       largeChartUrl: "",
       isTransparent: false,
       showSymbolLogo: true,
@@ -67,7 +73,7 @@ export function DashboardTvWidgets() {
         },
       ],
     }),
-    [colorTheme, t],
+    [colorTheme, t, widgetLocale],
   );
 
   const chartConfig = useMemo(
@@ -78,8 +84,8 @@ export function DashboardTvWidgets() {
       timezone: "Etc/UTC",
       theme: colorTheme,
       style: "1",
-      locale: "en",
-      allow_symbol_change: true,
+      locale: widgetLocale,
+      allow_symbol_change: false,
       calendar: false,
       hide_side_toolbar: true,
       hide_top_toolbar: false,
@@ -89,7 +95,7 @@ export function DashboardTvWidgets() {
       withdateranges: true,
       support_host: "https://www.tradingview.com",
     }),
-    [colorTheme],
+    [colorTheme, widgetLocale],
   );
 
   const heatmapConfig = useMemo(
@@ -99,18 +105,18 @@ export function DashboardTvWidgets() {
       grouping: "sector",
       blockSize: "market_cap_basic",
       blockColor: "change",
-      locale: "en",
+      locale: widgetLocale,
       symbolUrl: "",
       colorTheme,
       hasTopBar: true,
-      isDataSetEnabled: true,
+      isDataSetEnabled: false,
       isZoomEnabled: true,
       hasSymbolTooltip: true,
       isMonoSize: false,
       width: "100%",
       height: HEATMAP_H - WIDGET_CHROME,
     }),
-    [colorTheme],
+    [colorTheme, widgetLocale],
   );
 
   return (
