@@ -2,12 +2,27 @@
  * Company logo URLs via FMP's public image endpoint (same provider as fundamentals).
  * Strips exchange suffixes so e.g. VOW3.DE resolves to VOW3.
  * Maps EU-listed US tickers (Xetra stubs, German truncations) to US primary symbols
- * via the same German listing table as quote resolution (t212Ticker).
+ * so FMP returns the correct logo (e.g. FB2AD → META).
  */
 
-import { t212TickerToYahoo, usPrimarySymbolForLogo } from "@/lib/t212Ticker";
-
 const FMP_LOGO_BASE = "https://financialmodelingprep.com/image-stock";
+
+/**
+ * EU listing / Yahoo alias → US primary symbol for FMP logo lookup.
+ * Mirrors Xetra stub handling in t212Ticker / portfolioQuoteResolve.
+ */
+const EU_TO_US_LOGO_SYMBOL: Record<string, string> = {
+  FB2A: "META",
+  FB2AD: "META",
+  METAD: "META",
+  ABEA: "GOOGL",
+  ABEAD: "GOOGL",
+  AMZD: "AMZN",
+  AMZ: "AMZN",
+  MSFTD: "MSFT",
+  MSF: "MSFT",
+  UBERD: "UBER",
+};
 
 function normalizeLogoSymbolInput(symbol: string): string {
   let s = symbol.trim().toUpperCase();
@@ -18,19 +33,9 @@ function normalizeLogoSymbolInput(symbol: string): string {
   return s.replace(/_/g, "-");
 }
 
-function germanYahooBaseForLogo(symbol: string): string {
-  const yahoo = t212TickerToYahoo(symbol).trim().toUpperCase();
-  const dot = yahoo.indexOf(".");
-  return dot > 0 ? yahoo.slice(0, dot) : yahoo;
-}
-
 export function fmpLogoSymbol(symbol: string): string {
-  const raw = symbol.trim();
-  if (/_EQ$/i.test(raw)) {
-    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw));
-  }
   const base = normalizeLogoSymbolInput(symbol);
-  return usPrimarySymbolForLogo(base);
+  return EU_TO_US_LOGO_SYMBOL[base] ?? base;
 }
 
 export function companyLogoUrl(symbol: string): string {

@@ -11,7 +11,7 @@ type CompanyIdentityProps = {
   symbol: string;
   name?: string | null;
   href?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md";
   className?: string;
   /** When nested in a clickable row, stop propagation on link click. */
   onLinkClick?: (e: React.MouseEvent) => void;
@@ -24,13 +24,6 @@ type CompanyIdentityProps = {
 const logoSizes = {
   sm: { box: "size-8 text-[10px]", px: 32 },
   md: { box: "size-10 text-xs", px: 40 },
-  lg: { box: "size-14 text-sm sm:size-16", px: 64 },
-} as const;
-
-const textSizes = {
-  sm: { main: "text-sm", sub: "text-[10px]" },
-  md: { main: "text-base", sub: "text-xs" },
-  lg: { main: "text-xl sm:text-2xl", sub: "text-sm" },
 } as const;
 
 function CompanyLogo({
@@ -38,7 +31,7 @@ function CompanyLogo({
   size,
 }: {
   symbol: string;
-  size: "sm" | "md" | "lg";
+  size: "sm" | "md";
 }) {
   const [failed, setFailed] = useState(false);
   const dims = logoSizes[size];
@@ -83,34 +76,20 @@ export function CompanyIdentity({
   const displayName = name?.trim() || null;
   const mainLabel = primaryLabel === "name" && displayName ? displayName : sym;
   const subLabel = primaryLabel === "name" && displayName ? sym : displayName;
-  const typography = textSizes[size];
 
   const body = (
     <div
       className={cn(
         "flex min-w-0 items-center gap-2.5",
-        size === "lg" && "gap-3.5 sm:gap-4",
         align === "end" && "flex-row-reverse text-right",
         className,
       )}
     >
       <CompanyLogo symbol={sym} size={size} />
       <div className={cn("min-w-0", align === "end" && "items-end")}>
-        <p
-          className={cn("truncate font-semibold leading-tight text-foreground", typography.main)}
-          title={mainLabel}
-        >
-          {mainLabel}
-        </p>
+        <p className="truncate font-semibold leading-tight text-foreground" title={mainLabel}>{mainLabel}</p>
         {subLabel ? (
-          <p
-            className={cn(
-              "truncate leading-tight text-muted-foreground",
-              typography.sub,
-              primaryLabel === "name" && displayName && "font-mono font-medium tracking-tight",
-            )}
-            title={subLabel}
-          >
+          <p className="truncate text-xs leading-tight text-muted-foreground" title={subLabel}>
             {subLabel}
           </p>
         ) : null}

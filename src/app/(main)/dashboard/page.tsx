@@ -4,19 +4,27 @@ import { fetchMarketNews, fetchQuickQuote } from "@/lib/yahooQuickQuote";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [spy, qqq, gold, silver, oil, marketNews] = await Promise.all([
-    fetchQuickQuote("SPY"),
-    fetchQuickQuote("QQQ"),
-    fetchQuickQuote("GC=F"),
-    fetchQuickQuote("SI=F"),
-    fetchQuickQuote("CL=F"),
-    fetchMarketNews("US stock market economy", 9),
-  ]);
+  const [spy, qqq, oil, brent, gold, silver, eurUsd, gbpUsd, usdJpy, usdBgn, oilNews] =
+    await Promise.all([
+      fetchQuickQuote("SPY"),
+      fetchQuickQuote("QQQ"),
+      fetchQuickQuote("CL=F"),
+      fetchQuickQuote("BZ=F"),
+      fetchQuickQuote("GC=F"),
+      fetchQuickQuote("SI=F"),
+      fetchQuickQuote("EURUSD=X"),
+      fetchQuickQuote("GBPUSD=X"),
+      fetchQuickQuote("USDJPY=X"),
+      fetchQuickQuote("USDBGN=X"),
+      fetchMarketNews("crude oil futures market", 3),
+    ]);
 
   return (
     <DashboardContent
-      benchmarks={{ spy, qqq, gold, silver, oil }}
-      marketNews={marketNews}
+      market={{ spy, qqq, oil }}
+      commodities={{ oil, brent, gold, silver }}
+      currencies={{ eurUsd, gbpUsd, usdJpy, usdBgn }}
+      oilNews={oilNews}
     />
   );
 }
