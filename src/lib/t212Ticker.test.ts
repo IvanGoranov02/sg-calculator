@@ -329,5 +329,9 @@ describe("usPrimarySymbolForLogo", () => {
     assert.equal(usPrimarySymbolForLogo("APC"), "AAPL");
     assert.equal(usPrimarySymbolForLogo("MSF"), "MSFT");
     assert.equal(usPrimarySymbolForLogo("MSFTD"), "MSFT");
+    assert.equal(usPrimarySymbolForLogo("UBE"), "UBER");
+    assert.equal(usPrimarySymbolForLogo("NFL"), "NFLX");
+    assert.equal(usPrimarySymbolForLogo("NFCD"), "NFLX");
+    assert.equal(usPrimarySymbolForLogo("APCD"), "AAPL");
   });
 });

@@ -38,6 +38,9 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("MSF.DE"), "MSFT");
     assert.equal(fmpLogoSymbol("UBERD"), "UBER");
     assert.equal(fmpLogoSymbol("UBER.DE"), "UBER");
+    assert.equal(fmpLogoSymbol("UBERd_EQ"), "UBER");
+    assert.equal(fmpLogoSymbol("UBERD_EQ"), "UBER");
+    assert.equal(fmpLogoSymbol("UBE.DE"), "UBER");
   });
 
   it("maps local Xetra codes for major US names", () => {
@@ -50,6 +53,10 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("NFC"), "NFLX");
     assert.equal(fmpLogoSymbol("NFC.DE"), "NFLX");
     assert.equal(fmpLogoSymbol("NFLXD"), "NFLX");
+    assert.equal(fmpLogoSymbol("NFCd_EQ"), "NFLX");
+    assert.equal(fmpLogoSymbol("NFLXd_EQ"), "NFLX");
+    assert.equal(fmpLogoSymbol("NFL.DE"), "NFLX");
+    assert.equal(fmpLogoSymbol("NFCD"), "NFLX");
     assert.equal(fmpLogoSymbol("INL.DE"), "INTC");
     assert.equal(fmpLogoSymbol("2PP.DE"), "PYPL");
     assert.equal(fmpLogoSymbol("CCC3"), "KO");
