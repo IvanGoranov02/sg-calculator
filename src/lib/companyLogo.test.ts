@@ -59,5 +59,6 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("GILD"), "GILD");
     assert.equal(fmpLogoSymbol("CRWD"), "CRWD");
     assert.equal(fmpLogoSymbol("SCHD"), "SCHD");
+    assert.equal(fmpLogoSymbol("KOD"), "KOD");
   });
 });

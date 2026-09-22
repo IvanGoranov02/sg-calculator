@@ -145,11 +145,14 @@ function euListingToUsLogoMap(): Record<string, string> {
   // Full-ticker Xetra listings (MSFT.DE) and legacy MSFTD / AMZD portfolio keys.
   map.MSFT = "MSFT";
   map.AMZN = "AMZN";
+  map.AMZD = "AMZN";
 
   for (const [key, usPrimary] of Object.entries(map)) {
     const ku = key.toUpperCase();
-    if (ku.length >= 3 && ku.length <= 8 && !ku.endsWith("D")) {
-      map[`${ku}D`] = usPrimary;
+    if (ku.endsWith("D")) continue;
+    const stubKey = `${ku}D`;
+    if (isUppercaseXetraStub(stubKey)) {
+      map[stubKey] = usPrimary;
     }
   }
 
@@ -169,7 +172,7 @@ export function usPrimarySymbolForLogo(normalizedBase: string): string {
   const direct = map[base];
   if (direct) return direct;
 
-  if (base.endsWith("D")) {
+  if (isUppercaseXetraStub(base)) {
     const stripped = base.slice(0, -1);
     const fromStub = map[stripped];
     if (fromStub) return fromStub;
