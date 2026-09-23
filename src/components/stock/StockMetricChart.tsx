@@ -17,32 +17,18 @@ import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import {
   formatCurrency,
   formatCurrencyCompact,
-  formatCurrencyPerShare,
   formatPercent,
   formatVolume,
 } from "@/lib/format";
-import type {
-  ChartMetric,
-  HistoricalEodBar,
-  PerformanceRange,
-  StockAnalysisBundle,
-} from "@/lib/stockAnalysisTypes";
+import type { HistoricalEodBar, PerformanceRange, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { computeGrowthPills } from "@/lib/growthPills";
-import { sortIncomeByYearAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
 const rangeIds: PerformanceRange[] = ["1d", "1w", "1m", "1y", "5y", "max"];
 
-const metricIds: ChartMetric[] = ["price", "revenue", "netIncome", "freeCashFlow", "eps"];
-
-const strokeByMetric: Record<ChartMetric, string> = {
-  price: "#34d399",
-  revenue: "#60a5fa",
-  netIncome: "#a78bfa",
-  freeCashFlow: "#fbbf24",
-  eps: "#f472b6",
-};
+const PRICE_STROKE = "#34d399";
+const TRADING_DAYS_PER_YEAR = 252;
 
 /** Last calendar session in intraday series (YYYY-MM-DD). */
 function lastSessionBarsIntraday(bars: HistoricalEodBar[]): HistoricalEodBar[] {
@@ -78,95 +64,22 @@ function filterDailyOneDay(bars: HistoricalEodBar[]): HistoricalEodBar[] {
   return bars.filter((b) => b.date.slice(0, 10) === day);
 }
 
-/** Annual metrics: number of fiscal years to show per range. */
-function fundamentalYearCount(range: PerformanceRange): number {
-  switch (range) {
-    case "1d":
-      return 1;
-    case "1w":
-      return 2;
-    case "1m":
-      return 3;
-    case "1y":
-      return 4;
-    case "5y":
-      return 5;
-    case "max":
-      return 10_000;
-    default:
-      return 5;
-  }
-}
-
 type SeriesPoint = { label: string; value: number };
 
-function buildSeries(
-  data: StockAnalysisBundle,
-  metric: ChartMetric,
-  range: PerformanceRange,
-  formatFy: (fy: string) => string,
-): SeriesPoint[] {
-  switch (metric) {
-    case "price": {
-      if (range === "1d" && data.intraday?.length) {
-        const session = lastSessionBarsIntraday(data.intraday);
-        return session.map((row) => ({
-          label: row.date.includes("T")
-            ? row.date.slice(11, 16)
-            : row.date.slice(0, 10),
-          value: row.close,
-        }));
-      }
-      const daily =
-        range === "1d"
-          ? filterDailyOneDay(data.historical)
-          : filterDailyByRange(data.historical, range);
-      return daily.map((row) => ({
-        label: row.date.slice(0, 10),
-        value: row.close,
-      }));
-    }
-    case "revenue": {
-      const rows = sortIncomeByYearAsc(data.income);
-      const n = fundamentalYearCount(range);
-      const slice = range === "max" ? rows : rows.slice(-Math.min(n, rows.length));
-      return slice.map((row) => ({
-        label: formatFy(row.fiscalYear),
-        value: row.revenue,
-      }));
-    }
-    case "netIncome": {
-      const rows = sortIncomeByYearAsc(data.income);
-      const n = fundamentalYearCount(range);
-      const slice = range === "max" ? rows : rows.slice(-Math.min(n, rows.length));
-      return slice.map((row) => ({
-        label: formatFy(row.fiscalYear),
-        value: row.netIncome,
-      }));
-    }
-    case "freeCashFlow": {
-      const rows = [...data.cashFlow].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-      const n = fundamentalYearCount(range);
-      const slice = range === "max" ? rows : rows.slice(-Math.min(n, rows.length));
-      return slice.map((row) => ({
-        label: formatFy(row.fiscalYear),
-        value: row.freeCashFlow,
-      }));
-    }
-    case "eps": {
-      const rows = sortIncomeByYearAsc(data.income).filter(
-        (r) => r.dilutedEps != null && Number.isFinite(r.dilutedEps),
-      );
-      const n = fundamentalYearCount(range);
-      const slice = range === "max" ? rows : rows.slice(-Math.min(n, rows.length));
-      return slice.map((row) => ({
-        label: formatFy(row.fiscalYear),
-        value: row.dilutedEps!,
-      }));
-    }
-    default:
-      return [];
+function buildPriceSeries(data: StockAnalysisBundle, range: PerformanceRange): SeriesPoint[] {
+  if (range === "1d" && data.intraday?.length) {
+    const session = lastSessionBarsIntraday(data.intraday);
+    return session.map((row) => ({
+      label: row.date.includes("T") ? row.date.slice(11, 16) : row.date.slice(0, 10),
+      value: row.close,
+    }));
   }
+  const daily =
+    range === "1d" ? filterDailyOneDay(data.historical) : filterDailyByRange(data.historical, range);
+  return daily.map((row) => ({
+    label: row.date.slice(0, 10),
+    value: row.close,
+  }));
 }
 
 function priceStatsForRange(data: StockAnalysisBundle, range: PerformanceRange) {
@@ -175,9 +88,7 @@ function priceStatsForRange(data: StockAnalysisBundle, range: PerformanceRange) 
     return aggregatePriceStats(bars);
   }
   const daily =
-    range === "1d"
-      ? filterDailyOneDay(data.historical)
-      : filterDailyByRange(data.historical, range);
+    range === "1d" ? filterDailyOneDay(data.historical) : filterDailyByRange(data.historical, range);
   return aggregatePriceStats(daily);
 }
 
@@ -192,83 +103,13 @@ function aggregatePriceStats(bars: HistoricalEodBar[]) {
   return { first, last, high, low, changePct, volume };
 }
 
-function fundamentalStats(series: SeriesPoint[]) {
-  if (series.length === 0) return null;
-  const vals = series.map((s) => s.value);
-  const first = vals[0];
-  const last = vals[vals.length - 1];
-  const high = Math.max(...vals);
-  const low = Math.min(...vals);
-  const changePct = first !== 0 ? ((last - first) / first) * 100 : 0;
-  return { first, last, high, low, changePct };
-}
-
-const TRADING_DAYS_PER_YEAR = 252;
-
-function growthPillsForMetric(data: StockAnalysisBundle, metric: ChartMetric) {
-  switch (metric) {
-    case "price": {
-      const closes = [...data.historical]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map((row) => row.close);
-      return computeGrowthPills(closes, TRADING_DAYS_PER_YEAR);
-    }
-    case "revenue": {
-      const values = sortIncomeByYearAsc(data.income).map((row) => row.revenue);
-      return computeGrowthPills(values, 1);
-    }
-    case "netIncome": {
-      const values = sortIncomeByYearAsc(data.income).map((row) => row.netIncome);
-      return computeGrowthPills(values, 1);
-    }
-    case "freeCashFlow": {
-      const values = [...data.cashFlow]
-        .sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear))
-        .map((row) => row.freeCashFlow);
-      return computeGrowthPills(values, 1);
-    }
-    case "eps": {
-      const values = sortIncomeByYearAsc(data.income).map((row) =>
-        row.dilutedEps != null && Number.isFinite(row.dilutedEps) ? row.dilutedEps : null,
-      );
-      return computeGrowthPills(values, 1);
-    }
-    default:
-      return { oneYear: null, twoYear: null, threeYear: null };
-  }
-}
-
 type StockMetricChartProps = {
   data: StockAnalysisBundle;
 };
 
 export function StockMetricChart({ data }: StockMetricChartProps) {
   const { t } = useI18n();
-  const [metric, setMetric] = useState<ChartMetric>("price");
   const [range, setRange] = useState<PerformanceRange>("1y");
-
-  const formatFy = useCallback(
-    (fy: string) => t("chart.fyYear", { y: fy }),
-    [t],
-  );
-
-  const metricOptions = useMemo(
-    () =>
-      metricIds.map((id) => ({
-        id,
-        label:
-          id === "price"
-            ? t("chart.metricPrice")
-            : id === "revenue"
-              ? t("chart.metricRevenue")
-              : id === "netIncome"
-                ? t("chart.metricNetIncome")
-                : id === "freeCashFlow"
-                  ? t("chart.metricFcf")
-                  : t("chart.metricEps"),
-      })),
-    [t],
-  );
 
   const rangeOptions = useMemo(
     () =>
@@ -291,31 +132,19 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
     [t],
   );
 
-  const series = useMemo(
-    () => buildSeries(data, metric, range, formatFy),
-    [data, metric, range, formatFy],
-  );
+  const series = useMemo(() => buildPriceSeries(data, range), [data, range]);
 
-  const stroke = strokeByMetric[metric];
+  const fmtValue = useCallback((v: number) => formatCurrency(v), []);
+  const fmtAxis = useCallback((v: number) => formatCurrencyCompact(v), []);
 
-  const fmtValue = useCallback(
-    (v: number) => (metric === "eps" ? formatCurrencyPerShare(v) : formatCurrency(v)),
-    [metric],
-  );
+  const stats = useMemo(() => priceStatsForRange(data, range), [data, range]);
 
-  const fmtAxis = useCallback(
-    (v: number) => (metric === "eps" ? formatCurrencyPerShare(v) : formatCurrencyCompact(v)),
-    [metric],
-  );
-
-  const stats = useMemo(() => {
-    if (metric === "price") {
-      return priceStatsForRange(data, range);
-    }
-    return fundamentalStats(series);
-  }, [data, metric, range, series]);
-
-  const growthPills = useMemo(() => growthPillsForMetric(data, metric), [data, metric]);
+  const growthPills = useMemo(() => {
+    const closes = [...data.historical]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((row) => row.close);
+    return computeGrowthPills(closes, TRADING_DAYS_PER_YEAR);
+  }, [data.historical]);
 
   const pillLabels = useMemo(
     () => ({
@@ -327,44 +156,17 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
   );
 
   const volumeLabel =
-    metric === "price" &&
-    stats &&
-    "volume" in stats &&
-    typeof stats.volume === "number" &&
-    stats.volume > 0
-      ? formatVolume(stats.volume)
-      : "—";
+    stats && typeof stats.volume === "number" && stats.volume > 0 ? formatVolume(stats.volume) : "—";
 
   return (
     <Card className="min-w-0 border-border bg-card shadow-xl shadow-sm">
-      <CardHeader className="flex flex-col gap-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="text-lg">{t("chart.performance")}</CardTitle>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {metricOptions.map((m) => (
-              <Button
-                key={m.id}
-                type="button"
-                size="sm"
-                variant={metric === m.id ? "default" : "outline"}
-                className={cn(
-                  "rounded-lg",
-                  metric === m.id && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                )}
-                onClick={() => setMetric(m.id)}
-              >
-                {m.label}
-              </Button>
-            ))}
-          </div>
-        </div>
+      <CardHeader className="flex flex-col gap-3 pb-2">
+        <CardTitle className="text-lg">{t("chart.stockPerformance")}</CardTitle>
 
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {t("chart.range")}
-          </p>
+          </span>
           <div className="flex flex-wrap gap-1">
             {rangeOptions.map((r) => (
               <Button
@@ -374,7 +176,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 variant={range === r.id ? "secondary" : "ghost"}
                 title={r.title}
                 className={cn(
-                  "h-8 min-w-11 rounded-md px-2 font-mono text-xs",
+                  "h-7 min-w-10 rounded-md px-2 font-mono text-xs",
                   range === r.id && "bg-background text-foreground shadow-sm hover:bg-background",
                 )}
                 onClick={() => setRange(r.id)}
@@ -386,7 +188,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/50 px-3 py-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 sm:grid-cols-4">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.periodChange")}
@@ -412,33 +214,24 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
               </p>
               <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.low)}</p>
             </div>
-            {metric === "price" ? (
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("chart.volumeSum")}
-                </p>
-                <p className="font-mono text-sm tabular-nums text-foreground">{volumeLabel}</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {t("chart.lastValue")}
-                </p>
-                <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.last)}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {t("chart.volumeSum")}
+              </p>
+              <p className="font-mono text-sm tabular-nums text-foreground">{volumeLabel}</p>
+            </div>
           </div>
         )}
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 pt-0">
-        <div className="relative h-[260px] min-h-0 min-w-0 w-full sm:h-[320px] md:h-[380px]">
+        <div className="relative h-[200px] min-h-0 min-w-0 w-full sm:h-[220px] md:h-[240px]">
           <div className="absolute inset-0 min-h-0 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <AreaChart data={series} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="fillMetric" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                    <stop offset="0%" stopColor={PRICE_STROKE} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={PRICE_STROKE} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -471,7 +264,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke={stroke}
+                  stroke={PRICE_STROKE}
                   strokeWidth={2}
                   fill="url(#fillMetric)"
                   dot={false}
@@ -481,7 +274,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
             </ResponsiveContainer>
           </div>
         </div>
-        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-4" />
+        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-3" />
       </CardContent>
     </Card>
   );

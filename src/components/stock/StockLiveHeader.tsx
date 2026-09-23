@@ -5,7 +5,6 @@ import { useCallback, useMemo } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatCurrencyEur, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -77,13 +76,13 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
-            <CompanyIdentity symbol={quote.symbol} name={quote.name} size="md" />
+            <CompanyIdentity
+              symbol={quote.symbol}
+              name={quote.name}
+              size="lg"
+              primaryLabel="name"
+            />
             <WatchlistToggle symbol={quote.symbol} />
-            {quote.marketState ? (
-              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-                {quote.marketState}
-              </Badge>
-            ) : null}
           </div>
           {quote.earningsDate ? (
             <p className="mt-2 text-xs text-muted-foreground">
