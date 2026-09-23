@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   computeEpsModel,
   EPS_MODEL_HORIZON_YEARS,
-  suggestedPeMultiple,
+  seedPeMultiple,
   validateEpsModelInputs,
 } from "@/lib/epsModel";
 import { formatCurrency, formatPercent } from "@/lib/format";
@@ -39,6 +39,7 @@ function AssumptionCell({
   onChange,
   suffix,
   step = "any",
+  invalid = false,
 }: {
   id: string;
   label: string;
@@ -46,9 +47,15 @@ function AssumptionCell({
   onChange: (n: number) => void;
   suffix?: string;
   step?: string;
+  invalid?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border/80 bg-muted/40 px-3 py-2.5">
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1.5 rounded-lg border bg-muted/40 px-3 py-2.5",
+        invalid ? "border-amber-500/50 ring-1 ring-amber-500/20" : "border-border/80",
+      )}
+    >
       <Label htmlFor={id} className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </Label>
@@ -86,7 +93,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
     seed ? decimalToPct(seed.suggestedEpsGrowthRate) : 15,
   );
   const [peMultiple, setPeMultiple] = useState(
-    seed ? suggestedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20,
+    seed ? seedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20,
   );
   const [desiredReturnPct, setDesiredReturnPct] = useState(15);
 
@@ -98,21 +105,27 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
     setSyncedSeedKey(seedSyncKey);
     setTtmEps(seed?.epsPerShare ?? 0);
     setGrowthPct(seed ? decimalToPct(seed.suggestedEpsGrowthRate) : 15);
-    setPeMultiple(
-      seed ? suggestedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20,
-    );
+    setPeMultiple(seed ? seedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20);
   }
 
   const validationError = useMemo(
     () =>
       validateEpsModelInputs({
         ttmEps,
+        growthRatePct: growthPct,
         peMultiple,
         desiredReturnPct,
         horizonYears: EPS_MODEL_HORIZON_YEARS,
       }),
-    [desiredReturnPct, peMultiple, ttmEps],
+    [desiredReturnPct, growthPct, peMultiple, ttmEps],
   );
+
+  const growthInvalid =
+    validationError === "growth_rate_invalid" || !Number.isFinite(growthPct);
+  const peInvalid =
+    validationError === "pe_non_positive" || validationError === "pe_out_of_range";
+  const epsInvalid = validationError === "eps_non_positive";
+  const desiredInvalid = validationError === "desired_return_invalid";
 
   const result = useMemo(() => {
     if (validationError) return null;
@@ -156,7 +169,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               ) : null}
             </div>
             <span
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-200"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-600/25 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-800 dark:border-sky-500/30 dark:text-sky-200"
             >
               <LineChart className="size-3.5" aria-hidden />
               {t("dcf.epsModelBadge")}
@@ -169,6 +182,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               label={t("dcf.ttmEps")}
               value={ttmEps}
               onChange={setTtmEps}
+              invalid={epsInvalid}
             />
             <AssumptionCell
               id="growth-rate"
@@ -177,6 +191,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               onChange={setGrowthPct}
               suffix="%"
               step="0.1"
+              invalid={growthInvalid}
             />
             <AssumptionCell
               id="pe-multiple"
@@ -185,6 +200,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               onChange={setPeMultiple}
               suffix="x"
               step="0.1"
+              invalid={peInvalid}
             />
             <AssumptionCell
               id="desired-return"
@@ -193,6 +209,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               onChange={setDesiredReturnPct}
               suffix="%"
               step="0.1"
+              invalid={desiredInvalid}
             />
           </div>
 
@@ -229,7 +246,9 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
                 </div>
                 <div className="rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {t("dcf.entryForReturn", { pct: desiredReturnPct })}
+                    {t("dcf.entryForReturn", {
+                      pct: Number.isFinite(desiredReturnPct) ? desiredReturnPct : "—",
+                    })}
                   </p>
                   <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
                     {result.entryPriceForDesiredReturn != null

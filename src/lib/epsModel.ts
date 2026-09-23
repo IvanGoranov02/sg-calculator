@@ -5,6 +5,13 @@
 
 export const EPS_MODEL_HORIZON_YEARS = 5;
 
+/** Editable default when trailing P/E cannot be derived from price and EPS. */
+export const DEFAULT_PE_MULTIPLE = 20;
+
+/** Soft bounds for typed P/E — seed values outside this range are kept as-is. */
+export const PE_MULTIPLE_SANITY_MIN = 0.1;
+export const PE_MULTIPLE_SANITY_MAX = 500;
+
 export type EpsModelInputs = {
   ttmEps: number;
   /** Annual EPS growth (decimal, e.g. 0.18). */
@@ -33,7 +40,9 @@ export type EpsModelResult = {
 
 export type EpsModelValidationError =
   | "eps_non_positive"
+  | "growth_rate_invalid"
   | "pe_non_positive"
+  | "pe_out_of_range"
   | "desired_return_invalid"
   | "horizon_invalid";
 
@@ -74,32 +83,88 @@ export function entryPriceForTargetReturn(
   return Number.isFinite(entry) && entry > 0 ? entry : null;
 }
 
+/** Trailing P/E from quote and TTM EPS (not clamped). */
+export function trailingPeFromPriceAndEps(currentPrice: number, ttmEps: number): number | null {
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+  if (!Number.isFinite(ttmEps) || ttmEps <= 0) return null;
+  const raw = currentPrice / ttmEps;
+  if (!Number.isFinite(raw) || raw <= 0) return null;
+  return Math.round(raw * 10) / 10;
+}
+
+/** Seed P/E for the calculator: real trailing multiple or a neutral default. */
+export function seedPeMultiple(currentPrice: number, ttmEps: number): number {
+  return trailingPeFromPriceAndEps(currentPrice, ttmEps) ?? DEFAULT_PE_MULTIPLE;
+}
+
+export function clampPeMultipleForSanity(pe: number): number {
+  if (!Number.isFinite(pe)) return pe;
+  return Math.min(PE_MULTIPLE_SANITY_MAX, Math.max(PE_MULTIPLE_SANITY_MIN, pe));
+}
+
 export function validateEpsModelInputs(params: {
   ttmEps: number;
+  growthRatePct: number;
   peMultiple: number;
   desiredReturnPct: number;
   horizonYears: number;
 }): EpsModelValidationError | null {
-  const { ttmEps, peMultiple, desiredReturnPct, horizonYears } = params;
+  const { ttmEps, growthRatePct, peMultiple, desiredReturnPct, horizonYears } = params;
+
   if (!Number.isFinite(ttmEps) || ttmEps <= 0) return "eps_non_positive";
+
+  if (!Number.isFinite(growthRatePct) || growthRatePct <= -100) {
+    return "growth_rate_invalid";
+  }
+
   if (!Number.isFinite(peMultiple) || peMultiple <= 0) return "pe_non_positive";
+  if (peMultiple < PE_MULTIPLE_SANITY_MIN || peMultiple > PE_MULTIPLE_SANITY_MAX) {
+    return "pe_out_of_range";
+  }
+
   if (!Number.isFinite(desiredReturnPct) || desiredReturnPct <= 0 || desiredReturnPct >= 100) {
     return "desired_return_invalid";
   }
+
   if (!Number.isFinite(horizonYears) || horizonYears <= 0 || horizonYears > 30) {
     return "horizon_invalid";
   }
+
   return null;
+}
+
+export function epsModelChartLabel(
+  yearIndex: number,
+  options?: { now?: Date; todayLabel?: string },
+): string {
+  const now = options?.now ?? new Date();
+  const todayLabel = options?.todayLabel ?? "Today";
+  if (yearIndex === 0) return todayLabel;
+  return `Q1 ${now.getFullYear() + yearIndex}`;
 }
 
 export function computeEpsModel(input: EpsModelInputs): EpsModelResult {
   const horizonYears = Math.max(1, Math.floor(input.horizonYears ?? EPS_MODEL_HORIZON_YEARS));
+  const growthRate = input.growthRate;
+  const peMultiple = input.peMultiple;
+
+  if (!Number.isFinite(growthRate) || growthRate <= -1) {
+    throw new Error("Growth rate must be finite and greater than -100%.");
+  }
+  if (!Number.isFinite(peMultiple) || peMultiple <= 0) {
+    throw new Error("P/E multiple must be positive.");
+  }
+
   const targetPrice = targetPriceFromEpsModel(
     input.ttmEps,
-    input.growthRate,
-    input.peMultiple,
+    growthRate,
+    peMultiple,
     horizonYears,
   );
+
+  if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+    throw new Error("Target price is not computable with the current inputs.");
+  }
 
   const annualizedReturnFromPrice = annualizedReturnBetweenPrices(
     input.currentPrice,
@@ -115,14 +180,14 @@ export function computeEpsModel(input: EpsModelInputs): EpsModelResult {
 
   const chartPoints: EpsModelChartPoint[] = [];
   for (let i = 0; i <= horizonYears; i++) {
-    const epsAtYear = projectedEpsAtYear(input.ttmEps, input.growthRate, i);
+    const epsAtYear = projectedEpsAtYear(input.ttmEps, growthRate, i);
     let projectedPrice: number;
     if (i === 0 && input.currentPrice > 0) {
       projectedPrice = input.currentPrice;
     } else if (annualizedReturnFromPrice != null && input.currentPrice > 0) {
       projectedPrice = input.currentPrice * (1 + annualizedReturnFromPrice) ** i;
     } else {
-      projectedPrice = epsAtYear * input.peMultiple;
+      projectedPrice = epsAtYear * peMultiple;
     }
     chartPoints.push({
       yearIndex: i,
@@ -138,13 +203,4 @@ export function computeEpsModel(input: EpsModelInputs): EpsModelResult {
     entryPriceForDesiredReturn,
     chartPoints,
   };
-}
-
-/** Suggested P/E from quote and TTM EPS, clamped to a sensible retail range. */
-export function suggestedPeMultiple(currentPrice: number, ttmEps: number): number {
-  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return 20;
-  if (!Number.isFinite(ttmEps) || ttmEps <= 0) return 20;
-  const raw = currentPrice / ttmEps;
-  if (!Number.isFinite(raw) || raw <= 0) return 20;
-  return Math.min(45, Math.max(8, Math.round(raw * 10) / 10));
 }

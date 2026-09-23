@@ -13,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
-import type { EpsModelChartPoint } from "@/lib/epsModel";
+import { epsModelChartLabel, type EpsModelChartPoint } from "@/lib/epsModel";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 
@@ -22,22 +22,17 @@ type DcfEpsProjectionChartProps = {
   horizonYears: number;
 };
 
-function formatQuarterLabel(yearIndex: number): string {
-  const now = new Date();
-  const targetYear = now.getFullYear() + yearIndex;
-  return `Q1 ${targetYear}`;
-}
-
 export function DcfEpsProjectionChart({ points, horizonYears }: DcfEpsProjectionChartProps) {
   const { t } = useI18n();
+  const todayLabel = t("dcf.chartToday");
 
   const rows = useMemo(
     () =>
       points.map((p) => ({
-        label: formatQuarterLabel(p.yearIndex),
+        label: epsModelChartLabel(p.yearIndex, { todayLabel }),
         projectedPrice: p.projectedPrice,
       })),
-    [points],
+    [points, todayLabel],
   );
 
   if (points.length === 0) return null;
