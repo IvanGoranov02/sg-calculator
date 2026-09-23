@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { DashboardClient } from "@/components/dashboard/DashboardClient";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { MarketNewsItem, QuickQuote } from "@/lib/yahooQuickQuote";
@@ -19,22 +18,10 @@ type DashboardContentProps = {
     gold: QuickQuote | null;
     silver: QuickQuote | null;
   };
-  currencies: {
-    eurUsd: QuickQuote | null;
-    gbpUsd: QuickQuote | null;
-    usdJpy: QuickQuote | null;
-    usdBgn: QuickQuote | null;
-  };
   oilNews: MarketNewsItem[];
 };
 
-type QuoteValueKind = "money" | "rate";
-
-function formatQuoteValue(quote: QuickQuote, kind: QuoteValueKind): string {
-  if (kind === "rate") {
-    const decimals = quote.symbol.includes("JPY") ? 2 : 4;
-    return quote.price.toFixed(decimals);
-  }
+function formatQuoteValue(quote: QuickQuote): string {
   return formatCurrency(quote.price);
 }
 
@@ -52,13 +39,13 @@ function formatQuoteTime(quote: QuickQuote): string | null {
 
 function MarketQuoteCard({
   quote,
+  displayName,
   hint,
-  valueKind = "money",
   emphasized = false,
 }: {
   quote: QuickQuote;
+  displayName: string;
   hint: string;
-  valueKind?: QuoteValueKind;
   emphasized?: boolean;
 }) {
   const time = formatQuoteTime(quote);
@@ -80,11 +67,18 @@ function MarketQuoteCard({
           up ? "bg-emerald-500/70" : "bg-red-500/70",
         )}
       />
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">{quote.symbol}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold leading-snug text-foreground" title={displayName}>
+            {displayName}
+          </p>
+          <p className="mt-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {quote.symbol}
+          </p>
+        </div>
         <span
           className={cn(
-            "flex items-center gap-0.5 font-mono text-xs font-medium tabular-nums",
+            "flex shrink-0 items-center gap-0.5 font-mono text-xs font-medium tabular-nums",
             up ? "text-emerald-400" : "text-red-400",
           )}
         >
@@ -92,16 +86,12 @@ function MarketQuoteCard({
           {formatPercent(quote.changesPercentage)}
         </span>
       </div>
-      <p className="truncate text-xs text-muted-foreground" title={quote.name}>{quote.name}</p>
-      <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-foreground">
-        {formatQuoteValue(quote, valueKind)}
+      <p className="mt-2 font-mono text-lg font-semibold tabular-nums text-foreground">
+        {formatQuoteValue(quote)}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{hint}</p>
       {time ? (
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground/80">
-          {time}
-          {quote.exchange ? ` · ${quote.exchange}` : ""}
-        </p>
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground/80">{time}</p>
       ) : null}
     </div>
   );
@@ -109,21 +99,27 @@ function MarketQuoteCard({
 
 function QuoteGrid({
   quotes,
-  valueKind = "money",
 }: {
-  quotes: Array<{ quote: QuickQuote | null; hint: string; emphasized?: boolean }>;
-  valueKind?: QuoteValueKind;
+  quotes: Array<{
+    quote: QuickQuote | null;
+    displayName: string;
+    hint: string;
+    emphasized?: boolean;
+  }>;
 }) {
-  const shown = quotes.filter((x): x is { quote: QuickQuote; hint: string; emphasized?: boolean } => x.quote !== null);
+  const shown = quotes.filter(
+    (x): x is { quote: QuickQuote; displayName: string; hint: string; emphasized?: boolean } =>
+      x.quote !== null,
+  );
   if (shown.length === 0) return null;
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {shown.map(({ quote, hint, emphasized }) => (
+      {shown.map(({ quote, displayName, hint, emphasized }) => (
         <MarketQuoteCard
           key={quote.symbol}
           quote={quote}
+          displayName={displayName}
           hint={hint}
-          valueKind={valueKind}
           emphasized={emphasized}
         />
       ))}
@@ -163,7 +159,7 @@ function OilNews({ items }: { items: MarketNewsItem[] }) {
   );
 }
 
-export function DashboardContent({ market, commodities, currencies, oilNews }: DashboardContentProps) {
+export function DashboardContent({ market, commodities, oilNews }: DashboardContentProps) {
   const { t } = useI18n();
   const hasMarket = market.spy !== null || market.qqq !== null || market.oil !== null;
 
@@ -177,7 +173,6 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dashboard.title")}
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{t("dashboard.welcome")}</p>
       </div>
 
       <section aria-label={t("dashboard.marketAria")} className="space-y-2">
@@ -187,14 +182,23 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
         {hasMarket ? (
           <div className="flex flex-col gap-3 sm:flex-row">
             {market.spy ? (
-              <MarketQuoteCard quote={market.spy} hint={t("dashboard.marketSpyHint")} />
+              <MarketQuoteCard
+                quote={market.spy}
+                displayName={t("dashboard.nameSpy")}
+                hint={t("dashboard.marketSpyHint")}
+              />
             ) : null}
             {market.qqq ? (
-              <MarketQuoteCard quote={market.qqq} hint={t("dashboard.marketQqqHint")} />
+              <MarketQuoteCard
+                quote={market.qqq}
+                displayName={t("dashboard.nameQqq")}
+                hint={t("dashboard.marketQqqHint")}
+              />
             ) : null}
             {market.oil ? (
               <MarketQuoteCard
                 quote={market.oil}
+                displayName={t("dashboard.nameWti")}
                 hint={t("dashboard.marketOilHint")}
                 emphasized
               />
@@ -206,34 +210,35 @@ export function DashboardContent({ market, commodities, currencies, oilNews }: D
         <OilNews items={oilNews} />
       </section>
 
-      <section aria-label={t("dashboard.assetsAria")} className="space-y-3">
-        <Tabs defaultValue="commodities">
-          <TabsList>
-            <TabsTrigger value="commodities">{t("dashboard.commoditiesTab")}</TabsTrigger>
-            <TabsTrigger value="currencies">{t("dashboard.currenciesTab")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="commodities">
-            <QuoteGrid
-              quotes={[
-                { quote: commodities.oil, hint: t("dashboard.marketOilHint"), emphasized: true },
-                { quote: commodities.brent, hint: t("dashboard.marketBrentHint") },
-                { quote: commodities.gold, hint: t("dashboard.marketGoldHint") },
-                { quote: commodities.silver, hint: t("dashboard.marketSilverHint") },
-              ]}
-            />
-          </TabsContent>
-          <TabsContent value="currencies">
-            <QuoteGrid
-              valueKind="rate"
-              quotes={[
-                { quote: currencies.eurUsd, hint: t("dashboard.fxEurUsdHint") },
-                { quote: currencies.gbpUsd, hint: t("dashboard.fxGbpUsdHint") },
-                { quote: currencies.usdJpy, hint: t("dashboard.fxUsdJpyHint") },
-                { quote: currencies.usdBgn, hint: t("dashboard.fxUsdBgnHint") },
-              ]}
-            />
-          </TabsContent>
-        </Tabs>
+      <section aria-label={t("dashboard.commoditiesAria")} className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("dashboard.commoditiesTab")}
+        </h2>
+        <QuoteGrid
+          quotes={[
+            {
+              quote: commodities.oil,
+              displayName: t("dashboard.nameWti"),
+              hint: t("dashboard.marketOilHint"),
+              emphasized: true,
+            },
+            {
+              quote: commodities.brent,
+              displayName: t("dashboard.nameBrent"),
+              hint: t("dashboard.marketBrentHint"),
+            },
+            {
+              quote: commodities.gold,
+              displayName: t("dashboard.nameGold"),
+              hint: t("dashboard.marketGoldHint"),
+            },
+            {
+              quote: commodities.silver,
+              displayName: t("dashboard.nameSilver"),
+              hint: t("dashboard.marketSilverHint"),
+            },
+          ]}
+        />
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
