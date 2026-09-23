@@ -17,7 +17,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
@@ -43,7 +42,6 @@ const nav = [
 
 export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const { symbols } = useWatchlist();
   const { t } = useI18n();
   const { data: session } = useSession();
   const isAdmin = !!session?.user?.isAdmin;
@@ -115,13 +113,11 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
               ? pathname.startsWith("/stock/")
               : pathname === href || pathname.startsWith(`${href}/`);
           const label = t(labelKey);
-          const linkTitle =
-            href === "/watchlist" && symbols.length > 0 ? `${label} (${symbols.length})` : label;
           return (
             <Link
               key={href}
               href={href}
-              title={linkTitle}
+              title={label}
               onClick={() => onNavigate?.()}
               className={cn(
                 "flex min-h-9 items-center rounded-lg py-2 text-xs font-medium transition-colors",
@@ -133,11 +129,6 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
             >
               <Icon className="size-4 shrink-0 opacity-80" aria-hidden />
               {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
-              {!collapsed && href === "/watchlist" && symbols.length > 0 ? (
-                <span className="rounded-md bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">
-                  {symbols.length}
-                </span>
-              ) : null}
             </Link>
           );
         })}
