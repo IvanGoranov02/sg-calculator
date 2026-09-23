@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -127,7 +127,6 @@ export function PortfolioClient() {
   const [apiSecret, setApiSecret] = useState("");
   const [savingCreds, setSavingCreds] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [t212DetailsOpen, setT212DetailsOpen] = useState(false);
   const [lastSyncT212Status, setLastSyncT212Status] = useState<number | null>(null);
 
   const [sym, setSym] = useState("");
@@ -267,7 +266,6 @@ export function PortfolioClient() {
           typeof data.trading212Status === "number" ? data.trading212Status : null,
         );
         setError(msg);
-        setT212DetailsOpen(true);
         await load({ clearPageError: false });
         return false;
       }
@@ -388,10 +386,7 @@ export function PortfolioClient() {
   }
 
   function scrollToT212Settings() {
-    setT212DetailsOpen(true);
-    setTimeout(() => {
-      document.getElementById("t212-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 0);
+    document.getElementById("t212-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function onSync() {
@@ -659,23 +654,24 @@ export function PortfolioClient() {
 
   const analytics = usePortfolioAnalytics(analyticsRows, fx);
 
-  const t212IssueMessage = useMemo(() => {
-    const fromLast = normalizeTrading212ErrorMessage(trading212?.lastError ?? null);
-    if (fromLast) return fromLast;
-    if (error && looksLikeTrading212ErrorMessage(error)) {
-      return normalizeTrading212ErrorMessage(error);
-    }
-    return null;
-  }, [trading212?.lastError, error]);
-
-  const t212ConnectionProblem = useMemo(() => {
-    if (t212IssueMessage) return true;
+  const showT212ConnectionAlert = useMemo(() => {
+    if (trading212?.lastError) return true;
+    if (error && looksLikeTrading212ErrorMessage(error)) return true;
     return isTrading212AuthFailure(lastSyncT212Status, error);
-  }, [t212IssueMessage, lastSyncT212Status, error]);
+  }, [trading212?.lastError, error, lastSyncT212Status]);
 
-  useEffect(() => {
-    if (t212ConnectionProblem) setT212DetailsOpen(true);
-  }, [t212ConnectionProblem]);
+  const t212IssueDisplay = useMemo(() => {
+    if (trading212?.lastError) {
+      return (
+        normalizeTrading212ErrorMessage(trading212.lastError) ?? t("portfolio.t212ConnectionProblemGeneric")
+      );
+    }
+    if (error && looksLikeTrading212ErrorMessage(error)) {
+      return normalizeTrading212ErrorMessage(error) ?? t("portfolio.t212ConnectionProblemGeneric");
+    }
+    if (showT212ConnectionAlert) return t("portfolio.t212ConnectionProblemGeneric");
+    return null;
+  }, [trading212?.lastError, error, showT212ConnectionAlert, t]);
 
   const genericPageError =
     error && !looksLikeTrading212ErrorMessage(error) ? error : null;
@@ -732,7 +728,7 @@ export function PortfolioClient() {
         </TabsList>
 
         <TabsContent value="holdings" className="mt-6 space-y-6 sm:space-y-8">
-      {t212ConnectionProblem && t212IssueMessage ? (
+      {showT212ConnectionAlert && t212IssueDisplay ? (
         <div
           id="portfolio-page-error"
           className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-950/35 px-4 py-3 text-sm text-amber-50/95 sm:flex-row sm:items-start sm:justify-between"
@@ -740,7 +736,7 @@ export function PortfolioClient() {
         >
           <div className="min-w-0 space-y-1">
             <p className="font-medium text-amber-100">{t("portfolio.t212ConnectionProblemTitle")}</p>
-            <p className="leading-relaxed text-amber-50/90">{t212IssueMessage}</p>
+            <p className="leading-relaxed text-amber-50/90">{t212IssueDisplay}</p>
             <p className="text-xs text-amber-100/80">{t("portfolio.t212ConnectionProblemHint")}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -1094,21 +1090,16 @@ export function PortfolioClient() {
         onDelete={onDeleteMonthlyValue}
       />
 
-      <details
+      <Card
         id="t212-settings"
-        className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
-        open={t212DetailsOpen}
-        onToggle={(e) => setT212DetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
+        className={cn(
+          "border-border bg-card",
+          showT212ConnectionAlert && "border-amber-500/40 ring-1 ring-amber-500/20",
+        )}
       >
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-muted/50 sm:px-6 sm:py-4 sm:text-base">
-          <span>{t("portfolio.t212Title")}</span>
-          <ChevronDown
-            className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
-            aria-hidden
-          />
-        </summary>
-        <div className="space-y-4 border-t border-border px-4 pb-6 pt-2 sm:px-6">
-          <p className="text-sm text-muted-foreground">
+        <CardHeader className="space-y-2">
+          <CardTitle className="text-base sm:text-lg">{t("portfolio.t212Title")}</CardTitle>
+          <CardDescription className="text-sm leading-relaxed">
             {t("portfolio.t212Desc")}{" "}
             <a
               href="https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key"
@@ -1118,7 +1109,9 @@ export function PortfolioClient() {
             >
               {t("portfolio.t212Docs")}
             </a>
-          </p>
+          </CardDescription>
+        </CardHeader>
+        <div className="space-y-4 px-4 pb-6 sm:px-6">
           {trading212?.encryptionConfigured === false ? (
             <p className="text-sm text-amber-400">{t("portfolio.encryptionOff")}</p>
           ) : null}
@@ -1215,7 +1208,7 @@ export function PortfolioClient() {
             </p>
           ) : null}
         </div>
-      </details>
+      </Card>
         </TabsContent>
 
         <TabsContent value="dividends" className="mt-6">

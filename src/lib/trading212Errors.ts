@@ -1,6 +1,6 @@
 /** User-facing copy for Trading 212 API failures (English; UI may wrap with i18n titles). */
 
-const LEGACY_PREFIX = /^Trading 212 (\d{3})(?::\s*(.*))?$/i;
+const LEGACY_PREFIX = /^Trading 212 (\d{3})(?:\s*:?\s*(.*))?$/i;
 
 export function trading212UserErrorMessage(status: number, detail?: string): string {
   const trimmedDetail = detail?.trim();

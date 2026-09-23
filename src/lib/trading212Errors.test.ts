@@ -22,6 +22,13 @@ describe("normalizeTrading212ErrorMessage", () => {
     assert.ok(msg);
     assert.match(msg, /rejected the saved API credentials/i);
   });
+
+  it("rewrites production-style Trading 212 401: with empty detail", () => {
+    const msg = normalizeTrading212ErrorMessage("Trading 212 401:");
+    assert.ok(msg);
+    assert.match(msg, /rejected the saved API credentials/i);
+    assert.doesNotMatch(msg, /^Trading 212 401/i);
+  });
 });
 
 describe("isTrading212AuthFailure", () => {
