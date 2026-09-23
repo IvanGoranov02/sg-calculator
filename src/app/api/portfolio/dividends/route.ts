@@ -10,6 +10,7 @@ import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttp
 import { normalizeTicker } from "@/lib/watchlistStorage";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { loadT212DividendsForUser } from "@/lib/t212DividendsCache";
+import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 export const maxDuration = 60;
 
@@ -101,11 +102,12 @@ export async function GET(request: Request) {
     if (t212Conn && isPortfolioEncryptionConfigured()) {
       const loaded = await loadT212DividendsForUser(userId, t212Conn, { refresh });
       t212Items = loaded.items;
+      const rawErr = loaded.fetchError ?? loaded.error ?? undefined;
       t212Meta = {
         connected: true,
         cachedAt: loaded.cachedAt,
         partial: loaded.partial,
-        error: loaded.fetchError ?? loaded.error ?? undefined,
+        error: normalizeTrading212ErrorMessage(rawErr) ?? rawErr,
       };
     }
 

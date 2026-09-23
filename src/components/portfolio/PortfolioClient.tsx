@@ -51,6 +51,11 @@ import {
   type QuoteHistoryBar,
 } from "@/lib/dipFinder";
 import { t212ListingVenueLabel } from "@/lib/t212Ticker";
+import {
+  isTrading212AuthFailure,
+  looksLikeTrading212ErrorMessage,
+  normalizeTrading212ErrorMessage,
+} from "@/lib/trading212Errors";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -122,6 +127,8 @@ export function PortfolioClient() {
   const [apiSecret, setApiSecret] = useState("");
   const [savingCreds, setSavingCreds] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [t212DetailsOpen, setT212DetailsOpen] = useState(false);
+  const [lastSyncT212Status, setLastSyncT212Status] = useState<number | null>(null);
 
   const [sym, setSym] = useState("");
   const [qty, setQty] = useState("");
@@ -249,12 +256,22 @@ export function PortfolioClient() {
     setPortfolioInfo(null);
     try {
       const res = await fetch("/api/trading212/sync", { method: "POST" });
-      const data = (await res.json()) as { error?: string; skippedDueToManual?: string[] };
+      const data = (await res.json()) as {
+        error?: string;
+        skippedDueToManual?: string[];
+        trading212Status?: number | null;
+      };
       if (!res.ok) {
-        setError(data.error ?? "Sync failed");
+        const msg = normalizeTrading212ErrorMessage(data.error ?? "Sync failed") ?? "Sync failed";
+        setLastSyncT212Status(
+          typeof data.trading212Status === "number" ? data.trading212Status : null,
+        );
+        setError(msg);
+        setT212DetailsOpen(true);
         await load({ clearPageError: false });
         return false;
       }
+      setLastSyncT212Status(null);
       await load();
       await loadValueHistory();
       reloadDividendsFromCache();
@@ -337,17 +354,44 @@ export function PortfolioClient() {
     }
   }
 
-  async function onDisconnect() {
-    if (!window.confirm(t("portfolio.disconnectConfirm"))) return;
+  async function clearTrading212Integration(opts?: { confirmDisconnect?: boolean }) {
+    if (opts?.confirmDisconnect && !window.confirm(t("portfolio.disconnectConfirm"))) return;
     setSavingCreds(true);
+    setError(null);
+    setLastSyncT212Status(null);
     try {
-      await fetch("/api/trading212/settings", { method: "DELETE" });
+      const res = await fetch("/api/trading212/settings", { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setError(data.error ?? t("portfolio.saveFailed"));
+        return;
+      }
+      setApiKey("");
+      setApiSecret("");
       await load();
+      await loadValueHistory();
+      reloadDividendsFromCache();
+      setDividendsLiveRefreshToken((n) => n + 1);
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
       setSavingCreds(false);
     }
+  }
+
+  async function onDisconnect() {
+    await clearTrading212Integration({ confirmDisconnect: true });
+  }
+
+  async function onDismissTrading212() {
+    await clearTrading212Integration();
+  }
+
+  function scrollToT212Settings() {
+    setT212DetailsOpen(true);
+    setTimeout(() => {
+      document.getElementById("t212-settings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   }
 
   function onSync() {
@@ -615,6 +659,27 @@ export function PortfolioClient() {
 
   const analytics = usePortfolioAnalytics(analyticsRows, fx);
 
+  const t212IssueMessage = useMemo(() => {
+    const fromLast = normalizeTrading212ErrorMessage(trading212?.lastError ?? null);
+    if (fromLast) return fromLast;
+    if (error && looksLikeTrading212ErrorMessage(error)) {
+      return normalizeTrading212ErrorMessage(error);
+    }
+    return null;
+  }, [trading212?.lastError, error]);
+
+  const t212ConnectionProblem = useMemo(() => {
+    if (t212IssueMessage) return true;
+    return isTrading212AuthFailure(lastSyncT212Status, error);
+  }, [t212IssueMessage, lastSyncT212Status, error]);
+
+  useEffect(() => {
+    if (t212ConnectionProblem) setT212DetailsOpen(true);
+  }, [t212ConnectionProblem]);
+
+  const genericPageError =
+    error && !looksLikeTrading212ErrorMessage(error) ? error : null;
+
   if (status === "loading") {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -667,9 +732,38 @@ export function PortfolioClient() {
         </TabsList>
 
         <TabsContent value="holdings" className="mt-6 space-y-6 sm:space-y-8">
-      {error ? (
+      {t212ConnectionProblem && t212IssueMessage ? (
+        <div
+          id="portfolio-page-error"
+          className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-950/35 px-4 py-3 text-sm text-amber-50/95 sm:flex-row sm:items-start sm:justify-between"
+          role="alert"
+        >
+          <div className="min-w-0 space-y-1">
+            <p className="font-medium text-amber-100">{t("portfolio.t212ConnectionProblemTitle")}</p>
+            <p className="leading-relaxed text-amber-50/90">{t212IssueMessage}</p>
+            <p className="text-xs text-amber-100/80">{t("portfolio.t212ConnectionProblemHint")}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={scrollToT212Settings}>
+              {t("portfolio.t212ReconnectCta")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-amber-500/40 bg-transparent hover:bg-amber-950/60"
+              disabled={savingCreds}
+              onClick={() => void onDismissTrading212()}
+            >
+              {t("portfolio.t212Dismiss")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {genericPageError ? (
         <p id="portfolio-page-error" className="text-sm text-red-400" role="alert">
-          {error}
+          {genericPageError}
         </p>
       ) : null}
 
@@ -1000,7 +1094,12 @@ export function PortfolioClient() {
         onDelete={onDeleteMonthlyValue}
       />
 
-      <details className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden">
+      <details
+        id="t212-settings"
+        className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
+        open={t212DetailsOpen}
+        onToggle={(e) => setT212DetailsOpen((e.currentTarget as HTMLDetailsElement).open)}
+      >
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium tracking-tight text-foreground hover:bg-muted/50 sm:px-6 sm:py-4 sm:text-base">
           <span>{t("portfolio.t212Title")}</span>
           <ChevronDown
@@ -1060,14 +1159,16 @@ export function PortfolioClient() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={savingCreds}>
+              <Button type="submit" disabled={savingCreds || trading212?.encryptionConfigured === false}>
                 {savingCreds ? (
                   <>
                     <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("portfolio.saveCreds")}
+                    {trading212?.connected ? t("portfolio.saveCreds") : t("portfolio.connectCreds")}
                   </>
-                ) : (
+                ) : trading212?.connected ? (
                   t("portfolio.saveCreds")
+                ) : (
+                  t("portfolio.connectCreds")
                 )}
               </Button>
               <Button
@@ -1107,7 +1208,9 @@ export function PortfolioClient() {
                   })
                 : t("portfolio.neverSynced")}
               {trading212.lastError
-                ? ` · ${t("portfolio.syncError", { msg: trading212.lastError })}`
+                ? ` · ${t("portfolio.syncError", {
+                    msg: normalizeTrading212ErrorMessage(trading212.lastError) ?? trading212.lastError,
+                  })}`
                 : null}
             </p>
           ) : null}
@@ -1119,6 +1222,7 @@ export function PortfolioClient() {
           <PortfolioDividendsView
             reloadToken={dividendsReloadToken}
             liveRefreshToken={dividendsLiveRefreshToken}
+            onDismissTrading212={() => void onDismissTrading212()}
           />
         </TabsContent>
       </Tabs>

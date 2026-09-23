@@ -5,6 +5,9 @@ import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException, logApiInfo } from "@/lib/serverDebugLog";
 import type { Trading212Environment } from "@prisma/client";
 
+import { disconnectTrading212ForUser } from "@/lib/trading212Disconnect";
+import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
+
 function parseEnv(v: unknown): Trading212Environment | null {
   if (v === "demo" || v === "live") return v;
   return null;
@@ -24,7 +27,7 @@ export async function GET() {
       connected: !!row,
       environment: row?.environment ?? null,
       lastSyncAt: row?.lastSyncAt?.toISOString() ?? null,
-      lastError: row?.lastError ?? null,
+      lastError: normalizeTrading212ErrorMessage(row?.lastError ?? null),
     });
   } catch (e) {
     const { status, error } = prismaErrorToHttp(e);
@@ -120,7 +123,7 @@ export async function PUT(request: Request) {
       connected: !!row,
       environment: row?.environment ?? null,
       lastSyncAt: row?.lastSyncAt?.toISOString() ?? null,
-      lastError: row?.lastError ?? null,
+      lastError: normalizeTrading212ErrorMessage(row?.lastError ?? null),
     });
   } catch (e) {
     const { status, error } = prismaErrorToHttp(e);
@@ -136,10 +139,7 @@ export async function DELETE() {
   }
 
   try {
-    await prisma.$transaction([
-      prisma.portfolioHolding.deleteMany({ where: { userId, source: "t212" } }),
-      prisma.trading212Connection.deleteMany({ where: { userId } }),
-    ]);
+    await disconnectTrading212ForUser(userId);
     return Response.json({ ok: true });
   } catch (e) {
     const { status, error } = prismaErrorToHttp(e);
