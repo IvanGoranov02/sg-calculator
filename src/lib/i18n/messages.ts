@@ -117,7 +117,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       viewAsUser: "View as user",
     },
     search: {
-      placeholder: "Search ticker (e.g. AAPL)",
+      placeholder: "Search ticker",
       submit: "Search",
     },
     dashboard: {
@@ -1073,7 +1073,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       viewAsUser: "Виж като потребител",
     },
     search: {
-      placeholder: "Тикер (напр. AAPL)",
+      placeholder: "Търси тикер",
       submit: "Търси",
     },
     dashboard: {
