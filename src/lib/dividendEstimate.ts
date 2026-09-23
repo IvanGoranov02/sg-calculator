@@ -45,6 +45,7 @@ export type EventDividendHoldingInput = {
 
 const DEFAULT_PAYMENTS_PER_YEAR = 4;
 const MS_PER_YEAR = 365 * 24 * 60 * 60 * 1000;
+const CLEAN_PAYMENT_FREQUENCIES = new Set([1, 2, 4, 12]);
 
 /** Resolve a portfolio quote by holding or event symbol (case-insensitive, includes resolved Yahoo aliases). */
 export function lookupPortfolioQuote(
@@ -115,26 +116,56 @@ function trailingYearPaymentTotals(
   return totals;
 }
 
+function findLatestPayment(
+  payments: PortfolioDividendPayment[],
+  symbol: string,
+  asOfMs = Date.now(),
+): PortfolioDividendPayment | null {
+  let latest: { t: number; payment: PortfolioDividendPayment } | null = null;
+  for (const p of payments) {
+    if (!paymentMatchesSymbol(p, symbol) || p.amount <= 0 || !Number.isFinite(p.amount)) continue;
+    const t = new Date(`${p.paidOn}T12:00:00Z`).getTime();
+    if (!Number.isFinite(t) || t > asOfMs) continue;
+    if (!latest || t > latest.t) latest = { t, payment: p };
+  }
+  return latest?.payment ?? null;
+}
+
+/**
+ * Last cash dividend per share implied by a payment and declared per-event DPS.
+ * Uses payment amount ÷ (payment ÷ DPS) so position size changes do not distort DPS.
+ */
+export function lastCashDpsPerShareFromPayment(
+  payment: PortfolioDividendPayment,
+  perEventDps: number,
+): number | null {
+  if (!Number.isFinite(perEventDps) || perEventDps <= 0) return null;
+  const impliedSharesAtPayment = payment.amount / perEventDps;
+  if (!Number.isFinite(impliedSharesAtPayment) || impliedSharesAtPayment <= 0) return null;
+  const dps = payment.amount / impliedSharesAtPayment;
+  return Number.isFinite(dps) && dps > 0 ? dps : null;
+}
+
 /** Most recent portfolio dividend payment, as cash per share at current quantity. */
 export function latestPerShareCashDividendFromPayments(
   payments: PortfolioDividendPayment[],
   symbol: string,
   quantity: number | string,
+  perEventDps?: number | null,
   asOfMs = Date.now(),
 ): number | null {
   const qty = Number(quantity);
   if (!Number.isFinite(qty) || qty <= 0) return null;
 
-  let latest: { t: number; perShare: number } | null = null;
-  for (const p of payments) {
-    if (!paymentMatchesSymbol(p, symbol) || p.amount <= 0 || !Number.isFinite(p.amount)) continue;
-    const t = new Date(`${p.paidOn}T12:00:00Z`).getTime();
-    if (!Number.isFinite(t) || t > asOfMs) continue;
-    const perShare = p.amount / qty;
-    if (!Number.isFinite(perShare) || perShare <= 0) continue;
-    if (!latest || t > latest.t) latest = { t, perShare };
+  const latest = findLatestPayment(payments, symbol, asOfMs);
+  if (!latest) return null;
+
+  if (perEventDps != null && perEventDps > 0) {
+    return lastCashDpsPerShareFromPayment(latest, perEventDps);
   }
-  return latest?.perShare ?? null;
+
+  const perShare = latest.amount / qty;
+  return Number.isFinite(perShare) && perShare > 0 ? perShare : null;
 }
 
 export type InferPaymentsPerYearOptions = {
@@ -144,7 +175,47 @@ export type InferPaymentsPerYearOptions = {
   annualIncome?: number | null;
   /** Trailing annual dividend per share from the quote. */
   annualPerShare?: number | null;
+  /** Declared per-event DPS (optional; improves last-cash DPS when shares changed). */
+  perEventDps?: number | null;
 };
+
+function inferLastCashDpsPerShareForFrequency(
+  payment: PortfolioDividendPayment,
+  annualPerShare: number,
+  referenceQty: number,
+): number | null {
+  if (!Number.isFinite(referenceQty) || referenceQty <= 0) return null;
+  let bestDps: number | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const freq of CLEAN_PAYMENT_FREQUENCIES) {
+    const dps = annualPerShare / freq;
+    if (dps <= 0) continue;
+    const impliedQty = payment.amount / dps;
+    const score = Math.abs(impliedQty - referenceQty) / referenceQty;
+    if (score < bestScore) {
+      bestScore = score;
+      bestDps = dps;
+    }
+  }
+  if (bestDps != null && bestScore <= 0.25) return bestDps;
+  const fallback = payment.amount / referenceQty;
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : null;
+}
+
+function frequencyFromAnnualAndLastCashDps(
+  annualPerShare: number,
+  lastCashDpsPerShare: number,
+): number | null {
+  const implied = annualPerShare / lastCashDpsPerShare;
+  const rounded = Math.round(implied);
+  if (!CLEAN_PAYMENT_FREQUENCIES.has(rounded) || Math.abs(implied - rounded) > 0.35) {
+    return null;
+  }
+  const expectedPerEvent = annualPerShare / rounded;
+  const relDiff = Math.abs(lastCashDpsPerShare - expectedPerEvent) / expectedPerEvent;
+  if (relDiff > 0.15) return null;
+  return rounded;
+}
 
 /**
  * Infer how many dividends are paid per year.
@@ -164,23 +235,21 @@ export function inferPaymentsPerYearFromHistory(
   const qty = Number(options.quantity ?? NaN);
   const annualPerShare = options.annualPerShare;
   if (annualPerShare != null && annualPerShare > 0 && Number.isFinite(qty) && qty > 0) {
-    const lastPerShare = latestPerShareCashDividendFromPayments(payments, symbol, qty, asOfMs);
+    const latest = findLatestPayment(payments, symbol, asOfMs);
+    const lastPerShare =
+      latest != null
+        ? inferLastCashDpsPerShareForFrequency(latest, annualPerShare, qty)
+        : latestPerShareCashDividendFromPayments(
+            payments,
+            symbol,
+            qty,
+            options.perEventDps,
+            asOfMs,
+          );
     if (lastPerShare != null && lastPerShare > 0) {
-      const implied = annualPerShare / lastPerShare;
-      const rounded = Math.round(implied);
-      if (rounded >= 1 && rounded <= 12 && Math.abs(implied - rounded) <= 0.35) {
-        const expectedPerEvent = annualPerShare / rounded;
-        const relDiff = Math.abs(lastPerShare - expectedPerEvent) / expectedPerEvent;
-        // Partial-year history (e.g. two quarters) should not halve quarterly DPS.
-        if (
-          relDiff <= 0.15 &&
-          rounded === DEFAULT_PAYMENTS_PER_YEAR &&
-          count < rounded &&
-          count <= 2
-        ) {
-          return rounded;
-        }
-      }
+      const fromRatio = frequencyFromAnnualAndLastCashDps(annualPerShare, lastPerShare);
+      if (fromRatio != null) return fromRatio;
+      if (count <= 2) return DEFAULT_PAYMENTS_PER_YEAR;
     }
   }
 
@@ -202,22 +271,56 @@ export function perEventDividendPerShare(input: {
   if (!Number.isFinite(qty) || qty <= 0) return null;
 
   if (input.annualPerShare != null && input.annualPerShare > 0) {
-    const paymentsPerYear = input.payments
-      ? inferPaymentsPerYearFromHistory(input.payments, input.symbol, {
-          quantity: qty,
-          annualIncome: input.annualIncome,
-          annualPerShare: input.annualPerShare,
-        })
-      : DEFAULT_PAYMENTS_PER_YEAR;
-    const dps = input.annualPerShare / paymentsPerYear;
-    if (Number.isFinite(dps) && dps > 0) return dps;
+    let paymentsPerYear = DEFAULT_PAYMENTS_PER_YEAR;
+    if (input.payments) {
+      paymentsPerYear = inferPaymentsPerYearFromHistory(input.payments, input.symbol, {
+        quantity: qty,
+        annualIncome: input.annualIncome,
+        annualPerShare: input.annualPerShare,
+      });
+    }
+    const perEventDps = input.annualPerShare / paymentsPerYear;
+    if (Number.isFinite(perEventDps) && perEventDps > 0) return perEventDps;
   }
 
   const fallback = input.annualIncome / qty / DEFAULT_PAYMENTS_PER_YEAR;
   return Number.isFinite(fallback) && fallback > 0 ? fallback : null;
 }
 
-/** Estimated and confirmed cash dividend for one ex-div / pay-date event from a single holding. */
+/**
+ * Pay-date confirmed total: scale the latest portfolio payment to current total shares.
+ * Currency is the payment's currency (not the holding currency).
+ */
+export function confirmedEventDividendForSymbol(input: {
+  symbol: string;
+  totalQuantity: number;
+  perEventDps: number | null;
+  payments?: PortfolioDividendPayment[];
+  asOfMs?: number;
+}): EventDividendEstimate | null {
+  const qty = input.totalQuantity;
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  if (input.perEventDps == null || !Number.isFinite(input.perEventDps) || input.perEventDps <= 0) {
+    return null;
+  }
+  if (!input.payments?.length) return null;
+
+  const latest = findLatestPayment(input.payments, input.symbol, input.asOfMs);
+  if (!latest) return null;
+
+  const impliedSharesAtPayment = latest.amount / input.perEventDps;
+  if (!Number.isFinite(impliedSharesAtPayment) || impliedSharesAtPayment <= 0) return null;
+
+  const scaled = latest.amount * (qty / impliedSharesAtPayment);
+  if (!Number.isFinite(scaled) || scaled <= 0) return null;
+
+  return {
+    amount: scaled,
+    currency: normalizePortfolioCurrency(latest.currency),
+  };
+}
+
+/** Estimated cash dividend for one ex-div / pay-date event from a single holding. */
 export function estimateSymbolEventDividendEstimates(input: {
   symbol: string;
   quantity: string | number;
@@ -248,18 +351,9 @@ export function estimateSymbolEventDividendEstimates(input: {
   const estimateAmount = perShare * qty;
   if (!Number.isFinite(estimateAmount) || estimateAmount <= 0) return null;
 
-  const lastPerShare =
-    input.payments != null
-      ? latestPerShareCashDividendFromPayments(input.payments, input.symbol, qty)
-      : null;
-  const confirmed =
-    lastPerShare != null && Number.isFinite(lastPerShare) && lastPerShare > 0
-      ? { amount: lastPerShare * qty, currency: annual.currency }
-      : null;
-
   return {
     estimate: { amount: estimateAmount, currency: annual.currency },
-    confirmed,
+    confirmed: null,
   };
 }
 
@@ -286,44 +380,30 @@ function convertEstimateToDisplay(
   return { amount: converted, currency: target };
 }
 
-function accumulateSymbolEventDividendEstimates(
+function accumulateEventDividendEstimate(
   map: Map<string, SymbolEventDividendEstimates>,
   symbol: string,
-  row: SymbolEventDividendEstimates,
+  estimate: EventDividendEstimate,
   displayCurrency: string,
   fx: PortfolioFxRates,
 ): void {
   const sym = symbol.trim().toUpperCase();
   if (!sym) return;
 
-  const estimate = convertEstimateToDisplay(row.estimate, displayCurrency, fx);
-  if (!estimate) return;
-  const confirmed = row.confirmed
-    ? convertEstimateToDisplay(row.confirmed, displayCurrency, fx)
-    : null;
+  const converted = convertEstimateToDisplay(estimate, displayCurrency, fx);
+  if (!converted) return;
 
   const existing = map.get(sym);
   if (existing) {
-    const mergedEstimate: EventDividendEstimate = {
-      amount: existing.estimate.amount + estimate.amount,
-      currency: estimate.currency,
-    };
-
-    let mergedConfirmed: EventDividendEstimate | null = null;
-    if (existing.confirmed && confirmed) {
-      mergedConfirmed = {
-        amount: existing.confirmed.amount + confirmed.amount,
-        currency: confirmed.currency,
-      };
-    } else if (confirmed) {
-      mergedConfirmed = confirmed;
-    } else if (existing.confirmed) {
-      mergedConfirmed = existing.confirmed;
-    }
-
-    map.set(sym, { estimate: mergedEstimate, confirmed: mergedConfirmed });
+    map.set(sym, {
+      estimate: {
+        amount: existing.estimate.amount + converted.amount,
+        currency: converted.currency,
+      },
+      confirmed: existing.confirmed,
+    });
   } else {
-    map.set(sym, { estimate, confirmed });
+    map.set(sym, { estimate: converted, confirmed: null });
   }
 }
 
@@ -337,6 +417,10 @@ export function buildEventDividendEstimatesBySymbol(input: {
 }): Map<string, SymbolEventDividendEstimates> {
   const canonicalEstimates = new Map<string, SymbolEventDividendEstimates>();
   const aliasToCanonical = new Map<string, string>();
+  const canonicalTotalQty = new Map<string, number>();
+  const canonicalPerEventDps = new Map<string, number>();
+  const canonicalSymbolForConfirmed = new Map<string, string>();
+  const canonicalAnnualPerShare = new Map<string, number>();
 
   for (const h of input.holdings) {
     const sym = h.symbolYahoo.trim().toUpperCase();
@@ -344,6 +428,20 @@ export function buildEventDividendEstimatesBySymbol(input: {
 
     const quote = lookupPortfolioQuote(input.quotes, h.symbolYahoo);
     const canonical = resolveCanonicalSymbol(h.symbolYahoo, quote, aliasToCanonical, canonicalEstimates);
+
+    const qty = Number(h.quantity);
+    if (Number.isFinite(qty) && qty > 0) {
+      canonicalTotalQty.set(canonical, (canonicalTotalQty.get(canonical) ?? 0) + qty);
+    }
+    canonicalSymbolForConfirmed.set(canonical, sym);
+    const annual = estimateHoldingAnnualDividend(
+      { quantity: h.quantity, currency: h.currency },
+      quote,
+      input.fx,
+    );
+    if (annual?.dividendPerShare != null && !canonicalAnnualPerShare.has(canonical)) {
+      canonicalAnnualPerShare.set(canonical, annual.dividendPerShare);
+    }
 
     const estimates = estimateSymbolEventDividendEstimates({
       symbol: sym,
@@ -355,13 +453,44 @@ export function buildEventDividendEstimatesBySymbol(input: {
     });
     if (!estimates) continue;
 
-    accumulateSymbolEventDividendEstimates(
+    accumulateEventDividendEstimate(
       canonicalEstimates,
       canonical,
-      estimates,
+      estimates.estimate,
       input.displayCurrency,
       input.fx,
     );
+  }
+
+  for (const [canonical, totalQty] of canonicalTotalQty) {
+    const annualPerShare = canonicalAnnualPerShare.get(canonical);
+    const paymentSymbol = canonicalSymbolForConfirmed.get(canonical) ?? canonical;
+    if (annualPerShare != null && totalQty > 0) {
+      const perEvent = perEventDividendPerShare({
+        symbol: paymentSymbol,
+        quantity: totalQty,
+        annualPerShare,
+        annualIncome: annualPerShare * totalQty,
+        payments: input.payments,
+      });
+      if (perEvent != null) canonicalPerEventDps.set(canonical, perEvent);
+    }
+  }
+
+  for (const [canonical, totalQty] of canonicalTotalQty) {
+    const entry = canonicalEstimates.get(canonical);
+    if (!entry) continue;
+    const perEventDps = canonicalPerEventDps.get(canonical) ?? null;
+    const paymentSymbol = canonicalSymbolForConfirmed.get(canonical) ?? canonical;
+    const confirmed = confirmedEventDividendForSymbol({
+      symbol: paymentSymbol,
+      totalQuantity: totalQty,
+      perEventDps,
+      payments: input.payments,
+    });
+    if (!confirmed) continue;
+    const converted = convertEstimateToDisplay(confirmed, input.displayCurrency, input.fx);
+    if (converted) entry.confirmed = converted;
   }
 
   const bySymbol = new Map(canonicalEstimates);

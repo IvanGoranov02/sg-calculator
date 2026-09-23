@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   buildEventDividendEstimatesBySymbol,
+  confirmedEventDividendForSymbol,
   estimateEventDividendPayment,
   inferPaymentsPerYearFromHistory,
   lookupPortfolioQuote,
+  perEventDividendPerShare,
   periodizeAnnualDividend,
   type EventDividendHoldingInput,
 } from "@/lib/dividendEstimate";
@@ -124,6 +126,49 @@ describe("inferPaymentsPerYearFromHistory", () => {
       });
     }
     assert.equal(inferPaymentsPerYearFromHistory(monthly, "MONTH", { asOfMs: asOf }), 4);
+  });
+
+  it("infers semi-annual frequency when annual rate is 2× last cash DPS", () => {
+    const asOf = new Date("2026-06-15T12:00:00Z").getTime();
+    const semiPayments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "manual",
+        ticker: "SA",
+        symbolYahoo: "SA",
+        name: null,
+        amount: 20,
+        currency: "USD",
+        paidOn: "2025-12-01",
+      },
+      {
+        id: "2",
+        source: "manual",
+        ticker: "SA",
+        symbolYahoo: "SA",
+        name: null,
+        amount: 20,
+        currency: "USD",
+        paidOn: "2026-03-01",
+      },
+    ];
+    assert.equal(
+      inferPaymentsPerYearFromHistory(semiPayments, "SA", {
+        asOfMs: asOf,
+        quantity: 10,
+        annualPerShare: 4,
+      }),
+      2,
+    );
+    const estimate = estimateEventDividendPayment({
+      symbol: "SA",
+      quantity: 10,
+      currency: "USD",
+      quote: quote({ symbol: "SA", dividendRate: 4 }),
+      fx: FX,
+      payments: semiPayments,
+    });
+    assert.deepEqual(estimate, { amount: 20, currency: "USD" });
   });
 
   it("infers quarterly frequency when only two payments exist in trailing year (META-like)", () => {
@@ -389,6 +434,87 @@ describe("buildEventDividendEstimatesBySymbol", () => {
     assert.ok(est);
     assert.equal(est.estimate.currency, "EUR");
     assert.equal(est.estimate.amount, 5);
+  });
+
+  it("converts confirmed pay-date amount from payment currency to EUR display", () => {
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "t212",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        name: null,
+        amount: 10,
+        currency: "USD",
+        paidOn: "2026-03-15",
+      },
+    ];
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings: [{ symbolYahoo: "AAPL", quantity: "10", currency: "EUR" }],
+      quotes: { AAPL: quote({ dividendRate: 4 }) },
+      fx: { eurPerUsd: 0.5, gbpPerUsd: null },
+      payments,
+      displayCurrency: "EUR",
+    });
+    const row = map.get("AAPL");
+    assert.ok(row?.confirmed);
+    assert.equal(row.confirmed!.currency, "EUR");
+    assert.equal(row.confirmed!.amount, 5);
+  });
+
+  it("does not double-count confirmed cash across split lots", () => {
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "manual",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        name: null,
+        amount: 15,
+        currency: "USD",
+        paidOn: "2026-03-15",
+      },
+    ];
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings,
+      quotes: { AAPL: quote({ dividendRate: 4 }) },
+      fx: FX,
+      payments,
+      displayCurrency: "USD",
+    });
+    const row = map.get("AAPL");
+    assert.ok(row);
+    assert.deepEqual(row.confirmed, { amount: 15, currency: "USD" });
+  });
+
+  it("scales confirmed dividend when share count increased since last payment", () => {
+    const perEventDps = perEventDividendPerShare({
+      symbol: "META",
+      quantity: 7.6,
+      annualPerShare: 2.1,
+      annualIncome: 7.6 * 2.1,
+    });
+    assert.ok(perEventDps);
+    const confirmed = confirmedEventDividendForSymbol({
+      symbol: "META",
+      totalQuantity: 7.6,
+      perEventDps,
+      payments: [
+        {
+          id: "1",
+          source: "manual",
+          ticker: "META",
+          symbolYahoo: "META",
+          name: null,
+          amount: 1.995,
+          currency: "USD",
+          paidOn: "2025-09-22",
+        },
+      ],
+    });
+    assert.ok(confirmed);
+    assert.equal(confirmed.currency, "USD");
+    assert.ok(Math.abs(confirmed.amount - 3.99) < 0.02);
   });
 
   it("does not double-count dual-alias holdings (BRK-B and BRK.B)", () => {
