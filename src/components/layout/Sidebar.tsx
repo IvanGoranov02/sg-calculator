@@ -31,7 +31,7 @@ type SidebarProps = {
 
 const nav = [
   { href: "/dashboard", labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
-  { href: "/stock/AAPL", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
+  { href: "/stock", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
   { href: "/compare", labelKey: "nav.compare" as const, icon: GitCompareArrows },
   { href: "/dcf-calculator", labelKey: "nav.dcfCalculator" as const, icon: Calculator },
   { href: "/dividend-calculator", labelKey: "nav.dividendCalculator" as const, icon: Coins },
@@ -109,8 +109,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
       >
         {nav.map(({ href, labelKey, icon: Icon }) => {
           const active =
-            href.startsWith("/stock/")
-              ? pathname.startsWith("/stock/")
+            href === "/stock"
+              ? pathname === "/stock" || pathname.startsWith("/stock/")
               : pathname === href || pathname.startsWith(`${href}/`);
           const label = t(labelKey);
           return (

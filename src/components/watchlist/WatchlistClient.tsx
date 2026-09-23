@@ -175,7 +175,7 @@ export function WatchlistClient() {
             <CardTitle>{t("watchlist.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("watchlist.emptyDescBefore")}
-              <Link href="/stock/AAPL" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/stock" className="text-emerald-400 underline-offset-4 hover:underline">
                 {t("watchlist.emptyLink")}
               </Link>
               {t("watchlist.emptyDescAfter")}
