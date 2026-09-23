@@ -5,7 +5,6 @@ import { DividendChartsSection } from "@/components/stock/DividendChartsSection"
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
-import { StockAiSection } from "@/components/stock/StockAiSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
@@ -39,7 +38,7 @@ export function StockAnalysisView({
   onRetry,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
-  const symbol = ticker.trim().toUpperCase() || "AAPL";
+  const symbol = ticker.trim().toUpperCase();
   const errorText = error ? translateStockError(t, error) : null;
 
   if (loading && !bundle) {
@@ -140,8 +139,6 @@ export function StockAnalysisView({
             <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
           </div>
         </div>
-
-        <StockAiSection symbol={symbol} />
 
         <StockMetricChart data={bundle} />
         <FundamentalsChartsSection data={bundle} symbol={symbol} />
