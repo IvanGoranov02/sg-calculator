@@ -14,37 +14,30 @@ import usCompanies from "@/data/usCompanies.json";
 
 type SearchTarget = "stock" | "dcf" | "dividend";
 
-type StockSearchContainerProps = {
-  target: SearchTarget;
-  compact?: boolean;
-};
-
 /** Remount when the synced ticker changes so the input matches the URL without effects. */
-export function StockSearchContainer({ target, compact }: StockSearchContainerProps) {
+export function StockSearchContainer({ target }: { target: SearchTarget }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pathTicker = decodeTickerSegment(pathname.match(/^\/stock\/([^/]+)/i)?.[1] ?? "");
   const queryTicker = searchParams.get("ticker") ?? "";
   const syncKey =
     target === "stock" ? `stock-${pathTicker}` : `${target}-${queryTicker}-${searchParams.toString()}`;
-  return <StockSearch key={syncKey} target={target} compact={compact} />;
+  return <StockSearch key={syncKey} target={target} />;
 }
 
 /** Picks the route (stock / DCF / dividend calculator) from the current path. */
-export function StockSearchWithRoute({ compact }: { compact?: boolean } = {}) {
+export function StockSearchWithRoute() {
   const pathname = usePathname();
   const target: SearchTarget = pathname.startsWith("/dcf-calculator")
     ? "dcf"
     : pathname.startsWith("/dividend-calculator")
       ? "dividend"
       : "stock";
-  return <StockSearchContainer target={target} compact={compact} />;
+  return <StockSearchContainer target={target} />;
 }
 
 type StockSearchProps = {
   target: SearchTarget;
-  /** Tighter header styling (desktop toolbar). */
-  compact?: boolean;
 };
 
 type CompanyEntry = SearchCompany;
@@ -66,7 +59,7 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
   return fullCompaniesPromise;
 }
 
-function StockSearch({ target, compact }: StockSearchProps) {
+function StockSearch({ target }: StockSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
@@ -80,7 +73,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
     if (target === "dcf" || target === "dividend") {
       return fromUrl;
     }
-    return fromPath || fromUrl || "";
+    return fromPath || fromUrl || "AAPL";
   });
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
@@ -153,17 +146,13 @@ function StockSearch({ target, compact }: StockSearchProps) {
     go(resolved);
   }
 
-  const formClass = compact
-    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:bg-muted/30 lg:px-2.5 lg:py-1"
-    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
-
   return (
-    <form onSubmit={onSubmit} className={formClass}>
-      <div className={`flex min-w-0 flex-1 items-center gap-1.5 ${compact ? "h-7 lg:h-8" : "h-8 lg:h-9 lg:gap-2"}`}>
-        <Search
-          className={`shrink-0 text-muted-foreground ${compact ? "size-3.5 lg:size-4" : "size-4"}`}
-          aria-hidden
-        />
+    <form
+      onSubmit={onSubmit}
+      className="relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm"
+    >
+      <div className="flex h-8 min-w-0 flex-1 items-center gap-1.5 lg:h-9 lg:gap-2">
+        <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <Input
           ref={inputRef}
           name="ticker"
@@ -196,9 +185,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
             }
           }}
           placeholder={t("search.placeholder")}
-          className={`border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 ${
-            compact ? "h-7 text-sm lg:h-8 lg:text-sm" : "h-8 text-base lg:h-9 lg:text-sm"
-          }`}
+          className="h-8 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 lg:h-9 lg:text-sm"
           autoComplete="off"
           spellCheck={false}
           inputMode="text"
@@ -211,15 +198,11 @@ function StockSearch({ target, compact }: StockSearchProps) {
         type="submit"
         size="sm"
         variant="secondary"
-        className={
-          compact
-            ? "size-7 shrink-0 px-0 lg:size-8"
-            : "size-8 shrink-0 px-0 lg:h-9 lg:w-auto lg:px-3"
-        }
+        className="size-8 shrink-0 px-0 lg:h-9 lg:w-auto lg:px-3"
         aria-label={t("search.submit")}
       >
-        <Search className={compact ? "size-3.5" : "size-4 lg:hidden"} aria-hidden />
-        <span className={compact ? "hidden" : "hidden lg:inline"}>{t("search.submit")}</span>
+        <Search className="size-4 lg:hidden" aria-hidden />
+        <span className="hidden lg:inline">{t("search.submit")}</span>
       </Button>
       {open && suggestions.length > 0 ? (
         <ul

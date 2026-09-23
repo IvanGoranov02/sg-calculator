@@ -1,24 +1,31 @@
 "use client";
 
-import { Newspaper, TrendingDown, TrendingUp } from "lucide-react";
+import { BarChart3, Calculator, ListPlus, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
-import { DashboardDividendsPanel } from "@/components/dashboard/DashboardDividendsPanel";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { MarketNewsItem, QuickQuote } from "@/lib/yahooQuickQuote";
 import { cn } from "@/lib/utils";
 
 type DashboardContentProps = {
-  benchmarks: {
-    spy: QuickQuote | null;
-    qqq: QuickQuote | null;
+  market: { spy: QuickQuote | null; qqq: QuickQuote | null; oil: QuickQuote | null };
+  commodities: {
+    oil: QuickQuote | null;
+    brent: QuickQuote | null;
     gold: QuickQuote | null;
     silver: QuickQuote | null;
-    oil: QuickQuote | null;
   };
-  marketNews: MarketNewsItem[];
+  currencies: {
+    eurUsd: QuickQuote | null;
+    gbpUsd: QuickQuote | null;
+    usdJpy: QuickQuote | null;
+    usdBgn: QuickQuote | null;
+  };
+  oilNews: MarketNewsItem[];
 };
 
 type QuoteValueKind = "money" | "rate";
@@ -43,7 +50,17 @@ function formatQuoteTime(quote: QuickQuote): string | null {
   });
 }
 
-function MarketQuoteTile({ quote, hint }: { quote: QuickQuote; hint: string }) {
+function MarketQuoteCard({
+  quote,
+  hint,
+  valueKind = "money",
+  emphasized = false,
+}: {
+  quote: QuickQuote;
+  hint: string;
+  valueKind?: QuoteValueKind;
+  emphasized?: boolean;
+}) {
   const time = formatQuoteTime(quote);
   const up = quote.changesPercentage >= 0;
   const TrendIcon = up ? TrendingUp : TrendingDown;
@@ -51,19 +68,23 @@ function MarketQuoteTile({ quote, hint }: { quote: QuickQuote; hint: string }) {
   return (
     <div
       className={cn(
-        "group relative min-w-[9.5rem] shrink-0 overflow-hidden rounded-lg border border-border bg-card/90 backdrop-blur-sm px-3 py-2.5 transition-colors hover:border-emerald-500/30",
+        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-emerald-500/30",
+        emphasized && "border-amber-500/30 bg-amber-500/10",
       )}
-      title={hint}
     >
+      {/* Direction accent rail */}
       <span
         aria-hidden
-        className={cn("absolute inset-y-0 left-0 w-0.5", up ? "bg-emerald-500/70" : "bg-red-500/70")}
+        className={cn(
+          "absolute inset-y-0 left-0 w-0.5",
+          up ? "bg-emerald-500/70" : "bg-red-500/70",
+        )}
       />
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold tracking-wide text-foreground/95">{quote.symbol.replace("=F", "")}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/90">{quote.symbol}</p>
         <span
           className={cn(
-            "flex items-center gap-0.5 font-mono text-[11px] font-medium tabular-nums",
+            "flex items-center gap-0.5 font-mono text-xs font-medium tabular-nums",
             up ? "text-emerald-400" : "text-red-400",
           )}
         >
@@ -71,134 +92,196 @@ function MarketQuoteTile({ quote, hint }: { quote: QuickQuote; hint: string }) {
           {formatPercent(quote.changesPercentage)}
         </span>
       </div>
-      <p className="mt-1 font-mono text-base font-semibold tabular-nums leading-none text-foreground sm:text-lg">
-        {formatQuoteValue(quote, "money")}
+      <p className="truncate text-xs text-muted-foreground" title={quote.name}>{quote.name}</p>
+      <p className="mt-1.5 font-mono text-lg font-semibold tabular-nums text-foreground">
+        {formatQuoteValue(quote, valueKind)}
       </p>
-      <p className="mt-1 truncate text-[9px] leading-snug text-muted-foreground" title={quote.name}>
-        {quote.name}
-      </p>
-      {time ? <p className="mt-0.5 text-[9px] text-muted-foreground/75">{time}</p> : null}
+      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{hint}</p>
+      {time ? (
+        <p className="mt-1 text-[10px] leading-snug text-muted-foreground/80">
+          {time}
+          {quote.exchange ? ` · ${quote.exchange}` : ""}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function formatNewsAge(iso: string | null, locale: "en" | "bg"): string | null {
-  if (!iso) return null;
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return null;
-  const diffH = Math.round((Date.now() - then) / 3_600_000);
-  if (diffH < 1) return locale === "bg" ? "току-що" : "Just now";
-  if (diffH < 24) return locale === "bg" ? `преди ${diffH} ч` : `${diffH}h ago`;
-  const diffD = Math.round(diffH / 24);
-  return locale === "bg" ? `преди ${diffD} д` : `${diffD}d ago`;
-}
-
-function MarketNewsSection({ items }: { items: MarketNewsItem[] }) {
-  const { t, locale } = useI18n();
-
+function QuoteGrid({
+  quotes,
+  valueKind = "money",
+}: {
+  quotes: Array<{ quote: QuickQuote | null; hint: string; emphasized?: boolean }>;
+  valueKind?: QuoteValueKind;
+}) {
+  const shown = quotes.filter((x): x is { quote: QuickQuote; hint: string; emphasized?: boolean } => x.quote !== null);
+  if (shown.length === 0) return null;
   return (
-    <Card className="flex h-full flex-col border-border bg-card/80">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Newspaper className="size-4 text-sky-400" aria-hidden />
-          {t("dashboard.newsTitle")}
-        </CardTitle>
-        <CardDescription>{t("dashboard.newsDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1 pb-5">
-        {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            {t("dashboard.newsEmpty")}
-          </p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((item, index) => {
-              const age = formatNewsAge(item.publishedAt, locale);
-              const featured = index === 0;
-              return (
-                <a
-                  key={`${item.link}-${item.title}`}
-                  href={item.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={cn(
-                    "group flex flex-col justify-between rounded-xl border border-border bg-muted/25 px-3.5 py-3 text-left transition-colors hover:border-sky-500/30 hover:bg-card",
-                    featured && "sm:col-span-2 xl:col-span-2 sm:min-h-[7.5rem]",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "line-clamp-3 font-medium text-foreground/90 group-hover:text-foreground",
-                      featured ? "text-sm sm:text-base sm:line-clamp-2" : "text-xs sm:text-sm",
-                    )}
-                  >
-                    {item.title}
-                  </span>
-                  <span className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                    {item.publisher ? <span className="truncate">{item.publisher}</span> : null}
-                    {age ? (
-                      <>
-                        {item.publisher ? <span aria-hidden>·</span> : null}
-                        <span>{age}</span>
-                      </>
-                    ) : null}
-                  </span>
-                </a>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {shown.map(({ quote, hint, emphasized }) => (
+        <MarketQuoteCard
+          key={quote.symbol}
+          quote={quote}
+          hint={hint}
+          valueKind={valueKind}
+          emphasized={emphasized}
+        />
+      ))}
+    </div>
   );
 }
 
-export function DashboardContent({ benchmarks, marketNews }: DashboardContentProps) {
+function OilNews({ items }: { items: MarketNewsItem[] }) {
   const { t } = useI18n();
-  const quotes = [
-    benchmarks.spy ? { quote: benchmarks.spy, hint: t("dashboard.marketSpyHint") } : null,
-    benchmarks.qqq ? { quote: benchmarks.qqq, hint: t("dashboard.marketQqqHint") } : null,
-    benchmarks.gold ? { quote: benchmarks.gold, hint: t("dashboard.marketGoldHint") } : null,
-    benchmarks.silver ? { quote: benchmarks.silver, hint: t("dashboard.marketSilverHint") } : null,
-    benchmarks.oil ? { quote: benchmarks.oil, hint: t("dashboard.marketOilHint") } : null,
-  ].filter((x): x is { quote: QuickQuote; hint: string } => x !== null);
-
-  const hasBenchmarks = quotes.length > 0;
+  if (items.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">{t("dashboard.oilNewsFallback")}</p>
+    );
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-4 pb-2">
-      <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border/80 pb-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("dashboard.title")}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("dashboard.welcome")}</p>
-        </div>
-        <Link
-          href="/events"
-          className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-emerald-400 hover:underline"
-        >
-          {t("dashboard.eventsLink")}
-        </Link>
-      </header>
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {t("dashboard.oilNewsTitle")}
+      </p>
+      <div className="grid gap-2 md:grid-cols-3">
+        {items.map((item) => (
+          <a
+            key={`${item.link}-${item.title}`}
+            href={item.link}
+            target="_blank"
+            rel="noreferrer"
+            className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-emerald-500/30 hover:bg-card"
+            title={item.title}
+          >
+            <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{item.title}</span>
+            {item.publisher ? <span className="mt-1 block text-[10px] text-muted-foreground/80">{item.publisher}</span> : null}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-      <section
-        aria-label={t("dashboard.marketAria")}
-        className="overflow-hidden rounded-xl border border-border bg-gradient-to-r from-muted/40 via-card to-muted/20 p-2 sm:p-3"
-      >
-        {hasBenchmarks ? (
-          <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {quotes.map(({ quote, hint }) => (
-              <MarketQuoteTile key={quote.symbol} quote={quote} hint={hint} />
-            ))}
+export function DashboardContent({ market, commodities, currencies, oilNews }: DashboardContentProps) {
+  const { t } = useI18n();
+  const hasMarket = market.spy !== null || market.qqq !== null || market.oil !== null;
+
+  return (
+    <div className="mx-auto flex max-w-5xl flex-col gap-8">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-500/10 via-muted/50 to-card px-5 py-6 sm:px-7 sm:py-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl"
+        />
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+          {t("dashboard.title")}
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{t("dashboard.welcome")}</p>
+      </div>
+
+      <section aria-label={t("dashboard.marketAria")} className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("dashboard.marketTitle")}
+        </h2>
+        {hasMarket ? (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {market.spy ? (
+              <MarketQuoteCard quote={market.spy} hint={t("dashboard.marketSpyHint")} />
+            ) : null}
+            {market.qqq ? (
+              <MarketQuoteCard quote={market.qqq} hint={t("dashboard.marketQqqHint")} />
+            ) : null}
+            {market.oil ? (
+              <MarketQuoteCard
+                quote={market.oil}
+                hint={t("dashboard.marketOilHint")}
+                emphasized
+              />
+            ) : null}
           </div>
         ) : (
-          <p className="px-2 py-3 text-sm text-muted-foreground">{t("dashboard.marketUnavailable")}</p>
+          <p className="text-sm text-muted-foreground">{t("dashboard.marketUnavailable")}</p>
         )}
+        <OilNews items={oilNews} />
       </section>
 
-      <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.85fr)] lg:items-stretch">
-        <MarketNewsSection items={marketNews} />
-        <DashboardDividendsPanel />
-      </div>
+      <section aria-label={t("dashboard.assetsAria")} className="space-y-3">
+        <Tabs defaultValue="commodities">
+          <TabsList>
+            <TabsTrigger value="commodities">{t("dashboard.commoditiesTab")}</TabsTrigger>
+            <TabsTrigger value="currencies">{t("dashboard.currenciesTab")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="commodities">
+            <QuoteGrid
+              quotes={[
+                { quote: commodities.oil, hint: t("dashboard.marketOilHint"), emphasized: true },
+                { quote: commodities.brent, hint: t("dashboard.marketBrentHint") },
+                { quote: commodities.gold, hint: t("dashboard.marketGoldHint") },
+                { quote: commodities.silver, hint: t("dashboard.marketSilverHint") },
+              ]}
+            />
+          </TabsContent>
+          <TabsContent value="currencies">
+            <QuoteGrid
+              valueKind="rate"
+              quotes={[
+                { quote: currencies.eurUsd, hint: t("dashboard.fxEurUsdHint") },
+                { quote: currencies.gbpUsd, hint: t("dashboard.fxGbpUsdHint") },
+                { quote: currencies.usdJpy, hint: t("dashboard.fxUsdJpyHint") },
+                { quote: currencies.usdBgn, hint: t("dashboard.fxUsdBgnHint") },
+              ]}
+            />
+          </TabsContent>
+        </Tabs>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
+        <Link
+          href="/stock/AAPL"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
+            <CardHeader className="gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
+                <BarChart3 className="size-5" aria-hidden />
+              </div>
+              <CardTitle className="text-base">{t("dashboard.quickStockTitle")}</CardTitle>
+              <CardDescription className="text-sm">{t("dashboard.quickStockDesc")}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link
+          href="/dcf-calculator?ticker=AAPL"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
+            <CardHeader className="gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
+                <Calculator className="size-5" aria-hidden />
+              </div>
+              <CardTitle className="text-base">{t("dashboard.quickDcfTitle")}</CardTitle>
+              <CardDescription className="text-sm">{t("dashboard.quickDcfDesc")}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link
+          href="/watchlist"
+          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
+            <CardHeader className="gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
+                <ListPlus className="size-5" aria-hidden />
+              </div>
+              <CardTitle className="text-base">{t("dashboard.quickWlTitle")}</CardTitle>
+              <CardDescription className="text-sm">{t("dashboard.quickWlDesc")}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      </section>
+
+      <DashboardClient />
     </div>
   );
 }
