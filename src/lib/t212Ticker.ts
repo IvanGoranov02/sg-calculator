@@ -103,27 +103,15 @@ const US_PRIMARY_FOR_GERMAN_LISTINGS: readonly string[] = [
   "KO",
 ];
 
-/** German Yahoo 3-char truncations where reverse lookup is unambiguous for T212. */
+/**
+ * German Yahoo 3-char truncations where reverse lookup is unambiguous for logos.
+ * Do not add bare 3-char keys that are also valid US tickers (AAP, INT, GOO, …) or
+ * wrong Yahoo truncations (ABE, UBE, NFL) — EU duals use explicit local codes (APC, NFC, UBER.DE).
+ */
 const GERMAN_TRUNCATED_US_LOGO: Record<string, string> = {
   MSF: "MSFT",
   AMZ: "AMZN",
 };
-
-/**
- * Wrong 3-char Yahoo truncations for dual-listed US names (must not be used for logos).
- * Mirrors portfolioQuoteResolve trap sets.
- */
-/** Wrong 3-char Yahoo truncations → US primary (explicit symbol only, not *D stub stripping). */
-const GERMAN_TRUNCATION_TRAP_TO_US: Record<string, string> = {
-  UBE: "UBER",
-  NFL: "NFLX",
-  AAP: "AAPL",
-  TSL: "TSLA",
-  INT: "INTC",
-  GOO: "GOOGL",
-};
-
-const GERMAN_TRUNCATION_TRAP_KEYS = new Set(Object.keys(GERMAN_TRUNCATION_TRAP_TO_US));
 
 function germanOverrideArraysEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
@@ -138,22 +126,20 @@ function localXetraThreeCharStubPrefixes(): Set<string> {
 
   const out = new Set<string>();
   for (const key of Object.keys(GERMAN_TRUNCATED_US_LOGO)) {
-    if (key.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(key)) out.add(key);
+    if (key.length === 3) out.add(key);
   }
   for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
     const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
     if (!syms) continue;
     for (const yahoo of syms) {
       const germanBase = yahoo.split(".")[0]?.toUpperCase();
-      if (germanBase?.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(germanBase)) {
-        out.add(germanBase);
-      }
+      if (germanBase?.length === 3) out.add(germanBase);
     }
   }
   for (const localKey of Object.keys(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
     if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
     const ku = localKey.toUpperCase();
-    if (ku.length === 3 && !GERMAN_TRUNCATION_TRAP_KEYS.has(ku)) out.add(ku);
+    if (ku.length === 3) out.add(ku);
   }
 
   localXetraThreeCharStubPrefixesCache = out;
@@ -166,7 +152,6 @@ function euListingToUsLogoMap(): Record<string, string> {
 
   const map: Record<string, string> = {
     ...GERMAN_TRUNCATED_US_LOGO,
-    ...GERMAN_TRUNCATION_TRAP_TO_US,
   };
 
   for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {

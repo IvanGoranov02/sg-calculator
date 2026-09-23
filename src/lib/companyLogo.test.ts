@@ -40,7 +40,6 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("UBER.DE"), "UBER");
     assert.equal(fmpLogoSymbol("UBERd_EQ"), "UBER");
     assert.equal(fmpLogoSymbol("UBERD_EQ"), "UBER");
-    assert.equal(fmpLogoSymbol("UBE.DE"), "UBER");
   });
 
   it("maps local Xetra codes for major US names", () => {
@@ -55,7 +54,6 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("NFLXD"), "NFLX");
     assert.equal(fmpLogoSymbol("NFCd_EQ"), "NFLX");
     assert.equal(fmpLogoSymbol("NFLXd_EQ"), "NFLX");
-    assert.equal(fmpLogoSymbol("NFL.DE"), "NFLX");
     assert.equal(fmpLogoSymbol("NFCD"), "NFLX");
     assert.equal(fmpLogoSymbol("INL.DE"), "INTC");
     assert.equal(fmpLogoSymbol("2PP.DE"), "PYPL");
@@ -73,5 +71,14 @@ describe("companyLogo", () => {
   it("does not map truncated Alphabet trap ABE to GOOGL", () => {
     assert.equal(fmpLogoSymbol("ABE.DE"), "ABE");
     assert.equal(fmpLogoSymbol("ABE.F"), "ABE");
+    assert.equal(fmpLogoSymbol("ABE"), "ABE");
+  });
+
+  it("does not remap bare US tickers that collide with wrong 3-char Yahoo truncations", () => {
+    assert.equal(fmpLogoSymbol("AAP"), "AAP");
+    assert.equal(fmpLogoSymbol("AAP_US_EQ"), "AAP");
+    assert.equal(fmpLogoSymbol("INT"), "INT");
+    assert.equal(fmpLogoSymbol("TSL"), "TSL");
+    assert.equal(fmpLogoSymbol("GOO.DE"), "GOO");
   });
 });
