@@ -4,17 +4,34 @@ import { describe, it } from "node:test";
 import {
   buildEventDividendEstimatesBySymbol,
   confirmedEventDividendForSymbol,
+  dividendDpsBasisFromQuote,
   estimateEventDividendPayment,
   inferPaymentsPerYearFromHistory,
   lookupPortfolioQuote,
   perEventDividendPerShare,
   periodizeAnnualDividend,
+  resolvePaymentsPerYear,
   type EventDividendHoldingInput,
 } from "@/lib/dividendEstimate";
 import type { PortfolioDividendPayment } from "@/lib/portfolioDividends";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 
 const FX = { eurPerUsd: 1, gbpPerUsd: 1.25 };
+
+function quoteInferOpts(
+  annualPerShareQuote: number,
+  quantity: number,
+  asOfMs?: number,
+  fx: { eurPerUsd: number | null; gbpPerUsd: number | null } = FX,
+) {
+  return {
+    asOfMs,
+    quantity,
+    annualPerShareQuote,
+    quoteCurrency: "USD",
+    fx,
+  };
+}
 
 function quote(overrides: Partial<PortfolioQuoteRow> = {}): PortfolioQuoteRow {
   return {
@@ -153,11 +170,7 @@ describe("inferPaymentsPerYearFromHistory", () => {
       },
     ];
     assert.equal(
-      inferPaymentsPerYearFromHistory(semiPayments, "SA", {
-        asOfMs: asOf,
-        quantity: 10,
-        annualPerShare: 4,
-      }),
+      inferPaymentsPerYearFromHistory(semiPayments, "SA", quoteInferOpts(4, 10, asOf)),
       2,
     );
     const estimate = estimateEventDividendPayment({
@@ -196,12 +209,7 @@ describe("inferPaymentsPerYearFromHistory", () => {
       },
     ];
     assert.equal(
-      inferPaymentsPerYearFromHistory(metaPayments, "META", {
-        asOfMs: asOf,
-        quantity: 3.8,
-        annualPerShare: 2.1,
-        annualIncome: 7.98,
-      }),
+      inferPaymentsPerYearFromHistory(metaPayments, "META", quoteInferOpts(2.1, 3.8, asOf)),
       4,
     );
   });
@@ -277,12 +285,7 @@ describe("estimateEventDividendPayment", () => {
 
     assert.deepEqual(withoutHistory, { amount: 20, currency: "USD" });
     assert.equal(
-      inferPaymentsPerYearFromHistory(payments, "AAPL", {
-        asOfMs: asOf,
-        quantity: 10,
-        annualPerShare: 8,
-        annualIncome: 80,
-      }),
+      inferPaymentsPerYearFromHistory(payments, "AAPL", quoteInferOpts(8, 10, asOf)),
       4,
     );
     assert.deepEqual(withHistory, { amount: 20, currency: "USD" });
@@ -436,6 +439,65 @@ describe("buildEventDividendEstimatesBySymbol", () => {
     assert.equal(est.estimate.amount, 5);
   });
 
+  it("EUR holding with USD payment infers quarterly frequency and €5 estimate/confirmed", () => {
+    const fx = { eurPerUsd: 0.5, gbpPerUsd: null };
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "t212",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        name: null,
+        amount: 10,
+        currency: "USD",
+        paidOn: "2026-03-15",
+      },
+    ];
+    assert.equal(
+      inferPaymentsPerYearFromHistory(payments, "AAPL", quoteInferOpts(4, 10, undefined, fx)),
+      4,
+    );
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings: [{ symbolYahoo: "AAPL", quantity: "10", currency: "EUR" }],
+      quotes: { AAPL: quote({ dividendRate: 4 }) },
+      fx,
+      payments,
+      displayCurrency: "EUR",
+    });
+    const row = map.get("AAPL");
+    assert.ok(row);
+    assert.equal(row.estimate.amount, 5);
+    assert.equal(row.estimate.currency, "EUR");
+    assert.deepEqual(row.confirmed, { amount: 5, currency: "EUR" });
+  });
+
+  it("EUR holding USD payment scales confirmed when share count doubles", () => {
+    const fx = { eurPerUsd: 0.5, gbpPerUsd: null };
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "t212",
+        ticker: "AAPL",
+        symbolYahoo: "AAPL",
+        name: null,
+        amount: 10,
+        currency: "USD",
+        paidOn: "2026-03-15",
+      },
+    ];
+    const map = buildEventDividendEstimatesBySymbol({
+      holdings: [{ symbolYahoo: "AAPL", quantity: "20", currency: "EUR" }],
+      quotes: { AAPL: quote({ dividendRate: 4 }) },
+      fx,
+      payments,
+      displayCurrency: "EUR",
+    });
+    const row = map.get("AAPL");
+    assert.ok(row?.confirmed);
+    assert.equal(row.confirmed!.amount, 10);
+    assert.equal(row.confirmed!.currency, "EUR");
+  });
+
   it("converts confirmed pay-date amount from payment currency to EUR display", () => {
     const payments: PortfolioDividendPayment[] = [
       {
@@ -488,29 +550,33 @@ describe("buildEventDividendEstimatesBySymbol", () => {
   });
 
   it("scales confirmed dividend when share count increased since last payment", () => {
-    const perEventDps = perEventDividendPerShare({
+    const q = quote({ symbol: "META", dividendRate: 2.1 });
+    const basis = dividendDpsBasisFromQuote("USD", q, FX, { dividendPerShare: 2.1 });
+    assert.ok(basis);
+    const payments: PortfolioDividendPayment[] = [
+      {
+        id: "1",
+        source: "manual",
+        ticker: "META",
+        symbolYahoo: "META",
+        name: null,
+        amount: 1.995,
+        currency: "USD",
+        paidOn: "2025-09-22",
+      },
+    ];
+    const paymentsPerYear = resolvePaymentsPerYear({
       symbol: "META",
       quantity: 7.6,
-      annualPerShare: 2.1,
-      annualIncome: 7.6 * 2.1,
+      basis,
+      payments,
     });
-    assert.ok(perEventDps);
     const confirmed = confirmedEventDividendForSymbol({
       symbol: "META",
       totalQuantity: 7.6,
-      perEventDps,
-      payments: [
-        {
-          id: "1",
-          source: "manual",
-          ticker: "META",
-          symbolYahoo: "META",
-          name: null,
-          amount: 1.995,
-          currency: "USD",
-          paidOn: "2025-09-22",
-        },
-      ],
+      basis,
+      paymentsPerYear,
+      payments,
     });
     assert.ok(confirmed);
     assert.equal(confirmed.currency, "USD");
