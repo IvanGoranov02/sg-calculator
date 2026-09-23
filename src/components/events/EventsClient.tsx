@@ -19,7 +19,11 @@ import {
   type FlatEvent,
   unionEventSymbols,
 } from "@/lib/calendarEvents";
-import { buildEventDividendEstimatesBySymbol, type EventDividendEstimate } from "@/lib/dividendEstimate";
+import {
+  buildEventDividendEstimatesBySymbol,
+  type EventDividendEstimate,
+  type SymbolEventDividendEstimates,
+} from "@/lib/dividendEstimate";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { initialPortfolioReady } from "@/lib/eventsSession";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -199,7 +203,7 @@ export function EventsClient() {
             payments: dividendPayments,
             displayCurrency: preferredCurrency,
           })
-        : new Map<string, EventDividendEstimate>(),
+        : new Map<string, SymbolEventDividendEstimates>(),
     [portfolioHoldings, portfolioQuotes, portfolioFx, dividendPayments, preferredCurrency],
   );
 
@@ -353,14 +357,20 @@ function EventCard({
   event: FlatEvent;
   kindLabel: (kind: EventKind) => string;
   relative: (days: number) => string;
-  estimate: EventDividendEstimate | null;
+  estimate: SymbolEventDividendEstimates | null;
   estDividendLabel: string;
 }) {
   const meta = KIND_META[event.kind];
   const Icon = meta.icon;
   const soon = event.days <= 14;
+  const displayAmount: EventDividendEstimate | null =
+    estimate == null
+      ? null
+      : event.kind === "dividendPay" && estimate.confirmed != null
+        ? estimate.confirmed
+        : estimate.estimate;
   const showEstimate =
-    estimate != null && (event.kind === "exDividend" || event.kind === "dividendPay");
+    displayAmount != null && (event.kind === "exDividend" || event.kind === "dividendPay");
 
   return (
     <Link
@@ -389,13 +399,13 @@ function EventCard({
       {showEstimate ? (
         <div
           className="mt-3 rounded-lg border border-emerald-500/35 bg-emerald-950/50 px-3 py-2.5"
-          aria-label={`${estDividendLabel}: ${fmtMoney(estimate.amount, estimate.currency)}`}
+          aria-label={`${estDividendLabel}: ${fmtMoney(displayAmount.amount, displayAmount.currency)}`}
         >
           <p className="text-[11px] font-medium tracking-wide text-emerald-200/75 uppercase">
             {estDividendLabel}
           </p>
           <p className="mt-0.5 text-lg font-semibold tracking-tight text-emerald-300 tabular-nums sm:text-xl">
-            {fmtMoney(estimate.amount, estimate.currency)}
+            {fmtMoney(displayAmount.amount, displayAmount.currency)}
           </p>
         </div>
       ) : null}
