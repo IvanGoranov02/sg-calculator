@@ -199,6 +199,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadProgressGeminiGapFill: "Filling remaining gaps…",
       loadProgressYahooFundamentals: "Merging fundamentals…",
       loadProgressYahooPrices: "Updating live prices and charts…",
+      landingTitle: "Stock Analysis",
+      recentSearches: "Recently searched",
+      noRecent: "Your recent tickers appear here after you open a company.",
+      watchlistQuick: "From your watchlist",
+      portfolioQuick: "From your portfolio",
+      portfolioSignIn: "Sign in to see holdings from your portfolio.",
+      portfolioEmpty: "No holdings yet.",
     },
     stockNews: {
       title: "Latest news · {symbol}",
@@ -349,6 +356,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     chart: {
       performance: "Performance",
+      stockPerformance: "Stock Performance",
       performanceDesc:
         "Toggle metrics and time range. Price uses daily history (1D uses 5m intraday when available). Revenue and cash flows use fiscal years — shorter ranges show fewer FY columns.",
       metricPrice: "Price",
@@ -1137,6 +1145,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       loadProgressGeminiGapFill: "Попълване на останали липси…",
       loadProgressYahooFundamentals: "Сливане на фундаментали…",
       loadProgressYahooPrices: "Обновяване на котировки и графики…",
+      landingTitle: "Анализ на акции",
+      recentSearches: "Наскоро търсени",
+      noRecent: "Скорошните тикери се показват тук след отваряне на компания.",
+      watchlistQuick: "От списъка за наблюдение",
+      portfolioQuick: "От портфолиото",
+      portfolioSignIn: "Влезте, за да видите позициите от портфолиото.",
+      portfolioEmpty: "Все още няма позиции.",
     },
     stockNews: {
       title: "Последни новини · {symbol}",
@@ -1288,6 +1303,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     chart: {
       performance: "Представяне",
+      stockPerformance: "Представяне на акцията",
       performanceDesc:
         "Превключвайте показатели и период. Цената ползва дневна история (1D — 5m интрадей при наличност). Приходите и паричните потоци са по фискални години — по-късите периоди показват по-малко колони.",
       metricPrice: "Цена",

@@ -243,7 +243,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
 
       <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
         <Link
-          href="/stock/AAPL"
+          href="/stock"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">

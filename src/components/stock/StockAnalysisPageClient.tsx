@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
 import { debugLogStockBundle } from "@/lib/stockDebugConsole";
+import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import type {
   StockAnalysisLoadProgress,
   StockAnalysisPageLoadProgress,
@@ -41,7 +42,12 @@ export function StockAnalysisPageClient({ ticker }: Props) {
         cancelled = true;
         ac.abort();
       };
-      const sym = ticker.trim() || "AAPL";
+      const sym = ticker.trim();
+      if (!sym) {
+        setLoading(false);
+        setLoadProgress(null);
+        return;
+      }
       setLoading(true);
       setError(null);
       setLoadProgress({ event: null, percent: 4, connecting: true });
@@ -95,6 +101,9 @@ export function StockAnalysisPageClient({ ticker }: Props) {
                 setBundle(msg.bundle);
                 setError(msg.error);
                 setLoadProgress(null);
+                if (msg.bundle?.quote.symbol) {
+                  pushRecentStockSearch(msg.bundle.quote.symbol, msg.bundle.quote.name);
+                }
               }
             }
           }
@@ -120,7 +129,8 @@ export function StockAnalysisPageClient({ ticker }: Props) {
 
   useEffect(() => {
     if (loading) return;
-    const sym = ticker.trim().toUpperCase() || "AAPL";
+    const sym = ticker.trim().toUpperCase();
+    if (!sym) return;
     debugLogStockBundle(sym, bundle, error);
   }, [loading, bundle, error, ticker]);
 

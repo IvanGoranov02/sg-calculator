@@ -11,7 +11,7 @@ type Props = { onMore: () => void };
 
 const TABS = [
   { href: "/dashboard", labelKey: "mobileNav.home", icon: LayoutDashboard, match: (p: string) => p === "/dashboard" },
-  { href: "/stock/AAPL", labelKey: "mobileNav.stocks", icon: LineChart, match: (p: string) => p.startsWith("/stock") },
+  { href: "/stock", labelKey: "mobileNav.stocks", icon: LineChart, match: (p: string) => p.startsWith("/stock") },
   { href: "/portfolio", labelKey: "mobileNav.portfolio", icon: Briefcase, match: (p: string) => p.startsWith("/portfolio") },
   { href: "/watchlist", labelKey: "mobileNav.watchlist", icon: ListPlus, match: (p: string) => p.startsWith("/watchlist") },
 ] as const;
