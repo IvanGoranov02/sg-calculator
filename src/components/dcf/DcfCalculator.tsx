@@ -1,20 +1,20 @@
 "use client";
 
+import { LineChart } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { DcfProjectionCharts } from "@/components/dcf/DcfProjectionCharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CompanyIdentity } from "@/components/company/CompanyIdentity";
+import { DcfEpsProjectionChart } from "@/components/dcf/DcfEpsProjectionChart";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  computeGuruFocusDcf,
-  marginOfSafetyPct,
-  validateGuruFocusDcfInputs,
-  type DcfBaseMetric,
-} from "@/lib/dcf";
-import { formatCurrency } from "@/lib/format";
+  computeEpsModel,
+  EPS_MODEL_HORIZON_YEARS,
+  seedPeMultiple,
+  validateEpsModelInputs,
+} from "@/lib/epsModel";
+import { formatCurrency, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { DcfSeed } from "@/lib/yahooDcfSeed";
 import { cn } from "@/lib/utils";
@@ -32,366 +32,245 @@ function decimalToPct(dec: number): number {
   return Math.round(dec * 1000) / 10;
 }
 
-function SnapshotMetric({ label, sub, value }: { label: string; sub?: string; value: string }) {
+function AssumptionCell({
+  id,
+  label,
+  value,
+  onChange,
+  suffix,
+  step = "any",
+  invalid = false,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  suffix?: string;
+  step?: string;
+  invalid?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      {sub ? <p className="text-[10px] text-muted-foreground/80">{sub}</p> : null}
-      <p className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{value}</p>
+    <div
+      className={cn(
+        "flex min-w-0 flex-col gap-1.5 rounded-lg border bg-muted/40 px-3 py-2.5",
+        invalid ? "border-amber-500/50 ring-1 ring-amber-500/20" : "border-border/80",
+      )}
+    >
+      <Label htmlFor={id} className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type="number"
+          step={step}
+          value={Number.isFinite(value) ? value : ""}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(raw === "" ? Number.NaN : Number(raw));
+          }}
+          className={cn(
+            "h-9 border-0 bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0",
+            "font-mono tabular-nums",
+            suffix ? "pr-7" : undefined,
+          )}
+        />
+        {suffix ? (
+          <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            {suffix}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function baseFromSeed(seed: DcfSeed | null, metric: DcfBaseMetric): number {
-  if (!seed) return 0;
-  switch (metric) {
-    case "eps":
-      return seed.epsPerShare;
-    case "fcf":
-      return seed.fcfPerShare;
-    case "dividend":
-      return seed.dividendPerShare;
-    default:
-      return 0;
-  }
-}
-
-function growthFromSeed(seed: DcfSeed | null, metric: DcfBaseMetric): number {
-  if (!seed) return 0.15;
-  switch (metric) {
-    case "eps":
-      return seed.suggestedEpsGrowthRate;
-    case "fcf":
-      return seed.suggestedFcfGrowthRate;
-    case "dividend":
-      return seed.suggestedEpsGrowthRate;
-    default:
-      return 0.15;
-  }
-}
-
 export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   const { t } = useI18n();
-  const [baseMetric, setBaseMetric] = useState<DcfBaseMetric>("eps");
-  const [basePerShare, setBasePerShare] = useState(baseFromSeed(seed, "eps"));
-  const [discountPct, setDiscountPct] = useState(11);
-  const [growthYears, setGrowthYears] = useState(10);
-  const [growthPct, setGrowthPct] = useState(decimalToPct(growthFromSeed(seed, "eps")));
-  const [terminalYears, setTerminalYears] = useState(10);
-  const [terminalGrowthPct, setTerminalGrowthPct] = useState(4);
-  const [addTangibleBook, setAddTangibleBook] = useState(false);
-  const [tangibleBookPerShare, setTangibleBookPerShare] = useState(seed?.tangibleBookPerShare ?? 0);
+
+  const [ttmEps, setTtmEps] = useState(seed?.epsPerShare ?? 0);
+  const [growthPct, setGrowthPct] = useState(
+    seed ? decimalToPct(seed.suggestedEpsGrowthRate) : 15,
+  );
+  const [peMultiple, setPeMultiple] = useState(
+    seed ? seedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20,
+  );
+  const [desiredReturnPct, setDesiredReturnPct] = useState(15);
 
   const seedSyncKey = seed
-    ? `${seed.symbol}:${seed.epsPerShare}:${seed.fcfPerShare}:${seed.tangibleBookPerShare}`
+    ? `${seed.symbol}:${seed.epsPerShare}:${seed.currentPrice}:${seed.suggestedEpsGrowthRate}`
     : `empty:${ticker}`;
   const [syncedSeedKey, setSyncedSeedKey] = useState(seedSyncKey);
   if (seedSyncKey !== syncedSeedKey) {
     setSyncedSeedKey(seedSyncKey);
-    setBasePerShare(baseFromSeed(seed, baseMetric));
-    setGrowthPct(decimalToPct(growthFromSeed(seed, baseMetric)));
-    setTangibleBookPerShare(seed?.tangibleBookPerShare ?? 0);
+    setTtmEps(seed?.epsPerShare ?? 0);
+    setGrowthPct(seed ? decimalToPct(seed.suggestedEpsGrowthRate) : 15);
+    setPeMultiple(seed ? seedPeMultiple(seed.currentPrice, seed.epsPerShare) : 20);
   }
-
-  const baseMetricLabel = useMemo(() => {
-    switch (baseMetric) {
-      case "eps":
-        return t("dcf.baseEps");
-      case "fcf":
-        return t("dcf.baseFcf");
-      case "dividend":
-        return t("dcf.baseDividend");
-      default:
-        return "";
-    }
-  }, [baseMetric, t]);
 
   const validationError = useMemo(
     () =>
-      validateGuruFocusDcfInputs({
-        basePerShare,
-        discountPct,
-        growthYears,
-        terminalYears,
-        terminalGrowthPct,
+      validateEpsModelInputs({
+        ttmEps,
+        growthRatePct: growthPct,
+        peMultiple,
+        desiredReturnPct,
+        horizonYears: EPS_MODEL_HORIZON_YEARS,
       }),
-    [basePerShare, discountPct, growthYears, terminalYears, terminalGrowthPct],
+    [desiredReturnPct, growthPct, peMultiple, ttmEps],
   );
+
+  const growthInvalid =
+    validationError === "growth_rate_invalid" || !Number.isFinite(growthPct);
+  const peInvalid =
+    validationError === "pe_non_positive" || validationError === "pe_out_of_range";
+  const epsInvalid = validationError === "eps_non_positive";
+  const desiredInvalid = validationError === "desired_return_invalid";
 
   const result = useMemo(() => {
     if (validationError) return null;
-    try {
-      return computeGuruFocusDcf({
-        basePerShare,
-        discountRate: pctToDecimal(discountPct),
-        growthYears,
-        growthRate: pctToDecimal(growthPct),
-        terminalYears,
-        terminalGrowthRate: pctToDecimal(terminalGrowthPct),
-        tangibleBookPerShare: addTangibleBook ? Math.max(0, tangibleBookPerShare) : 0,
-      });
-    } catch {
-      return null;
-    }
-  }, [
-    addTangibleBook,
-    basePerShare,
-    discountPct,
-    growthPct,
-    growthYears,
-    tangibleBookPerShare,
-    terminalGrowthPct,
-    terminalYears,
-    validationError,
-  ]);
+    return computeEpsModel({
+      ttmEps,
+      growthRate: pctToDecimal(growthPct),
+      peMultiple,
+      currentPrice: seed?.currentPrice ?? 0,
+      desiredReturn: pctToDecimal(desiredReturnPct),
+      horizonYears: EPS_MODEL_HORIZON_YEARS,
+    });
+  }, [desiredReturnPct, growthPct, peMultiple, seed?.currentPrice, ttmEps, validationError]);
 
-  const mosPct =
-    result && seed && seed.currentPrice > 0
-      ? marginOfSafetyPct(result.fairValuePerShare, seed.currentPrice)
-      : null;
-
-  const handleMetricChange = (value: DcfBaseMetric) => {
-    setBaseMetric(value);
-    setBasePerShare(baseFromSeed(seed, value));
-    setGrowthPct(decimalToPct(growthFromSeed(seed, value)));
-  };
+  const displaySymbol = seed?.symbol ?? ticker;
+  const displayName = seed?.name ?? ticker;
+  const currentPrice = seed?.currentPrice ?? 0;
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 sm:gap-8">
-      <div>
-        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
-      </div>
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
+      <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
+      {!ticker ? (
+        <p className="text-sm text-muted-foreground">{t("dcf.pickTicker")}</p>
+      ) : !seed ? (
+        <p className="text-sm text-amber-200/90">{t("dcf.noSeed", { ticker })}</p>
+      ) : null}
 
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle>{t("dcf.snapshotTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <SnapshotMetric
-            label={t("dcf.snapEps")}
-            sub={t("dcf.snapEpsSub")}
-            value={
-              seed && Number.isFinite(seed.epsPerShare) ? formatCurrency(seed.epsPerShare) : "—"
-            }
-          />
-          <SnapshotMetric
-            label={t("dcf.snapFcf")}
-            sub={t("dcf.snapFcfSub")}
-            value={
-              seed && Number.isFinite(seed.fcfPerShare) ? formatCurrency(seed.fcfPerShare) : "—"
-            }
-          />
-          <SnapshotMetric
-            label={t("dcf.snapDividend")}
-            value={seed && seed.dividendPerShare > 0 ? formatCurrency(seed.dividendPerShare) : "—"}
-          />
-          <SnapshotMetric
-            label={t("dcf.snapTangibleBook")}
-            value={
-              seed && seed.tangibleBookPerShare > 0
-                ? formatCurrency(seed.tangibleBookPerShare)
-                : "—"
-            }
-          />
-          <SnapshotMetric
-            label={t("dcf.snapSuggestedGrowth")}
-            value={
-              seed
-                ? `${decimalToPct(growthFromSeed(seed, baseMetric)).toFixed(1)}%`
-                : "—"
-            }
-          />
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle>{t("dcf.assumptionsTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label>{t("dcf.basedOn")}</Label>
-            <Tabs
-              value={baseMetric}
-              onValueChange={(v) => handleMetricChange(v as DcfBaseMetric)}
-            >
-              <TabsList>
-                <TabsTrigger value="eps">{t("dcf.baseEps")}</TabsTrigger>
-                <TabsTrigger value="fcf">{t("dcf.baseFcf")}</TabsTrigger>
-                <TabsTrigger value="dividend">{t("dcf.baseDividend")}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="base">{baseMetricLabel}</Label>
-            <Input
-              id="base"
-              type="number"
-              step="any"
-              value={Number.isFinite(basePerShare) ? basePerShare : ""}
-              onChange={(e) => setBasePerShare(Number(e.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="dr">{t("dcf.discount")}</Label>
-            <Input
-              id="dr"
-              type="number"
-              step="0.1"
-              value={discountPct}
-              onChange={(e) => setDiscountPct(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="gy">{t("dcf.growthYears")}</Label>
-            <Input
-              id="gy"
-              type="number"
-              min={0}
-              step={1}
-              value={growthYears}
-              onChange={(e) => setGrowthYears(Number(e.target.value))}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="gr">{t("dcf.growthRate")}</Label>
-            <Input
-              id="gr"
-              type="number"
-              step="0.1"
-              value={growthPct}
-              onChange={(e) => setGrowthPct(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="ty">{t("dcf.terminalYears")}</Label>
-            <Input
-              id="ty"
-              type="number"
-              min={0}
-              step={1}
-              value={terminalYears}
-              onChange={(e) => setTerminalYears(Number(e.target.value))}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tg">{t("dcf.terminalGrowth")}</Label>
-            <Input
-              id="tg"
-              type="number"
-              step="0.1"
-              value={terminalGrowthPct}
-              onChange={(e) => setTerminalGrowthPct(Number(e.target.value))}
-            />
-          </div>
-
-          <Separator className="bg-border sm:col-span-2" />
-
-          <div className="space-y-3 sm:col-span-2">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={addTangibleBook}
-                onChange={(e) => setAddTangibleBook(e.target.checked)}
-                className="size-4 rounded border-border bg-background"
+      <Card className="overflow-hidden border-border bg-card shadow-sm">
+        <CardContent className="space-y-6 p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <CompanyIdentity
+                symbol={displaySymbol || "—"}
+                name={displayName}
+                size="lg"
+                primaryLabel="name"
               />
-              {t("dcf.addTangibleBook")}
-            </label>
-            {addTangibleBook && (
-              <div className="space-y-2">
-                <Label htmlFor="tbv">{t("dcf.tangibleBook")}</Label>
-                <Input
-                  id="tbv"
-                  type="number"
-                  min={0}
-                  step="any"
-                  value={Number.isFinite(tangibleBookPerShare) ? tangibleBookPerShare : ""}
-                  onChange={(e) => setTangibleBookPerShare(Number(e.target.value))}
-                  className="font-mono tabular-nums"
-                />
-              </div>
-            )}
+              {currentPrice > 0 && displaySymbol ? (
+                <p className="mt-1 font-mono text-sm tabular-nums text-muted-foreground sm:ml-[4.75rem]">
+                  {displaySymbol} | {formatCurrency(currentPrice)}
+                </p>
+              ) : null}
+            </div>
+            <span
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-600/25 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-800 dark:border-sky-500/30 dark:text-sky-200"
+            >
+              <LineChart className="size-3.5" aria-hidden />
+              {t("dcf.epsModelBadge")}
+            </span>
           </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-emerald-500/20 bg-card">
-        <CardHeader>
-          <CardTitle>{t("dcf.resultTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <AssumptionCell
+              id="ttm-eps"
+              label={t("dcf.ttmEps")}
+              value={ttmEps}
+              onChange={setTtmEps}
+              invalid={epsInvalid}
+            />
+            <AssumptionCell
+              id="growth-rate"
+              label={t("dcf.growthRateShort")}
+              value={growthPct}
+              onChange={setGrowthPct}
+              suffix="%"
+              step="0.1"
+              invalid={growthInvalid}
+            />
+            <AssumptionCell
+              id="pe-multiple"
+              label={t("dcf.peMultiple")}
+              value={peMultiple}
+              onChange={setPeMultiple}
+              suffix="x"
+              step="0.1"
+              invalid={peInvalid}
+            />
+            <AssumptionCell
+              id="desired-return"
+              label={t("dcf.desiredReturn")}
+              value={desiredReturnPct}
+              onChange={setDesiredReturnPct}
+              suffix="%"
+              step="0.1"
+              invalid={desiredInvalid}
+            />
+          </div>
+
           {validationError ? (
-            <p className="text-sm text-amber-200/90">{t(`dcf.err.${validationError}`)}</p>
+            <p className="text-sm text-amber-200/90">{t(`dcf.epsErr.${validationError}`)}</p>
           ) : !result ? (
             <p className="text-sm text-muted-foreground">{t("dcf.needInputs")}</p>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("dcf.growthValue")}</p>
-                  <p className="font-mono text-lg tabular-nums">{formatCurrency(result.growthValue)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("dcf.terminalValue")}</p>
-                  <p className="font-mono text-lg tabular-nums">{formatCurrency(result.terminalValue)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{t("dcf.intrinsicValue")}</p>
-                  <p className="font-mono text-lg tabular-nums">{formatCurrency(result.intrinsicValue)}</p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-3">
-                <p className="text-xs text-muted-foreground">{t("dcf.fairValue")}</p>
-                <p className="font-mono text-3xl font-semibold tabular-nums text-emerald-400">
-                  {formatCurrency(result.fairValuePerShare)}
-                </p>
-                {addTangibleBook && result.tangibleBookPerShare > 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {t("dcf.includesTbv", { v: formatCurrency(result.tangibleBookPerShare) })}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("dcf.returnFromToday")}
                   </p>
-                )}
-              </div>
-
-              {seed && seed.currentPrice > 0 && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
-                    <p className="text-xs text-muted-foreground">{t("dcf.stockPrice")}</p>
-                    <p className="font-mono text-lg tabular-nums">{formatCurrency(seed.currentPrice)}</p>
-                  </div>
-                  <div
+                  <p
                     className={cn(
-                      "rounded-lg border px-3 py-2",
-                      mosPct != null && mosPct >= 0
-                        ? "border-emerald-500/30 bg-emerald-500/10"
-                        : "border-red-500/30 bg-red-500/10",
+                      "mt-1 font-mono text-3xl font-semibold tabular-nums sm:text-4xl",
+                      result.annualizedReturnFromPrice != null && result.annualizedReturnFromPrice >= 0
+                        ? "text-emerald-400"
+                        : "text-red-400",
                     )}
                   >
-                    <p className="text-xs text-muted-foreground">{t("dcf.marginOfSafety")}</p>
-                    <p className="font-mono text-lg font-medium tabular-nums">
-                      {mosPct != null ? `${mosPct >= 0 ? "+" : ""}${mosPct.toFixed(1)}%` : "—"}
+                    {result.annualizedReturnFromPrice != null
+                      ? formatPercent(result.annualizedReturnFromPrice * 100, 2)
+                      : "—"}
+                  </p>
+                  {result.annualizedReturnFromPrice == null ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{t("dcf.returnNeedsPrice")}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("dcf.returnHorizonHint", { years: result.horizonYears })}
                     </p>
-                  </div>
+                  )}
                 </div>
-              )}
+                <div className="rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {t("dcf.entryForReturn", {
+                      pct: Number.isFinite(desiredReturnPct) ? desiredReturnPct : "—",
+                    })}
+                  </p>
+                  <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
+                    {result.entryPriceForDesiredReturn != null
+                      ? formatCurrency(result.entryPriceForDesiredReturn)
+                      : "—"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("dcf.entryHint", {
+                      target: formatCurrency(result.targetPrice),
+                      years: result.horizonYears,
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              <DcfEpsProjectionChart points={result.chartPoints} horizonYears={result.horizonYears} />
             </>
           )}
+
+          <p className="text-center text-[10px] text-muted-foreground">{t("dcf.resultDisclaimer")}</p>
         </CardContent>
       </Card>
-
-      {result && (
-        <DcfProjectionCharts
-          yearlyProjections={result.yearlyProjections}
-          fairValuePerShare={result.fairValuePerShare}
-          currentPrice={seed?.currentPrice ?? null}
-          baseMetricLabel={baseMetricLabel}
-        />
-      )}
     </div>
   );
 }
