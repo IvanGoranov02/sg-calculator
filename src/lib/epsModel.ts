@@ -97,11 +97,6 @@ export function seedPeMultiple(currentPrice: number, ttmEps: number): number {
   return trailingPeFromPriceAndEps(currentPrice, ttmEps) ?? DEFAULT_PE_MULTIPLE;
 }
 
-export function clampPeMultipleForSanity(pe: number): number {
-  if (!Number.isFinite(pe)) return pe;
-  return Math.min(PE_MULTIPLE_SANITY_MAX, Math.max(PE_MULTIPLE_SANITY_MIN, pe));
-}
-
 export function validateEpsModelInputs(params: {
   ttmEps: number;
   growthRatePct: number;
