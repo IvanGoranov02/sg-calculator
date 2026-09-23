@@ -8,6 +8,7 @@ import {
   t212QuoteCurrency,
   t212TickerToYahoo,
   t212TickerToYahooCandidates,
+  usPrimarySymbolForLogo,
 } from "@/lib/t212Ticker";
 
 describe("parseT212Ticker", () => {
@@ -320,5 +321,17 @@ describe("t212ListingVenueLabel", () => {
     assert.equal(t212ListingVenueLabel("UBERd_EQ"), "Xetra");
     assert.equal(t212ListingVenueLabel("BPl_EQ"), "LSE");
     assert.equal(t212ListingVenueLabel("SANe_EQ"), "Madrid");
+  });
+});
+
+describe("usPrimarySymbolForLogo", () => {
+  it("derives US primaries from German listing overrides", () => {
+    assert.equal(usPrimarySymbolForLogo("APC"), "AAPL");
+    assert.equal(usPrimarySymbolForLogo("MSF"), "MSFT");
+    assert.equal(usPrimarySymbolForLogo("MSFTD"), "MSFT");
+    assert.equal(usPrimarySymbolForLogo("UBE"), "UBE");
+    assert.equal(usPrimarySymbolForLogo("NFL"), "NFL");
+    assert.equal(usPrimarySymbolForLogo("NFCD"), "NFLX");
+    assert.equal(usPrimarySymbolForLogo("APCD"), "AAPL");
   });
 });
