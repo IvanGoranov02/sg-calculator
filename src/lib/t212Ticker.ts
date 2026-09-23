@@ -89,6 +89,140 @@ const GERMAN_YAHOO_SYMBOL_OVERRIDES: Record<string, string[]> = {
   CCC3: ["CCC3.DE", "CCC3.F"],
 };
 
+/** US Nasdaq symbols that also trade on Xetra/Frankfurt under local or truncated codes. */
+const US_PRIMARY_FOR_GERMAN_LISTINGS: readonly string[] = [
+  "META",
+  "GOOGL",
+  "GOOG",
+  "AAPL",
+  "TSLA",
+  "NFLX",
+  "UBER",
+  "INTC",
+  "PYPL",
+  "KO",
+];
+
+/**
+ * German Yahoo 3-char truncations where reverse lookup is unambiguous for logos.
+ * Do not add bare 3-char keys that are also valid US tickers (AAP, INT, GOO, …) or
+ * wrong Yahoo truncations (ABE, UBE, NFL) — EU duals use explicit local codes (APC, NFC, UBER.DE).
+ */
+const GERMAN_TRUNCATED_US_LOGO: Record<string, string> = {
+  MSF: "MSFT",
+  AMZ: "AMZN",
+};
+
+function germanOverrideArraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+let euListingToUsLogoMapCache: Record<string, string> | null = null;
+let localXetraThreeCharStubPrefixesCache: Set<string> | null = null;
+
+/** 3-char local Xetra roots that may appear as `{code}D` after T212 uppercasing (NFCd → NFCD). */
+function localXetraThreeCharStubPrefixes(): Set<string> {
+  if (localXetraThreeCharStubPrefixesCache) return localXetraThreeCharStubPrefixesCache;
+
+  const out = new Set<string>();
+  for (const key of Object.keys(GERMAN_TRUNCATED_US_LOGO)) {
+    if (key.length === 3) out.add(key);
+  }
+  for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
+    const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
+    if (!syms) continue;
+    for (const yahoo of syms) {
+      const germanBase = yahoo.split(".")[0]?.toUpperCase();
+      if (germanBase?.length === 3) out.add(germanBase);
+    }
+  }
+  for (const localKey of Object.keys(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
+    if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
+    const ku = localKey.toUpperCase();
+    if (ku.length === 3) out.add(ku);
+  }
+
+  localXetraThreeCharStubPrefixesCache = out;
+  return out;
+}
+
+/** EU / German listing ticker → US primary symbol for FMP logo URLs. */
+function euListingToUsLogoMap(): Record<string, string> {
+  if (euListingToUsLogoMapCache) return euListingToUsLogoMapCache;
+
+  const map: Record<string, string> = {
+    ...GERMAN_TRUNCATED_US_LOGO,
+  };
+
+  for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
+    const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
+    if (!syms) continue;
+    map[usPrimary] = usPrimary;
+    for (const yahoo of syms) {
+      const germanBase = yahoo.split(".")[0]?.toUpperCase();
+      if (germanBase) map[germanBase] = usPrimary;
+    }
+  }
+
+  for (const [localKey, syms] of Object.entries(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
+    if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
+    for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
+      const usSyms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
+      if (usSyms && germanOverrideArraysEqual(usSyms, syms)) {
+        map[localKey.toUpperCase()] = usPrimary;
+        break;
+      }
+    }
+  }
+
+  // Full-ticker Xetra listings (MSFT.DE) and legacy MSFTD / AMZD portfolio keys.
+  map.MSFT = "MSFT";
+  map.AMZN = "AMZN";
+  map.AMZD = "AMZN";
+
+  for (const [key, usPrimary] of Object.entries(map)) {
+    const ku = key.toUpperCase();
+    if (ku.endsWith("D")) continue;
+    const stubKey = `${ku}D`;
+    if (isUppercaseXetraStub(stubKey)) {
+      map[stubKey] = usPrimary;
+    }
+  }
+
+  euListingToUsLogoMapCache = map;
+  return map;
+}
+
+/**
+ * Resolve a normalized ticker (no exchange suffix) to the US primary symbol for FMP logos.
+ * Leaves genuine US tickers unchanged (e.g. GILD is not treated as a Xetra stub).
+ */
+export function usPrimarySymbolForLogo(normalizedBase: string): string {
+  const base = normalizedBase.trim().toUpperCase();
+  if (!base) return base;
+
+  const map = euListingToUsLogoMap();
+  const direct = map[base];
+  if (direct) return direct;
+
+  if (isUppercaseXetraStub(base)) {
+    const stripped = base.slice(0, -1);
+    const fromStub = map[stripped];
+    if (fromStub) return fromStub;
+  }
+
+  // T212 lowercase Xetra suffix on known 3-char local codes (NFCd → NFCD), not US tickers (GOOD).
+  if (/^[A-Z0-9]{3}D$/.test(base)) {
+    const prefix = base.slice(0, -1);
+    if (localXetraThreeCharStubPrefixes().has(prefix)) {
+      const fromLocal = map[prefix];
+      if (fromLocal) return fromLocal;
+    }
+  }
+
+  return base;
+}
+
 const EUR_LISTING_SUFFIX =
   /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM|MU|BE|MC|LS|IC|WA|CO|IR|AT|HA|HE)$/i;
 
