@@ -35,7 +35,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       more: "More",
     },
     header: {
-      tagline: "Markets · Analysis workspace",
       language: "Language",
       english: "English",
       bulgarian: "Bulgarian",
@@ -981,7 +980,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       more: "Още",
     },
     header: {
-      tagline: "Пазари · Работно пространство",
       language: "Език",
       english: "Английски",
       bulgarian: "Български",
