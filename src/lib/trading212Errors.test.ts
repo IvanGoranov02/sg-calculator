@@ -29,6 +29,10 @@ describe("normalizeTrading212ErrorMessage", () => {
     assert.match(msg, /rejected the saved API credentials/i);
     assert.doesNotMatch(msg, /^Trading 212 401/i);
   });
+
+  it("does not rewrite bare Unauthorized (app session)", () => {
+    assert.equal(normalizeTrading212ErrorMessage("Unauthorized"), "Unauthorized");
+  });
 });
 
 describe("isTrading212AuthFailure", () => {
@@ -38,6 +42,23 @@ describe("isTrading212AuthFailure", () => {
 
   it("detects legacy message", () => {
     assert.equal(isTrading212AuthFailure(null, "Trading 212 401"), true);
+  });
+
+  it("rejects bare Unauthorized", () => {
+    assert.equal(isTrading212AuthFailure(null, "Unauthorized"), false);
+    assert.equal(isTrading212AuthFailure(401, "Unauthorized"), true);
+  });
+
+  it("rejects rate limit and 5xx legacy strings", () => {
+    assert.equal(isTrading212AuthFailure(null, "Trading 212 429: slow down"), false);
+    assert.equal(isTrading212AuthFailure(null, "Trading 212 502: bad gateway"), false);
+  });
+
+  it("rejects sync guard messages", () => {
+    assert.equal(
+      isTrading212AuthFailure(null, "Trading 212 returned no open positions; your synced holdings were not changed."),
+      false,
+    );
   });
 });
 

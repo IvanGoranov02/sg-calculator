@@ -2,6 +2,13 @@
 
 const LEGACY_PREFIX = /^Trading 212 (\d{3})(?:\s*:?\s*(.*))?$/i;
 
+export function trading212ErrorHttpStatus(message: string | null | undefined): number | null {
+  const legacy = LEGACY_PREFIX.exec(message?.trim() ?? "");
+  if (!legacy) return null;
+  const status = Number(legacy[1]);
+  return Number.isFinite(status) ? status : null;
+}
+
 export function trading212UserErrorMessage(status: number, detail?: string): string {
   const trimmedDetail = detail?.trim();
   switch (status) {
@@ -38,23 +45,33 @@ export function normalizeTrading212ErrorMessage(raw: string | null | undefined):
     const detail = legacy[2] ?? "";
     if (Number.isFinite(status)) return trading212UserErrorMessage(status, detail);
   }
-  if (/unauthorized/i.test(text) && text.length < 120) {
-    return trading212UserErrorMessage(401);
-  }
   return text;
 }
 
+function isAppSessionUnauthorizedMessage(message: string): boolean {
+  return /^unauthorized$/i.test(message.trim());
+}
+
+/** True only for broker 401/403 / revoked-key style failures — not rate limits, 5xx, or app session auth. */
 export function isTrading212AuthFailure(
   status: number | null | undefined,
   message: string | null | undefined,
 ): boolean {
   if (status === 401 || status === 403) return true;
-  const normalized = normalizeTrading212ErrorMessage(message);
-  if (!normalized) return false;
-  if (LEGACY_PREFIX.test(message ?? "")) {
-    const code = Number(LEGACY_PREFIX.exec(message ?? "")?.[1]);
-    return code === 401 || code === 403;
+  if (status != null && status !== 401 && status !== 403) return false;
+
+  const msg = message?.trim();
+  if (!msg) return false;
+  if (isAppSessionUnauthorizedMessage(msg)) return false;
+
+  const legacyStatus = trading212ErrorHttpStatus(msg);
+  if (legacyStatus != null) {
+    return legacyStatus === 401 || legacyStatus === 403;
   }
+
+  const normalized = normalizeTrading212ErrorMessage(msg);
+  if (!normalized) return false;
+
   return /rejected the saved API credentials|denied access with the current API key/i.test(normalized);
 }
 

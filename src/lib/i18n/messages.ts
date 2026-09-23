@@ -654,6 +654,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "We could not reach Trading 212 with your saved API credentials. Enter a new key below or dismiss to clear broker data.",
       t212ConnectionProblemHint:
         "Update your API key and secret in the Trading 212 section below, or dismiss to remove synced broker data and start fresh.",
+      t212ConnectionProblemHintDividends:
+        "Open the Holdings tab and scroll to Trading 212 at the bottom to enter a new API key and secret, or dismiss to remove synced broker data.",
+      t212BrokerNoticeTitle: "Trading 212 notice",
       t212ReconnectCta: "Reconnect",
       t212Dismiss: "Dismiss",
       connectCreds: "Connect",
@@ -1611,6 +1614,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Не успяхме да се свържем с Trading 212 със запазените API данни. Въведете нов ключ по-долу или натиснете „Премахни“, за да изчистите брокерските данни.",
       t212ConnectionProblemHint:
         "Обновете API ключа и тайната в секцията Trading 212 по-долу или натиснете „Премахни“, за да изчистите синхронизираните данни и да започнете отначало.",
+      t212ConnectionProblemHintDividends:
+        "Отворете таб „Позиции“ и секцията Trading 212 най-отдолу за нов API ключ и тайна, или натиснете „Премахни“, за да изчистите брокерските данни.",
+      t212BrokerNoticeTitle: "Бележка от Trading 212",
       t212ReconnectCta: "Свържи отново",
       t212Dismiss: "Премахни",
       connectCreds: "Свържи",
