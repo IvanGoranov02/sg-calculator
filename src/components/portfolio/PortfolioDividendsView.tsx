@@ -37,6 +37,7 @@ import {
   type PortfolioDividendsPayload,
 } from "@/lib/portfolioDividends";
 import { cn } from "@/lib/utils";
+import { isTrading212AuthFailure, normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
@@ -55,11 +56,15 @@ function fmtMoney(n: number, currency: string) {
 type PortfolioDividendsViewProps = {
   reloadToken?: number;
   liveRefreshToken?: number;
+  onReconnectTrading212?: () => void;
+  onDismissTrading212?: () => void;
 };
 
 export function PortfolioDividendsView({
   reloadToken = 0,
   liveRefreshToken = 0,
+  onReconnectTrading212,
+  onDismissTrading212,
 }: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
   const { dateFormat, displayCurrency } = usePreferences();
@@ -244,9 +249,48 @@ export function PortfolioDividendsView({
         </div>
       ) : null}
       {data.trading212.error ? (
-        <p className="text-sm text-amber-400/90" role="status">
-          {data.trading212.error}
-        </p>
+        isTrading212AuthFailure(null, data.trading212.error) ? (
+          <div
+            className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-950/35 px-4 py-3 text-sm text-amber-50/95 sm:flex-row sm:items-start sm:justify-between"
+            role="alert"
+          >
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium text-amber-100">{t("portfolio.t212ConnectionProblemTitle")}</p>
+              <p className="leading-relaxed text-amber-50/90">
+                {normalizeTrading212ErrorMessage(data.trading212.error) ?? data.trading212.error}
+              </p>
+              <p className="text-xs text-amber-100/80">{t("portfolio.t212ConnectionProblemHintDividends")}</p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {onReconnectTrading212 ? (
+                <Button type="button" variant="secondary" size="sm" onClick={onReconnectTrading212}>
+                  {t("portfolio.t212ReconnectCta")}
+                </Button>
+              ) : null}
+              {onDismissTrading212 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-500/40 bg-transparent hover:bg-amber-950/60"
+                  onClick={onDismissTrading212}
+                >
+                  {t("portfolio.t212Dismiss")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+            role="status"
+          >
+            <p className="font-medium text-foreground">{t("portfolio.t212BrokerNoticeTitle")}</p>
+            <p className="mt-1 leading-relaxed">
+              {normalizeTrading212ErrorMessage(data.trading212.error) ?? data.trading212.error}
+            </p>
+          </div>
+        )
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

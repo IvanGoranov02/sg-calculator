@@ -5,6 +5,7 @@ import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException } from "@/lib/serverDebugLog";
+import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 export const maxDuration = 60;
 
@@ -78,7 +79,7 @@ export async function GET() {
         connected: !!t212,
         environment: t212?.environment ?? null,
         lastSyncAt: t212?.lastSyncAt?.toISOString() ?? null,
-        lastError: t212?.lastError ?? null,
+        lastError: normalizeTrading212ErrorMessage(t212?.lastError ?? null),
       },
     });
   } catch (e) {

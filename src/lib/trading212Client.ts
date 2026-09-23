@@ -5,6 +5,8 @@
 
 import type { Trading212Environment } from "@prisma/client";
 
+import { trading212UserErrorMessage } from "@/lib/trading212Errors";
+
 const BASE: Record<Trading212Environment, string> = {
   demo: "https://demo.trading212.com",
   live: "https://live.trading212.com",
@@ -156,10 +158,13 @@ export async function t212FetchJson<T>(
       } catch {
         /* ignore */
       }
-      const err: T212RequestError = Object.assign(new Error(`Trading 212 ${res.status}: ${detail}`), {
-        status: res.status,
-        rateLimitReset,
-      });
+      const err: T212RequestError = Object.assign(
+        new Error(trading212UserErrorMessage(res.status, detail)),
+        {
+          status: res.status,
+          rateLimitReset,
+        },
+      );
       throw err;
     }
 

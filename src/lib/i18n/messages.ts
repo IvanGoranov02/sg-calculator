@@ -649,6 +649,17 @@ export const messages: Record<AppLocale, MessageDict> = {
       lastSync: "Last sync: {time}",
       neverSynced: "Never synced",
       syncError: "Last error: {msg}",
+      t212ConnectionProblemTitle: "Trading 212 connection problem",
+      t212ConnectionProblemGeneric:
+        "We could not reach Trading 212 with your saved API credentials. Enter a new key below or dismiss to clear broker data.",
+      t212ConnectionProblemHint:
+        "Update your API key and secret in the Trading 212 section below, or dismiss to remove synced broker data and start fresh.",
+      t212ConnectionProblemHintDividends:
+        "Open the Holdings tab and scroll to Trading 212 at the bottom to enter a new API key and secret, or dismiss to remove synced broker data.",
+      t212BrokerNoticeTitle: "Trading 212 notice",
+      t212ReconnectCta: "Reconnect",
+      t212Dismiss: "Dismiss",
+      connectCreds: "Connect",
       manualTitle: "Add manual position",
       manualSymbol: "Symbol (ticker)",
       manualQty: "Quantity",
@@ -661,7 +672,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualSave: "Save",
       manualCancel: "Cancel",
       emptyTitle: "No positions yet",
-      emptyDesc: "Add a manual row below, or expand Trading 212 further down to sync from your broker.",
+      emptyDesc: "Add a manual row below, or connect Trading 212 at the bottom of this tab to sync from your broker.",
       noEncryptionHint: "Set a 32-byte base64 PORTFOLIO_ENCRYPTION_KEY in the server environment.",
       t212DivTitle: "Recent Trading 212 dividends",
       t212DivHint: "Latest paid dividends from your connected Trading 212 account.",
@@ -1598,6 +1609,17 @@ export const messages: Record<AppLocale, MessageDict> = {
       lastSync: "Последна синхр.: {time}",
       neverSynced: "Никога не е синхронизирано",
       syncError: "Последна грешка: {msg}",
+      t212ConnectionProblemTitle: "Проблем с връзката към Trading 212",
+      t212ConnectionProblemGeneric:
+        "Не успяхме да се свържем с Trading 212 със запазените API данни. Въведете нов ключ по-долу или натиснете „Премахни“, за да изчистите брокерските данни.",
+      t212ConnectionProblemHint:
+        "Обновете API ключа и тайната в секцията Trading 212 по-долу или натиснете „Премахни“, за да изчистите синхронизираните данни и да започнете отначало.",
+      t212ConnectionProblemHintDividends:
+        "Отворете таб „Позиции“ и секцията Trading 212 най-отдолу за нов API ключ и тайна, или натиснете „Премахни“, за да изчистите брокерските данни.",
+      t212BrokerNoticeTitle: "Бележка от Trading 212",
+      t212ReconnectCta: "Свържи отново",
+      t212Dismiss: "Премахни",
+      connectCreds: "Свържи",
       manualTitle: "Добави ръчна позиция",
       manualSymbol: "Символ (тикер)",
       manualQty: "Количество",
@@ -1610,7 +1632,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       manualSave: "Запази",
       manualCancel: "Отказ",
       emptyTitle: "Няма позиции",
-      emptyDesc: "Добави ръчна позиция по-долу или разгъни Trading 212 по-надолу за синхрон с брокера.",
+      emptyDesc: "Добави ръчна позиция по-долу или свържи Trading 212 в долната част на таба за синхрон с брокера.",
       noEncryptionHint: "Задайте 32-байтов base64 PORTFOLIO_ENCRYPTION_KEY в средата на сървъра.",
       t212DivTitle: "Последни дивиденти от Trading 212",
       t212DivHint: "Последно платени дивиденти от свързания Trading 212 акаунт.",

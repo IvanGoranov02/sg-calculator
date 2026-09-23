@@ -8,6 +8,7 @@ import { logApiException } from "@/lib/serverDebugLog";
 import { mapT212PositionToHolding, mergeT212HoldingRows } from "@/lib/t212PositionSync";
 import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
 import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
+import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 export const maxDuration = 60;
 
@@ -156,7 +157,8 @@ export async function POST() {
       const { status, error } = prismaErrorToHttp(e);
       return Response.json({ error }, { status });
     }
-    const msg = e instanceof Error ? e.message : "Sync failed";
+    const rawMsg = e instanceof Error ? e.message : "Sync failed";
+    const msg = normalizeTrading212ErrorMessage(rawMsg) ?? rawMsg;
     const status = (e as T212RequestError).status;
     logApiException("POST /api/trading212/sync (broker API or other)", e, {
       userId,
