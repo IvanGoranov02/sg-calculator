@@ -8,6 +8,7 @@ import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 import { resolveStockSearchQuery, suggestCompanies, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
 import usCompanies from "@/data/usCompanies.json";
@@ -73,7 +74,7 @@ function StockSearch({ target }: StockSearchProps) {
     if (target === "dcf" || target === "dividend") {
       return fromUrl;
     }
-    return fromPath || fromUrl || "AAPL";
+    return fromPath || fromUrl || "";
   });
   const [symbolError, setSymbolError] = useState(false);
   const [open, setOpen] = useState(false);
@@ -123,6 +124,10 @@ function StockSearch({ target }: StockSearchProps) {
     setOpen(false);
     setHighlighted(-1);
     setQuery(sym);
+    if (target === "stock") {
+      const match = companies.find((c) => c.s === sym);
+      pushRecentStockSearch(sym, match?.n);
+    }
     if (target === "dcf") {
       router.push(`/dcf-calculator?ticker=${encodeURIComponent(sym)}`);
     } else if (target === "dividend") {
