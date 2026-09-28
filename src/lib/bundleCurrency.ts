@@ -102,26 +102,131 @@ export function dividendsAlreadyInQuoteCurrency(
 
 export type DividendOverlayMode = "fill-gaps" | "overwrite";
 
+const MS_PER_DAY = 86_400_000;
+/** Used when the series has a single quarter and no gap to measure. */
+const DEFAULT_QUARTER_DAYS = 92;
+
+function daysBetweenIso(earlier: string, later: string): number | null {
+  const a = Date.parse(`${earlier.slice(0, 10)}T00:00:00Z`);
+  const b = Date.parse(`${later.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
+  return Math.round((b - a) / MS_PER_DAY);
+}
+
+/** Median spacing of the quarterly series, else one quarter. */
+export function medianQuarterGapDays(datesAsc: readonly string[]): number {
+  const gaps: number[] = [];
+  for (let i = 1; i < datesAsc.length; i++) {
+    const gap = daysBetweenIso(datesAsc[i - 1]!, datesAsc[i]!);
+    if (gap != null) gaps.push(gap);
+  }
+  if (gaps.length === 0) return DEFAULT_QUARTER_DAYS;
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor((gaps.length - 1) / 2)]!;
+}
+
+/**
+ * Start of the first fiscal-quarter window. Dividends on or before this date
+ * belong to quarters that are not in the series (the ex-div fetch is longer
+ * than the 5-year fundamentals window).
+ */
+export function firstQuarterWindowStart(datesAsc: readonly string[]): string {
+  const first = datesAsc[0]?.slice(0, 10);
+  if (!first) return "1900-01-01";
+  const gap = medianQuarterGapDays(datesAsc);
+  const t = Date.parse(`${first}T00:00:00Z`);
+  if (!Number.isFinite(t)) return first;
+  return new Date(t - gap * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+/**
+ * The open first window is the only bar that can swallow pre-history.
+ * If a previous pass marked it as listing cash but this clamped window has
+ * no ex-div, that value was the pile-up — drop it. A fundamentals DPS that
+ * was never overwritten is left alone.
+ */
+export function dropStaleOpenWindowSum<T extends { date: string; dividendPerShare: number | null }>(
+  rows: T[],
+  listingDatesThisPass: readonly string[],
+  previousListingDates: readonly string[],
+): { rows: T[]; listingDates: string[] } {
+  if (rows.length === 0) return { rows, listingDates: [...previousListingDates] };
+  const first = rows[0]!.date.slice(0, 10);
+  const rewritten = new Set(listingDatesThisPass.map((d) => d.slice(0, 10)));
+  const previous = new Set(previousListingDates.map((d) => d.slice(0, 10)));
+  if (!previous.has(first) || rewritten.has(first)) {
+    return { rows, listingDates: [...previous] };
+  }
+  previous.delete(first);
+  const [head, ...rest] = rows;
+  return {
+    rows: [{ ...head!, dividendPerShare: null }, ...rest],
+    listingDates: [...previous],
+  };
+}
+
+export type DividendFxPlan = "none" | "all" | "unmarked";
+
+/**
+ * How to FX quarterly DPS into the quote currency.
+ * A non-empty listing-date set is per-row: those amounts are already listing
+ * cash and must not be scaled, even when a quarter with no ex-date remains
+ * in the reporting currency. The series-level heuristic cannot see that mix.
+ */
+export function dividendFxPlan(input: {
+  listingDates: readonly string[] | null | undefined;
+  stampedQuoteCurrency?: string | null;
+  quoteCurrency: string;
+  points: Array<{ date?: string; dividendPerShare: number | null }>;
+  quoteAnnualDividend: number | null | undefined;
+  quotePerFinancial: number;
+}): DividendFxPlan {
+  if ((input.listingDates?.length ?? 0) > 0) return "unmarked";
+  if (
+    input.stampedQuoteCurrency === input.quoteCurrency ||
+    dividendsAlreadyInQuoteCurrency(input.points, input.quoteAnnualDividend, input.quotePerFinancial)
+  ) {
+    return "none";
+  }
+  return "all";
+}
+
+/** Scale DPS by `rate`, skipping dates already stored as listing-currency cash. */
+export function applyDividendFx<T extends { date: string; dividendPerShare: number | null }>(
+  rows: T[],
+  listingDates: ReadonlySet<string> | null,
+  rate: number,
+): T[] {
+  if (!Number.isFinite(rate) || rate <= 0 || rate === 1) return rows;
+  return rows.map((row) => {
+    if (listingDates?.has(row.date.slice(0, 10))) return row;
+    return { ...row, dividendPerShare: s(row.dividendPerShare, rate) };
+  });
+}
+
 /**
  * Bucket Yahoo ex-dividend cash into fiscal-quarter windows.
  * Amounts are listing-currency cash. `fill-gaps` only replaces null/0.
- * `overwrite` replaces every quarter Yahoo has cash for (reporting-currency
- * DPS must not survive next to listing-currency cash).
+ * `overwrite` replaces every quarter Yahoo has in-window cash for.
+ * The first window is one quarter long — older events are not dumped into it.
  */
 export function overlayQuarterlyDividends<T extends { date: string; dividendPerShare: number | null }>(
   rows: T[],
   events: Array<{ date: string; amount: number }>,
   mode: DividendOverlayMode,
-): { rows: T[]; wrote: number; kept: number } {
+): { rows: T[]; wrote: number; kept: number; listingDates: string[] } {
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const dates = sorted.map((row) => row.date.slice(0, 10));
+  const firstStart = firstQuarterWindowStart(dates);
   const next: T[] = [];
   let wrote = 0;
   let kept = 0;
+  const listingDates: string[] = [];
 
   for (let i = 0; i < sorted.length; i++) {
     const row = sorted[i]!;
-    const end = row.date.slice(0, 10);
-    const prevEnd = i > 0 ? sorted[i - 1]!.date.slice(0, 10) : "1900-01-01";
+    const end = dates[i]!;
+    const prevEnd = i > 0 ? dates[i - 1]! : firstStart;
     let sum = 0;
     for (const { date: ex, amount } of events) {
       if (ex > prevEnd && ex <= end) sum += amount;
@@ -132,13 +237,14 @@ export function overlayQuarterlyDividends<T extends { date: string; dividendPerS
     if (replace) {
       next.push({ ...row, dividendPerShare: rounded });
       wrote += 1;
+      listingDates.push(end);
     } else {
       next.push(row);
       if (cur != null && cur > 0) kept += 1;
     }
   }
 
-  return { rows: next, wrote, kept };
+  return { rows: next, wrote, kept, listingDates };
 }
 
 /**

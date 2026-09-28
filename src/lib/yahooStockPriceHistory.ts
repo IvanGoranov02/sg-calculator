@@ -4,11 +4,14 @@
  */
 
 import {
+  applyDividendFx,
   convertBundleFundamentals,
-  dividendsAlreadyInQuoteCurrency,
+  dividendFxPlan,
+  dropStaleOpenWindowSum,
   overlayQuarterlyDividends,
 } from "@/lib/bundleCurrency";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
+import { dividendRateToMajorUnits, isPenceQuoteCurrency, quoteCurrencyMajor } from "@/lib/portfolioFx";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
@@ -232,22 +235,26 @@ function needsYahooDpsBackfill(bundle: StockAnalysisBundle): boolean {
 
 type DividendQuarterlyCurrencyBundle = StockAnalysisBundle & {
   __financialCurrency?: string;
-  /** Set when `dividendQuarterly` is listing/quote currency, not reporting currency. */
+  /** Set when every positive DPS row is listing/quote currency. */
   __dividendQuarterlyCurrency?: string;
+  /** Quarter-end dates whose DPS is listing cash (major units), not reporting currency. */
+  __dividendListingDates?: string[];
 };
+
+type DividendMergeResult = { writtenDates: string[] };
 
 /**
  * Sums Yahoo ex-dividend cash into fiscal quarter windows.
- * Those amounts are listing (quote) currency — EUR on FB2A.DE, USD on META.
+ * Those amounts are listing currency — EUR on FB2A.DE, pence on VOD.L, USD on META.
  * `fill-gaps` only replaces null/0. `overwrite` replaces reporting-currency DPS
- * when the listing currency differs, so a later FX pass cannot scale them again.
+ * where the clamped window has cash, so a later FX pass can skip just those rows.
  */
 async function mergeYahooExDividendsIntoQuarterly(
   bundle: StockAnalysisBundle,
   resolvedYahooSymbol: string,
   mode: "fill-gaps" | "overwrite" = "fill-gaps",
-): Promise<boolean> {
-  if (mode === "fill-gaps" && !needsYahooDpsBackfill(bundle)) return false;
+): Promise<DividendMergeResult> {
+  if (mode === "fill-gaps" && !needsYahooDpsBackfill(bundle)) return { writtenDates: [] };
 
   const period2 = new Date();
   const period1 = new Date(period2);
@@ -275,12 +282,21 @@ async function mergeYahooExDividendsIntoQuarterly(
   const fromChart = extractYahooDividendEvents(chartResult);
   const fromHist = extractHistoricalDividendRows(histRows);
   const divs = mergeChartAndHistoricalDividends(fromChart, fromHist);
-  if (divs.length === 0) return false;
+  if (divs.length === 0) return { writtenDates: [] };
 
+  const tagged = bundle as DividendQuarterlyCurrencyBundle;
+  const previousListing = tagged.__dividendListingDates ?? [];
   const applied = overlayQuarterlyDividends(bundle.dividendQuarterly, divs, mode);
-  bundle.dividendQuarterly = applied.rows;
-  // Whole series is listing currency only when no reporting-currency DPS was left behind.
-  return applied.wrote > 0 && applied.kept === 0;
+  let rows = applied.rows;
+  let listingDates = [...new Set([...previousListing, ...applied.listingDates])];
+  if (mode === "overwrite") {
+    const repaired = dropStaleOpenWindowSum(rows, applied.listingDates, previousListing);
+    rows = repaired.rows;
+    listingDates = [...new Set([...repaired.listingDates, ...applied.listingDates])];
+  }
+  bundle.dividendQuarterly = rows;
+  tagged.__dividendListingDates = listingDates;
+  return { writtenDates: applied.listingDates };
 }
 
 /**
@@ -300,7 +316,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
 
     const existingHistLen = bundle.historical?.length ?? 0;
 
-    const [quoteResult, dailyBars, chartIntraday, quoteSummaryResult, fxQuote] =
+    const [quoteResult, dailyBars, chartIntraday, quoteSummaryResult, fxQuote, gapFillDividends] =
       await Promise.all([
         yahooFinance.quote(resolved).catch(() => null),
         fetchDailyPriceBars(resolved, period2Str),
@@ -324,7 +340,9 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
           })
           .catch(() => null),
         yahooFinance.quote("EURUSD=X").catch(() => null),
-        mergeYahooExDividendsIntoQuarterly(bundle, resolved, "fill-gaps").catch(() => false),
+        mergeYahooExDividendsIntoQuarterly(bundle, resolved, "fill-gaps").catch(() => ({
+          writtenDates: [] as string[],
+        })),
       ]);
 
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
@@ -359,30 +377,47 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     bundle.quote = quote;
     bundle.investor = mapInvestorMetrics(rawQuote, qs);
 
-    // Currency the financial statements are reported in (may differ from the quote
-    // currency: ASML reports EUR but the ADR quotes USD; FB2A.DE quotes EUR but
-    // Meta reports USD).
-    const finCcy = rawQuote.financialCurrency;
+    // Reporting currency vs listing currency. GBp is pence of GBP, not a
+    // separate currency (ASML reports EUR / quotes USD; FB2A.DE quotes EUR /
+    // Meta reports USD; VOD.L quotes GBp / reports EUR).
+    const finRaw = typeof rawQuote.financialCurrency === "string" ? rawQuote.financialCurrency : "";
+    const quoteRaw = bundle.investor?.currency ?? "";
+    const finCcy = quoteCurrencyMajor(finRaw);
+    const quoteCcy = quoteCurrencyMajor(quoteRaw);
     const tagged = bundle as DividendQuarterlyCurrencyBundle;
-    if (typeof finCcy === "string" && /^[A-Z]{3}$/.test(finCcy)) {
-      tagged.__financialCurrency = finCcy;
-    }
+    if (finCcy.code) tagged.__financialCurrency = finCcy.code;
 
-    const quoteCcy = bundle.investor?.currency;
-    // Yahoo ex-div cash is already in the listing currency. When that is not the
-    // reporting currency, replace DPS so we don't FX-scale euros (or dollars) twice.
-    if (
-      typeof finCcy === "string" &&
-      typeof quoteCcy === "string" &&
-      finCcy !== quoteCcy &&
-      tagged.__dividendQuarterlyCurrency !== quoteCcy
-    ) {
-      const quoteCurrencySeries = await mergeYahooExDividendsIntoQuarterly(
+    const writtenNow = new Set(gapFillDividends.writtenDates.map((d) => d.slice(0, 10)));
+    if (finCcy.code && quoteCcy.code && finCcy.code !== quoteCcy.code) {
+      const overwritten = await mergeYahooExDividendsIntoQuarterly(
         bundle,
         resolved,
         "overwrite",
-      ).catch(() => false);
-      if (quoteCurrencySeries) tagged.__dividendQuarterlyCurrency = quoteCcy;
+      ).catch(() => ({ writtenDates: [] as string[] }));
+      for (const d of overwritten.writtenDates) writtenNow.add(d.slice(0, 10));
+    }
+
+    if (isPenceQuoteCurrency(quoteRaw)) {
+      // Chart ex-div cash is pence. Annual dividendRate is usually already pounds.
+      for (const row of bundle.dividendQuarterly) {
+        if (!writtenNow.has(row.date.slice(0, 10)) || row.dividendPerShare == null) continue;
+        row.dividendPerShare = row.dividendPerShare / 100;
+      }
+      const majorRate = dividendRateToMajorUnits(
+        bundle.investor.dividendRate,
+        bundle.quote.price,
+        quoteRaw,
+      );
+      bundle.investor = { ...bundle.investor, currency: "GBP", dividendRate: majorRate };
+    }
+
+    const listingDates = tagged.__dividendListingDates ?? [];
+    const unmarkedPositive = bundle.dividendQuarterly.some((row) => {
+      const dps = row.dividendPerShare;
+      return dps != null && dps > 0 && !listingDates.includes(row.date.slice(0, 10));
+    });
+    if (quoteCcy.code && listingDates.length > 0 && !unmarkedPositive) {
+      tagged.__dividendQuarterlyCurrency = quoteCcy.code;
     }
 
     if ((bundle.historical?.length ?? 0) === 0 && quote.price > 0) {
@@ -427,20 +462,33 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
  */
 export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle): Promise<void> {
   const tagged = bundle as DividendQuarterlyCurrencyBundle;
-  const finCcy = tagged.__financialCurrency;
-  const quoteCcy = bundle.investor?.currency;
-  if (!finCcy || !quoteCcy || finCcy === quoteCcy) return;
-  if (!/^[A-Z]{3}$/.test(finCcy) || !/^[A-Z]{3}$/.test(quoteCcy)) return;
+  const fin = quoteCurrencyMajor(tagged.__financialCurrency);
+  const quote = quoteCurrencyMajor(bundle.investor?.currency);
+  if (!fin.code || !quote.code || fin.code === quote.code) return;
   try {
-    const fx = await yahooFinance.quote(`${finCcy}${quoteCcy}=X`);
+    const fx = await yahooFinance.quote(`${fin.code}${quote.code}=X`);
     const f = Array.isArray(fx) ? fx[0] : fx;
     const rate = Number((f as { regularMarketPrice?: unknown })?.regularMarketPrice);
     if (!Number.isFinite(rate) || rate <= 0) return;
-    const dividendsInQuoteCurrency =
-      tagged.__dividendQuarterlyCurrency === quoteCcy ||
-      dividendsAlreadyInQuoteCurrency(bundle.dividendQuarterly, bundle.investor.dividendRate, rate);
-    convertBundleFundamentals(bundle, rate, { convertDividends: !dividendsInQuoteCurrency });
-    bundle.investor = { ...bundle.investor, currency: quoteCcy };
+    const plan = dividendFxPlan({
+      listingDates: tagged.__dividendListingDates,
+      stampedQuoteCurrency: tagged.__dividendQuarterlyCurrency,
+      quoteCurrency: quote.code,
+      points: bundle.dividendQuarterly,
+      quoteAnnualDividend: bundle.investor.dividendRate,
+      quotePerFinancial: rate,
+    });
+    convertBundleFundamentals(bundle, rate, { convertDividends: false });
+    if (plan === "all") {
+      bundle.dividendQuarterly = applyDividendFx(bundle.dividendQuarterly, null, rate);
+    } else if (plan === "unmarked") {
+      bundle.dividendQuarterly = applyDividendFx(
+        bundle.dividendQuarterly,
+        new Set((tagged.__dividendListingDates ?? []).map((d) => d.slice(0, 10))),
+        rate,
+      );
+    }
+    bundle.investor = { ...bundle.investor, currency: quote.code };
   } catch {
     /* keep native-currency fundamentals if the FX fetch fails */
   }

@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import {
   BGN_PER_EUR,
   convertPortfolioMoney,
+  dividendRateToMajorUnits,
   inferCurrencyFromSymbol,
   listingCurrencyOverride,
   normalizeQuotePrice,
+  quoteCurrencyMajor,
 } from "@/lib/portfolioFx";
 
 describe("listingCurrencyOverride", () => {
@@ -54,5 +56,29 @@ describe("normalizeQuotePrice", () => {
     const n = normalizeQuotePrice(539.7, "GBp");
     assert.equal(n.currency, "GBP");
     assert.equal(Number(n.price.toFixed(4)), 5.397);
+  });
+});
+
+describe("quoteCurrencyMajor", () => {
+  it("treats GBp as pence of GBP and leaves ISO codes alone", () => {
+    assert.deepEqual(quoteCurrencyMajor("GBp"), { code: "GBP", minorPerMajor: 100 });
+    assert.deepEqual(quoteCurrencyMajor("GBX"), { code: "GBP", minorPerMajor: 100 });
+    assert.deepEqual(quoteCurrencyMajor("EUR"), { code: "EUR", minorPerMajor: 1 });
+    assert.deepEqual(quoteCurrencyMajor("gbp"), { code: "GBP", minorPerMajor: 1 });
+  });
+});
+
+describe("dividendRateToMajorUnits", () => {
+  it("keeps a Yahoo dividendRate that is already pounds on a pence quote", () => {
+    // VOD.L: price ~126.7 pence, dividendRate 0.04 pounds, yield ~3.16%.
+    assert.equal(dividendRateToMajorUnits(0.04, 126.7, "GBp"), 0.04);
+  });
+
+  it("divides a dividendRate that is still in pence", () => {
+    assert.equal(dividendRateToMajorUnits(4, 126.7, "GBp"), 0.04);
+  });
+
+  it("leaves a USD annual rate unchanged", () => {
+    assert.equal(dividendRateToMajorUnits(2.1, 500, "USD"), 2.1);
   });
 });

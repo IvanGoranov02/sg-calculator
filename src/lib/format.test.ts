@@ -49,9 +49,13 @@ describe("formatCurrencyPerShare", () => {
     assert.match(formatCurrency(1.83, "EUR"), /^€1\.83/);
   });
 
-  it("formats pence quotes as pounds", () => {
+  it("formats pence quotes as pounds after dividing by 100", () => {
     assert.equal(intlCurrencyCode("GBp"), "GBP");
-    assert.match(formatCurrencyPerShare(0.5, "GBp"), /^£0\.50/);
+    assert.equal(intlCurrencyCode("GBX"), "GBP");
+    // VOD.L latest ex-div is ~2.03 pence. Relabeling GBp as GBP without /100 showed £2.03.
+    assert.match(formatCurrencyPerShare(2.03, "GBp"), /^£0\.0203/);
+    assert.match(formatCurrencyPerShare(2.0267887, "GBX"), /^£0\.0203/);
+    assert.doesNotMatch(formatCurrencyPerShare(2.03, "GBp"), /^£2/);
   });
 });
 

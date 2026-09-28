@@ -1,3 +1,5 @@
+import { isPenceQuoteCurrency } from "@/lib/portfolioFx";
+
 const currencyFmt = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -77,9 +79,15 @@ const moneyFmtCache = new Map<string, Intl.NumberFormat>();
 /** ISO currency for Intl. Yahoo pence quotes (GBp/GBX) format as GBP. */
 export function intlCurrencyCode(currency: string | null | undefined): string {
   const raw = (currency ?? "USD").trim();
-  if (/^gb[px]$/i.test(raw)) return "GBP";
+  if (isPenceQuoteCurrency(raw)) return "GBP";
   const upper = raw.toUpperCase();
   return /^[A-Z]{3}$/.test(upper) ? upper : "USD";
+}
+
+/** GBp/GBX amounts are pence. Display them as pounds; do not relabel without /100. */
+function amountForFormat(n: number, currency: string | null | undefined): { amount: number; code: string } {
+  if (isPenceQuoteCurrency(currency)) return { amount: n / 100, code: "GBP" };
+  return { amount: n, code: intlCurrencyCode(currency) };
 }
 
 function cachedMoneyFormat(currency: string, maximumFractionDigits: number, minimumFractionDigits: number): Intl.NumberFormat {
@@ -108,13 +116,15 @@ function cachedMoneyFormat(currency: string, maximumFractionDigits: number, mini
 }
 
 export function formatCurrency(n: number, currency = "USD"): string {
-  if (intlCurrencyCode(currency) === "USD") return currencyFmt.format(n);
-  return cachedMoneyFormat(currency, 2, 2).format(n);
+  const { amount, code } = amountForFormat(n, currency);
+  if (code === "USD") return currencyFmt.format(amount);
+  return cachedMoneyFormat(code, 2, 2).format(amount);
 }
 
 export function formatCurrencyPerShare(n: number, currency = "USD"): string {
-  if (intlCurrencyCode(currency) === "USD") return perShareFmt.format(n);
-  return cachedMoneyFormat(currency, 4, 2).format(n);
+  const { amount, code } = amountForFormat(n, currency);
+  if (code === "USD") return perShareFmt.format(amount);
+  return cachedMoneyFormat(code, 4, 2).format(amount);
 }
 
 /** Extract yyyy-mm-dd from ISO date or datetime; null if missing or unparseable. */
