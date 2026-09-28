@@ -1,3 +1,5 @@
+import { isPenceQuoteCurrency } from "@/lib/portfolioFx";
+
 const currencyFmt = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -16,10 +18,6 @@ const compactFmt = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
-
-export function formatCurrency(n: number): string {
-  return currencyFmt.format(n);
-}
 
 export function formatCurrencyEur(n: number): string {
   return currencyEurFmt.format(n);
@@ -76,8 +74,57 @@ const perShareFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 4,
 });
 
-export function formatCurrencyPerShare(n: number): string {
-  return perShareFmt.format(n);
+const moneyFmtCache = new Map<string, Intl.NumberFormat>();
+
+/** ISO currency for Intl. Yahoo pence quotes (GBp/GBX) format as GBP. */
+export function intlCurrencyCode(currency: string | null | undefined): string {
+  const raw = (currency ?? "USD").trim();
+  if (isPenceQuoteCurrency(raw)) return "GBP";
+  const upper = raw.toUpperCase();
+  return /^[A-Z]{3}$/.test(upper) ? upper : "USD";
+}
+
+/** GBp/GBX amounts are pence. Display them as pounds; do not relabel without /100. */
+function amountForFormat(n: number, currency: string | null | undefined): { amount: number; code: string } {
+  if (isPenceQuoteCurrency(currency)) return { amount: n / 100, code: "GBP" };
+  return { amount: n, code: intlCurrencyCode(currency) };
+}
+
+function cachedMoneyFormat(currency: string, maximumFractionDigits: number, minimumFractionDigits: number): Intl.NumberFormat {
+  const code = intlCurrencyCode(currency);
+  const key = `${code}:${minimumFractionDigits}:${maximumFractionDigits}`;
+  const hit = moneyFmtCache.get(key);
+  if (hit) return hit;
+  let fmt: Intl.NumberFormat;
+  try {
+    fmt = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits,
+      maximumFractionDigits,
+    });
+  } catch {
+    fmt = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits,
+      maximumFractionDigits,
+    });
+  }
+  moneyFmtCache.set(key, fmt);
+  return fmt;
+}
+
+export function formatCurrency(n: number, currency = "USD"): string {
+  const { amount, code } = amountForFormat(n, currency);
+  if (code === "USD") return currencyFmt.format(amount);
+  return cachedMoneyFormat(code, 2, 2).format(amount);
+}
+
+export function formatCurrencyPerShare(n: number, currency = "USD"): string {
+  const { amount, code } = amountForFormat(n, currency);
+  if (code === "USD") return perShareFmt.format(amount);
+  return cachedMoneyFormat(code, 4, 2).format(amount);
 }
 
 /** Extract yyyy-mm-dd from ISO date or datetime; null if missing or unparseable. */

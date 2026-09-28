@@ -39,6 +39,13 @@ export type CachePayload = StockAnalysisBundle & {
   __gapFillAt?: string;
   /** Where the fundamentals came from; EDGAR data is authoritative over Yahoo on re-merge. */
   __fundamentalsSource?: FundamentalsSource;
+  /**
+   * Currency of `dividendQuarterly` when every positive row is listing cash
+   * (quote currency) rather than the financial-reporting currency.
+   */
+  __dividendQuarterlyCurrency?: string;
+  /** Quarter-end dates whose DPS is listing cash in major units. FX skips these rows only. */
+  __dividendListingDates?: string[];
   historical?: StockAnalysisBundle["historical"];
   intraday?: StockAnalysisBundle["intraday"];
   eurPerUsd?: StockAnalysisBundle["eurPerUsd"];

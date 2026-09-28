@@ -56,9 +56,11 @@ type FundamentalChartCardProps = {
   growthNote?: string | null;
   /** Multi-horizon growth pill badges (1Y / 2Y / 3Y). */
   growthPills?: GrowthPillsEntry[] | null;
+  /** Quote currency for per-share amounts (USD when omitted). */
+  currency?: string;
 };
 
-function formatTooltipValue(fmt: ValueFormat, v: number): string {
+function formatTooltipValue(fmt: ValueFormat, v: number, currency?: string): string {
   if (!Number.isFinite(v)) return "—";
   switch (fmt) {
     case "currency":
@@ -68,7 +70,7 @@ function formatTooltipValue(fmt: ValueFormat, v: number): string {
     case "ratio":
       return formatRatio(v);
     case "perShare":
-      return formatCurrencyPerShare(v);
+      return formatCurrencyPerShare(v, currency);
     case "compactCount":
       return formatVolume(v);
     default:
@@ -76,7 +78,7 @@ function formatTooltipValue(fmt: ValueFormat, v: number): string {
   }
 }
 
-function axisTick(fmt: ValueFormat, v: number): string {
+function axisTick(fmt: ValueFormat, v: number, currency?: string): string {
   if (!Number.isFinite(v)) return "";
   switch (fmt) {
     case "currency":
@@ -86,7 +88,7 @@ function axisTick(fmt: ValueFormat, v: number): string {
     case "ratio":
       return formatRatio(v);
     case "perShare":
-      return formatCurrencyPerShare(v);
+      return formatCurrencyPerShare(v, currency);
     case "compactCount":
       return formatVolume(v);
     default:
@@ -106,6 +108,7 @@ export function FundamentalChartCard({
   className,
   growthNote,
   growthPills,
+  currency,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const pillLabels = useMemo(
@@ -134,7 +137,7 @@ export function FundamentalChartCard({
     const v = Array.isArray(value) ? value[0] : value;
     if (v === undefined || v === null) return "—";
     const n = typeof v === "number" ? v : Number(v);
-    return formatTooltipValue(valueFormat, n);
+    return formatTooltipValue(valueFormat, n, currency);
   }
 
   const periodDisplayLabels = useMemo(() => {
@@ -188,7 +191,7 @@ export function FundamentalChartCard({
             tickLine={false}
             axisLine={false}
             width={68}
-            tickFormatter={(v: number) => axisTick(valueFormat, v)}
+            tickFormatter={(v: number) => axisTick(valueFormat, v, currency)}
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
@@ -237,7 +240,7 @@ export function FundamentalChartCard({
             tickLine={false}
             axisLine={false}
             width={68}
-            tickFormatter={(v: number) => axisTick(valueFormat, v)}
+            tickFormatter={(v: number) => axisTick(valueFormat, v, currency)}
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
@@ -386,7 +389,7 @@ export function FundamentalChartCard({
                       const n = v == null ? NaN : typeof v === "number" ? v : Number(v);
                       return (
                         <td key={s.dataKey} className="px-3 py-1.5 text-right font-mono tabular-nums">
-                          {Number.isFinite(n) ? formatTooltipValue(valueFormat, n) : "—"}
+                          {Number.isFinite(n) ? formatTooltipValue(valueFormat, n, currency) : "—"}
                         </td>
                       );
                     })}

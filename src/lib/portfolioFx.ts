@@ -25,6 +25,41 @@ export function isPenceQuoteCurrency(raw: string | null | undefined): boolean {
   return c === "GBp" || c === "GBX";
 }
 
+/**
+ * Quote currency in major units. Yahoo's `GBp`/`GBX` is pence (100 per pound),
+ * not a third ISO currency next to GBP.
+ */
+export function quoteCurrencyMajor(raw: string | null | undefined): { code: string; minorPerMajor: number } {
+  if (isPenceQuoteCurrency(raw)) return { code: "GBP", minorPerMajor: 100 };
+  const c = (raw ?? "").trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(c)) return { code: c, minorPerMajor: 1 };
+  return { code: "", minorPerMajor: 1 };
+}
+
+/**
+ * Annual dividend rate in major units.
+ * LSE ex-div events and the price are pence, but Yahoo's `dividendRate` is
+ * usually already pounds (it matches the yield against price/100). Divide only
+ * when the pence reading is a plausible yield and the pound reading is not.
+ */
+export function dividendRateToMajorUnits(
+  rate: number | null | undefined,
+  price: number | null | undefined,
+  currency: string | null | undefined,
+): number | null {
+  if (rate == null || !Number.isFinite(rate)) return rate ?? null;
+  const { minorPerMajor } = quoteCurrencyMajor(currency);
+  if (minorPerMajor === 1) return rate;
+  const px = price != null && Number.isFinite(price) && price > 0 ? price : null;
+  if (px == null) return rate >= minorPerMajor ? rate / minorPerMajor : rate;
+  const priceMajor = px / minorPerMajor;
+  const yieldIfMajor = rate / priceMajor;
+  const yieldIfMinor = rate / px;
+  const sane = (y: number) => y >= 0.002 && y <= 0.25;
+  if (sane(yieldIfMinor) && !sane(yieldIfMajor)) return rate / minorPerMajor;
+  return rate;
+}
+
 /** Normalize Yahoo quote price/currency (GBp → GBP with price / 100). */
 export function normalizeQuotePrice(
   price: number,
