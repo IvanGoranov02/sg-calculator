@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildBlockedYahooSymbols,
+  dipVs200dForBrokerPrice,
   isTrapQuoteRow,
   pickBestQuoteRow,
   shouldPreferBrokerPrice,
@@ -232,6 +233,57 @@ describe("shouldPreferBrokerPrice", () => {
         brokerFirst: true,
       }),
       true,
+    );
+  });
+});
+
+describe("dipVs200dForBrokerPrice", () => {
+  it("recomputes dip from the broker price when Yahoo SMA currency matches", () => {
+    const dip = dipVs200dForBrokerPrice(
+      { price: 180, currency: "EUR" },
+      { currency: "EUR", twoHundredDayAverage: 200 },
+    );
+    assert.equal(dip.twoHundredDayAverage, 200);
+    assert.equal(dip.dipVsSma200Pct, -10);
+  });
+
+  it("treats GBp and GBP as the same currency", () => {
+    const dip = dipVs200dForBrokerPrice(
+      { price: 12.5, currency: "GBP" },
+      { currency: "GBp", twoHundredDayAverage: 10 },
+    );
+    assert.equal(dip.twoHundredDayAverage, 10);
+    assert.equal(dip.dipVsSma200Pct, 25);
+  });
+
+  it("leaves dip blank when Yahoo has no 200-day average", () => {
+    assert.deepEqual(
+      dipVs200dForBrokerPrice({ price: 180, currency: "USD" }, { currency: "USD", twoHundredDayAverage: null }),
+      { twoHundredDayAverage: null, dipVsSma200Pct: null },
+    );
+  });
+
+  it("leaves dip blank when Yahoo quote is missing", () => {
+    assert.deepEqual(dipVs200dForBrokerPrice({ price: 180, currency: "USD" }, null), {
+      twoHundredDayAverage: null,
+      dipVsSma200Pct: null,
+    });
+  });
+
+  it("does not invent a dip when SMA currency differs from the displayed price", () => {
+    assert.deepEqual(
+      dipVs200dForBrokerPrice(
+        { price: 180, currency: "EUR" },
+        { currency: "USD", twoHundredDayAverage: 200 },
+      ),
+      { twoHundredDayAverage: null, dipVsSma200Pct: null },
+    );
+  });
+
+  it("leaves dip blank when the average is zero", () => {
+    assert.deepEqual(
+      dipVs200dForBrokerPrice({ price: 180, currency: "USD" }, { currency: "USD", twoHundredDayAverage: 0 }),
+      { twoHundredDayAverage: null, dipVsSma200Pct: null },
     );
   });
 });

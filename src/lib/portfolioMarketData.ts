@@ -12,6 +12,7 @@ import { normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency }
 import {
   buildBlockedYahooSymbols,
   isBlockedYahooSymbol,
+  dipVs200dForBrokerPrice,
   pickBestQuoteRow,
   searchQueryForPortfolioSymbol,
   shouldPreferBrokerPrice,
@@ -296,6 +297,12 @@ function mergeBrokerQuote(
   broker: { price: number; currency: string },
 ): PortfolioQuoteRow {
   const brokerCcy = normalizePortfolioCurrency(broker.currency);
+  const dip = dipVs200dForBrokerPrice(
+    { price: broker.price, currency: brokerCcy },
+    best
+      ? { currency: best.currency, twoHundredDayAverage: best.twoHundredDayAverage }
+      : null,
+  );
   return {
     symbol: portfolioSymbol,
     resolvedYahooSymbol: best?.resolvedYahooSymbol,
@@ -305,8 +312,8 @@ function mergeBrokerQuote(
     dividendYield: best?.dividendYield ?? null,
     dividendRate: best?.dividendRate ?? null,
     changePercent: 0,
-    twoHundredDayAverage: null,
-    dipVsSma200Pct: null,
+    twoHundredDayAverage: dip.twoHundredDayAverage,
+    dipVsSma200Pct: dip.dipVsSma200Pct,
     nextEarnings: best?.nextEarnings ?? null,
     sector: best?.sector ?? null,
     fromBroker: true,
