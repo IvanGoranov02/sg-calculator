@@ -125,12 +125,48 @@ export type DipChartRow = {
   sma200: number | null;
 };
 
-/** Compact chart axis label: company name when available, else ticker. */
+/** Longest angled-axis label that stays fully visible beside a narrow bar. */
+const DIP_AXIS_LABEL_MAX = 10;
+
+const TRAILING_LEGAL =
+  /(?:\s+|,\s*)(?:incorporated|corporation|company|holdings|holding|group|limited|inc|corp|ltd|plc|llc|lp|n\.v|s\.a|sa|ag|nv|se|co|class\s+[a-z])\.?$/i;
+
+const GENERIC_NAME_TAIL =
+  /^(platforms?|group|holdings?|technolog(?:y|ies)|systems?|communications?|entertainment|financial|services|pharmaceuticals?|energy|motors?|solutions|partners|international|global)$/i;
+
+/** Drop legal suffixes so "Apple Inc." can render as "Apple". */
+function shortenCompanyName(name: string): string {
+  let short = name.trim();
+  let prev = "";
+  while (short && short !== prev) {
+    prev = short;
+    short = short.replace(TRAILING_LEGAL, "").replace(/[,\s.]+$/, "").trim();
+  }
+  return short.replace(/\.com$/i, "").trim();
+}
+
+/**
+ * Readable dip-chart axis label.
+ * Uses a short company name when it fits; otherwise the ticker (never a clipped stub).
+ */
 export function dipChartAxisLabel(symbol: string, name?: string | null): string {
+  const ticker = symbol.trim();
   const trimmed = name?.trim();
-  if (!trimmed) return symbol;
-  if (trimmed.length <= 14) return trimmed;
-  return `${trimmed.slice(0, 12)}…`;
+  if (!trimmed) return ticker;
+
+  const short = shortenCompanyName(trimmed);
+  if (short.length > 0 && short.length <= DIP_AXIS_LABEL_MAX) return short;
+
+  const words = short.split(/\s+/).filter((word) => word.length > 0 && !/^the$/i.test(word));
+  if (
+    words.length >= 2 &&
+    words[0].length <= DIP_AXIS_LABEL_MAX &&
+    words.slice(1).every((word) => GENERIC_NAME_TAIL.test(word))
+  ) {
+    return words[0];
+  }
+
+  return ticker || short;
 }
 
 /** Default Y domain when there is no data to plot. */

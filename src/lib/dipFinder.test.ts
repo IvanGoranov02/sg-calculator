@@ -189,10 +189,24 @@ describe("remapPortfolioDipHistory", () => {
 });
 
 describe("dipChartAxisLabel", () => {
-  it("prefers company name and truncates long labels", () => {
-    assert.equal(dipChartAxisLabel("AAPL", "Apple Inc."), "Apple Inc.");
-    assert.equal(dipChartAxisLabel("AAPL", "International Business Machines Corporation"), "Internationa…");
+  it("uses a short company name when it fits the axis", () => {
+    assert.equal(dipChartAxisLabel("AAPL", "Apple Inc."), "Apple");
+    assert.equal(dipChartAxisLabel("MSFT", "Microsoft Corporation"), "Microsoft");
+    assert.equal(dipChartAxisLabel("AMZN", "Amazon.com, Inc."), "Amazon");
+    assert.equal(dipChartAxisLabel("META", "Meta Platforms, Inc."), "Meta");
+    assert.equal(dipChartAxisLabel("NVDA", "NVIDIA Corporation"), "NVIDIA");
+    assert.equal(dipChartAxisLabel("ASML.AS", "ASML Holding N.V."), "ASML");
+  });
+
+  it("uses the ticker when the name would be clipped", () => {
+    assert.equal(
+      dipChartAxisLabel("IBM", "International Business Machines Corporation"),
+      "IBM",
+    );
+    assert.equal(dipChartAxisLabel("BRK-B", "Berkshire Hathaway Inc."), "BRK-B");
+    assert.equal(dipChartAxisLabel("JNJ", "Johnson & Johnson"), "JNJ");
     assert.equal(dipChartAxisLabel("AAPL", null), "AAPL");
+    assert.equal(dipChartAxisLabel("AAPL", "   "), "AAPL");
   });
 });
 
@@ -226,7 +240,7 @@ describe("dipChartRowForQuote", () => {
     const row = dipChartRowForQuote(quote, bars, "5d");
     assert.ok(row);
     assert.equal(row!.name, "Test Corp");
-    assert.equal(row!.axisLabel, "Test Corp");
+    assert.equal(row!.axisLabel, "Test");
     assert.notEqual(row!.dipPct, quote.dipVsSma200Pct);
     assert.ok(row!.windowSma != null);
     assert.equal(row!.dipPct, ((90 - row!.windowSma!) / row!.windowSma!) * 100);
