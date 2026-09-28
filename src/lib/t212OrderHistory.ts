@@ -224,6 +224,29 @@ export function isT212OrdersCacheStale(
   return Date.now() - cachedAt.getTime() > STALE_MS;
 }
 
+export type OrdersCacheRefreshDecision = {
+  /** True only for the portfolio Refresh control, not page load or backfill polls. */
+  userRefresh: boolean;
+  scopeDenied: boolean;
+  ordersPartial: boolean;
+  nextPagePath: string | null;
+  /** This cache already reconstructs months that match open positions. */
+  usedQuantityTimeline: boolean;
+};
+
+/**
+ * Refresh re-probes `history:orders` when the stored walk cannot draw the chart
+ * (missing scope, empty cache, or a finished walk that does not match positions).
+ * A healthy timeline stays put. A partial walk with a resume cursor continues.
+ */
+export function shouldRebuildOrdersCacheOnRefresh(input: OrdersCacheRefreshDecision): boolean {
+  if (!input.userRefresh) return false;
+  if (input.scopeDenied) return true;
+  if (input.usedQuantityTimeline) return false;
+  if (input.ordersPartial && normalizeT212OrdersResumePath(input.nextPagePath)) return false;
+  return true;
+}
+
 export type T212OrdersCacheWriteDecision = {
   items: T212HistoryOrderItem[];
   partial: boolean;

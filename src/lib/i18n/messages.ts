@@ -693,7 +693,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueHistoryPartialPaused:
         "Some earlier months are still on Trading 212. Refresh this page to keep loading them.",
       valueHistoryMissingScope:
-        "Trading 212 did not grant history access for this API key. Enable read-only history (orders), then disconnect and reconnect so this chart can rebuild.",
+        "Trading 212 did not grant history access for this API key. Enable read-only history (orders), then use Refresh data so this chart can rebuild.",
       valueHistoryMismatch:
         "These fills do not line up with your open positions (transfers, pies, or share counts), so earlier months were not estimated. Enter a monthly value below if you want those months on the chart.",
       valueHistoryEmpty: "No portfolio value history yet.",
@@ -1685,7 +1685,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueHistoryPartialPaused:
         "По-ранни месеци още са в Trading 212. Презареди страницата, за да продължи зареждането.",
       valueHistoryMissingScope:
-        "Trading 212 не даде достъп до историята за този API ключ. Включи история само за четене (поръчки), после премахни и свържи отново, за да се преизчисли графиката.",
+        "Trading 212 не даде достъп до историята за този API ключ. Включи история само за четене (поръчки), после натисни „Обнови данните“, за да се преизчисли графиката.",
       valueHistoryMismatch:
         "Сделките не съвпадат с отворените позиции (прехвърляния, pies или брой акции), затова по-ранните месеци не са оценени. Въведи месечна стойност по-долу, ако искаш тези месеци на графиката.",
       valueHistoryEmpty: "Все още няма история на стойността на портфолиото.",

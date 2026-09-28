@@ -24,11 +24,14 @@ import {
   quantityTimelineMatchesHoldings,
 } from "@/lib/portfolioValueHistory";
 import {
+  clearedT212OrdersCacheData,
   isT212OrdersCacheStale,
   isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
+  ordersCacheGenerationWhere,
   readT212OrdersCache,
   refreshT212OrdersCache,
+  shouldRebuildOrdersCacheOnRefresh,
 } from "@/lib/t212OrderHistory";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
   const requestedBase = url.searchParams.get("base");
 
   try {
-    const [holdings, snapshots, manualRows, fx, t212] = await Promise.all([
+    const [holdings, snapshots, manualRows, fx, t212Row] = await Promise.all([
       prisma.portfolioHolding.findMany({
         where: { userId },
         select: { symbolYahoo: true, symbolT212: true, quantity: true, currency: true, brokerPrice: true, source: true },
@@ -75,12 +78,55 @@ export async function GET(request: Request) {
       (holdings.length > 0 ? pickBaseCurrencyFromHoldings(holdings) : "USD");
     const baseCurrency = parseChartBaseCurrency(requestedBase, fallbackBase);
 
+    let t212 = t212Row;
     let ordersRead = t212 ? readT212OrdersCache(t212) : null;
     let orderItems = ordersRead?.items ?? [];
     let ordersPartial = ordersRead?.partial ?? false;
     let ordersError = ordersRead?.error ?? null;
     let ordersNextPath = ordersRead?.nextPagePath ?? null;
     const thisMonth = currentMonthKey();
+    const userRefresh = url.searchParams.get("refresh") === "1";
+
+    if (t212 && isPortfolioEncryptionConfigured() && userRefresh) {
+      const scopeDeniedNow = isT212OrdersScopeDenied(ordersError);
+      const previewEvents = mapT212OrderItemsToQtyEvents(orderItems);
+      const previewMonths = calendarMonthsForEvents(previewEvents);
+      let previewTimeline =
+        !ordersPartial && !scopeDeniedNow && previewMonths.length > 0
+          ? quantitiesByMonthFromEvents(previewEvents, previewMonths)
+          : undefined;
+      if (previewTimeline && !quantityTimelineMatchesHoldings(previewTimeline, thisMonth, holdings)) {
+        previewTimeline = undefined;
+      }
+      // Same cache clear as a credential reconnect, only when this walk cannot draw the chart.
+      if (
+        shouldRebuildOrdersCacheOnRefresh({
+          userRefresh: true,
+          scopeDenied: scopeDeniedNow,
+          ordersPartial,
+          nextPagePath: ordersNextPath,
+          usedQuantityTimeline: previewTimeline != null,
+        })
+      ) {
+        await prisma.trading212Connection.updateMany({
+          where: ordersCacheGenerationWhere(userId, {
+            apiKeyEnc: t212.apiKeyEnc,
+            environment: t212.environment,
+            ordersCachedAt: t212.ordersCachedAt,
+            ordersCacheNextPath: t212.ordersCacheNextPath ?? null,
+            ordersCachePartial: t212.ordersCachePartial,
+            ordersCacheError: t212.ordersCacheError,
+          }),
+          data: clearedT212OrdersCacheData(),
+        });
+        t212 = await prisma.trading212Connection.findUnique({ where: { userId } });
+        ordersRead = t212 ? readT212OrdersCache(t212) : null;
+        orderItems = ordersRead?.items ?? [];
+        ordersPartial = ordersRead?.partial ?? false;
+        ordersError = ordersRead?.error ?? null;
+        ordersNextPath = ordersRead?.nextPagePath ?? null;
+      }
+    }
 
     if (
       t212 &&

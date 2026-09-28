@@ -155,6 +155,7 @@ export function PortfolioClient() {
   const historyPollCount = useRef(0);
   const historyLoadInFlight = useRef(false);
   const historyLoadQueued = useRef(false);
+  const historyRefreshQueued = useRef(false);
   const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
 
   useEffect(() => {
@@ -230,7 +231,9 @@ export function PortfolioClient() {
     }
   }, [t]);
 
-  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean }) => Promise<void>>(async () => {});
+  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean; refresh?: boolean }) => Promise<void>>(
+    async () => {},
+  );
 
   const clearHistoryPoll = useCallback(() => {
     if (historyPollTimer.current != null) {
@@ -253,9 +256,12 @@ export function PortfolioClient() {
     }, 60_000);
   }, [clearHistoryPoll]);
 
-  const loadValueHistory = useCallback(async (opts?: { poll?: boolean }) => {
+  const loadValueHistory = useCallback(async (opts?: { poll?: boolean; refresh?: boolean }) => {
     if (historyLoadInFlight.current) {
-      if (!opts?.poll) historyLoadQueued.current = true;
+      if (!opts?.poll) {
+        historyLoadQueued.current = true;
+        if (opts?.refresh) historyRefreshQueued.current = true;
+      }
       return;
     }
     historyLoadInFlight.current = true;
@@ -266,9 +272,9 @@ export function PortfolioClient() {
     }
     setValueHistoryLoading(true);
     try {
-      const res = await fetch(
-        `/api/portfolio/value-history?base=${encodeURIComponent(preferredPortfolioCurrency)}`,
-      );
+      const params = new URLSearchParams({ base: preferredPortfolioCurrency });
+      if (opts?.refresh) params.set("refresh", "1");
+      const res = await fetch(`/api/portfolio/value-history?${params.toString()}`);
       if (!res.ok) {
         if (opts?.poll) scheduleHistoryPoll();
         else setValueHistory(null);
@@ -295,8 +301,10 @@ export function PortfolioClient() {
       setValueHistoryLoading(false);
       historyLoadInFlight.current = false;
       if (historyLoadQueued.current) {
+        const refresh = historyRefreshQueued.current;
         historyLoadQueued.current = false;
-        void loadValueHistoryRef.current();
+        historyRefreshQueued.current = false;
+        void loadValueHistoryRef.current(refresh ? { refresh: true } : undefined);
       }
     }
   }, [clearHistoryPoll, preferredPortfolioCurrency, scheduleHistoryPoll]);
@@ -309,7 +317,7 @@ export function PortfolioClient() {
     setDividendsReloadToken((n) => n + 1);
   }, []);
 
-  const runSync = useCallback(async (): Promise<boolean> => {
+  const runSync = useCallback(async (opts?: { refreshHistory?: boolean }): Promise<boolean> => {
     setSyncing(true);
     setError(null);
     setPortfolioInfo(null);
@@ -327,11 +335,12 @@ export function PortfolioClient() {
         );
         setError(msg);
         await load({ clearPageError: false });
+        if (opts?.refreshHistory) await loadValueHistory({ refresh: true });
         return false;
       }
       setLastSyncT212Status(null);
       await load();
-      await loadValueHistory();
+      await loadValueHistory(opts?.refreshHistory ? { refresh: true } : undefined);
       reloadDividendsFromCache();
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
         setPortfolioInfo(t("portfolio.syncSkippedManual", { symbols: data.skippedDueToManual.join(", ") }));
@@ -340,6 +349,7 @@ export function PortfolioClient() {
     } catch {
       setError(t("portfolio.syncNetworkError"));
       await load({ clearPageError: false });
+      if (opts?.refreshHistory) await loadValueHistory({ refresh: true });
       return false;
     } finally {
       setSyncing(false);
@@ -348,11 +358,11 @@ export function PortfolioClient() {
 
   const refreshPortfolioData = useCallback(async () => {
     if (trading212?.connected && trading212.encryptionConfigured) {
-      await runSync();
+      await runSync({ refreshHistory: true });
       return;
     }
     await load();
-    await loadValueHistory();
+    await loadValueHistory({ refresh: true });
     setDividendsLiveRefreshToken((n) => n + 1);
   }, [load, loadValueHistory, runSync, trading212?.connected, trading212?.encryptionConfigured]);
 

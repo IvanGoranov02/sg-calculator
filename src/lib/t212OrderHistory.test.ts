@@ -11,6 +11,7 @@ import {
   mergeT212OrderItems,
   ordersCacheGenerationUnchanged,
   ordersCacheGenerationWhere,
+  shouldRebuildOrdersCacheOnRefresh,
   shouldRecordOrdersScopeDenial,
   T212_ORDERS_SCOPE_DENIED,
   t212OrderItemKey,
@@ -312,6 +313,90 @@ describe("orders cache reset and scope", () => {
     assert.equal(where.apiKeyEnc, "key-a");
     assert.equal(where.environment, "live");
     assert.notEqual(ordersCacheGenerationWhere("user-1", generation({ apiKeyEnc: "key-b" })).apiKeyEnc, where.apiKeyEnc);
+  });
+});
+
+describe("shouldRebuildOrdersCacheOnRefresh", () => {
+  const healthy = {
+    userRefresh: true,
+    scopeDenied: false,
+    ordersPartial: false,
+    nextPagePath: null,
+    usedQuantityTimeline: true,
+  };
+
+  it("keeps a healthy timeline on refresh", () => {
+    assert.equal(shouldRebuildOrdersCacheOnRefresh(healthy), false);
+  });
+
+  it("does not rebuild on background loads even when scope was denied", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        userRefresh: false,
+        scopeDenied: true,
+        ordersPartial: true,
+        usedQuantityTimeline: false,
+      }),
+      false,
+    );
+  });
+
+  it("re-probes when history scope was denied", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        scopeDenied: true,
+        ordersPartial: true,
+        usedQuantityTimeline: false,
+      }),
+      true,
+    );
+  });
+
+  it("restarts a finished cache that cannot explain open positions", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        usedQuantityTimeline: false,
+      }),
+      true,
+    );
+  });
+
+  it("restarts an empty complete cache", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        usedQuantityTimeline: false,
+        nextPagePath: null,
+      }),
+      true,
+    );
+  });
+
+  it("continues a partial walk that still has a cursor", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        ordersPartial: true,
+        nextPagePath: "/api/v0/equity/history/orders?cursor=abc",
+        usedQuantityTimeline: false,
+      }),
+      false,
+    );
+  });
+
+  it("restarts a partial walk whose cursor cannot be resumed", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        ordersPartial: true,
+        nextPagePath: "null",
+        usedQuantityTimeline: false,
+      }),
+      true,
+    );
   });
 });
 
