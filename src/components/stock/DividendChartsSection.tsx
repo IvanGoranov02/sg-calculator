@@ -3,27 +3,9 @@
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
-import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
-import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  computeTtmDpsGrowthPills,
-  rollingSum4Quarterly,
-  rollingSum4QuarterlyLoose,
-} from "@/lib/dividendMetrics";
-import { formatCurrencyPerShare } from "@/lib/format";
 import { growthPillsForKey } from "@/lib/growthPills";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { filterDividendQuarterlyByPeriod, quarterlyFilterYearBounds, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
@@ -63,9 +45,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
 
   const pack = useMemo(() => {
     const allSorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
-    const allDpsArr = allSorted.map((p) => p.dividendPerShare);
-    const allTtmStrict = rollingSum4Quarterly(allDpsArr);
-    const pills = computeTtmDpsGrowthPills(allTtmStrict);
     const allRows = allSorted.map((p) => ({ qDps: p.dividendPerShare }));
     const qDpsPills = growthPillsForKey(allRows, "qDps", "quarterly");
 
@@ -77,20 +56,12 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       quarterBounds,
     );
     const sorted = sortQuarterlyByDateAsc(filtered);
-    const dpsArr = sorted.map((p) => p.dividendPerShare);
-    const ttmStrict = rollingSum4Quarterly(dpsArr);
-    const loose = rollingSum4QuarterlyLoose(dpsArr);
-    const hasDps =
-      dpsArr.some((v) => v != null && (v as number) > 0) ||
-      ttmStrict.some((v) => v != null && (v as number) > 0) ||
-      loose.sums.some((v) => v != null && (v as number) > 0);
-    const rows = sorted.map((p, i) => ({
+    const hasDps = sorted.some((p) => p.dividendPerShare != null && p.dividendPerShare > 0);
+    const rows = sorted.map((p) => ({
       label: formatPeriod(p.date),
-      ttmDps: loose.sums[i],
-      ttmPartial: loose.partial[i],
-      qDps: dpsArr[i],
+      qDps: p.dividendPerShare,
     }));
-    return { rows, pills, hasDps, anyTtmPartial: loose.partial.some(Boolean), qDpsPills };
+    return { rows, hasDps, qDpsPills };
   }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
   const showsDividend = useMemo(() => {
@@ -105,15 +76,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       return true;
     return false;
   }, [data.investor, data.dividendQuarterly]);
-
-  const pillLabels = useMemo(
-    () => ({
-      oneYear: t("chartsFund.pill1Y"),
-      twoYear: t("chartsFund.pill2Y"),
-      threeYear: t("chartsFund.pill3Y"),
-    }),
-    [t],
-  );
 
   const qDpsSeries: FundamentalSeries[] = useMemo(
     () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
@@ -234,83 +196,16 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
           ) : null}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="border-border bg-card sm:col-span-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{t("chartsFund.dividendTtmTitle")}</CardTitle>
-            </CardHeader>
-            <CardContent className="min-h-0 min-w-0">
-              <div className="relative h-[240px] w-full min-h-[240px] min-w-0">
-                <div className="absolute inset-0 min-h-0 min-w-0">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                    <BarChart data={pack.rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tick={(props) => (
-                          <CategoryAxisTick {...props} total={pack.rows.length} maxLabels={8} />
-                        )}
-                        tickLine={false}
-                        interval={0}
-                        minTickGap={0}
-                        height={28}
-                      />
-                      <YAxis
-                        tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-                        width={76}
-                        tickFormatter={(v: number) => formatCurrencyPerShare(v, dividendCurrency)}
-                      />
-                      <Tooltip
-                        formatter={
-                          ((value: unknown, name: string, item: { payload?: { ttmPartial?: boolean } }) => {
-                            const v = Array.isArray(value) ? value[0] : value;
-                            if (v === undefined || v === null) return "—";
-                            const fmt = formatCurrencyPerShare(
-                              typeof v === "number" ? v : Number(v),
-                              dividendCurrency,
-                            );
-                            const partial = item?.payload?.ttmPartial === true;
-                            if (partial) {
-                              return [`${fmt} (${t("chartsFund.dividendTtmPartialShort")})`, name];
-                            }
-                            return [fmt, name];
-                          }) as never
-                        }
-                        contentStyle={{
-                          background: "rgba(9,9,11,0.95)",
-                          border: "1px solid var(--border)",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                        labelStyle={{ color: "var(--muted-foreground)" }}
-                      />
-                      <Bar
-                        dataKey="ttmDps"
-                        name={t("chartsFund.dividendTtmLabel")}
-                        fill="#fb923c"
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={44}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              <GrowthPillsRow pills={pack.pills} labels={pillLabels} className="mt-4" />
-            </CardContent>
-          </Card>
-
-          <FundamentalChartCard
-            className="sm:col-span-2"
-            title={t("chartsFund.dividendQtrChartTitle")}
-            description={t("chartsFund.dividendQtrChartDesc")}
-            data={pack.rows}
-            series={qDpsSeries}
-            chartType="bar"
-            valueFormat="perShare"
-            currency={dividendCurrency}
-            growthPills={[{ pills: pack.qDpsPills }]}
-          />
-        </div>
+        <FundamentalChartCard
+          title={t("chartsFund.dividendQtrChartTitle")}
+          description={t("chartsFund.dividendQtrChartDesc")}
+          data={pack.rows}
+          series={qDpsSeries}
+          chartType="bar"
+          valueFormat="perShare"
+          currency={dividendCurrency}
+          growthPills={[{ pills: pack.qDpsPills }]}
+        />
       )}
     </div>
   );

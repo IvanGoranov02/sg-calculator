@@ -491,8 +491,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartDebtPctCapitalDesc: "Total debt ÷ (total debt + stockholders’ equity) — capital structure, not raw debt/equity ratio.",
       debtPctCapitalLabel: "Debt % of (debt + equity)",
       dividendSectionTitle: "Dividends (quarterly)",
-      dividendSectionSubtitle:
-        "Dividend per share as reported; TTM = sum of last four quarters. Growth tags compare TTM to prior periods.",
+      dividendSectionSubtitle: "Dividend per share for each fiscal quarter as reported.",
       dividendNoData: "No dividend per share is reported for this symbol in the loaded series (e.g. many growth stocks).",
       dividendNonPayer:
         "This company does not pay a regular cash dividend on common stock — reinvestment / growth profile (e.g. AMZN). Dividend metrics in “Key investor metrics” may still show 0.",
@@ -505,12 +504,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividendRefreshAi: "New AI summary",
       dividendRefreshHint:
         "Refresh reloads prices and fundamentals from the server. AI only regenerates the explanatory text — it does not replace the numbers.",
-      dividendTtmPartialNote:
-        "Orange bars may sum fewer than four quarters when per-quarter DPS is missing for some periods (partial trailing sum).",
-      dividendTtmPartialShort: "partial",
-      dividendTtmTitle: "TTM dividend per share",
-      dividendTtmDesc: "Trailing twelve months (rolling sum of four quarters).",
-      dividendTtmLabel: "TTM DPS",
       dividendQtrChartTitle: "Dividend per share (quarterly)",
       dividendQtrChartDesc: "Per-share dividend for each fiscal quarter as reported.",
       dividendQtrPerShare: "Dividend / share",
@@ -1482,8 +1475,7 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Общ дълг ÷ (дълг + собствен капитал) — структура на капитала, не сурово съотношение дълг/капитал.",
       debtPctCapitalLabel: "Дълг % от (дълг + капитал)",
       dividendSectionTitle: "Дивиденти (тримесечни)",
-      dividendSectionSubtitle:
-        "Дивидент на акция според отчета; TTM = сума от последните четири тримесечия. Процентите сравняват TTM с по-ранни периоди.",
+      dividendSectionSubtitle: "Дивидент на акция за всяко фискално тримесечие според отчета.",
       dividendNoData: "Няма отчетен дивидент на акция в заредената серия (напр. при много растежни компании).",
       dividendNonPayer:
         "Компанията не изплаща редовен паричен дивидент по обикновените акции — често реинвестиране / растеж (напр. AMZN). В „Ключови метрики“ доходността може да е 0.",
@@ -1497,12 +1489,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividendRefreshAi: "Нов AI текст",
       dividendRefreshHint:
         "Обновяването зарежда наново котировки и фундаментали от сървъра. AI само прегенерира обяснителния текст — не подменя числата.",
-      dividendTtmPartialNote:
-        "Оранжевите стълбове могат да сумират по-малко от четири тримесечия, когато липсва DPS за някои периоди (частична сума).",
-      dividendTtmPartialShort: "частично",
-      dividendTtmTitle: "TTM дивидент на акция",
-      dividendTtmDesc: "Скользящи дванадесет месеца (сума от четири тримесечия).",
-      dividendTtmLabel: "TTM DPS",
       dividendQtrChartTitle: "Дивидент на акция (тримесечие)",
       dividendQtrChartDesc: "Дивидент на акция за всяко тримесечие според отчета.",
       dividendQtrPerShare: "Дивидент / акция",
