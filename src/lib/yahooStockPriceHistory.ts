@@ -290,7 +290,9 @@ async function mergeYahooExDividendsIntoQuarterly(
   let rows = applied.rows;
   let listingDates = [...new Set([...previousListing, ...applied.listingDates])];
   if (mode === "overwrite") {
-    const repaired = dropStaleOpenWindowSum(rows, applied.listingDates, previousListing);
+    // Pass the ex-div events so a cached open-window pile-up is cleared even
+    // when the previous commit never wrote __dividendListingDates.
+    const repaired = dropStaleOpenWindowSum(rows, applied.listingDates, previousListing, divs);
     rows = repaired.rows;
     listingDates = [...new Set([...repaired.listingDates, ...applied.listingDates])];
   }

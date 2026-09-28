@@ -139,28 +139,72 @@ export function firstQuarterWindowStart(datesAsc: readonly string[]): string {
   return new Date(t - gap * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
+function roundDividendCash(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * True when the oldest DPS is the pre-clamp open-window sum: every ex-div on or
+ * before that quarter-end, including events older than one quarter. The first
+ * overwrite commit persisted that sum and did not write `__dividendListingDates`,
+ * so the date stamp alone cannot find it. A one-quarter fundamentals DPS does
+ * not equal that multi-event sum.
+ */
+function firstBarIsLegacyOpenWindowSum(
+  rows: ReadonlyArray<{ date: string; dividendPerShare: number | null }>,
+  events: ReadonlyArray<{ date: string; amount: number }>,
+): boolean {
+  const dates = rows.map((row) => row.date.slice(0, 10)).sort((a, b) => a.localeCompare(b));
+  const end = dates[0];
+  if (!end) return false;
+  const start = firstQuarterWindowStart(dates);
+  let openSum = 0;
+  let openCount = 0;
+  let sawPreWindow = false;
+  for (const event of events) {
+    const ex = event.date.slice(0, 10);
+    if (!ex || ex > end || !Number.isFinite(event.amount)) continue;
+    openSum += event.amount;
+    openCount += 1;
+    if (ex <= start) sawPreWindow = true;
+  }
+  if (!sawPreWindow || openCount < 2) return false;
+  const head = rows.find((row) => row.date.slice(0, 10) === end);
+  const cur = head?.dividendPerShare;
+  if (cur == null || !Number.isFinite(cur) || cur <= 0) return false;
+  const piled = roundDividendCash(openSum);
+  return piled > 0 && Math.abs(cur - piled) <= 0.02;
+}
+
 /**
  * The open first window is the only bar that can swallow pre-history.
- * If a previous pass marked it as listing cash but this clamped window has
- * no ex-div, that value was the pile-up — drop it. A fundamentals DPS that
- * was never overwritten is left alone.
+ * Drop it when this clamped window did not rewrite it and either a previous
+ * pass marked it as listing cash, or the stored amount is the legacy
+ * open-window sum (no listing-date stamp required). A fundamentals DPS that
+ * does not match that sum is left alone.
  */
 export function dropStaleOpenWindowSum<T extends { date: string; dividendPerShare: number | null }>(
   rows: T[],
   listingDatesThisPass: readonly string[],
   previousListingDates: readonly string[],
+  events?: ReadonlyArray<{ date: string; amount: number }>,
 ): { rows: T[]; listingDates: string[] } {
   if (rows.length === 0) return { rows, listingDates: [...previousListingDates] };
-  const first = rows[0]!.date.slice(0, 10);
+  const first = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]!.date.slice(0, 10);
   const rewritten = new Set(listingDatesThisPass.map((d) => d.slice(0, 10)));
   const previous = new Set(previousListingDates.map((d) => d.slice(0, 10)));
-  if (!previous.has(first) || rewritten.has(first)) {
+  if (rewritten.has(first)) {
+    return { rows, listingDates: [...previous] };
+  }
+  const legacyPileup = events != null && events.length > 0 && firstBarIsLegacyOpenWindowSum(rows, events);
+  if (!previous.has(first) && !legacyPileup) {
     return { rows, listingDates: [...previous] };
   }
   previous.delete(first);
-  const [head, ...rest] = rows;
   return {
-    rows: [{ ...head!, dividendPerShare: null }, ...rest],
+    rows: rows.map((row) =>
+      row.date.slice(0, 10) === first ? { ...row, dividendPerShare: null } : row,
+    ),
     listingDates: [...previous],
   };
 }

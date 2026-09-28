@@ -225,6 +225,66 @@ describe("dropStaleOpenWindowSum", () => {
     assert.equal(repaired.rows[0]!.dividendPerShare, 2.08);
     assert.deepEqual(repaired.listingDates, []);
   });
+
+  it("clears a cached ~$13.261 first bar that has no listing-date stamp and does not FX it", () => {
+    // 25c387 summed every ex-div through 2021-05-03 into 2021-09-30 and persisted
+    // that USD total without __dividendListingDates. The May ex-div is ~150 days
+    // before the quarter-end, so the clamped window does not rewrite it.
+    const older = [
+      { date: "2015-04-24", amount: 1 },
+      { date: "2016-04-25", amount: 1.1 },
+      { date: "2017-04-24", amount: 1.2 },
+      { date: "2018-04-25", amount: 1.3 },
+      { date: "2019-04-29", amount: 1.4 },
+      { date: "2020-04-29", amount: 1.5 },
+      { date: "2020-11-04", amount: 1.6 },
+      { date: "2021-04-26", amount: 2.291 },
+      { date: "2021-05-03", amount: 1.87 },
+    ];
+    const piled = Math.round(older.reduce((sum, event) => sum + event.amount, 0) * 1e6) / 1e6;
+    assert.ok(Math.abs(piled - 13.261) < 1e-9);
+    const events = [...older, { date: "2021-11-02", amount: 2.084 }, { date: "2022-05-03", amount: 2.1 }];
+    const cached = [
+      { date: "2021-09-30", dividendPerShare: piled },
+      { date: "2021-12-31", dividendPerShare: 1.5 },
+      { date: "2022-03-31", dividendPerShare: 1.7 },
+      { date: "2022-06-30", dividendPerShare: 1.8 },
+    ];
+    const applied = overlayQuarterlyDividends(cached, events, "overwrite");
+    assert.equal(applied.rows[0]!.dividendPerShare, piled);
+    assert.ok(!applied.listingDates.includes("2021-09-30"));
+    assert.deepEqual(applied.listingDates, ["2021-12-31", "2022-06-30"]);
+
+    const repaired = dropStaleOpenWindowSum(applied.rows, applied.listingDates, [], events);
+    assert.equal(repaired.rows[0]!.dividendPerShare, null);
+    const listingDates = [...new Set([...repaired.listingDates, ...applied.listingDates])];
+    assert.deepEqual(listingDates, ["2021-12-31", "2022-06-30"]);
+
+    const fx = 1.14;
+    const scaled = applyDividendFx(repaired.rows, new Set(listingDates), fx);
+    assert.equal(scaled[0]!.dividendPerShare, null);
+    assert.equal(scaled[1]!.dividendPerShare, 2.084);
+    assert.ok(Math.abs((scaled[2]!.dividendPerShare ?? 0) - 1.7 * fx) < 1e-9);
+    assert.equal(scaled[3]!.dividendPerShare, 2.1);
+  });
+
+  it("still FX-scales a real first-quarter fundamentals DPS that is not the pile-up", () => {
+    const events = [
+      { date: "2015-04-24", amount: 11.391 },
+      { date: "2021-05-03", amount: 1.87 },
+      { date: "2021-11-02", amount: 2.084 },
+    ];
+    const rows = [
+      { date: "2021-09-30", dividendPerShare: 2.08 },
+      { date: "2021-12-31", dividendPerShare: 1.5 },
+    ];
+    const applied = overlayQuarterlyDividends(rows, events, "overwrite");
+    const repaired = dropStaleOpenWindowSum(applied.rows, applied.listingDates, [], events);
+    assert.equal(repaired.rows[0]!.dividendPerShare, 2.08);
+    const scaled = applyDividendFx(repaired.rows, new Set(applied.listingDates), 1.14);
+    assert.ok(Math.abs((scaled[0]!.dividendPerShare ?? 0) - 2.08 * 1.14) < 1e-9);
+    assert.equal(scaled[1]!.dividendPerShare, 2.084);
+  });
 });
 
 describe("partial dividend FX", () => {
