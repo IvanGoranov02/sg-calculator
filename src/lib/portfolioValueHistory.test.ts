@@ -6,6 +6,7 @@ import {
   aggregateSnapshotsByMonth,
   buildPortfolioValueChartSeries,
   calendarMonthsForEvents,
+  classifyPortfolioHistory,
   computeLiveHoldingsValue,
   computeMonthlyValuesFromHoldings,
   isValidMonthKey,
@@ -393,6 +394,60 @@ describe("pickPortfolioHistorySymbols", () => {
     const picked = pickPortfolioHistorySymbols(holdings, undefined, 40);
     assert.equal(picked.complete, false);
     assert.equal(picked.symbols.length, 40);
+  });
+});
+
+describe("classifyPortfolioHistory", () => {
+  it("asks for a rebuild while older pages are still loading", () => {
+    assert.deepEqual(
+      classifyPortfolioHistory({
+        connected: true,
+        scopeDenied: false,
+        ordersPartial: true,
+        usedQuantityTimeline: false,
+        hasHoldings: true,
+      }),
+      { status: "partial", reason: "incomplete" },
+    );
+  });
+
+  it("prefers a missing history scope over a partial cache", () => {
+    assert.deepEqual(
+      classifyPortfolioHistory({
+        connected: true,
+        scopeDenied: true,
+        ordersPartial: true,
+        usedQuantityTimeline: false,
+        hasHoldings: true,
+      }),
+      { status: "unavailable", reason: "missing_scope" },
+    );
+  });
+
+  it("reports a mismatch when a finished history cannot explain open positions", () => {
+    assert.deepEqual(
+      classifyPortfolioHistory({
+        connected: true,
+        scopeDenied: false,
+        ordersPartial: false,
+        usedQuantityTimeline: false,
+        hasHoldings: true,
+      }),
+      { status: "unavailable", reason: "mismatch" },
+    );
+  });
+
+  it("is ready once reconstructed months are in use", () => {
+    assert.deepEqual(
+      classifyPortfolioHistory({
+        connected: true,
+        scopeDenied: false,
+        ordersPartial: false,
+        usedQuantityTimeline: true,
+        hasHoldings: true,
+      }),
+      { status: "ready", reason: null },
+    );
   });
 });
 

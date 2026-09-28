@@ -90,7 +90,76 @@ export type T212PaginatedFetchResult<T> = {
   error?: string;
   /** Cursor to resume older pages when `partial` is true. */
   nextPagePath?: string | null;
+  /** HTTP status of the error that stopped pagination, when the broker returned one. */
+  status?: number;
 };
+
+export type T212NextPageResolution =
+  | { action: "end" }
+  | { action: "follow"; path: string }
+  | { action: "reject" };
+
+/**
+ * Clean a Trading 212 `nextPagePath`.
+ * `"null"` is a real end. A path we refuse (orders require `cursor=`) is `reject`,
+ * which callers must persist as partial — not as a finished series.
+ * Dividends and positions do not require `cursor=`, so a usable path is followed.
+ */
+export function resolveT212NextPagePath(
+  raw: unknown,
+  opts?: { requireCursor?: boolean },
+): T212NextPageResolution {
+  if (raw == null) return { action: "end" };
+  if (typeof raw !== "string") return { action: "reject" };
+  let path = raw.trim();
+  if (!path || path === "null" || /^null([?&]|$)/.test(path)) return { action: "end" };
+  path = path
+    .replace(/([?&])instrumentCode(?=&|$)/g, "$1")
+    .replace(/\?&/g, "?")
+    .replace(/&&+/g, "&")
+    .replace(/[?&]$/g, "");
+  if (!path) return { action: "end" };
+  if (opts?.requireCursor && !path.includes("cursor=")) return { action: "reject" };
+  return { action: "follow", path };
+}
+
+/** Follow-path only. `end` and `reject` are both null — use {@link resolveT212NextPagePath} to tell them apart. */
+export function normalizeT212NextPagePath(
+  raw: unknown,
+  opts?: { requireCursor?: boolean },
+): string | null {
+  const resolved = resolveT212NextPagePath(raw, opts);
+  return resolved.action === "follow" ? resolved.path : null;
+}
+
+/** Resume cursor for orders. `"null"` and paths without `cursor=` are not followed. */
+export function normalizeT212OrdersResumePath(raw: string | null | undefined): string | null {
+  return normalizeT212NextPagePath(raw, { requireCursor: true });
+}
+
+/**
+ * A full page followed by an empty terminal page drops older fills at limit=50.
+ * Retry that cursor once at limit=10 before accepting the end of history.
+ */
+export function retryPathForEmptyHistoryPage(input: {
+  requestedPath: string;
+  itemCount: number;
+  nextPagePath: string | null;
+  retriedCursors: ReadonlySet<string>;
+}): string | null {
+  if (input.itemCount !== 0 || input.nextPagePath) return null;
+  const qIndex = input.requestedPath.indexOf("?");
+  if (qIndex < 0) return null;
+  const params = new URLSearchParams(input.requestedPath.slice(qIndex + 1));
+  const cursor = params.get("cursor")?.trim();
+  if (!cursor || input.retriedCursors.has(cursor)) return null;
+  const limit = Number(params.get("limit") ?? "20");
+  if (!Number.isFinite(limit) || limit <= 10) return null;
+  const base = input.requestedPath.slice(0, qIndex) || "/api/v0/equity/history/orders";
+  params.set("limit", "10");
+  params.delete("instrumentCode");
+  return `${base}?${params.toString()}`;
+}
 
 const T212_MIN_REQUEST_INTERVAL_MS = 10_000;
 const T212_429_DEFAULT_BACKOFF_MS = 10_500;
@@ -132,6 +201,7 @@ export async function t212FetchJson<T>(
   try {
     const res = await fetch(url, {
       ...rest,
+      cache: "no-store",
       signal: controller.signal,
       headers: {
         Accept: "application/json",
@@ -292,9 +362,8 @@ export async function fetchT212HistoryOrders(
   apiSecret: string,
   options?: { maxPages?: number; minRequestIntervalMs?: number; startPath?: string | null },
 ): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
-  const initialPath =
-    options?.startPath?.trim() ||
-    "/api/v0/equity/history/orders";
+  const resumed = normalizeT212OrdersResumePath(options?.startPath);
+  const initialPath = resumed || "/api/v0/equity/history/orders";
   return fetchAllT212Paginated<T212HistoryOrderItem>(
     environment,
     apiKey,
@@ -303,6 +372,8 @@ export async function fetchT212HistoryOrders(
     {
       maxPages: options?.maxPages ?? 6,
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
+      requireCursor: true,
+      retryEmptyPages: true,
     },
   );
 }
@@ -332,7 +403,14 @@ export async function fetchAllT212Paginated<T>(
   apiKey: string,
   apiSecret: string,
   initialPath: string,
-  options?: { maxPages?: number; minRequestIntervalMs?: number },
+  options?: {
+    maxPages?: number;
+    minRequestIntervalMs?: number;
+    /** Orders only. A next path without `cursor=` is an incomplete walk, not the end. */
+    requireCursor?: boolean;
+    /** Orders only. Dividends and positions must not retry an empty page at a smaller limit. */
+    retryEmptyPages?: boolean;
+  },
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
   const minRequestIntervalMs = options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS;
@@ -344,7 +422,9 @@ export async function fetchAllT212Paginated<T>(
   let lastRequestAt = 0;
   let partial = false;
   let error: string | undefined;
+  let status: number | undefined;
   let nextPagePath: string | null = null;
+  const retriedCursors = new Set<string>();
 
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
@@ -354,7 +434,7 @@ export async function fetchAllT212Paginated<T>(
   }
 
   while (path && pages < maxPages) {
-    const pagePath = path;
+    const pagePath: string = path;
     let retries429 = 0;
     for (;;) {
       try {
@@ -363,14 +443,38 @@ export async function fetchAllT212Paginated<T>(
         const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, pagePath);
         const page: T212Paginated<T> = result.data;
         pages += 1;
-        if (Array.isArray(page.items)) {
-          out.push(...page.items);
+        const pageItems = Array.isArray(page.items) ? page.items : [];
+        if (pageItems.length > 0) out.push(...pageItems);
+        const resolution = resolveT212NextPagePath(page.nextPagePath, {
+          requireCursor: options?.requireCursor,
+        });
+        if (resolution.action === "reject") {
+          partial = true;
+          if (!error) error = "Trading 212 next page path was not usable.";
+          nextPagePath = null;
+          path = null;
+          break;
         }
-        path = page.nextPagePath;
+        const normalizedNext: string | null = resolution.action === "follow" ? resolution.path : null;
+        const retryPath: string | null = options?.retryEmptyPages
+          ? retryPathForEmptyHistoryPage({
+              requestedPath: pagePath,
+              itemCount: pageItems.length,
+              nextPagePath: normalizedNext,
+              retriedCursors,
+            })
+          : null;
+        if (retryPath) {
+          const cursor = new URLSearchParams(pagePath.slice(pagePath.indexOf("?") + 1)).get("cursor");
+          if (cursor) retriedCursors.add(cursor);
+          path = retryPath;
+        } else {
+          path = normalizedNext;
+        }
         break;
       } catch (e) {
-        const status = (e as T212RequestError).status;
-        if (status === 429 && retries429 < T212_MAX_429_RETRIES) {
+        const httpStatus = (e as T212RequestError).status;
+        if (httpStatus === 429 && retries429 < T212_MAX_429_RETRIES) {
           retries429 += 1;
           const reset = (e as T212RequestError).rateLimitReset;
           const waitMs =
@@ -381,6 +485,7 @@ export async function fetchAllT212Paginated<T>(
           continue;
         }
         partial = true;
+        status = httpStatus;
         error =
           e instanceof Error ? e.message.slice(0, 500) : "Trading 212 request failed during pagination";
         nextPagePath = pagePath;
@@ -396,5 +501,5 @@ export async function fetchAllT212Paginated<T>(
     if (!error) error = "Trading 212 history truncated (page limit reached).";
   }
 
-  return { items: out, partial, error, nextPagePath };
+  return { items: out, partial, error, nextPagePath, status };
 }

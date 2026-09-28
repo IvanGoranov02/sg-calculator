@@ -8,9 +8,13 @@ import type { QtyEvent } from "@/lib/portfolioValueHistory";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import {
   fetchT212HistoryOrders,
+  normalizeT212OrdersResumePath,
   type T212HistoryOrderItem,
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
+
+/** Stored only when the first history page 403s and there are no cached fills yet. */
+export const T212_ORDERS_SCOPE_DENIED = "scope:history:orders:denied";
 
 const FILLED_STATUS = new Set(["FILLED", "PARTIALLY_FILLED"]);
 const SKIP_STATUS = new Set(["CANCELLED", "REJECTED", "LOCAL", "UNCONFIRMED"]);
@@ -129,6 +133,87 @@ export function readT212OrdersCache(conn: T212OrdersCacheFields | null): T212Ord
 
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** True only for the explicit first-page marker. Generic 403 copy is also used for IP allowlists and later pages. */
+export function isT212OrdersScopeDenied(error: string | null | undefined): boolean {
+  return Boolean(error?.includes(T212_ORDERS_SCOPE_DENIED));
+}
+
+/**
+ * Missing `history:orders` only when this call is the first page, returned no rows, and nothing is cached yet.
+ * A 403 while resuming must not wipe fills already stored.
+ */
+export function shouldRecordOrdersScopeDenial(input: {
+  prevItemCount: number;
+  resumePath: string | null;
+  fetchItemCount: number;
+  httpStatus?: number;
+}): boolean {
+  if (input.prevItemCount > 0) return false;
+  if (input.resumePath) return false;
+  if (input.fetchItemCount > 0) return false;
+  return input.httpStatus === 403;
+}
+
+export type OrdersCacheGeneration = {
+  apiKeyEnc: string;
+  environment: Trading212Environment;
+  ordersCachedAt: Date | null;
+  ordersCacheNextPath: string | null;
+  ordersCachePartial: boolean;
+  ordersCacheError: string | null;
+};
+
+/** Where-clause for the cache write. A clear or a newer walk changes one of these fields, so the update matches 0 rows. */
+export function ordersCacheGenerationWhere(userId: string, generation: OrdersCacheGeneration) {
+  return {
+    userId,
+    apiKeyEnc: generation.apiKeyEnc,
+    environment: generation.environment,
+    ordersCachedAt: generation.ordersCachedAt,
+    ordersCacheNextPath: generation.ordersCacheNextPath,
+    ordersCachePartial: generation.ordersCachePartial,
+    ordersCacheError: generation.ordersCacheError,
+  };
+}
+
+/** Compare-and-swap snapshot. A credential clear or a newer walk changes one of these fields. */
+export function ordersCacheGenerationUnchanged(
+  expected: OrdersCacheGeneration,
+  current: OrdersCacheGeneration,
+): boolean {
+  return (
+    expected.apiKeyEnc === current.apiKeyEnc &&
+    expected.environment === current.environment &&
+    expected.ordersCachePartial === current.ordersCachePartial &&
+    (expected.ordersCacheError ?? null) === (current.ordersCacheError ?? null) &&
+    (expected.ordersCacheNextPath ?? null) === (current.ordersCacheNextPath ?? null) &&
+    (expected.ordersCachedAt?.getTime() ?? null) === (current.ordersCachedAt?.getTime() ?? null)
+  );
+}
+
+/** Clear fills when a new key is saved or demo/live changes. A no-op environment save must not. */
+export function trading212SettingsOrdersCachePatch(input: {
+  savingCredentials: boolean;
+  environmentChanged: boolean;
+}): ReturnType<typeof clearedT212OrdersCacheData> | null {
+  if (input.savingCredentials || input.environmentChanged) return clearedT212OrdersCacheData();
+  return null;
+}
+
+/** Drop cached fills when the API key or environment changes so history is rebuilt. */
+export function clearedT212OrdersCacheData(): Pick<
+  Prisma.Trading212ConnectionUpdateInput,
+  "ordersCache" | "ordersCachedAt" | "ordersCacheError" | "ordersCachePartial" | "ordersCacheNextPath"
+> {
+  return {
+    ordersCache: Prisma.DbNull,
+    ordersCachedAt: null,
+    ordersCacheError: null,
+    ordersCachePartial: false,
+    ordersCacheNextPath: null,
+  };
+}
+
 /** Partial caches stay retryable until pagination completes. */
 export function isT212OrdersCacheStale(
   cachedAt: Date | null | undefined,
@@ -214,6 +299,7 @@ export async function refreshT212OrdersCache(input: {
   apiKeyEnc: string;
   apiSecretEnc: string;
   maxPages?: number;
+  minRequestIntervalMs?: number;
 }): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
   const apiKey = decryptSecret(input.apiKeyEnc);
   const apiSecret = decryptSecret(input.apiSecretEnc);
@@ -221,6 +307,8 @@ export async function refreshT212OrdersCache(input: {
   const prev = await prisma.trading212Connection.findUnique({
     where: { userId: input.userId },
     select: {
+      apiKeyEnc: true,
+      environment: true,
       ordersCache: true,
       ordersCachedAt: true,
       ordersCachePartial: true,
@@ -229,39 +317,98 @@ export async function refreshT212OrdersCache(input: {
     },
   });
   const prevItems = parseCachedOrderItems(prev?.ordersCache);
-  const resumePath =
-    prev?.ordersCachePartial && prev.ordersCacheNextPath?.trim()
-      ? prev.ordersCacheNextPath.trim()
-      : null;
+  const resumePath = prev?.ordersCachePartial
+    ? normalizeT212OrdersResumePath(prev.ordersCacheNextPath)
+    : null;
+
+  const generation: OrdersCacheGeneration = {
+    apiKeyEnc: input.apiKeyEnc,
+    environment: input.environment,
+    ordersCachedAt: prev?.ordersCachedAt ?? null,
+    ordersCacheNextPath: prev?.ordersCacheNextPath ?? null,
+    ordersCachePartial: prev?.ordersCachePartial ?? false,
+    ordersCacheError: prev?.ordersCacheError ?? null,
+  };
 
   const result = await fetchT212HistoryOrders(input.environment, apiKey, apiSecret, {
-    maxPages: input.maxPages ?? 5,
+    maxPages: input.maxPages ?? 6,
+    minRequestIntervalMs: input.minRequestIntervalMs ?? 400,
     startPath: resumePath,
   });
 
-  const decision = decideT212OrdersCacheWrite(prevItems, result, prev?.ordersCacheNextPath ?? null);
+  async function commitIfCurrent(data: Prisma.Trading212ConnectionUpdateInput): Promise<boolean> {
+    const updated = await prisma.trading212Connection.updateMany({
+      where: ordersCacheGenerationWhere(input.userId, generation),
+      data,
+    });
+    return updated.count > 0;
+  }
+
+  async function readCurrentCache(): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
+    const fresh = await prisma.trading212Connection.findUnique({
+      where: { userId: input.userId },
+      select: {
+        ordersCache: true,
+        ordersCachedAt: true,
+        ordersCachePartial: true,
+        ordersCacheError: true,
+        ordersCacheNextPath: true,
+      },
+    });
+    const read = readT212OrdersCache(fresh);
+    return {
+      items: read.items,
+      partial: read.partial,
+      error: read.error ?? undefined,
+      nextPagePath: read.nextPagePath,
+    };
+  }
+
+  if (
+    shouldRecordOrdersScopeDenial({
+      prevItemCount: prevItems.length,
+      resumePath,
+      fetchItemCount: result.items.length,
+      httpStatus: result.status,
+    })
+  ) {
+    const committed = await commitIfCurrent({
+      ordersCache: [],
+      ordersCachedAt: null,
+      ordersCachePartial: true,
+      ordersCacheError: T212_ORDERS_SCOPE_DENIED,
+      ordersCacheNextPath: null,
+    });
+    if (!committed) return readCurrentCache();
+    return {
+      items: [],
+      partial: true,
+      error: T212_ORDERS_SCOPE_DENIED,
+      nextPagePath: null,
+      status: 403,
+    };
+  }
+
+  const decision = decideT212OrdersCacheWrite(prevItems, result, resumePath);
 
   const shouldTouchCachedAt =
     !decision.partial &&
     (decision.replaced || prevItems.length === 0);
 
-  await prisma.trading212Connection.update({
-    where: { userId: input.userId },
-    data: {
-      ordersCache: decision.items as Prisma.InputJsonValue,
-      ordersCachedAt: shouldTouchCachedAt
-        ? new Date()
-        : (prev?.ordersCachedAt ?? null),
-      ordersCachePartial: decision.partial,
-      ordersCacheError: decision.error,
-      ordersCacheNextPath: decision.nextPagePath,
-    },
+  const committed = await commitIfCurrent({
+    ordersCache: decision.items as Prisma.InputJsonValue,
+    ordersCachedAt: shouldTouchCachedAt ? new Date() : (prev?.ordersCachedAt ?? null),
+    ordersCachePartial: decision.partial,
+    ordersCacheError: decision.error,
+    ordersCacheNextPath: decision.nextPagePath,
   });
+  if (!committed) return readCurrentCache();
 
   return {
     items: decision.items,
     partial: decision.partial,
     error: decision.error ?? undefined,
     nextPagePath: decision.nextPagePath,
+    status: result.status,
   };
 }

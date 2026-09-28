@@ -689,6 +689,14 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Trading 212 account snapshots and live holdings (same currency as the rest of this tab). Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
       valueChartLoading: "Loading portfolio history…",
+      valueHistoryPartial: "Loading earlier months from Trading 212…",
+      valueHistoryPartialPaused:
+        "Some earlier months are still on Trading 212. Refresh this page to keep loading them.",
+      valueHistoryMissingScope:
+        "Trading 212 did not grant history access for this API key. Enable read-only history (orders), then disconnect and reconnect so this chart can rebuild.",
+      valueHistoryMismatch:
+        "These fills do not line up with your open positions (transfers, pies, or share counts), so earlier months were not estimated. Enter a monthly value below if you want those months on the chart.",
+      valueHistoryEmpty: "No portfolio value history yet.",
       valueChartValue: "Portfolio value",
       valueChartChange: "Change vs prior month",
       valueSourceManual: "Source: manual entry",
@@ -1673,6 +1681,14 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Снимки от Trading 212 и текущите позиции (същата валута като таба). Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
       valueChartLoading: "Зареждане на история на портфолиото…",
+      valueHistoryPartial: "Зареждане на по-ранни месеци от Trading 212…",
+      valueHistoryPartialPaused:
+        "По-ранни месеци още са в Trading 212. Презареди страницата, за да продължи зареждането.",
+      valueHistoryMissingScope:
+        "Trading 212 не даде достъп до историята за този API ключ. Включи история само за четене (поръчки), после премахни и свържи отново, за да се преизчисли графиката.",
+      valueHistoryMismatch:
+        "Сделките не съвпадат с отворените позиции (прехвърляния, pies или брой акции), затова по-ранните месеци не са оценени. Въведи месечна стойност по-долу, ако искаш тези месеци на графиката.",
+      valueHistoryEmpty: "Все още няма история на стойността на портфолиото.",
       valueChartValue: "Стойност на портфолиото",
       valueChartChange: "Промяна спрямо предишния месец",
       valueSourceManual: "Източник: ръчен запис",
