@@ -3,7 +3,7 @@
 import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
@@ -50,7 +50,6 @@ import {
   remapPortfolioDipHistory,
   type QuoteHistoryBar,
 } from "@/lib/dipFinder";
-import { t212ListingVenueLabel } from "@/lib/t212Ticker";
 import {
   isTrading212AuthFailure,
   looksLikeTrading212ErrorMessage,
@@ -151,6 +150,11 @@ export function PortfolioClient() {
 
   const [valueHistory, setValueHistory] = useState<PortfolioValueHistoryPayload | null>(null);
   const [valueHistoryLoading, setValueHistoryLoading] = useState(false);
+  const [historyBackfillPaused, setHistoryBackfillPaused] = useState(false);
+  const historyPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyPollCount = useRef(0);
+  const historyLoadInFlight = useRef(false);
+  const historyLoadQueued = useRef(false);
   const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
 
   useEffect(() => {
@@ -226,24 +230,80 @@ export function PortfolioClient() {
     }
   }, [t]);
 
-  const loadValueHistory = useCallback(async () => {
+  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean }) => Promise<void>>(async () => {});
+
+  const clearHistoryPoll = useCallback(() => {
+    if (historyPollTimer.current != null) {
+      clearTimeout(historyPollTimer.current);
+      historyPollTimer.current = null;
+    }
+  }, []);
+
+  const scheduleHistoryPoll = useCallback(() => {
+    // history:orders allows 6 requests/minute. Do not start another walk inside that window.
+    if (historyPollCount.current >= 10) {
+      setHistoryBackfillPaused(true);
+      clearHistoryPoll();
+      return;
+    }
+    historyPollCount.current += 1;
+    clearHistoryPoll();
+    historyPollTimer.current = setTimeout(() => {
+      void loadValueHistoryRef.current({ poll: true });
+    }, 60_000);
+  }, [clearHistoryPoll]);
+
+  const loadValueHistory = useCallback(async (opts?: { poll?: boolean }) => {
+    if (historyLoadInFlight.current) {
+      if (!opts?.poll) historyLoadQueued.current = true;
+      return;
+    }
+    historyLoadInFlight.current = true;
+    if (!opts?.poll) {
+      historyPollCount.current = 0;
+      setHistoryBackfillPaused(false);
+      clearHistoryPoll();
+    }
     setValueHistoryLoading(true);
     try {
       const res = await fetch(
         `/api/portfolio/value-history?base=${encodeURIComponent(preferredPortfolioCurrency)}`,
       );
       if (!res.ok) {
-        setValueHistory(null);
+        if (opts?.poll) scheduleHistoryPoll();
+        else setValueHistory(null);
         return;
       }
       const data = (await res.json()) as PortfolioValueHistoryPayload;
       setValueHistory(data);
+      const morePending = data.historyStatus === "partial" && data.historyHasMore === true;
+      if (morePending) {
+        setHistoryBackfillPaused(false);
+        scheduleHistoryPoll();
+      } else if (data.historyStatus === "partial") {
+        setHistoryBackfillPaused(true);
+        clearHistoryPoll();
+      } else {
+        setHistoryBackfillPaused(false);
+        historyPollCount.current = 0;
+        clearHistoryPoll();
+      }
     } catch {
-      setValueHistory(null);
+      if (opts?.poll) scheduleHistoryPoll();
+      else setValueHistory(null);
     } finally {
       setValueHistoryLoading(false);
+      historyLoadInFlight.current = false;
+      if (historyLoadQueued.current) {
+        historyLoadQueued.current = false;
+        void loadValueHistoryRef.current();
+      }
     }
-  }, [preferredPortfolioCurrency]);
+  }, [clearHistoryPoll, preferredPortfolioCurrency, scheduleHistoryPoll]);
+
+  loadValueHistoryRef.current = loadValueHistory;
+
+  useEffect(() => () => clearHistoryPoll(), [clearHistoryPoll]);
 
   const reloadDividendsFromCache = useCallback(() => {
     setDividendsReloadToken((n) => n + 1);
@@ -828,7 +888,11 @@ export function PortfolioClient() {
         </div>
       ) : null}
 
-      <PortfolioValueChartCard data={valueHistory} loading={valueHistoryLoading} />
+      <PortfolioValueChartCard
+        data={valueHistory}
+        loading={valueHistoryLoading}
+        backfillPaused={historyBackfillPaused}
+      />
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -878,11 +942,6 @@ export function PortfolioClient() {
                         size="sm"
                         primaryLabel="name"
                       />
-                      {h.symbolT212 ? (
-                        <span className="text-[11px] leading-tight text-muted-foreground">
-                          {[t212ListingVenueLabel(h.symbolT212), h.symbolT212].filter(Boolean).join(" · ")}
-                        </span>
-                      ) : null}
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                       </span>

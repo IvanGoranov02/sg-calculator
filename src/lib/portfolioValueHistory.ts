@@ -490,3 +490,23 @@ export function buildPortfolioValueChartSeries(input: {
 
   return points;
 }
+
+export type PortfolioHistoryStatus = "ready" | "partial" | "unavailable";
+export type PortfolioHistoryReason = "missing_scope" | "mismatch" | "incomplete" | null;
+
+/** What the value chart should claim after a Trading 212 history read. */
+export function classifyPortfolioHistory(input: {
+  connected: boolean;
+  scopeDenied: boolean;
+  ordersPartial: boolean;
+  usedQuantityTimeline: boolean;
+  hasHoldings: boolean;
+}): { status: PortfolioHistoryStatus; reason: PortfolioHistoryReason } {
+  if (!input.connected) return { status: "ready", reason: null };
+  if (input.scopeDenied) return { status: "unavailable", reason: "missing_scope" };
+  if (input.ordersPartial) return { status: "partial", reason: "incomplete" };
+  if (input.hasHoldings && !input.usedQuantityTimeline) {
+    return { status: "unavailable", reason: "mismatch" };
+  }
+  return { status: "ready", reason: null };
+}

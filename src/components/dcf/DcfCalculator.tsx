@@ -1,10 +1,11 @@
 "use client";
 
-import { LineChart } from "lucide-react";
+import { ChevronDown, ChevronUp, LineChart } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { DcfEpsProjectionChart } from "@/components/dcf/DcfEpsProjectionChart";
+import { StockLandingSearch } from "@/components/stock/StockLandingSearch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,13 +33,18 @@ function decimalToPct(dec: number): number {
   return Math.round(dec * 1000) / 10;
 }
 
+/** Move an assumption by 1 (one percentage point for % fields), keeping typed decimals. */
+function stepAssumption(value: number, direction: 1 | -1): number {
+  const base = Number.isFinite(value) ? value : 0;
+  return Math.round((base + direction) * 1e6) / 1e6;
+}
+
 function AssumptionCell({
   id,
   label,
   value,
   onChange,
   suffix,
-  step = "any",
   invalid = false,
 }: {
   id: string;
@@ -46,9 +52,14 @@ function AssumptionCell({
   value: number;
   onChange: (n: number) => void;
   suffix?: string;
-  step?: string;
   invalid?: boolean;
 }) {
+  const { t } = useI18n();
+
+  function bump(direction: 1 | -1) {
+    onChange(stepAssumption(value, direction));
+  }
+
   return (
     <div
       className={cn(
@@ -63,29 +74,74 @@ function AssumptionCell({
         <Input
           id={id}
           type="number"
-          step={step}
+          step="1"
           value={Number.isFinite(value) ? value : ""}
           onChange={(e) => {
             const raw = e.target.value;
             onChange(raw === "" ? Number.NaN : Number(raw));
           }}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            bump(e.key === "ArrowUp" ? 1 : -1);
+          }}
           className={cn(
             "h-9 border-0 bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0",
             "font-mono tabular-nums",
-            suffix ? "pr-7" : undefined,
+            "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            suffix ? "pr-12" : "pr-6",
           )}
         />
         {suffix ? (
-          <span className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+          <span className="pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             {suffix}
           </span>
         ) : null}
+        <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col">
+          <button
+            type="button"
+            className="flex h-4 w-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t("dcf.stepUp", { label })}
+            onClick={() => bump(1)}
+          >
+            <ChevronUp className="size-3" aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="flex h-4 w-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t("dcf.stepDown", { label })}
+            onClick={() => bump(-1)}
+          >
+            <ChevronDown className="size-3" aria-hidden />
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+function DcfEmptyState() {
+  const { t } = useI18n();
+
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
+      <div className="space-y-1">
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("dcf.pickTicker")}</p>
+      </div>
+      <StockLandingSearch
+        hrefForSymbol={(symbol) => `/dcf-calculator?ticker=${encodeURIComponent(symbol)}`}
+      />
+    </div>
+  );
+}
+
 export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
+  if (!ticker) return <DcfEmptyState />;
+  return <DcfCalculatorForm ticker={ticker} seed={seed} />;
+}
+
+function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
   const { t } = useI18n();
 
   const [ttmEps, setTtmEps] = useState(seed?.epsPerShare ?? 0);
@@ -146,9 +202,7 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
       <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
-      {!ticker ? (
-        <p className="text-sm text-muted-foreground">{t("dcf.pickTicker")}</p>
-      ) : !seed ? (
+      {!seed ? (
         <p className="text-sm text-amber-200/90">{t("dcf.noSeed", { ticker })}</p>
       ) : null}
 
@@ -190,7 +244,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               value={growthPct}
               onChange={setGrowthPct}
               suffix="%"
-              step="0.1"
               invalid={growthInvalid}
             />
             <AssumptionCell
@@ -199,7 +252,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               value={peMultiple}
               onChange={setPeMultiple}
               suffix="x"
-              step="0.1"
               invalid={peInvalid}
             />
             <AssumptionCell
@@ -208,7 +260,6 @@ export function DcfCalculator({ ticker, seed }: DcfCalculatorProps) {
               value={desiredReturnPct}
               onChange={setDesiredReturnPct}
               suffix="%"
-              step="0.1"
               invalid={desiredInvalid}
             />
           </div>

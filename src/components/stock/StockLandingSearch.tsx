@@ -27,8 +27,13 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
   return fullCompaniesPromise;
 }
 
-/** Prominent search on the Stock Analysis landing page. */
-export function StockLandingSearch() {
+type StockLandingSearchProps = {
+  /** Where a chosen symbol opens. Defaults to the stock analysis page. */
+  hrefForSymbol?: (symbol: string) => string;
+};
+
+/** Prominent company search (Stock Analysis landing, and other empty states). */
+export function StockLandingSearch({ hrefForSymbol }: StockLandingSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -61,7 +66,10 @@ export function StockLandingSearch() {
     setOpen(false);
     setHighlighted(-1);
     pushRecentStockSearch(sym, name);
-    router.push(`/stock/${encodeURIComponent(sym)}`);
+    const href = hrefForSymbol
+      ? hrefForSymbol(sym)
+      : `/stock/${encodeURIComponent(sym)}`;
+    router.push(href);
   }
 
   function onSubmit(e: FormEvent) {
