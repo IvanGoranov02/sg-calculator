@@ -5,7 +5,7 @@ import { prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException, logApiInfo } from "@/lib/serverDebugLog";
 import type { Trading212Environment } from "@prisma/client";
 
-import { clearedT212OrdersCacheData } from "@/lib/t212OrderHistory";
+import { trading212SettingsOrdersCachePatch } from "@/lib/t212OrderHistory";
 import { disconnectTrading212ForUser } from "@/lib/trading212Disconnect";
 import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
@@ -105,17 +105,24 @@ export async function PUT(request: Request) {
           apiKeyEnc,
           apiSecretEnc,
           lastError: null,
-          // New key (or the same key after a permission change) must not reuse the old fill series.
-          ...clearedT212OrdersCacheData(),
+          // New ciphertext (random IV) is the generation the in-flight walk must not overwrite.
+          ...trading212SettingsOrdersCachePatch({
+            savingCredentials: true,
+            environmentChanged: false,
+          }),
         },
       });
     } else if (existing) {
       const environmentChanged = environment != null && environment !== existing.environment;
+      const cachePatch = trading212SettingsOrdersCachePatch({
+        savingCredentials: false,
+        environmentChanged,
+      });
       await prisma.trading212Connection.update({
         where: { userId },
         data: {
           environment: nextEnv,
-          ...(environmentChanged ? clearedT212OrdersCacheData() : {}),
+          ...(cachePatch ?? {}),
         },
       });
     } else {

@@ -94,22 +94,47 @@ export type T212PaginatedFetchResult<T> = {
   status?: number;
 };
 
+export type T212NextPageResolution =
+  | { action: "end" }
+  | { action: "follow"; path: string }
+  | { action: "reject" };
+
 /**
- * Trading 212 sometimes returns the string `"null"` or a dangling `instrumentCode`
- * instead of a real cursor. Those must not be treated as another page or as success.
+ * Clean a Trading 212 `nextPagePath`.
+ * `"null"` is a real end. A path we refuse (orders require `cursor=`) is `reject`,
+ * which callers must persist as partial — not as a finished series.
+ * Dividends and positions do not require `cursor=`, so a usable path is followed.
  */
-export function normalizeT212NextPagePath(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
+export function resolveT212NextPagePath(
+  raw: unknown,
+  opts?: { requireCursor?: boolean },
+): T212NextPageResolution {
+  if (raw == null) return { action: "end" };
+  if (typeof raw !== "string") return { action: "reject" };
   let path = raw.trim();
-  if (!path || path === "null" || /^null([?&]|$)/.test(path)) return null;
+  if (!path || path === "null" || /^null([?&]|$)/.test(path)) return { action: "end" };
   path = path
     .replace(/([?&])instrumentCode(?=&|$)/g, "$1")
     .replace(/\?&/g, "?")
     .replace(/&&+/g, "&")
     .replace(/[?&]$/g, "");
-  // Without a cursor this is not an older page — following it restarts at the newest fills.
-  if (!path.includes("cursor=")) return null;
-  return path;
+  if (!path) return { action: "end" };
+  if (opts?.requireCursor && !path.includes("cursor=")) return { action: "reject" };
+  return { action: "follow", path };
+}
+
+/** Follow-path only. `end` and `reject` are both null — use {@link resolveT212NextPagePath} to tell them apart. */
+export function normalizeT212NextPagePath(
+  raw: unknown,
+  opts?: { requireCursor?: boolean },
+): string | null {
+  const resolved = resolveT212NextPagePath(raw, opts);
+  return resolved.action === "follow" ? resolved.path : null;
+}
+
+/** Resume cursor for orders. `"null"` and paths without `cursor=` are not followed. */
+export function normalizeT212OrdersResumePath(raw: string | null | undefined): string | null {
+  return normalizeT212NextPagePath(raw, { requireCursor: true });
 }
 
 /**
@@ -337,9 +362,8 @@ export async function fetchT212HistoryOrders(
   apiSecret: string,
   options?: { maxPages?: number; minRequestIntervalMs?: number; startPath?: string | null },
 ): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
-  const initialPath =
-    options?.startPath?.trim() ||
-    "/api/v0/equity/history/orders";
+  const resumed = normalizeT212OrdersResumePath(options?.startPath);
+  const initialPath = resumed || "/api/v0/equity/history/orders";
   return fetchAllT212Paginated<T212HistoryOrderItem>(
     environment,
     apiKey,
@@ -348,6 +372,8 @@ export async function fetchT212HistoryOrders(
     {
       maxPages: options?.maxPages ?? 6,
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
+      requireCursor: true,
+      retryEmptyPages: true,
     },
   );
 }
@@ -377,7 +403,14 @@ export async function fetchAllT212Paginated<T>(
   apiKey: string,
   apiSecret: string,
   initialPath: string,
-  options?: { maxPages?: number; minRequestIntervalMs?: number },
+  options?: {
+    maxPages?: number;
+    minRequestIntervalMs?: number;
+    /** Orders only. A next path without `cursor=` is an incomplete walk, not the end. */
+    requireCursor?: boolean;
+    /** Orders only. Dividends and positions must not retry an empty page at a smaller limit. */
+    retryEmptyPages?: boolean;
+  },
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
   const minRequestIntervalMs = options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS;
@@ -401,7 +434,7 @@ export async function fetchAllT212Paginated<T>(
   }
 
   while (path && pages < maxPages) {
-    const pagePath = path;
+    const pagePath: string = path;
     let retries429 = 0;
     for (;;) {
       try {
@@ -412,13 +445,25 @@ export async function fetchAllT212Paginated<T>(
         pages += 1;
         const pageItems = Array.isArray(page.items) ? page.items : [];
         if (pageItems.length > 0) out.push(...pageItems);
-        const normalizedNext = normalizeT212NextPagePath(page.nextPagePath);
-        const retryPath = retryPathForEmptyHistoryPage({
-          requestedPath: pagePath,
-          itemCount: pageItems.length,
-          nextPagePath: normalizedNext,
-          retriedCursors,
+        const resolution = resolveT212NextPagePath(page.nextPagePath, {
+          requireCursor: options?.requireCursor,
         });
+        if (resolution.action === "reject") {
+          partial = true;
+          if (!error) error = "Trading 212 next page path was not usable.";
+          nextPagePath = null;
+          path = null;
+          break;
+        }
+        const normalizedNext: string | null = resolution.action === "follow" ? resolution.path : null;
+        const retryPath: string | null = options?.retryEmptyPages
+          ? retryPathForEmptyHistoryPage({
+              requestedPath: pagePath,
+              itemCount: pageItems.length,
+              nextPagePath: normalizedNext,
+              retriedCursors,
+            })
+          : null;
         if (retryPath) {
           const cursor = new URLSearchParams(pagePath.slice(pagePath.indexOf("?") + 1)).get("cursor");
           if (cursor) retriedCursors.add(cursor);

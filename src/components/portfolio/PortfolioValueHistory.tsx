@@ -36,6 +36,8 @@ export type PortfolioValueHistoryPayload = {
   computedHint: boolean;
   historyStatus?: PortfolioHistoryStatus;
   historyReason?: PortfolioHistoryReason;
+  /** Another orders page is stored and the walk should continue. */
+  historyHasMore?: boolean;
 };
 
 function fmtMoney(n: number, currency: string) {
@@ -63,9 +65,10 @@ function sourceLabel(
 function historyNotice(
   data: PortfolioValueHistoryPayload,
   t: (key: string) => string,
+  backfillPaused: boolean,
 ): string | null {
   if (data.historyStatus === "partial" || data.historyReason === "incomplete") {
-    return t("portfolio.valueHistoryPartial");
+    return backfillPaused ? t("portfolio.valueHistoryPartialPaused") : t("portfolio.valueHistoryPartial");
   }
   if (data.historyReason === "missing_scope") return t("portfolio.valueHistoryMissingScope");
   if (data.historyReason === "mismatch") return t("portfolio.valueHistoryMismatch");
@@ -75,9 +78,10 @@ function historyNotice(
 type ChartProps = {
   data: PortfolioValueHistoryPayload | null;
   loading: boolean;
+  backfillPaused?: boolean;
 };
 
-export function PortfolioValueChartCard({ data, loading }: ChartProps) {
+export function PortfolioValueChartCard({ data, loading, backfillPaused = false }: ChartProps) {
   const { t, locale } = useI18n();
 
   const chartData = useMemo(() => {
@@ -104,7 +108,7 @@ export function PortfolioValueChartCard({ data, loading }: ChartProps) {
 
   if (!data) return null;
 
-  const notice = historyNotice(data, t);
+  const notice = historyNotice(data, t, backfillPaused);
   const noticeIsError = data.historyStatus === "unavailable";
 
   if (chartData.length === 0) {
@@ -136,7 +140,7 @@ export function PortfolioValueChartCard({ data, loading }: ChartProps) {
             )}
             role={noticeIsError ? "alert" : "status"}
           >
-            {data.historyStatus === "partial" ? (
+            {data.historyStatus === "partial" && !backfillPaused ? (
               <Loader2 className="mr-1.5 inline size-3.5 animate-spin" aria-hidden />
             ) : null}
             {notice}

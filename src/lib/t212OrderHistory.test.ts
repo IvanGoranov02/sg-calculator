@@ -1,17 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Prisma } from "@prisma/client";
+import type { Trading212Environment } from "@prisma/client";
 
 import {
-  clearedT212OrdersCacheData,
   decideT212OrdersCacheWrite,
   isT212OrdersCacheStale,
   isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
   mergeT212OrderItems,
-  T212_ORDERS_HISTORY_MISMATCH,
+  ordersCacheGenerationUnchanged,
+  ordersCacheGenerationWhere,
+  shouldRecordOrdersScopeDenial,
   T212_ORDERS_SCOPE_DENIED,
   t212OrderItemKey,
+  trading212SettingsOrdersCachePatch,
+  type OrdersCacheGeneration,
 } from "@/lib/t212OrderHistory";
 import type { T212HistoryOrderItem } from "@/lib/trading212Client";
 
@@ -170,24 +174,144 @@ describe("decideT212OrdersCacheWrite", () => {
   });
 });
 
+function generation(overrides: Partial<OrdersCacheGeneration> = {}): OrdersCacheGeneration {
+  return {
+    apiKeyEnc: "key-a",
+    environment: "live" as Trading212Environment,
+    ordersCachedAt: new Date("2026-09-01T00:00:00Z"),
+    ordersCacheNextPath: "/api/v0/equity/history/orders?cursor=1",
+    ordersCachePartial: true,
+    ordersCacheError: null,
+    ...overrides,
+  };
+}
+
 describe("orders cache reset and scope", () => {
-  it("clears every cached history field when credentials change", () => {
-    const cleared = clearedT212OrdersCacheData();
-    assert.equal(cleared.ordersCachedAt, null);
-    assert.equal(cleared.ordersCacheError, null);
-    assert.equal(cleared.ordersCachePartial, false);
-    assert.equal(cleared.ordersCacheNextPath, null);
-    assert.equal(cleared.ordersCache, Prisma.DbNull);
+  it("clears the orders cache when credentials are replaced or the environment changes", () => {
+    const cleared = trading212SettingsOrdersCachePatch({
+      savingCredentials: true,
+      environmentChanged: false,
+    });
+    assert.ok(cleared);
+    assert.equal(cleared?.ordersCache, Prisma.DbNull);
+    assert.equal(cleared?.ordersCachedAt, null);
+    assert.equal(cleared?.ordersCacheError, null);
+    assert.equal(cleared?.ordersCachePartial, false);
+    assert.equal(cleared?.ordersCacheNextPath, null);
+
+    const envClear = trading212SettingsOrdersCachePatch({
+      savingCredentials: false,
+      environmentChanged: true,
+    });
+    assert.equal(envClear?.ordersCache, Prisma.DbNull);
+    assert.equal(envClear?.ordersCachePartial, false);
   });
 
-  it("treats a missing history scope as denied and a mismatch as settled", () => {
-    assert.equal(isT212OrdersScopeDenied(T212_ORDERS_SCOPE_DENIED), true);
+  it("does not clear the orders cache on an environment no-op", () => {
     assert.equal(
-      isT212OrdersScopeDenied("Trading 212 denied access with the current API key (forbidden)."),
+      trading212SettingsOrdersCachePatch({
+        savingCredentials: false,
+        environmentChanged: false,
+      }),
+      null,
+    );
+  });
+
+  it("records missing history scope only for a first-page 403 with no cached fills", () => {
+    assert.equal(
+      shouldRecordOrdersScopeDenial({
+        prevItemCount: 0,
+        resumePath: null,
+        fetchItemCount: 0,
+        httpStatus: 403,
+      }),
       true,
     );
-    assert.equal(isT212OrdersScopeDenied(T212_ORDERS_HISTORY_MISMATCH), false);
+    assert.equal(isT212OrdersScopeDenied(T212_ORDERS_SCOPE_DENIED), true);
+  });
+
+  it("does not treat a later-page 403 or generic forbidden copy as missing scope", () => {
+    assert.equal(
+      shouldRecordOrdersScopeDenial({
+        prevItemCount: 4,
+        resumePath: "/api/v0/equity/history/orders?cursor=9",
+        fetchItemCount: 0,
+        httpStatus: 403,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRecordOrdersScopeDenial({
+        prevItemCount: 0,
+        resumePath: "/api/v0/equity/history/orders?cursor=9",
+        fetchItemCount: 0,
+        httpStatus: 403,
+      }),
+      false,
+    );
+    assert.equal(
+      isT212OrdersScopeDenied("Trading 212 denied access with the current API key (forbidden)."),
+      false,
+    );
+    assert.equal(isT212OrdersScopeDenied("Trading 212 403"), false);
     assert.equal(isT212OrdersScopeDenied(null), false);
+  });
+
+  it("keeps existing fills when a partial fetch returns no rows", () => {
+    const prev: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2020-01-01T00:00:00Z", quantity: 2, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const decision = decideT212OrdersCacheWrite(
+      prev,
+      {
+        items: [],
+        partial: true,
+        status: 403,
+        error: "Trading 212 denied access with the current API key (forbidden).",
+        nextPagePath: "/api/v0/equity/history/orders?cursor=9",
+      },
+      "/api/v0/equity/history/orders?cursor=8",
+    );
+    assert.equal(decision.items.length, 1);
+    assert.equal(decision.items[0]?.order?.ticker, "AAPL_US_EQ");
+    assert.notEqual(decision.error, T212_ORDERS_SCOPE_DENIED);
+    assert.equal(decision.partial, true);
+    assert.equal(decision.nextPagePath, "/api/v0/equity/history/orders?cursor=9");
+  });
+
+  it("refuses a cache write after the key, environment, or cursor generation changes", () => {
+    const expected = generation();
+    assert.equal(ordersCacheGenerationUnchanged(expected, generation()), true);
+    assert.equal(
+      ordersCacheGenerationUnchanged(expected, generation({ apiKeyEnc: "key-b" })),
+      false,
+    );
+    assert.equal(
+      ordersCacheGenerationUnchanged(expected, generation({ environment: "demo" })),
+      false,
+    );
+    assert.equal(
+      ordersCacheGenerationUnchanged(
+        expected,
+        generation({ ordersCachedAt: null, ordersCacheNextPath: null, ordersCachePartial: false }),
+      ),
+      false,
+    );
+    assert.equal(
+      ordersCacheGenerationUnchanged(
+        expected,
+        generation({ ordersCacheNextPath: "/api/v0/equity/history/orders?cursor=2" }),
+      ),
+      false,
+    );
+    const where = ordersCacheGenerationWhere("user-1", expected);
+    assert.equal(where.userId, "user-1");
+    assert.equal(where.apiKeyEnc, "key-a");
+    assert.equal(where.environment, "live");
+    assert.notEqual(ordersCacheGenerationWhere("user-1", generation({ apiKeyEnc: "key-b" })).apiKeyEnc, where.apiKeyEnc);
   });
 });
 

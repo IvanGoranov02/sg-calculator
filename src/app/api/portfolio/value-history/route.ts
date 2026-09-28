@@ -29,7 +29,6 @@ import {
   mapT212OrderItemsToQtyEvents,
   readT212OrdersCache,
   refreshT212OrdersCache,
-  T212_ORDERS_HISTORY_MISMATCH,
 } from "@/lib/t212OrderHistory";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 
@@ -80,30 +79,13 @@ export async function GET(request: Request) {
     let orderItems = ordersRead?.items ?? [];
     let ordersPartial = ordersRead?.partial ?? false;
     let ordersError = ordersRead?.error ?? null;
+    let ordersNextPath = ordersRead?.nextPagePath ?? null;
     const thisMonth = currentMonthKey();
-    const cachedEvents = mapT212OrderItemsToQtyEvents(orderItems);
-    const cachedMonths = calendarMonthsForEvents(cachedEvents);
-    const cachedQty =
-      !ordersPartial && cachedMonths.length > 0
-        ? quantitiesByMonthFromEvents(cachedEvents, cachedMonths)
-        : undefined;
-    const cachedTimelineOk =
-      cachedQty != null && quantityTimelineMatchesHoldings(cachedQty, thisMonth, holdings);
-    // A settled cache that cannot explain open positions was often a key without history access
-    // or a pagination walk that stopped on the newest page. Rebuild it once, then remember the miss.
-    const mismatchNeedsRebuild =
-      Boolean(t212) &&
-      holdings.length > 0 &&
-      !ordersPartial &&
-      !cachedTimelineOk &&
-      ordersError !== T212_ORDERS_HISTORY_MISMATCH;
 
-    let refreshFinished = false;
     if (
       t212 &&
       isPortfolioEncryptionConfigured() &&
       (isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
-        mismatchNeedsRebuild ||
         isT212OrdersScopeDenied(ordersError))
     ) {
       const refreshed = await withTimeoutFallback(
@@ -112,23 +94,25 @@ export async function GET(request: Request) {
           environment: t212.environment,
           apiKeyEnc: t212.apiKeyEnc,
           apiSecretEnc: t212.apiSecretEnc,
-          maxPages: 6,
+          // Two pages per request stays inside 6/min when the client polls on the rate-limit window.
+          maxPages: 2,
         }),
         50_000,
         "t212-orders-cache",
         null,
       );
-      refreshFinished = refreshed != null;
       if (refreshed) {
         orderItems = refreshed.items;
         ordersPartial = refreshed.partial;
         ordersError = refreshed.error ?? null;
+        ordersNextPath = refreshed.nextPagePath ?? null;
       } else {
         const fresh = await prisma.trading212Connection.findUnique({ where: { userId } });
         ordersRead = fresh ? readT212OrdersCache(fresh) : ordersRead;
         orderItems = ordersRead?.items ?? [];
         ordersPartial = ordersRead?.partial ?? false;
         ordersError = ordersRead?.error ?? null;
+        ordersNextPath = ordersRead?.nextPagePath ?? null;
       }
     }
 
@@ -198,22 +182,6 @@ export async function GET(request: Request) {
       hasHoldings: holdings.length > 0,
     });
 
-    if (
-      refreshFinished &&
-      t212 &&
-      history.reason === "mismatch" &&
-      ordersError !== T212_ORDERS_HISTORY_MISMATCH
-    ) {
-      await prisma.trading212Connection.update({
-        where: { userId },
-        data: {
-          ordersCacheError: T212_ORDERS_HISTORY_MISMATCH,
-          ordersCachePartial: false,
-          ordersCachedAt: new Date(),
-        },
-      });
-    }
-
     const chartSeries = buildPortfolioValueChartSeries({
       snapshots: snapshots.map((s) => ({
         capturedAt: s.capturedAt,
@@ -244,6 +212,7 @@ export async function GET(request: Request) {
       computedHint: holdings.length > 0 || snapshots.length > 0,
       historyStatus: history.status,
       historyReason: history.reason,
+      historyHasMore: Boolean(t212) && ordersPartial && !scopeDenied && Boolean(ordersNextPath?.trim()),
     });
   } catch (e) {
     if (isPrismaInfrastructureError(e)) {

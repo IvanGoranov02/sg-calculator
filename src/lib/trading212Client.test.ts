@@ -4,7 +4,9 @@ import { describe, it } from "node:test";
 import {
   normalizePositionsPayload,
   normalizeT212NextPagePath,
+  normalizeT212OrdersResumePath,
   normalizeT212Position,
+  resolveT212NextPagePath,
   retryPathForEmptyHistoryPage,
 } from "@/lib/trading212Client";
 
@@ -55,8 +57,32 @@ describe("normalizeT212NextPagePath", () => {
     );
   });
 
-  it("rejects a path that would restart at the newest page", () => {
-    assert.equal(normalizeT212NextPagePath("/api/v0/equity/history/orders?limit=50"), null);
+  it("keeps a dividend or position path that has no cursor", () => {
+    assert.equal(
+      normalizeT212NextPagePath("/api/v0/equity/history/dividends?limit=50"),
+      "/api/v0/equity/history/dividends?limit=50",
+    );
+  });
+
+  it("rejects an orders path without a cursor instead of treating it as the end", () => {
+    assert.equal(
+      normalizeT212NextPagePath("/api/v0/equity/history/orders?limit=50", { requireCursor: true }),
+      null,
+    );
+    assert.deepEqual(
+      resolveT212NextPagePath("/api/v0/equity/history/orders?limit=50", { requireCursor: true }),
+      { action: "reject" },
+    );
+    assert.deepEqual(resolveT212NextPagePath("null", { requireCursor: true }), { action: "end" });
+  });
+
+  it("does not follow a resume path of the string null", () => {
+    assert.equal(normalizeT212OrdersResumePath("null"), null);
+    assert.equal(normalizeT212OrdersResumePath("null&ticker=AAPL_US_EQ"), null);
+    assert.equal(
+      normalizeT212OrdersResumePath("/api/v0/equity/history/orders?cursor=5&limit=50"),
+      "/api/v0/equity/history/orders?cursor=5&limit=50",
+    );
   });
 });
 

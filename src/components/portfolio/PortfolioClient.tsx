@@ -151,8 +151,11 @@ export function PortfolioClient() {
 
   const [valueHistory, setValueHistory] = useState<PortfolioValueHistoryPayload | null>(null);
   const [valueHistoryLoading, setValueHistoryLoading] = useState(false);
+  const [historyBackfillPaused, setHistoryBackfillPaused] = useState(false);
   const historyPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyPollCount = useRef(0);
+  const historyLoadInFlight = useRef(false);
+  const historyLoadQueued = useRef(false);
   const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
 
   useEffect(() => {
@@ -228,6 +231,8 @@ export function PortfolioClient() {
     }
   }, [t]);
 
+  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean }) => Promise<void>>(async () => {});
+
   const clearHistoryPoll = useCallback(() => {
     if (historyPollTimer.current != null) {
       clearTimeout(historyPollTimer.current);
@@ -235,9 +240,29 @@ export function PortfolioClient() {
     }
   }, []);
 
+  const scheduleHistoryPoll = useCallback(() => {
+    // history:orders allows 6 requests/minute. Do not start another walk inside that window.
+    if (historyPollCount.current >= 10) {
+      setHistoryBackfillPaused(true);
+      clearHistoryPoll();
+      return;
+    }
+    historyPollCount.current += 1;
+    clearHistoryPoll();
+    historyPollTimer.current = setTimeout(() => {
+      void loadValueHistoryRef.current({ poll: true });
+    }, 60_000);
+  }, [clearHistoryPoll]);
+
   const loadValueHistory = useCallback(async (opts?: { poll?: boolean }) => {
+    if (historyLoadInFlight.current) {
+      if (!opts?.poll) historyLoadQueued.current = true;
+      return;
+    }
+    historyLoadInFlight.current = true;
     if (!opts?.poll) {
       historyPollCount.current = 0;
+      setHistoryBackfillPaused(false);
       clearHistoryPoll();
     }
     setValueHistoryLoading(true);
@@ -246,27 +271,38 @@ export function PortfolioClient() {
         `/api/portfolio/value-history?base=${encodeURIComponent(preferredPortfolioCurrency)}`,
       );
       if (!res.ok) {
-        if (!opts?.poll) setValueHistory(null);
+        if (opts?.poll) scheduleHistoryPoll();
+        else setValueHistory(null);
         return;
       }
       const data = (await res.json()) as PortfolioValueHistoryPayload;
       setValueHistory(data);
-      if (data.historyStatus === "partial" && historyPollCount.current < 24) {
-        historyPollCount.current += 1;
+      const morePending = data.historyStatus === "partial" && data.historyHasMore === true;
+      if (morePending) {
+        setHistoryBackfillPaused(false);
+        scheduleHistoryPoll();
+      } else if (data.historyStatus === "partial") {
+        setHistoryBackfillPaused(true);
         clearHistoryPoll();
-        historyPollTimer.current = setTimeout(() => {
-          void loadValueHistory({ poll: true });
-        }, 8000);
       } else {
+        setHistoryBackfillPaused(false);
         historyPollCount.current = 0;
         clearHistoryPoll();
       }
     } catch {
-      if (!opts?.poll) setValueHistory(null);
+      if (opts?.poll) scheduleHistoryPoll();
+      else setValueHistory(null);
     } finally {
       setValueHistoryLoading(false);
+      historyLoadInFlight.current = false;
+      if (historyLoadQueued.current) {
+        historyLoadQueued.current = false;
+        void loadValueHistoryRef.current();
+      }
     }
-  }, [clearHistoryPoll, preferredPortfolioCurrency]);
+  }, [clearHistoryPoll, preferredPortfolioCurrency, scheduleHistoryPoll]);
+
+  loadValueHistoryRef.current = loadValueHistory;
 
   useEffect(() => () => clearHistoryPoll(), [clearHistoryPoll]);
 
@@ -853,7 +889,11 @@ export function PortfolioClient() {
         </div>
       ) : null}
 
-      <PortfolioValueChartCard data={valueHistory} loading={valueHistoryLoading} />
+      <PortfolioValueChartCard
+        data={valueHistory}
+        loading={valueHistoryLoading}
+        backfillPaused={historyBackfillPaused}
+      />
 
       {loading && holdings.length === 0 ? (
         <div className="flex items-center gap-2 text-muted-foreground">
