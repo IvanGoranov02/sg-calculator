@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  formatCurrency,
+  formatCurrencyPerShare,
   formatLocaleDate,
   formatLocaleDateShort,
+  intlCurrencyCode,
   resolveDateLocaleTag,
 } from "./format";
 
@@ -32,6 +35,23 @@ describe("formatLocaleDate", () => {
 
   it("returns dash for invalid input", () => {
     assert.equal(formatLocaleDate(null, "en", "mdy"), "—");
+  });
+});
+
+describe("formatCurrencyPerShare", () => {
+  it("labels US listings in dollars", () => {
+    assert.match(formatCurrencyPerShare(0.525), /^\$0\.525/);
+    assert.match(formatCurrency(2.1), /^\$2\.10/);
+  });
+
+  it("labels euro listing cash with the euro symbol", () => {
+    assert.match(formatCurrencyPerShare(0.461, "EUR"), /^€0\.461/);
+    assert.match(formatCurrency(1.83, "EUR"), /^€1\.83/);
+  });
+
+  it("formats pence quotes as pounds", () => {
+    assert.equal(intlCurrencyCode("GBp"), "GBP");
+    assert.match(formatCurrencyPerShare(0.5, "GBp"), /^£0\.50/);
   });
 });
 

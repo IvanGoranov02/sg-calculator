@@ -37,6 +37,7 @@ type DividendChartsSectionProps = {
 
 export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
+  const dividendCurrency = data.investor.currency || "USD";
   const { timeRange, customFromYear, customToYear } = useStockAnalysisPeriod();
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
@@ -257,14 +258,17 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
                       <YAxis
                         tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                         width={76}
-                        tickFormatter={(v: number) => formatCurrencyPerShare(v)}
+                        tickFormatter={(v: number) => formatCurrencyPerShare(v, dividendCurrency)}
                       />
                       <Tooltip
                         formatter={
                           ((value: unknown, name: string, item: { payload?: { ttmPartial?: boolean } }) => {
                             const v = Array.isArray(value) ? value[0] : value;
                             if (v === undefined || v === null) return "—";
-                            const fmt = formatCurrencyPerShare(typeof v === "number" ? v : Number(v));
+                            const fmt = formatCurrencyPerShare(
+                              typeof v === "number" ? v : Number(v),
+                              dividendCurrency,
+                            );
                             const partial = item?.payload?.ttmPartial === true;
                             if (partial) {
                               return [`${fmt} (${t("chartsFund.dividendTtmPartialShort")})`, name];
@@ -303,6 +307,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             series={qDpsSeries}
             chartType="bar"
             valueFormat="perShare"
+            currency={dividendCurrency}
             growthPills={[{ pills: pack.qDpsPills }]}
           />
         </div>

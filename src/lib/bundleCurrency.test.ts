@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { convertBundleFundamentals } from "@/lib/bundleCurrency";
+import {
+  convertBundleFundamentals,
+  dividendsAlreadyInQuoteCurrency,
+  overlayQuarterlyDividends,
+} from "@/lib/bundleCurrency";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 function makeBundle(): StockAnalysisBundle {
@@ -90,5 +94,62 @@ describe("convertBundleFundamentals", () => {
     assert.equal(b2.income[0].revenue, 100);
     const b3 = convertBundleFundamentals(makeBundle(), NaN);
     assert.equal(b3.income[0].revenue, 100);
+  });
+
+  it("can leave dividends unscaled when they are already quote currency", () => {
+    const b = convertBundleFundamentals(makeBundle(), 1.1, { convertDividends: false });
+    assert.ok(Math.abs(b.income[0].revenue - 110) < 1e-9);
+    assert.equal(b.dividendQuarterly[0].dividendPerShare, 1.2);
+  });
+});
+
+describe("dividendsAlreadyInQuoteCurrency", () => {
+  const quarters = (dps: number) =>
+    [0, 1, 2, 3].map(() => ({ dividendPerShare: dps }));
+
+  it("treats FB2A.DE listing cash as EUR and does not ask for a second scale", () => {
+    // Yahoo ex-div on FB2A.DE is the USD dividend converted once (~€0.461 = $0.525).
+    // Scaling again by ~0.867 produced the reported ~$0.3996 figure.
+    const eurCash = 0.461;
+    const usdPerShare = 0.525;
+    const eurPerUsd = 0.8667;
+    assert.ok(Math.abs(eurCash * eurPerUsd - 0.3996) < 0.001);
+    assert.equal(dividendsAlreadyInQuoteCurrency(quarters(eurCash), 1.83, eurPerUsd), true);
+    assert.equal(dividendsAlreadyInQuoteCurrency(quarters(usdPerShare), 1.83, eurPerUsd), false);
+  });
+
+  it("does not rescale a series that already matches the quote-currency annual rate", () => {
+    // META: $0.525 × 4 = $2.10. Same currency, so an FX rate must not be applied.
+    assert.equal(dividendsAlreadyInQuoteCurrency(quarters(0.525), 2.1, 0.88), true);
+  });
+
+  it("returns false without an annual rate to compare", () => {
+    assert.equal(dividendsAlreadyInQuoteCurrency(quarters(0.461), null, 0.88), false);
+  });
+});
+
+describe("overlayQuarterlyDividends", () => {
+  const rows = [
+    { date: "2025-12-31", dividendPerShare: 0.525 },
+    { date: "2026-03-31", dividendPerShare: null },
+  ];
+  const events = [
+    { date: "2025-12-15", amount: 0.461 },
+    { date: "2026-03-16", amount: 0.461 },
+  ];
+
+  it("fills only gaps by default", () => {
+    const applied = overlayQuarterlyDividends(rows, events, "fill-gaps");
+    assert.equal(applied.rows[0]!.dividendPerShare, 0.525);
+    assert.equal(applied.rows[1]!.dividendPerShare, 0.461);
+    assert.equal(applied.kept, 1);
+  });
+
+  it("overwrites reporting-currency DPS with listing cash", () => {
+    const applied = overlayQuarterlyDividends(rows, events, "overwrite");
+    assert.equal(applied.rows[0]!.dividendPerShare, 0.461);
+    assert.equal(applied.rows[1]!.dividendPerShare, 0.461);
+    assert.equal(applied.wrote, 2);
+    assert.equal(applied.kept, 0);
   });
 });

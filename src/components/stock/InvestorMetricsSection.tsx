@@ -106,7 +106,10 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
   ];
 
   const divRows: Row[] = [
-    { label: t("investor.dividendRate"), value: m.dividendRate != null ? formatCurrency(m.dividendRate) : "—" },
+    {
+      label: t("investor.dividendRate"),
+      value: m.dividendRate != null ? formatCurrency(m.dividendRate, m.currency) : "—",
+    },
     { label: t("investor.dividendYield"), value: fmtYield(m.dividendYield) },
     { label: t("investor.payoutRatio"), value: fmtPayout(m.payoutRatio) },
   ];

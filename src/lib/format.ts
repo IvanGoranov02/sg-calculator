@@ -17,10 +17,6 @@ const compactFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
 });
 
-export function formatCurrency(n: number): string {
-  return currencyFmt.format(n);
-}
-
 export function formatCurrencyEur(n: number): string {
   return currencyEurFmt.format(n);
 }
@@ -76,8 +72,49 @@ const perShareFmt = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 4,
 });
 
-export function formatCurrencyPerShare(n: number): string {
-  return perShareFmt.format(n);
+const moneyFmtCache = new Map<string, Intl.NumberFormat>();
+
+/** ISO currency for Intl. Yahoo pence quotes (GBp/GBX) format as GBP. */
+export function intlCurrencyCode(currency: string | null | undefined): string {
+  const raw = (currency ?? "USD").trim();
+  if (/^gb[px]$/i.test(raw)) return "GBP";
+  const upper = raw.toUpperCase();
+  return /^[A-Z]{3}$/.test(upper) ? upper : "USD";
+}
+
+function cachedMoneyFormat(currency: string, maximumFractionDigits: number, minimumFractionDigits: number): Intl.NumberFormat {
+  const code = intlCurrencyCode(currency);
+  const key = `${code}:${minimumFractionDigits}:${maximumFractionDigits}`;
+  const hit = moneyFmtCache.get(key);
+  if (hit) return hit;
+  let fmt: Intl.NumberFormat;
+  try {
+    fmt = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits,
+      maximumFractionDigits,
+    });
+  } catch {
+    fmt = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits,
+      maximumFractionDigits,
+    });
+  }
+  moneyFmtCache.set(key, fmt);
+  return fmt;
+}
+
+export function formatCurrency(n: number, currency = "USD"): string {
+  if (intlCurrencyCode(currency) === "USD") return currencyFmt.format(n);
+  return cachedMoneyFormat(currency, 2, 2).format(n);
+}
+
+export function formatCurrencyPerShare(n: number, currency = "USD"): string {
+  if (intlCurrencyCode(currency) === "USD") return perShareFmt.format(n);
+  return cachedMoneyFormat(currency, 4, 2).format(n);
 }
 
 /** Extract yyyy-mm-dd from ISO date or datetime; null if missing or unparseable. */
