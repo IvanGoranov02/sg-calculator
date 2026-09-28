@@ -3,6 +3,7 @@
  * Keeps T212 EU listings from fail-open to US ADR/ETF traps (e.g. AMZD bear ETF).
  */
 
+import { dipVsAveragePct } from "@/lib/dipFinder";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import { parseT212Ticker, t212TickerToYahooCandidates } from "@/lib/t212Ticker";
 
@@ -203,6 +204,34 @@ export function shouldPreferBrokerPrice(
   if (hold != null && brokerCcy === hold && quoteCurrencyScore(best, holdingCurrency) === 0) return true;
 
   return false;
+}
+
+const EMPTY_DIP = {
+  twoHundredDayAverage: null,
+  dipVsSma200Pct: null,
+} as const;
+
+/**
+ * Dip vs the 200-day average for a row whose displayed price is the broker quote.
+ * Uses Yahoo's SMA only when it is in the same currency as that price.
+ * Cross-currency SMA is left blank — do not invent a dip from mismatched units.
+ */
+export function dipVs200dForBrokerPrice(
+  broker: { price: number; currency: string },
+  yahoo: { currency: string; twoHundredDayAverage: number | null } | null,
+): { twoHundredDayAverage: number | null; dipVsSma200Pct: number | null } {
+  if (!yahoo) return { ...EMPTY_DIP };
+  const brokerCcy = normalizePortfolioCurrency(broker.currency);
+  const yahooCcy = normalizePortfolioCurrency(yahoo.currency);
+  if (brokerCcy !== yahooCcy) return { ...EMPTY_DIP };
+
+  const sma = yahoo.twoHundredDayAverage;
+  if (sma == null || !Number.isFinite(sma) || sma === 0) return { ...EMPTY_DIP };
+  if (!Number.isFinite(broker.price)) return { ...EMPTY_DIP };
+
+  const dip = dipVsAveragePct(broker.price, sma);
+  if (dip == null || !Number.isFinite(dip)) return { ...EMPTY_DIP };
+  return { twoHundredDayAverage: sma, dipVsSma200Pct: dip };
 }
 
 /** Search query for Yahoo when the stored portfolio key is a legacy stub. */
