@@ -24,6 +24,16 @@ function fmtLive(
   return formatCurrency(usd);
 }
 
+function extendedChangeText(
+  percent: number | null | undefined,
+  change: number | null | undefined,
+  fmt: (usd: number) => string,
+): string {
+  if (percent != null && Number.isFinite(percent)) return formatPercent(percent);
+  if (change != null && Number.isFinite(change)) return fmt(change);
+  return "—";
+}
+
 type StockLiveHeaderProps = {
   quote: StockQuote;
   eurPerUsd?: number | null;
@@ -71,10 +81,19 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
     return formatCurrency(quote.change);
   }, [ccy, canEur, eurPerUsd, quote.change]);
 
+  const sessionLabel = showPost ? t("stock.afterHours") : showPre ? t("stock.preMarket") : null;
+  const sessionPrice = showPost ? post : showPre ? pre : null;
+  const sessionChange = showPost
+    ? extendedChangeText(quote.postMarketChangePercent, quote.postMarketChange, fmt)
+    : showPre
+      ? extendedChangeText(quote.preMarketChangePercent, quote.preMarketChange, fmt)
+      : null;
+  const sessionPositive = showPost ? postPos : prePos;
+
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-lg shadow-sm sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
+    <div className="rounded-xl border border-border bg-card px-4 py-2.5 shadow-lg shadow-sm sm:px-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <CompanyIdentity
               symbol={quote.symbol}
@@ -85,42 +104,15 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
             <WatchlistToggle symbol={quote.symbol} />
           </div>
           {quote.earningsDate ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               <span className="font-medium text-foreground/90">{t("stock.nextEarnings")}</span>{" "}
               {quote.earningsDate}
             </p>
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-col items-start gap-3 sm:items-end">
-          <div
-            className="flex flex-wrap items-center gap-2 sm:justify-end"
-            role="group"
-            aria-label={t("stock.priceCurrencyGroup")}
-          >
-            <Button
-              type="button"
-              size="sm"
-              variant={ccy === "usd" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 font-mono text-[11px]"
-              onClick={() => persistCcy("usd")}
-            >
-              USD
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={ccy === "eur" ? "secondary" : "ghost"}
-              className="h-7 px-2.5 font-mono text-[11px]"
-              disabled={!canEur}
-              title={!canEur ? t("stock.eurUnavailable") : undefined}
-              onClick={() => canEur && persistCcy("eur")}
-            >
-              EUR
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-baseline gap-2 sm:justify-end sm:gap-3">
+        <div className="flex min-w-0 flex-col items-end gap-1 self-end sm:self-auto">
+          <div className="flex flex-wrap items-baseline justify-end gap-x-2 gap-y-0.5 sm:gap-x-3">
             <span className="font-mono text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
               {fmt(quote.price)}
             </span>
@@ -136,47 +128,51 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
             </span>
           </div>
 
-          {showPost ? (
-            <div className="text-left sm:text-right">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {t("stock.afterHours")}
-              </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">{fmt(post!)}</p>
-              <p
-                className={cn(
-                  "font-mono text-xs tabular-nums",
-                  postPos ? "text-emerald-400" : "text-red-400",
-                )}
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label={t("stock.priceCurrencyGroup")}
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={ccy === "usd" ? "secondary" : "ghost"}
+                className="h-7 px-2.5 font-mono text-[11px]"
+                onClick={() => persistCcy("usd")}
               >
-                {quote.postMarketChangePercent != null && Number.isFinite(quote.postMarketChangePercent)
-                  ? formatPercent(quote.postMarketChangePercent)
-                  : quote.postMarketChange != null
-                    ? fmt(quote.postMarketChange)
-                    : "—"}
-              </p>
+                USD
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={ccy === "eur" ? "secondary" : "ghost"}
+                className="h-7 px-2.5 font-mono text-[11px]"
+                disabled={!canEur}
+                title={!canEur ? t("stock.eurUnavailable") : undefined}
+                onClick={() => canEur && persistCcy("eur")}
+              >
+                EUR
+              </Button>
             </div>
-          ) : null}
 
-          {showPre ? (
-            <div className="text-left sm:text-right">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {t("stock.preMarket")}
-              </p>
-              <p className="font-mono text-sm tabular-nums text-foreground">{fmt(pre!)}</p>
-              <p
-                className={cn(
-                  "font-mono text-xs tabular-nums",
-                  prePos ? "text-emerald-400" : "text-red-400",
-                )}
-              >
-                {quote.preMarketChangePercent != null && Number.isFinite(quote.preMarketChangePercent)
-                  ? formatPercent(quote.preMarketChangePercent)
-                  : quote.preMarketChange != null
-                    ? fmt(quote.preMarketChange)
-                    : "—"}
-              </p>
-            </div>
-          ) : null}
+            {sessionLabel && sessionPrice != null && sessionChange ? (
+              <div className="flex flex-wrap items-baseline justify-end gap-x-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {sessionLabel}
+                </span>
+                <span className="font-mono text-sm tabular-nums text-foreground">{fmt(sessionPrice)}</span>
+                <span
+                  className={cn(
+                    "font-mono text-xs tabular-nums",
+                    sessionPositive ? "text-emerald-400" : "text-red-400",
+                  )}
+                >
+                  {sessionChange}
+                </span>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

@@ -120,27 +120,29 @@ export function StockAnalysisView({
             />
           </div>
         ) : null}
-        <div className="space-y-2 sm:flex sm:items-start sm:gap-3 sm:space-y-0">
-          <div className="flex items-center justify-end gap-2 sm:order-2">
-            {onForceRefresh && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="shrink-0 text-xs"
-                onClick={onForceRefresh}
-                disabled={loading}
-              >
-                {loading ? t("stock.refreshing") : t("stock.refreshData")}
-              </Button>
-            )}
+        <div className="flex flex-col gap-4">
+          <div className="space-y-2 sm:flex sm:items-start sm:gap-3 sm:space-y-0">
+            <div className="flex items-center justify-end gap-2 sm:order-2">
+              {onForceRefresh && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 text-xs"
+                  onClick={onForceRefresh}
+                  disabled={loading}
+                >
+                  {loading ? t("stock.refreshing") : t("stock.refreshData")}
+                </Button>
+              )}
+            </div>
+            <div className="min-w-0 flex-1 sm:order-1">
+              <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
+            </div>
           </div>
-          <div className="min-w-0 flex-1 sm:order-1">
-            <StockLiveHeader quote={quote} eurPerUsd={eurPerUsd} />
-          </div>
-        </div>
 
-        <StockMetricChart data={bundle} />
+          <StockMetricChart data={bundle} />
+        </div>
         <FundamentalsChartsSection data={bundle} symbol={symbol} />
         <DividendChartsSection data={bundle} />
 

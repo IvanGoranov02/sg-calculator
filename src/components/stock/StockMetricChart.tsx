@@ -159,37 +159,38 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
     stats && typeof stats.volume === "number" && stats.volume > 0 ? formatVolume(stats.volume) : "—";
 
   return (
-    <Card className="min-w-0 border-border bg-card shadow-xl shadow-sm">
-      <CardHeader className="flex flex-col gap-3 pb-2">
-        <CardTitle className="text-lg">{t("chart.stockPerformance")}</CardTitle>
-
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {t("chart.range")}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {rangeOptions.map((r) => (
-              <Button
-                key={r.id}
-                type="button"
-                size="sm"
-                variant={range === r.id ? "secondary" : "ghost"}
-                title={r.title}
-                className={cn(
-                  "h-7 min-w-10 rounded-md px-2 font-mono text-xs",
-                  range === r.id && "bg-background text-foreground shadow-sm hover:bg-background",
-                )}
-                onClick={() => setRange(r.id)}
-              >
-                {r.label}
-              </Button>
-            ))}
+    <Card className="min-w-0 gap-2 border-border bg-card py-3 shadow-xl shadow-sm">
+      <CardHeader className="flex flex-col gap-2 pb-0">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <CardTitle className="text-lg">{t("chart.stockPerformance")}</CardTitle>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t("chart.range")}
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {rangeOptions.map((r) => (
+                <Button
+                  key={r.id}
+                  type="button"
+                  size="sm"
+                  variant={range === r.id ? "secondary" : "ghost"}
+                  title={r.title}
+                  className={cn(
+                    "h-7 min-w-10 rounded-md px-2 font-mono text-xs",
+                    range === r.id && "bg-background text-foreground shadow-sm hover:bg-background",
+                  )}
+                  onClick={() => setRange(r.id)}
+                >
+                  {r.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
         {stats && (
-          <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 sm:grid-cols-4">
-            <div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border bg-muted/50 px-3 py-1.5 sm:grid-cols-4">
+            <div className="flex min-w-0 items-baseline justify-between gap-2 sm:justify-start">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.periodChange")}
               </p>
@@ -202,19 +203,19 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
                 {formatPercent(stats.changePct)}
               </p>
             </div>
-            <div>
+            <div className="flex min-w-0 items-baseline justify-between gap-2 sm:justify-start">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.rangeHigh")}
               </p>
               <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.high)}</p>
             </div>
-            <div>
+            <div className="flex min-w-0 items-baseline justify-between gap-2 sm:justify-start">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.rangeLow")}
               </p>
               <p className="font-mono text-sm tabular-nums text-foreground">{fmtValue(stats.low)}</p>
             </div>
-            <div>
+            <div className="flex min-w-0 items-baseline justify-between gap-2 sm:justify-start">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 {t("chart.volumeSum")}
               </p>
@@ -224,7 +225,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
         )}
       </CardHeader>
       <CardContent className="min-h-0 min-w-0 pt-0">
-        <div className="relative h-[200px] min-h-0 min-w-0 w-full sm:h-[220px] md:h-[240px]">
+        <div className="relative h-[168px] min-h-0 min-w-0 w-full sm:h-[184px] md:h-[200px]">
           <div className="absolute inset-0 min-h-0 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={series} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
@@ -274,7 +275,7 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
             </ResponsiveContainer>
           </div>
         </div>
-        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-3" />
+        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-2" />
       </CardContent>
     </Card>
   );
