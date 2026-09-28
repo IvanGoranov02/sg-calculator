@@ -19,7 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMonthKeyLabel, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { PortfolioValueChartPoint, PortfolioValueMonthSource } from "@/lib/portfolioValueHistory";
+import type {
+  PortfolioHistoryReason,
+  PortfolioHistoryStatus,
+  PortfolioValueChartPoint,
+  PortfolioValueMonthSource,
+} from "@/lib/portfolioValueHistory";
 import { cn } from "@/lib/utils";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
@@ -29,6 +34,8 @@ export type PortfolioValueHistoryPayload = {
   baseCurrency: string;
   manualEntries: { month: string; amount: string; currency: string }[];
   computedHint: boolean;
+  historyStatus?: PortfolioHistoryStatus;
+  historyReason?: PortfolioHistoryReason;
 };
 
 function fmtMoney(n: number, currency: string) {
@@ -51,6 +58,18 @@ function sourceLabel(
   if (source === "t212") return t("portfolio.valueSourceT212");
   if (source === "computed") return t("portfolio.valueSourceComputed");
   return "—";
+}
+
+function historyNotice(
+  data: PortfolioValueHistoryPayload,
+  t: (key: string) => string,
+): string | null {
+  if (data.historyStatus === "partial" || data.historyReason === "incomplete") {
+    return t("portfolio.valueHistoryPartial");
+  }
+  if (data.historyReason === "missing_scope") return t("portfolio.valueHistoryMissingScope");
+  if (data.historyReason === "mismatch") return t("portfolio.valueHistoryMismatch");
+  return null;
 }
 
 type ChartProps = {
@@ -83,7 +102,24 @@ export function PortfolioValueChartCard({ data, loading }: ChartProps) {
     );
   }
 
-  if (!data || chartData.length === 0) return null;
+  if (!data) return null;
+
+  const notice = historyNotice(data, t);
+  const noticeIsError = data.historyStatus === "unavailable";
+
+  if (chartData.length === 0) {
+    if (!notice && !data.computedHint) return null;
+    return (
+      <Card className="border-border bg-card">
+        <CardHeader className="space-y-1 pb-4">
+          <CardTitle className="text-base">{t("portfolio.valueChartTitle")}</CardTitle>
+          <CardDescription className={cn("text-xs sm:text-sm", noticeIsError && "text-amber-200/90")}>
+            {notice ?? t("portfolio.valueHistoryEmpty")}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-border bg-card">
@@ -91,6 +127,20 @@ export function PortfolioValueChartCard({ data, loading }: ChartProps) {
         <CardTitle className="text-base">{t("portfolio.valueChartTitle")}</CardTitle>
         {data.computedHint ? (
           <CardDescription className="text-xs sm:text-sm">{t("portfolio.valueChartHint")}</CardDescription>
+        ) : null}
+        {notice ? (
+          <p
+            className={cn(
+              "text-xs sm:text-sm",
+              noticeIsError ? "text-amber-200/90" : "text-muted-foreground",
+            )}
+            role={noticeIsError ? "alert" : "status"}
+          >
+            {data.historyStatus === "partial" ? (
+              <Loader2 className="mr-1.5 inline size-3.5 animate-spin" aria-hidden />
+            ) : null}
+            {notice}
+          </p>
         ) : null}
       </CardHeader>
       <div className="h-64 px-2 pb-4 sm:px-4">

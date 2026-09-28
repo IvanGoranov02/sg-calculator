@@ -3,7 +3,7 @@
 import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
@@ -151,6 +151,8 @@ export function PortfolioClient() {
 
   const [valueHistory, setValueHistory] = useState<PortfolioValueHistoryPayload | null>(null);
   const [valueHistoryLoading, setValueHistoryLoading] = useState(false);
+  const historyPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyPollCount = useRef(0);
   const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
 
   useEffect(() => {
@@ -226,24 +228,47 @@ export function PortfolioClient() {
     }
   }, [t]);
 
-  const loadValueHistory = useCallback(async () => {
+  const clearHistoryPoll = useCallback(() => {
+    if (historyPollTimer.current != null) {
+      clearTimeout(historyPollTimer.current);
+      historyPollTimer.current = null;
+    }
+  }, []);
+
+  const loadValueHistory = useCallback(async (opts?: { poll?: boolean }) => {
+    if (!opts?.poll) {
+      historyPollCount.current = 0;
+      clearHistoryPoll();
+    }
     setValueHistoryLoading(true);
     try {
       const res = await fetch(
         `/api/portfolio/value-history?base=${encodeURIComponent(preferredPortfolioCurrency)}`,
       );
       if (!res.ok) {
-        setValueHistory(null);
+        if (!opts?.poll) setValueHistory(null);
         return;
       }
       const data = (await res.json()) as PortfolioValueHistoryPayload;
       setValueHistory(data);
+      if (data.historyStatus === "partial" && historyPollCount.current < 24) {
+        historyPollCount.current += 1;
+        clearHistoryPoll();
+        historyPollTimer.current = setTimeout(() => {
+          void loadValueHistory({ poll: true });
+        }, 8000);
+      } else {
+        historyPollCount.current = 0;
+        clearHistoryPoll();
+      }
     } catch {
-      setValueHistory(null);
+      if (!opts?.poll) setValueHistory(null);
     } finally {
       setValueHistoryLoading(false);
     }
-  }, [preferredPortfolioCurrency]);
+  }, [clearHistoryPoll, preferredPortfolioCurrency]);
+
+  useEffect(() => () => clearHistoryPoll(), [clearHistoryPoll]);
 
   const reloadDividendsFromCache = useCallback(() => {
     setDividendsReloadToken((n) => n + 1);

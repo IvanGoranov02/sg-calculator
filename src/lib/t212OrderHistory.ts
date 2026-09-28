@@ -12,6 +12,12 @@ import {
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
 
+/** Stored on the connection when the key cannot read `history:orders`. Kept partial so the next load re-probes. */
+export const T212_ORDERS_SCOPE_DENIED = "scope:history:orders:denied";
+
+/** Complete order history that does not reconstruct current positions. Stops a refetch loop until credentials change. */
+export const T212_ORDERS_HISTORY_MISMATCH = "history:orders:mismatch";
+
 const FILLED_STATUS = new Set(["FILLED", "PARTIALLY_FILLED"]);
 const SKIP_STATUS = new Set(["CANCELLED", "REJECTED", "LOCAL", "UNCONFIRMED"]);
 const SHARE_ADD_FILL_TYPES = new Set([
@@ -129,6 +135,27 @@ export function readT212OrdersCache(conn: T212OrdersCacheFields | null): T212Ord
 
 const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
+export function isT212OrdersScopeDenied(error: string | null | undefined): boolean {
+  if (!error) return false;
+  if (error.includes(T212_ORDERS_SCOPE_DENIED)) return true;
+  if (error.includes(T212_ORDERS_HISTORY_MISMATCH)) return false;
+  return /denied access with the current API key|\b403\b/i.test(error);
+}
+
+/** Drop cached fills when the API key or environment changes so history is rebuilt. */
+export function clearedT212OrdersCacheData(): Pick<
+  Prisma.Trading212ConnectionUpdateInput,
+  "ordersCache" | "ordersCachedAt" | "ordersCacheError" | "ordersCachePartial" | "ordersCacheNextPath"
+> {
+  return {
+    ordersCache: Prisma.DbNull,
+    ordersCachedAt: null,
+    ordersCacheError: null,
+    ordersCachePartial: false,
+    ordersCacheNextPath: null,
+  };
+}
+
 /** Partial caches stay retryable until pagination completes. */
 export function isT212OrdersCacheStale(
   cachedAt: Date | null | undefined,
@@ -214,6 +241,7 @@ export async function refreshT212OrdersCache(input: {
   apiKeyEnc: string;
   apiSecretEnc: string;
   maxPages?: number;
+  minRequestIntervalMs?: number;
 }): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
   const apiKey = decryptSecret(input.apiKeyEnc);
   const apiSecret = decryptSecret(input.apiSecretEnc);
@@ -235,9 +263,34 @@ export async function refreshT212OrdersCache(input: {
       : null;
 
   const result = await fetchT212HistoryOrders(input.environment, apiKey, apiSecret, {
-    maxPages: input.maxPages ?? 5,
+    maxPages: input.maxPages ?? 6,
+    // History allows 6 requests/minute. A fixed 10s gap cannot finish inside the chart request.
+    minRequestIntervalMs: input.minRequestIntervalMs ?? 400,
     startPath: resumePath,
   });
+
+  const scopeDenied =
+    result.items.length === 0 &&
+    (result.status === 403 || isT212OrdersScopeDenied(result.error));
+  if (scopeDenied) {
+    await prisma.trading212Connection.update({
+      where: { userId: input.userId },
+      data: {
+        ordersCache: [],
+        ordersCachedAt: null,
+        ordersCachePartial: true,
+        ordersCacheError: T212_ORDERS_SCOPE_DENIED,
+        ordersCacheNextPath: null,
+      },
+    });
+    return {
+      items: [],
+      partial: true,
+      error: T212_ORDERS_SCOPE_DENIED,
+      nextPagePath: null,
+      status: 403,
+    };
+  }
 
   const decision = decideT212OrdersCacheWrite(prevItems, result, prev?.ordersCacheNextPath ?? null);
 

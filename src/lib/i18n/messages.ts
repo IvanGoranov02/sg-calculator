@@ -689,6 +689,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Trading 212 account snapshots and live holdings (same currency as the rest of this tab). Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
       valueChartLoading: "Loading portfolio history…",
+      valueHistoryPartial: "Loading earlier months from Trading 212…",
+      valueHistoryMissingScope:
+        "Trading 212 did not grant history access for this API key. Enable read-only history (orders), then disconnect and reconnect so this chart can rebuild.",
+      valueHistoryMismatch:
+        "Order history does not cover your open positions, so months before the current one were not estimated. Disconnect and reconnect Trading 212 after granting history access to try again.",
+      valueHistoryEmpty: "No portfolio value history yet.",
       valueChartValue: "Portfolio value",
       valueChartChange: "Change vs prior month",
       valueSourceManual: "Source: manual entry",
@@ -1671,6 +1677,12 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Снимки от Trading 212 и текущите позиции (същата валута като таба). Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
       valueChartLoading: "Зареждане на история на портфолиото…",
+      valueHistoryPartial: "Зареждане на по-ранни месеци от Trading 212…",
+      valueHistoryMissingScope:
+        "Trading 212 не даде достъп до историята за този API ключ. Включи история само за четене (поръчки), после премахни и свържи отново, за да се преизчисли графиката.",
+      valueHistoryMismatch:
+        "Историята на поръчките не покрива отворените позиции, затова месеците преди текущия не са оценени. Премахни и свържи отново Trading 212 след достъп до историята.",
+      valueHistoryEmpty: "Все още няма история на стойността на портфолиото.",
       valueChartValue: "Стойност на портфолиото",
       valueChartChange: "Промяна спрямо предишния месец",
       valueSourceManual: "Източник: ръчен запис",

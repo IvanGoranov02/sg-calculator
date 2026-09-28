@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Prisma } from "@prisma/client";
 
 import {
+  clearedT212OrdersCacheData,
   decideT212OrdersCacheWrite,
   isT212OrdersCacheStale,
+  isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
   mergeT212OrderItems,
+  T212_ORDERS_HISTORY_MISMATCH,
+  T212_ORDERS_SCOPE_DENIED,
   t212OrderItemKey,
 } from "@/lib/t212OrderHistory";
 import type { T212HistoryOrderItem } from "@/lib/trading212Client";
@@ -162,6 +167,27 @@ describe("decideT212OrdersCacheWrite", () => {
     );
     assert.equal(decision.partial, true);
     assert.equal(decision.nextPagePath, resumeCursor);
+  });
+});
+
+describe("orders cache reset and scope", () => {
+  it("clears every cached history field when credentials change", () => {
+    const cleared = clearedT212OrdersCacheData();
+    assert.equal(cleared.ordersCachedAt, null);
+    assert.equal(cleared.ordersCacheError, null);
+    assert.equal(cleared.ordersCachePartial, false);
+    assert.equal(cleared.ordersCacheNextPath, null);
+    assert.equal(cleared.ordersCache, Prisma.DbNull);
+  });
+
+  it("treats a missing history scope as denied and a mismatch as settled", () => {
+    assert.equal(isT212OrdersScopeDenied(T212_ORDERS_SCOPE_DENIED), true);
+    assert.equal(
+      isT212OrdersScopeDenied("Trading 212 denied access with the current API key (forbidden)."),
+      true,
+    );
+    assert.equal(isT212OrdersScopeDenied(T212_ORDERS_HISTORY_MISMATCH), false);
+    assert.equal(isT212OrdersScopeDenied(null), false);
   });
 });
 

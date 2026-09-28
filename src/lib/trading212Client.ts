@@ -90,7 +90,51 @@ export type T212PaginatedFetchResult<T> = {
   error?: string;
   /** Cursor to resume older pages when `partial` is true. */
   nextPagePath?: string | null;
+  /** HTTP status of the error that stopped pagination, when the broker returned one. */
+  status?: number;
 };
+
+/**
+ * Trading 212 sometimes returns the string `"null"` or a dangling `instrumentCode`
+ * instead of a real cursor. Those must not be treated as another page or as success.
+ */
+export function normalizeT212NextPagePath(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let path = raw.trim();
+  if (!path || path === "null" || /^null([?&]|$)/.test(path)) return null;
+  path = path
+    .replace(/([?&])instrumentCode(?=&|$)/g, "$1")
+    .replace(/\?&/g, "?")
+    .replace(/&&+/g, "&")
+    .replace(/[?&]$/g, "");
+  // Without a cursor this is not an older page — following it restarts at the newest fills.
+  if (!path.includes("cursor=")) return null;
+  return path;
+}
+
+/**
+ * A full page followed by an empty terminal page drops older fills at limit=50.
+ * Retry that cursor once at limit=10 before accepting the end of history.
+ */
+export function retryPathForEmptyHistoryPage(input: {
+  requestedPath: string;
+  itemCount: number;
+  nextPagePath: string | null;
+  retriedCursors: ReadonlySet<string>;
+}): string | null {
+  if (input.itemCount !== 0 || input.nextPagePath) return null;
+  const qIndex = input.requestedPath.indexOf("?");
+  if (qIndex < 0) return null;
+  const params = new URLSearchParams(input.requestedPath.slice(qIndex + 1));
+  const cursor = params.get("cursor")?.trim();
+  if (!cursor || input.retriedCursors.has(cursor)) return null;
+  const limit = Number(params.get("limit") ?? "20");
+  if (!Number.isFinite(limit) || limit <= 10) return null;
+  const base = input.requestedPath.slice(0, qIndex) || "/api/v0/equity/history/orders";
+  params.set("limit", "10");
+  params.delete("instrumentCode");
+  return `${base}?${params.toString()}`;
+}
 
 const T212_MIN_REQUEST_INTERVAL_MS = 10_000;
 const T212_429_DEFAULT_BACKOFF_MS = 10_500;
@@ -132,6 +176,7 @@ export async function t212FetchJson<T>(
   try {
     const res = await fetch(url, {
       ...rest,
+      cache: "no-store",
       signal: controller.signal,
       headers: {
         Accept: "application/json",
@@ -344,7 +389,9 @@ export async function fetchAllT212Paginated<T>(
   let lastRequestAt = 0;
   let partial = false;
   let error: string | undefined;
+  let status: number | undefined;
   let nextPagePath: string | null = null;
+  const retriedCursors = new Set<string>();
 
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
@@ -363,14 +410,26 @@ export async function fetchAllT212Paginated<T>(
         const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, pagePath);
         const page: T212Paginated<T> = result.data;
         pages += 1;
-        if (Array.isArray(page.items)) {
-          out.push(...page.items);
+        const pageItems = Array.isArray(page.items) ? page.items : [];
+        if (pageItems.length > 0) out.push(...pageItems);
+        const normalizedNext = normalizeT212NextPagePath(page.nextPagePath);
+        const retryPath = retryPathForEmptyHistoryPage({
+          requestedPath: pagePath,
+          itemCount: pageItems.length,
+          nextPagePath: normalizedNext,
+          retriedCursors,
+        });
+        if (retryPath) {
+          const cursor = new URLSearchParams(pagePath.slice(pagePath.indexOf("?") + 1)).get("cursor");
+          if (cursor) retriedCursors.add(cursor);
+          path = retryPath;
+        } else {
+          path = normalizedNext;
         }
-        path = page.nextPagePath;
         break;
       } catch (e) {
-        const status = (e as T212RequestError).status;
-        if (status === 429 && retries429 < T212_MAX_429_RETRIES) {
+        const httpStatus = (e as T212RequestError).status;
+        if (httpStatus === 429 && retries429 < T212_MAX_429_RETRIES) {
           retries429 += 1;
           const reset = (e as T212RequestError).rateLimitReset;
           const waitMs =
@@ -381,6 +440,7 @@ export async function fetchAllT212Paginated<T>(
           continue;
         }
         partial = true;
+        status = httpStatus;
         error =
           e instanceof Error ? e.message.slice(0, 500) : "Trading 212 request failed during pagination";
         nextPagePath = pagePath;
@@ -396,5 +456,5 @@ export async function fetchAllT212Paginated<T>(
     if (!error) error = "Trading 212 history truncated (page limit reached).";
   }
 
-  return { items: out, partial, error, nextPagePath };
+  return { items: out, partial, error, nextPagePath, status };
 }
