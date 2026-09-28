@@ -41,8 +41,9 @@ type WatchlistDipChartProps = {
   compact?: boolean;
 };
 
-const SLOT_WIDTH_COMPACT = 26;
-const SLOT_WIDTH = 30;
+const SLOT_WIDTH_COMPACT = 32;
+const SLOT_WIDTH = 36;
+const X_AXIS_HEIGHT = 72;
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
@@ -75,28 +76,34 @@ type AngledXTickProps = {
   x?: string | number;
   y?: string | number;
   payload?: { value?: unknown };
+  label?: string;
+  title?: string;
 };
 
-function AngledXTick({ x, y, payload }: AngledXTickProps) {
+function AngledXTick({ x, y, payload, label, title }: AngledXTickProps) {
   if (x == null || y == null) return null;
   const cx = tickCoord(x);
   const cy = tickCoord(y);
   if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
-  const label = payload?.value == null ? "" : String(payload.value);
+  const text = label ?? (payload?.value == null ? "" : String(payload.value));
+  if (!text) return null;
   return (
-    <text
-      x={cx}
-      y={cy}
-      dy={8}
-      dx={-2}
-      textAnchor="end"
-      fill="var(--muted-foreground)"
-      fontSize={9}
-      fontFamily="ui-monospace, monospace"
-      transform={`rotate(-45, ${cx}, ${cy})`}
-    >
-      {label}
-    </text>
+    <g>
+      {title ? <title>{title}</title> : null}
+      <text
+        x={cx}
+        y={cy}
+        dy={12}
+        textAnchor="end"
+        fill="var(--foreground)"
+        fontSize={12}
+        fontWeight={700}
+        fontFamily="var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif"
+        transform={`rotate(-50, ${cx}, ${cy})`}
+      >
+        {text}
+      </text>
+    </g>
   );
 }
 
@@ -128,7 +135,7 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
     <div
       className={cn(
         "relative min-h-0 min-w-0 w-full",
-        compact ? "h-[min(300px,44vh)]" : "h-[min(440px,60vh)]",
+        compact ? "h-[min(340px,50vh)]" : "h-[min(480px,64vh)]",
       )}
     >
       <div className="absolute inset-0 flex min-h-0 min-w-0">
@@ -145,17 +152,24 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={sorted}
-                margin={{ top: 12, right: 12, left: 2, bottom: 4 }}
+                margin={{ top: 12, right: 12, left: 2, bottom: 8 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
-                  dataKey="axisLabel"
-                  tick={(props) => <AngledXTick {...props} />}
+                  dataKey="symbol"
+                  tick={(props: AngledXTickProps) => {
+                    const symbol = props.payload?.value == null ? "" : String(props.payload.value);
+                    const row = sorted.find((entry) => entry.symbol === symbol);
+                    const axisLabel = row?.axisLabel || symbol;
+                    const fullName = row?.name?.trim();
+                    const tickTitle = fullName ? `${fullName} (${symbol})` : symbol;
+                    return <AngledXTick {...props} label={axisLabel} title={tickTitle} />;
+                  }}
                   tickLine={false}
                   axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
                   interval={0}
                   minTickGap={0}
-                  height={52}
+                  height={X_AXIS_HEIGHT}
                 />
                 <YAxis
                   domain={[yMin, yMax]}
