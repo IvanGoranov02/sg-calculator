@@ -50,7 +50,6 @@ import {
   remapPortfolioDipHistory,
   type QuoteHistoryBar,
 } from "@/lib/dipFinder";
-import { t212ListingVenueLabel } from "@/lib/t212Ticker";
 import {
   isTrading212AuthFailure,
   looksLikeTrading212ErrorMessage,
@@ -943,11 +942,6 @@ export function PortfolioClient() {
                         size="sm"
                         primaryLabel="name"
                       />
-                      {h.symbolT212 ? (
-                        <span className="text-[11px] leading-tight text-muted-foreground">
-                          {[t212ListingVenueLabel(h.symbolT212), h.symbolT212].filter(Boolean).join(" · ")}
-                        </span>
-                      ) : null}
                       <span className="text-xs text-muted-foreground lg:hidden">
                         {h.source === "manual" ? t("portfolio.sourceManual") : t("portfolio.sourceT212")}
                       </span>
