@@ -11,6 +11,7 @@ import {
   mergeT212OrderItems,
   ordersCacheGenerationUnchanged,
   ordersCacheGenerationWhere,
+  resumeCursorAfterDuplicatePage,
   rewindSkippedOrdersResumePath,
   shouldRebuildOrdersCacheOnRefresh,
   shouldRecordOrdersScopeDenial,
@@ -274,6 +275,86 @@ describe("decideT212OrdersCacheWrite", () => {
     );
     assert.equal(decision.partial, true);
     assert.equal(decision.nextPagePath, resumeCursor);
+  });
+
+  it("steps a resumed page of only cached fills behind the oldest fill", () => {
+    const oldest = "2024-01-01T00:00:00.000Z";
+    const oldestMs = Date.parse(oldest);
+    const cached: T212HistoryOrderItem[] = [
+      {
+        fill: { id: 1, filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+      {
+        fill: { id: 2, filledAt: oldest, quantity: 1, type: "TRADE" },
+        order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const resume = `/api/v0/equity/history/orders?cursor=${Date.parse("2024-06-01T00:00:00.000Z")}&limit=50`;
+    const decision = decideT212OrdersCacheWrite(
+      cached,
+      { items: cached, partial: true, nextPagePath: resume },
+      resume,
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.items.length, cached.length);
+    assert.equal(
+      decision.nextPagePath,
+      `/api/v0/equity/history/orders?cursor=${oldestMs - 1}&limit=50`,
+    );
+  });
+});
+
+describe("resumeCursorAfterDuplicatePage", () => {
+  const oldest = "2024-01-01T00:00:00.000Z";
+  const oldestMs = Date.parse(oldest);
+  const cached: T212HistoryOrderItem[] = [
+    {
+      fill: { id: 2, filledAt: oldest, quantity: 1, type: "TRADE" },
+      order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+    },
+  ];
+
+  it("keeps a cursor that is already behind the oldest cached fill", () => {
+    const behind = `/api/v0/equity/history/orders?cursor=${oldestMs - 1000}&limit=50`;
+    assert.equal(
+      resumeCursorAfterDuplicatePage({
+        prevItems: cached,
+        fetchedItems: cached,
+        nextPagePath: behind,
+        resumePath: behind,
+      }),
+      behind,
+    );
+  });
+
+  it("keeps the cursor-less limit=10 restart", () => {
+    assert.equal(
+      resumeCursorAfterDuplicatePage({
+        prevItems: cached,
+        fetchedItems: cached,
+        nextPagePath: T212_ORDERS_LIMIT10_RESTART_PATH,
+        resumePath: "/api/v0/equity/history/orders?cursor=1&limit=50",
+      }),
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+  });
+
+  it("does not step when the resumed page contains a new fill", () => {
+    const next = `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=50`;
+    const fresh: T212HistoryOrderItem = {
+      fill: { id: 9, filledAt: "2020-03-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+      order: { ticker: "OLD_US_EQ", side: "BUY", status: "FILLED" },
+    };
+    assert.equal(
+      resumeCursorAfterDuplicatePage({
+        prevItems: cached,
+        fetchedItems: [fresh],
+        nextPagePath: next,
+        resumePath: next,
+      }),
+      next,
+    );
   });
 });
 

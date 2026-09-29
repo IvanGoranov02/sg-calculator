@@ -15,6 +15,7 @@ import {
   oldestT212HistoryCursorMs,
   ordersHistoryPathBase,
   ordersNextPathAvoidingSkip,
+  ordersPathWithCursor,
   T212_ORDERS_LIMIT10_RESTART_PATH,
   t212HistoryPageLimit,
   t212OrderItemKey,
@@ -68,6 +69,33 @@ export function t212HoldingSymbolMap(
     map.set(ticker.toUpperCase(), yahoo);
   }
   return map;
+}
+
+/**
+ * A resumed page that only repeats fills already cached is why Refresh stays on
+ * "Loading earlier months" with a single bar. Step the cursor 1ms behind the
+ * oldest cached fill so the next poll moves. A cursor that is already behind
+ * those fills (a skip rewind) and the cursor-less limit=10 restart are kept.
+ */
+export function resumeCursorAfterDuplicatePage(input: {
+  prevItems: T212HistoryOrderItem[];
+  fetchedItems: T212HistoryOrderItem[];
+  nextPagePath: string | null;
+  resumePath: string | null;
+}): string | null {
+  const next = input.nextPagePath;
+  if (!input.resumePath?.trim() || !next?.trim()) return next;
+  if (isOrdersLimit10RestartPath(next)) return next;
+  const prevKeys = new Set(input.prevItems.map((item) => t212OrderItemKey(item)));
+  if (input.fetchedItems.some((item) => !prevKeys.has(t212OrderItemKey(item)))) return next;
+  if (input.prevItems.length === 0) return next;
+  const oldest = oldestT212HistoryCursorMs(input.prevItems);
+  if (oldest == null) return next;
+  const bare = stripOrdersLimit10WalkMarker(next) ?? next;
+  const apiMs = Number(t212PathCursor(bare));
+  if (Number.isFinite(apiMs) && apiMs < oldest) return next;
+  const stepped = ordersPathWithCursor(bare, oldest - 1);
+  return isOrdersLimit10WalkPath(next) ? tagOrdersLimit10WalkPath(stepped) : stepped;
 }
 
 /**
@@ -391,7 +419,12 @@ export function decideT212OrdersCacheWrite(
       partial: true,
       error: fetch.error ?? null,
       replaced: merged.length > prevItems.length,
-      nextPagePath: fetch.nextPagePath ?? prevNextPagePath,
+      nextPagePath: resumeCursorAfterDuplicatePage({
+        prevItems,
+        fetchedItems: fetch.items,
+        nextPagePath: fetch.nextPagePath ?? prevNextPagePath,
+        resumePath: prevNextPagePath,
+      }),
     };
   }
 

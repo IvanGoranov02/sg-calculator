@@ -225,7 +225,7 @@ describe("portfolioValueHistory quantity timeline", () => {
 });
 
 describe("computeMonthlyValuesFromHoldings coverage", () => {
-  it("returns null when any contributor lacks a month-end close", () => {
+  it("prices a month from the names that have daily history", () => {
     const byMonth = computeMonthlyValuesFromHoldings(
       [
         { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
@@ -234,6 +234,24 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
       {
         AAPL: [{ date: "2024-03-28", close: 100 }],
         MSFT: [],
+      },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+      ["2024-03"],
+    );
+    // MSFT has no bars (typical UCITS gap). 10 * 100 stays on the chart.
+    assert.equal(byMonth.get("2024-03"), 1000);
+  });
+
+  it("returns null when a name with history has no close in that month", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      {
+        AAPL: [{ date: "2024-03-28", close: 100 }],
+        MSFT: [{ date: "2024-04-30", close: 200 }],
       },
       { eurPerUsd: null, gbpPerUsd: null },
       "USD",
@@ -264,7 +282,7 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
     assert.equal(byMonth.get("2024-03"), 80 * 10 * 1.1 * 0.92);
   });
 
-  it("keeps earlier months when a later month cannot be priced", () => {
+  it("keeps a later month when a new name has no daily history", () => {
     const qtyByMonth = quantitiesByMonthFromEvents(
       [
         { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
@@ -286,6 +304,40 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
           { date: "2024-03-29", close: 120 },
         ],
         MSFT: [],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      now: new Date("2024-03-31T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2024-02")?.value, 1100);
+    // March is AAPL only (120 * 10). MSFT has no bars, so it does not erase the month.
+    assert.equal(series.find((p) => p.month === "2024-03")?.value, 1200);
+  });
+
+  it("omits a month when a held name has history but no close that month", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [
+        { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
+        { symbolYahoo: "MSFT", date: "2024-03-10", delta: 5 },
+      ],
+      ["2024-01", "2024-02", "2024-03"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [],
+      manualRows: [],
+      holdings: [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      historyBySymbol: {
+        AAPL: [
+          { date: "2024-01-31", close: 100 },
+          { date: "2024-02-29", close: 110 },
+          { date: "2024-03-29", close: 120 },
+        ],
+        MSFT: [{ date: "2024-04-30", close: 200 }],
       },
       fx: { eurPerUsd: null, gbpPerUsd: null },
       baseCurrency: "USD",

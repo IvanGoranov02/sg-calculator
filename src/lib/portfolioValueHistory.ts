@@ -337,25 +337,31 @@ export function computeMonthlyValuesFromHoldings(
     }
 
     let total = 0;
-    let complete = true;
+    let priced = 0;
+    let blocked = false;
     for (const { sym, qty } of contributors) {
       const h = holdingBySymbol.get(sym);
       const bars = historyBySymbol[sym] ?? historyBySymbol[h?.symbolYahoo ?? ""] ?? [];
+      // A name with no daily history (some UCITS listings) must not wipe every
+      // month that includes it. A name that has history but no close this month,
+      // or that cannot be converted, still blanks the month so the total is not short.
+      if (bars.length === 0) continue;
       const close = monthEndCloseFromBars(bars, month);
       if (close == null) {
-        complete = false;
+        blocked = true;
         break;
       }
       const pxCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
       const mv = convertPortfolioMoney(close * qty, pxCcy, base, fx);
       if (mv == null) {
-        complete = false;
+        blocked = true;
         break;
       }
       total += mv;
+      priced += 1;
     }
 
-    out.set(month, complete ? total : null);
+    out.set(month, !blocked && priced > 0 ? total : null);
   }
 
   return out;

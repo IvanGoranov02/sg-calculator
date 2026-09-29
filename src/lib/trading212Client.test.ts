@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  fetchT212HistoryOrders,
   normalizePositionsPayload,
   nextOrdersPathAfterFalseEnd,
   normalizeT212NextPagePath,
@@ -271,6 +272,60 @@ describe("ordersNextPathAvoidingSkip", () => {
       }),
       null,
     );
+  });
+
+  it("requests the oldest fill cursor instead of a jumped nextPagePath", async () => {
+    const oldest = "2024-06-01T00:00:00.000Z";
+    const oldestMs = Date.parse(oldest);
+    const skipped = Date.parse("2018-01-01T00:00:00.000Z");
+    const requested: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requested.push(url);
+      const body =
+        requested.length === 1
+          ? {
+              items: [
+                {
+                  fill: { id: 1, filledAt: oldest, quantity: 1, type: "TRADE" },
+                  order: {
+                    ticker: "AAPL_US_EQ",
+                    side: "BUY",
+                    status: "FILLED",
+                    dateModified: oldest,
+                  },
+                },
+              ],
+              nextPagePath: `/api/v0/equity/history/orders?cursor=${skipped}&limit=50`,
+            }
+          : {
+              items: [
+                {
+                  fill: { id: 2, filledAt: "2023-01-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+                  order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+                },
+              ],
+              nextPagePath: null,
+            };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    try {
+      const result = await fetchT212HistoryOrders("live", "k", "s", {
+        maxPages: 2,
+        minRequestIntervalMs: 0,
+      });
+      assert.equal(requested.length, 2);
+      assert.match(requested[1]!, new RegExp(`cursor=${oldestMs}(&|$)`));
+      assert.equal(requested[1]!.includes(String(skipped)), false);
+      assert.equal(result.partial, false);
+      assert.equal(result.items.length, 2);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });
 
