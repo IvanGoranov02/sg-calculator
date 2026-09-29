@@ -1,13 +1,18 @@
 /**
  * Company logo URLs via FMP's public image endpoint (same provider as fundamentals).
  * Strips exchange suffixes so e.g. VOW3.DE resolves to VOW3.
- * Maps EU-listed US tickers (Xetra stubs, German truncations) to US primary symbols
- * via the same German listing table as quote resolution (t212Ticker).
+ * EU-listed US names (Xetra mnemonics, LSE/Euronext local codes, ISINs) resolve to the
+ * US composite ticker so FMP serves the real logo. See euCrossListingLogos.json.
  */
 
-import { t212TickerToYahoo, usPrimarySymbolForLogo } from "@/lib/t212Ticker";
+import { parseT212Ticker, t212TickerToYahoo, usPrimarySymbolForLogo } from "@/lib/t212Ticker";
 
 const FMP_LOGO_BASE = "https://financialmodelingprep.com/image-stock";
+
+/** Xetra, Frankfurt, and other Deutsche Börse venues that use local mnemonics. */
+const GERMAN_LISTING_SUFFIX = /\.(DE|F|DU|HM|MU|BE|HA|XC|XD)$/i;
+
+const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
 function normalizeLogoSymbolInput(symbol: string): string {
   let s = symbol.trim().toUpperCase();
@@ -24,13 +29,26 @@ function germanYahooBaseForLogo(symbol: string): string {
   return dot > 0 ? yahoo.slice(0, dot) : yahoo;
 }
 
+function isGermanListingSymbol(symbol: string): boolean {
+  if (GERMAN_LISTING_SUFFIX.test(symbol)) return true;
+  if (/_EQ$/i.test(symbol)) {
+    const parsed = parseT212Ticker(symbol);
+    return parsed.yahooSuffix === ".DE" || parsed.yahooSuffix === ".F";
+  }
+  return false;
+}
+
 export function fmpLogoSymbol(symbol: string): string {
   const raw = symbol.trim();
+  if (!raw) return "";
+  const upper = raw.toUpperCase();
+  if (ISIN_RE.test(upper)) return usPrimarySymbolForLogo(upper);
+
+  const germanVenue = isGermanListingSymbol(raw);
   if (/_EQ$/i.test(raw)) {
-    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw));
+    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw), { germanVenue });
   }
-  const base = normalizeLogoSymbolInput(symbol);
-  return usPrimarySymbolForLogo(base);
+  return usPrimarySymbolForLogo(normalizeLogoSymbolInput(symbol), { germanVenue });
 }
 
 export function companyLogoUrl(symbol: string): string {

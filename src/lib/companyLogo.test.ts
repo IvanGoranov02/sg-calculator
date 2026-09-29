@@ -81,4 +81,49 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("TSL"), "TSL");
     assert.equal(fmpLogoSymbol("GOO.DE"), "GOO");
   });
+
+  it("maps the Xetra universe of US listings, not a handful of names", () => {
+    assert.equal(fmpLogoSymbol("NVD.DE"), "NVDA");
+    assert.equal(fmpLogoSymbol("NVDd_EQ"), "NVDA");
+    assert.equal(fmpLogoSymbol("NVDD"), "NVDA");
+    assert.equal(fmpLogoSymbol("GS2C.DE"), "GME");
+    assert.equal(fmpLogoSymbol("GS2Cd_EQ"), "GME");
+    assert.equal(fmpLogoSymbol("WDP.DE"), "DIS");
+    assert.equal(fmpLogoSymbol("WDPd_EQ"), "DIS");
+    assert.equal(fmpLogoSymbol("UT8.DE"), "UBER");
+    assert.equal(fmpLogoSymbol("UT8d_EQ"), "UBER");
+    assert.equal(fmpLogoSymbol("1SI.DE"), "SNAP");
+    assert.equal(fmpLogoSymbol("4S0.DE"), "NOW");
+    assert.equal(fmpLogoSymbol("ORC.DE"), "ORCL");
+    assert.equal(fmpLogoSymbol("CMC.DE"), "JPM");
+    assert.equal(fmpLogoSymbol("CTO.F"), "COST");
+    assert.equal(fmpLogoSymbol("BRYN.DE"), "BRK-B");
+    assert.equal(
+      companyLogoUrl("GS2Cd_EQ"),
+      "https://financialmodelingprep.com/image-stock/GME.png",
+    );
+  });
+
+  it("maps the same ISIN and non-German EU venue symbols to the US ticker", () => {
+    assert.equal(fmpLogoSymbol("US0378331005"), "AAPL");
+    assert.equal(fmpLogoSymbol("US67066G1040"), "NVDA");
+    assert.equal(fmpLogoSymbol("0R2V.L"), "AAPL");
+    assert.equal(fmpLogoSymbol("1AAPL.MI"), "AAPL");
+  });
+
+  it("keeps US tickers when a German mnemonic collides, and remaps the German line", () => {
+    assert.equal(fmpLogoSymbol("GIS"), "GIS");
+    assert.equal(fmpLogoSymbol("GIS_US_EQ"), "GIS");
+    assert.equal(fmpLogoSymbol("GIS.DE"), "GILD");
+    assert.equal(fmpLogoSymbol("GISd_EQ"), "GILD");
+    assert.equal(fmpLogoSymbol("BAC"), "BAC");
+    assert.equal(fmpLogoSymbol("BAC_US_EQ"), "BAC");
+    assert.equal(fmpLogoSymbol("BAC.DE"), "VZ");
+    assert.equal(fmpLogoSymbol("BACd_EQ"), "VZ");
+    assert.equal(fmpLogoSymbol("SNOW"), "SNOW");
+    assert.equal(fmpLogoSymbol("SNOW.DE"), "SNOW");
+    assert.equal(fmpLogoSymbol("BOX"), "BOX");
+    assert.equal(fmpLogoSymbol("BOX.DE"), "BDX");
+    assert.equal(fmpLogoSymbol("PRLD"), "PRLD");
+  });
 });
