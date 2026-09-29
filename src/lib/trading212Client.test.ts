@@ -10,6 +10,8 @@ import {
   oldestT212HistoryCursorMs,
   resolveT212NextPagePath,
   retryPathForEmptyHistoryPage,
+  T212_ORDERS_LIMIT10_RESTART_PATH,
+  T212_ORDERS_LIMIT10_WALK_PREFIX,
 } from "@/lib/trading212Client";
 import type { T212HistoryOrderItem } from "@/lib/trading212Client";
 
@@ -87,6 +89,20 @@ describe("normalizeT212NextPagePath", () => {
       "/api/v0/equity/history/orders?cursor=5&limit=50",
     );
   });
+
+  it("resumes the cursor-less limit=10 restart and strips the walk marker", () => {
+    assert.equal(
+      normalizeT212OrdersResumePath("/api/v0/equity/history/orders?limit=10"),
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+    assert.equal(normalizeT212OrdersResumePath("/api/v0/equity/history/orders?limit=50"), null);
+    assert.equal(
+      normalizeT212OrdersResumePath(
+        `${T212_ORDERS_LIMIT10_WALK_PREFIX}/api/v0/equity/history/orders?cursor=5&limit=10`,
+      ),
+      "/api/v0/equity/history/orders?cursor=5&limit=10",
+    );
+  });
 });
 
 describe("retryPathForEmptyHistoryPage", () => {
@@ -137,25 +153,30 @@ describe("nextOrdersPathAfterFalseEnd", () => {
   };
   const oldestMs = String(Date.parse("2020-03-01T00:00:00.000Z"));
 
-  it("continues after a full page that claims to be the end", () => {
+  it("restarts at limit=10 with no cursor after a full page that claims to be the end", () => {
     const path = nextOrdersPathAfterFalseEnd({
       requestedPath: "/api/v0/equity/history/orders?limit=50",
       pageItemCount: 50,
       collected: [newer, older],
-      triedFallbackCursors: new Set(),
+      triedFallbackPaths: new Set(),
     });
-    assert.equal(path, `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`);
+    assert.equal(path, T212_ORDERS_LIMIT10_RESTART_PATH);
+    assert.equal(path?.includes("cursor="), false);
     assert.equal(oldestT212HistoryCursorMs([newer, older]), Number(oldestMs));
   });
 
-  it("continues after an empty page once the limit=10 retry is exhausted", () => {
+  it("restarts from limit=10 with no cursor when the empty page cursor is the fill time", () => {
+    const filledAt = older.fill!.filledAt!;
+    const cursor = String(Date.parse(filledAt));
     const path = nextOrdersPathAfterFalseEnd({
-      requestedPath: "/api/v0/equity/history/orders?cursor=999&limit=10",
+      requestedPath: `/api/v0/equity/history/orders?cursor=${cursor}&limit=10`,
       pageItemCount: 0,
       collected: [newer, older],
-      triedFallbackCursors: new Set(),
+      triedFallbackPaths: new Set(),
     });
-    assert.equal(path, `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`);
+    assert.equal(cursor, oldestMs);
+    assert.equal(path, T212_ORDERS_LIMIT10_RESTART_PATH);
+    assert.equal(path?.includes(`cursor=${cursor}`), false);
   });
 
   it("accepts a short page as the end", () => {
@@ -164,28 +185,38 @@ describe("nextOrdersPathAfterFalseEnd", () => {
         requestedPath: "/api/v0/equity/history/orders?cursor=999&limit=50",
         pageItemCount: 12,
         collected: [older],
-        triedFallbackCursors: new Set(),
+        triedFallbackPaths: new Set(),
       }),
       null,
     );
   });
 
-  it("does not request the same timestamp cursor twice", () => {
+  it("does not issue the cursor-less restart twice, and a limit=10 walk ends on an empty page", () => {
     assert.equal(
       nextOrdersPathAfterFalseEnd({
         requestedPath: `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`,
         pageItemCount: 0,
         collected: [older],
-        triedFallbackCursors: new Set(),
+        triedFallbackPaths: new Set([T212_ORDERS_LIMIT10_RESTART_PATH]),
       }),
       null,
     );
     assert.equal(
       nextOrdersPathAfterFalseEnd({
-        requestedPath: "/api/v0/equity/history/orders?limit=50",
-        pageItemCount: 50,
+        requestedPath: `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`,
+        pageItemCount: 0,
         collected: [older],
-        triedFallbackCursors: new Set([oldestMs]),
+        triedFallbackPaths: new Set(),
+        limit10Walk: true,
+      }),
+      null,
+    );
+    assert.equal(
+      nextOrdersPathAfterFalseEnd({
+        requestedPath: T212_ORDERS_LIMIT10_RESTART_PATH,
+        pageItemCount: 10,
+        collected: [older],
+        triedFallbackPaths: new Set(),
       }),
       null,
     );

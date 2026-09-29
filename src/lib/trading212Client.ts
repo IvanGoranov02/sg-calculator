@@ -78,6 +78,15 @@ export type T212HistoryOrderItem = {
   };
 };
 
+/** Identity for one fill. Limit=10 restarts overlap limit=50 pages; callers dedupe on this. */
+export function t212OrderItemKey(item: T212HistoryOrderItem): string {
+  const ticker = (item.order?.ticker ?? item.order?.instrument?.ticker ?? "").trim();
+  const filledAt = item.fill?.filledAt ?? item.order?.createdAt ?? "";
+  const qty = item.fill?.quantity ?? item.order?.filledQuantity ?? item.order?.quantity ?? "";
+  const side = (item.order?.side ?? "").trim().toUpperCase();
+  return `${ticker}|${filledAt}|${qty}|${side}`;
+}
+
 export type T212RequestError = Error & {
   status?: number;
   rateLimitReset?: number;
@@ -132,9 +141,59 @@ export function normalizeT212NextPagePath(
   return resolved.action === "follow" ? resolved.path : null;
 }
 
-/** Resume cursor for orders. `"null"` and paths without `cursor=` are not followed. */
+/** Cursor-less orders walk. A limit=50 cursor that returns an empty page is not resumed. */
+export const T212_ORDERS_LIMIT10_RESTART_PATH = "/api/v0/equity/history/orders?limit=10";
+
+/**
+ * Prefix for a cursor saved while the cursor-less limit=10 walk is in progress.
+ * Stripped before the HTTP call. An empty page on a marked cursor ends that walk.
+ * The same cursor without the marker is the poisoned limit=50 cursor.
+ */
+export const T212_ORDERS_LIMIT10_WALK_PREFIX = "t212-limit10:";
+
+export function stripOrdersLimit10WalkMarker(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith(T212_ORDERS_LIMIT10_WALK_PREFIX)
+    ? trimmed.slice(T212_ORDERS_LIMIT10_WALK_PREFIX.length)
+    : trimmed;
+}
+
+export function isOrdersLimit10WalkPath(path: string | null | undefined): boolean {
+  return Boolean(path?.trim().startsWith(T212_ORDERS_LIMIT10_WALK_PREFIX));
+}
+
+/** True for the cursor-less limit=10 orders restart, not a later `cursor=` page. */
+export function isOrdersLimit10RestartPath(path: string | null | undefined): boolean {
+  const bare = stripOrdersLimit10WalkMarker(path);
+  if (!bare?.includes("/equity/history/orders")) return false;
+  if (t212PathCursor(bare)) return false;
+  return t212HistoryPageLimit(bare) === 10;
+}
+
+/** True once orders are being read from the cursor-less limit=10 restart. */
+export function ordersResumeInLimit10Walk(path: string | null | undefined): boolean {
+  if (!path) return false;
+  if (isOrdersLimit10WalkPath(path)) return true;
+  return isOrdersLimit10RestartPath(path);
+}
+
+/** Keep a limit=10 continuation distinct from the poisoned limit=50 cursor. */
+export function tagOrdersLimit10WalkPath(path: string): string {
+  if (isOrdersLimit10RestartPath(path) || isOrdersLimit10WalkPath(path)) return path;
+  return `${T212_ORDERS_LIMIT10_WALK_PREFIX}${path}`;
+}
+
+/**
+ * Resume cursor for orders. `"null"` and paths without `cursor=` are not followed,
+ * except the cursor-less limit=10 restart after a limit=50 false end.
+ * A walk marker is stripped so the HTTP path stays valid.
+ */
 export function normalizeT212OrdersResumePath(raw: string | null | undefined): string | null {
-  return normalizeT212NextPagePath(raw, { requireCursor: true });
+  const bare = stripOrdersLimit10WalkMarker(raw);
+  if (isOrdersLimit10RestartPath(bare)) return T212_ORDERS_LIMIT10_RESTART_PATH;
+  return normalizeT212NextPagePath(bare, { requireCursor: true });
 }
 
 export function t212PathCursor(path: string | null | undefined): string | null {
@@ -170,39 +229,41 @@ export function oldestT212HistoryCursorMs(items: T212HistoryOrderItem[]): number
   return oldest;
 }
 
-const T212_ORDERS_FALLBACK_LIMIT = 10;
-
 /**
- * Continue past a false end by asking for fills older than the oldest one we have.
- * Limit 10: a limit=50 cursor often returns an empty page even when older fills exist.
- */
-export function ordersFalseEndFallbackPath(items: T212HistoryOrderItem[]): string | null {
-  const ms = oldestT212HistoryCursorMs(items);
-  if (ms == null) return null;
-  return `/api/v0/equity/history/orders?cursor=${ms}&limit=${T212_ORDERS_FALLBACK_LIMIT}`;
-}
-
-/**
- * A full page, or an empty page, with no next path is not proof that history ended.
- * A short page is. The same timestamp cursor is not requested twice.
+ * A limit=50 cursor is the oldest fill's epoch millis. An empty page on that cursor
+ * (including the limit=10 retry of the same cursor) is not the end of history.
+ * Restart at limit=10 with no cursor and follow that walk until a short page.
+ * The restart path is not issued twice in one fetch.
  */
 export function nextOrdersPathAfterFalseEnd(input: {
   requestedPath: string;
   pageItemCount: number;
   collected: T212HistoryOrderItem[];
-  triedFallbackCursors: ReadonlySet<string>;
+  triedFallbackPaths: ReadonlySet<string>;
+  /** Already inside the cursor-less limit=10 walk. Empty and short pages end it. */
+  limit10Walk?: boolean;
 }): string | null {
-  if (input.collected.length === 0) return null;
+  if (input.limit10Walk) return null;
+  if (input.triedFallbackPaths.has(T212_ORDERS_LIMIT10_RESTART_PATH)) return null;
+  if (isOrdersLimit10RestartPath(input.requestedPath)) return null;
+
   const limit = t212HistoryPageLimit(input.requestedPath);
-  const fullPage = input.pageItemCount >= limit;
-  const emptyPage = input.pageItemCount === 0;
-  if (!fullPage && !emptyPage) return null;
-  const fallback = ordersFalseEndFallbackPath(input.collected);
-  const cursor = t212PathCursor(fallback);
-  if (!fallback || !cursor) return null;
-  if (input.triedFallbackCursors.has(cursor)) return null;
-  if (t212PathCursor(input.requestedPath) === cursor) return null;
-  return fallback;
+  const shortPage = input.pageItemCount > 0 && input.pageItemCount < limit;
+  if (shortPage) return null;
+
+  if (limit > 10) return T212_ORDERS_LIMIT10_RESTART_PATH;
+
+  const cursor = t212PathCursor(input.requestedPath);
+  const oldest = oldestT212HistoryCursorMs(input.collected);
+  if (
+    input.pageItemCount === 0 &&
+    cursor &&
+    oldest != null &&
+    cursor === String(oldest)
+  ) {
+    return T212_ORDERS_LIMIT10_RESTART_PATH;
+  }
+  return null;
 }
 
 /**
@@ -428,8 +489,16 @@ export async function fetchT212HistoryOrders(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
-  options?: { maxPages?: number; minRequestIntervalMs?: number; startPath?: string | null },
+  options?: {
+    maxPages?: number;
+    minRequestIntervalMs?: number;
+    startPath?: string | null;
+    /** Resume path was saved during the cursor-less limit=10 walk. */
+    limit10Walk?: boolean;
+  },
 ): Promise<T212PaginatedFetchResult<T212HistoryOrderItem>> {
+  const limit10Walk =
+    Boolean(options?.limit10Walk) || ordersResumeInLimit10Walk(options?.startPath);
   const resumed = normalizeT212OrdersResumePath(options?.startPath);
   const initialPath = resumed || "/api/v0/equity/history/orders";
   return fetchAllT212Paginated<T212HistoryOrderItem>(
@@ -442,7 +511,9 @@ export async function fetchT212HistoryOrders(
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
       requireCursor: true,
       retryEmptyPages: true,
+      ordersLimit10Walk: limit10Walk,
       falseEndFallbackPath: (input) => nextOrdersPathAfterFalseEnd(input),
+      itemKey: t212OrderItemKey,
     },
   );
 }
@@ -479,16 +550,20 @@ export async function fetchAllT212Paginated<T>(
     requireCursor?: boolean;
     /** Orders only. Dividends and positions must not retry an empty page at a smaller limit. */
     retryEmptyPages?: boolean;
+    /** Orders only. Drop duplicate fills when a limit=10 restart overlaps limit=50 pages. */
+    itemKey?: (item: T) => string;
     /**
-     * Orders only. When the broker reports the end after a full or empty page,
-     * return a path that walks older fills instead of accepting that end.
+     * Orders only. When a limit=50 cursor falsely ends, return the cursor-less limit=10 path.
      */
     falseEndFallbackPath?: (input: {
       requestedPath: string;
       pageItemCount: number;
       collected: T[];
-      triedFallbackCursors: ReadonlySet<string>;
+      triedFallbackPaths: ReadonlySet<string>;
+      limit10Walk: boolean;
     }) => string | null;
+    /** Orders only. Resume is already the cursor-less limit=10 walk. */
+    ordersLimit10Walk?: boolean;
   },
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
@@ -504,7 +579,14 @@ export async function fetchAllT212Paginated<T>(
   let status: number | undefined;
   let nextPagePath: string | null = null;
   const retriedCursors = new Set<string>();
-  const triedFallbackCursors = new Set<string>();
+  const triedFallbackPaths = new Set<string>();
+  const seenItemKeys = new Set<string>();
+  let limit10Walk = Boolean(options?.ordersLimit10Walk);
+
+  function pathForNextPoll(candidate: string | null): string | null {
+    if (!candidate || !limit10Walk) return candidate;
+    return tagOrdersLimit10WalkPath(candidate);
+  }
 
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
@@ -524,7 +606,16 @@ export async function fetchAllT212Paginated<T>(
         const page: T212Paginated<T> = result.data;
         pages += 1;
         const pageItems = Array.isArray(page.items) ? page.items : [];
-        if (pageItems.length > 0) out.push(...pageItems);
+        if (options?.itemKey) {
+          for (const item of pageItems) {
+            const key = options.itemKey(item);
+            if (seenItemKeys.has(key)) continue;
+            seenItemKeys.add(key);
+            out.push(item);
+          }
+        } else if (pageItems.length > 0) {
+          out.push(...pageItems);
+        }
         const resolution = resolveT212NextPagePath(page.nextPagePath, {
           requireCursor: options?.requireCursor,
         });
@@ -544,23 +635,24 @@ export async function fetchAllT212Paginated<T>(
               retriedCursors,
             })
           : null;
-        if (retryPath) {
-          const cursor = t212PathCursor(pagePath);
-          if (cursor) retriedCursors.add(cursor);
-          path = retryPath;
-        } else if (normalizedNext) {
+        if (normalizedNext) {
           path = normalizedNext;
         } else {
           const fallback = options?.falseEndFallbackPath?.({
             requestedPath: pagePath,
             pageItemCount: pageItems.length,
             collected: out,
-            triedFallbackCursors,
+            triedFallbackPaths,
+            limit10Walk,
           });
-          const fallbackCursor = t212PathCursor(fallback);
-          if (fallback && fallbackCursor) {
-            triedFallbackCursors.add(fallbackCursor);
+          if (fallback && !triedFallbackPaths.has(fallback)) {
+            triedFallbackPaths.add(fallback);
+            if (isOrdersLimit10RestartPath(fallback)) limit10Walk = true;
             path = fallback;
+          } else if (retryPath) {
+            const cursor = t212PathCursor(pagePath);
+            if (cursor) retriedCursors.add(cursor);
+            path = retryPath;
           } else {
             path = null;
           }
@@ -582,7 +674,7 @@ export async function fetchAllT212Paginated<T>(
         status = httpStatus;
         error =
           e instanceof Error ? e.message.slice(0, 500) : "Trading 212 request failed during pagination";
-        nextPagePath = pagePath;
+        nextPagePath = pathForNextPoll(pagePath);
         path = null;
         break;
       }
@@ -591,7 +683,7 @@ export async function fetchAllT212Paginated<T>(
 
   if (path && pages >= maxPages) {
     partial = true;
-    nextPagePath = path;
+    nextPagePath = pathForNextPoll(path);
     if (!error) error = "Trading 212 history truncated (page limit reached).";
   }
 

@@ -8,10 +8,14 @@ import type { QtyEvent } from "@/lib/portfolioValueHistory";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import {
   fetchT212HistoryOrders,
+  isOrdersLimit10RestartPath,
+  isOrdersLimit10WalkPath,
   normalizeT212OrdersResumePath,
+  ordersResumeInLimit10Walk,
   oldestT212HistoryCursorMs,
-  ordersFalseEndFallbackPath,
-  t212HistoryOrderTimeMs,
+  T212_ORDERS_LIMIT10_RESTART_PATH,
+  t212HistoryPageLimit,
+  t212OrderItemKey,
   t212PathCursor,
   type T212HistoryOrderItem,
   type T212PaginatedFetchResult,
@@ -36,13 +40,7 @@ const SHARE_ADD_FILL_TYPES = new Set([
   "FOP_CORRECTION",
 ]);
 
-export function t212OrderItemKey(item: T212HistoryOrderItem): string {
-  const ticker = (item.order?.ticker ?? item.order?.instrument?.ticker ?? "").trim();
-  const filledAt = item.fill?.filledAt ?? item.order?.createdAt ?? "";
-  const qty = item.fill?.quantity ?? item.order?.filledQuantity ?? item.order?.quantity ?? "";
-  const side = (item.order?.side ?? "").trim().toUpperCase();
-  return `${ticker}|${filledAt}|${qty}|${side}`;
-}
+export { t212OrderItemKey };
 
 export function mergeT212OrderItems(
   prev: T212HistoryOrderItem[],
@@ -256,9 +254,10 @@ export function shouldRebuildOrdersCacheOnRefresh(input: OrdersCacheRefreshDecis
 }
 
 /**
- * A resumed walk that came back "finished" without any older fill is not finished.
- * Trading 212 often ends a limit=50 cursor early; the next request uses the oldest
- * fill time at limit=10. A resume that already was that timestamp cursor is a real end.
+ * A resumed limit=50 cursor (epoch millis of the oldest fill) that comes back empty
+ * is poisoned, including the limit=10 retry of that same cursor. Restart at limit=10
+ * with no cursor. A cursor saved during that walk, or a cursor-less walk that already
+ * returned fills, is a real end — do not start limit=50 again.
  */
 export function stalledOrdersResumeFallback(input: {
   prevItems: T212HistoryOrderItem[];
@@ -267,19 +266,33 @@ export function stalledOrdersResumeFallback(input: {
   fetchPartial: boolean;
 }): string | null {
   if (!input.resumePath || input.fetchPartial) return null;
+  if (isOrdersLimit10WalkPath(input.resumePath)) return null;
+
   const oldestPrev = oldestT212HistoryCursorMs(input.prevItems);
   const fetchedOlder =
     oldestPrev != null &&
     input.fetchedItems.some((item) => {
-      const ms = t212HistoryOrderTimeMs(item);
+      const ms = oldestT212HistoryCursorMs([item]);
       return ms != null && ms < oldestPrev;
     });
   if (fetchedOlder) return null;
   if (input.fetchedItems.length > 0 && oldestPrev == null) return null;
-  const fallback = ordersFalseEndFallbackPath(input.prevItems);
-  if (!fallback) return null;
-  if (t212PathCursor(input.resumePath) === t212PathCursor(fallback)) return null;
-  return fallback;
+
+  if (isOrdersLimit10RestartPath(input.resumePath)) {
+    if (input.fetchedItems.length === 0) return T212_ORDERS_LIMIT10_RESTART_PATH;
+    return null;
+  }
+
+  const cursor = t212PathCursor(input.resumePath);
+  const poisonedTimestamp =
+    input.fetchedItems.length === 0 &&
+    cursor != null &&
+    oldestPrev != null &&
+    cursor === String(oldestPrev);
+  const limit50FalseEnd =
+    input.fetchedItems.length === 0 && t212HistoryPageLimit(input.resumePath) > 10;
+  if (poisonedTimestamp || limit50FalseEnd) return T212_ORDERS_LIMIT10_RESTART_PATH;
+  return null;
 }
 
 export type T212OrdersCacheWriteDecision = {
@@ -391,9 +404,8 @@ export async function refreshT212OrdersCache(input: {
     },
   });
   const prevItems = parseCachedOrderItems(prev?.ordersCache);
-  const resumePath = prev?.ordersCachePartial
-    ? normalizeT212OrdersResumePath(prev.ordersCacheNextPath)
-    : null;
+  const rawNextPath = prev?.ordersCachePartial ? (prev.ordersCacheNextPath ?? null) : null;
+  const resumePath = normalizeT212OrdersResumePath(rawNextPath);
 
   const generation: OrdersCacheGeneration = {
     apiKeyEnc: input.apiKeyEnc,
@@ -408,6 +420,7 @@ export async function refreshT212OrdersCache(input: {
     maxPages: input.maxPages ?? 6,
     minRequestIntervalMs: input.minRequestIntervalMs ?? 400,
     startPath: resumePath,
+    limit10Walk: ordersResumeInLimit10Walk(rawNextPath),
   });
 
   async function commitIfCurrent(data: Prisma.Trading212ConnectionUpdateInput): Promise<boolean> {
@@ -463,7 +476,7 @@ export async function refreshT212OrdersCache(input: {
     };
   }
 
-  const decision = decideT212OrdersCacheWrite(prevItems, result, resumePath);
+  const decision = decideT212OrdersCacheWrite(prevItems, result, rawNextPath);
 
   const shouldTouchCachedAt =
     !decision.partial &&
