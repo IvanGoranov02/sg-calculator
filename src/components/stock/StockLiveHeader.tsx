@@ -129,6 +129,26 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {sessionLabel && sessionPrice != null && sessionChange ? (
+              <div
+                className="flex flex-wrap items-baseline justify-end gap-x-1.5"
+                data-session-quote={showPost ? "after-hours" : "pre-market"}
+              >
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {sessionLabel}
+                </span>
+                <span className="font-mono text-sm tabular-nums text-foreground">{fmt(sessionPrice)}</span>
+                <span
+                  className={cn(
+                    "font-mono text-xs tabular-nums",
+                    sessionPositive ? "text-emerald-400" : "text-red-400",
+                  )}
+                >
+                  {sessionChange}
+                </span>
+              </div>
+            ) : null}
+
             <div
               className="flex items-center gap-1"
               role="group"
@@ -155,23 +175,6 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
                 EUR
               </Button>
             </div>
-
-            {sessionLabel && sessionPrice != null && sessionChange ? (
-              <div className="flex flex-wrap items-baseline justify-end gap-x-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {sessionLabel}
-                </span>
-                <span className="font-mono text-sm tabular-nums text-foreground">{fmt(sessionPrice)}</span>
-                <span
-                  className={cn(
-                    "font-mono text-xs tabular-nums",
-                    sessionPositive ? "text-emerald-400" : "text-red-400",
-                  )}
-                >
-                  {sessionChange}
-                </span>
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
