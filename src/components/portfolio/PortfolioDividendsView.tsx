@@ -307,7 +307,7 @@ export function PortfolioDividendsView({
                 <dt className="text-base font-medium leading-snug text-foreground">
                   {t("portfolio.dividendPerYearLabel")}
                 </dt>
-                <dd className="text-2xl font-semibold tabular-nums leading-tight text-emerald-400">
+                <dd className="text-base font-semibold tabular-nums text-emerald-400">
                   {fmtMoney(mergedEstAnnualParts.annual, preferredCurrency)}
                 </dd>
               </div>
