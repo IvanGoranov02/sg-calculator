@@ -39,22 +39,21 @@ export function SectorAllocationDonut({
   slices,
   activeName,
   focusName,
-  pinnedName,
   chartLabel,
   onHover,
   onFocusName,
-  onToggle,
 }: {
   slices: SectorDonutSlice[];
   activeName: string | null;
   focusName: string | null;
-  pinnedName: string | null;
   chartLabel: string;
   onHover: (name: string | null) => void;
   onFocusName: (name: string | null) => void;
-  onToggle: (name: string) => void;
 }) {
   const buttonRefs = useRef<Array<SVGPathElement | null>>([]);
+  // Stays set from pointerdown until focus leaves the chart, so a click that
+  // focuses after pointerup cannot pin the wedge through :focus-visible.
+  const pointerFocusRef = useRef(false);
   const angles = useMemo(
     () => donutSliceAngles(slices.map((slice) => slice.value), { gapDegrees: 0.8, minSweepDegrees: 3 }),
     [slices],
@@ -97,7 +96,6 @@ export function SectorAllocationDonut({
     }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onToggle(slices[index].name);
       return;
     }
     if (event.key === "Escape") {
@@ -107,14 +105,30 @@ export function SectorAllocationDonut({
     }
   }
 
+  function onKeyUp(event: KeyboardEvent<SVGPathElement>) {
+    if (event.key === " ") event.preventDefault();
+  }
+
   function onGroupBlur(event: FocusEvent<SVGSVGElement>) {
     const next = event.relatedTarget;
     if (next instanceof Node && event.currentTarget.contains(next)) return;
+    pointerFocusRef.current = false;
     onFocusName(null);
   }
 
+  function isPointingDevice(pointerType: string) {
+    return pointerType === "mouse" || pointerType === "pen";
+  }
+
   function onChartLeave(event: PointerEvent<SVGSVGElement>) {
-    if (event.pointerType === "mouse") onHover(null);
+    if (isPointingDevice(event.pointerType)) onHover(null);
+  }
+
+  function onSliceBlur(event: FocusEvent<SVGPathElement>) {
+    const next = event.relatedTarget;
+    const svg = event.currentTarget.ownerSVGElement;
+    if (next instanceof Node && svg?.contains(next)) return;
+    pointerFocusRef.current = false;
   }
 
   const activeIndex = slices.findIndex((slice) => slice.name === activeName);
@@ -167,20 +181,34 @@ export function SectorAllocationDonut({
               role="button"
               tabIndex={slice.name === tabName ? 0 : -1}
               aria-label={`${slice.name}, ${slice.ringLabel}`}
-              aria-pressed={pinnedName === slice.name}
               data-sector-slice={slice.name}
               data-active={slice.name === activeName ? "true" : "false"}
               onPointerDown={(event) => {
-                event.currentTarget.focus();
+                pointerFocusRef.current = true;
+                if (event.pointerType === "touch") onHover(slice.name);
+              }}
+              onPointerUp={(event) => {
+                if (event.pointerType === "touch") onHover(null);
+              }}
+              onPointerCancel={() => {
+                onHover(null);
               }}
               onPointerEnter={(event) => {
-                if (event.pointerType === "mouse") onHover(slice.name);
+                if (isPointingDevice(event.pointerType)) onHover(slice.name);
+              }}
+              onPointerLeave={(event) => {
+                if (!isPointingDevice(event.pointerType)) return;
+                const next = event.relatedTarget;
+                if (next instanceof Element && next.closest("[data-sector-slice]")) return;
+                onHover(null);
               }}
               onFocus={(event) => {
+                if (pointerFocusRef.current) return;
                 if (event.currentTarget.matches(":focus-visible")) onFocusName(slice.name);
               }}
-              onClick={() => onToggle(slice.name)}
+              onBlur={onSliceBlur}
               onKeyDown={(event) => onKeyDown(event, index)}
+              onKeyUp={onKeyUp}
             />
           );
         })}
@@ -219,9 +247,9 @@ export function SectorAllocationDonut({
           );
         })}
       </svg>
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center [&_*]:pointer-events-none" aria-hidden="true">
         {active ? (
-          <div className="flex w-[34%] flex-col items-center gap-1 text-center">
+          <div className="pointer-events-none flex w-[34%] flex-col items-center gap-1 text-center">
             <p className="line-clamp-3 text-[11px] leading-tight font-medium text-foreground">
               <span
                 className="mr-1 inline-block size-1.5 translate-y-[-1px] rounded-full"
