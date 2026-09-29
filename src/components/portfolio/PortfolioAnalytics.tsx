@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
+import { useMemo, useState, type KeyboardEvent } from "react";
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { SectorAllocationDonut, type SectorDonutSlice } from "@/components/portfolio/SectorAllocationDonut";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPercent } from "@/lib/format";
 import {
   allocationPercentOfTotal,
   formatAllocationPercent,
+  groupSectorCompanies,
+  type SectorCompany,
+  type SectorCompanySource,
 } from "@/lib/portfolioAllocation";
 import { convertPortfolioMoney, type PortfolioFxRates } from "@/lib/portfolioFx";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -25,6 +30,8 @@ export type AnalyticsRow = {
   cost: number;
   pl: number | null;
   estAnnual: number | null;
+  /** Session move from the live quote. Null for broker-only prices. */
+  dayChangePct: number | null;
 };
 
 export type PortfolioAnalyticsData = {
@@ -37,7 +44,7 @@ export type PortfolioAnalyticsData = {
   portfolioYield: number | null;
   unconverted: number;
   holdings: { symbol: string; name: string | null; value: number }[];
-  sectors: { name: string; value: number }[];
+  sectors: { name: string; value: number; companies: SectorCompany[] }[];
   hasRealSectors: boolean;
   best: { symbol: string; name: string | null; plPct: number }[];
   worst: { symbol: string; name: string | null; plPct: number }[];
@@ -79,6 +86,7 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
     let unconverted = 0;
     const holdings: { symbol: string; name: string | null; value: number }[] = [];
     const sectorMap = new Map<string, number>();
+    const sectorSources = new Map<string, SectorCompanySource[]>();
     const movers: { symbol: string; name: string | null; plPct: number }[] = [];
 
     for (const r of rows) {
@@ -91,6 +99,17 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
         holdings.push({ symbol: r.symbol, name: r.name, value: mvBase });
         const sector = r.sector ?? t("portfolioAnalytics.unknownSector");
         sectorMap.set(sector, (sectorMap.get(sector) ?? 0) + mvBase);
+        const source: SectorCompanySource = {
+          symbol: r.symbol,
+          name: r.name,
+          value: mvBase,
+          cost: costBase,
+          pl: conv(r.pl, r.holdingCcy),
+          dayChangePct: r.dayChangePct,
+        };
+        const sources = sectorSources.get(sector);
+        if (sources) sources.push(source);
+        else sectorSources.set(sector, [source]);
       }
       if (costBase != null) totalCost += costBase;
       if (incomeBase != null && incomeBase > 0) totalIncome += incomeBase;
@@ -106,7 +125,11 @@ export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates
     holdings.sort((x, y) => y.value - x.value);
     const unknownLabel = t("portfolioAnalytics.unknownSector");
     const sectors = [...sectorMap.entries()]
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({
+        name,
+        value,
+        companies: groupSectorCompanies(sectorSources.get(name) ?? []),
+      }))
       .sort((x, y) => y.value - x.value);
     const hasRealSectors = sectors.some((s) => s.name !== unknownLabel);
     movers.sort((x, y) => y.plPct - x.plPct);
@@ -196,7 +219,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
       </Card>
 
       {a.hasRealSectors ? (
-        <SectorAllocationCard sectors={a.sectors} totalValue={a.totalValue} />
+        <SectorAllocationCard sectors={a.sectors} totalValue={a.totalValue} currency={a.base} />
       ) : null}
     </div>
   );
@@ -257,15 +280,40 @@ function SummaryCard({
 function SectorAllocationCard({
   sectors,
   totalValue,
+  currency,
 }: {
-  sectors: { name: string; value: number }[];
+  sectors: { name: string; value: number; companies: SectorCompany[] }[];
   totalValue: number;
+  currency: string;
 }) {
   const { t } = useI18n();
   const [hoverName, setHoverName] = useState<string | null>(null);
   const [focusName, setFocusName] = useState<string | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
   // Expanded only while the pointer is over a sector, or while a wedge has keyboard focus.
   const activeName = hoverName ?? focusName;
+  const selected = selectedName ? sectors.find((sector) => sector.name === selectedName) ?? null : null;
+  if (selectedName != null && selected == null) {
+    setSelectedName(null);
+  }
+
+  function openSector(name: string) {
+    setHoverName(null);
+    setFocusName(null);
+    setSelectedName(name);
+  }
+
+  function closeSector() {
+    setHoverName(null);
+    setFocusName(null);
+    setSelectedName(null);
+  }
+
+  function onCardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || !selected) return;
+    event.preventDefault();
+    closeSector();
+  }
 
   const slices: SectorDonutSlice[] = [];
   for (let i = 0; i < sectors.length; i++) {
@@ -281,47 +329,154 @@ function SectorAllocationCard({
     });
   }
 
+  const selectedIndex = selected ? sectors.findIndex((sector) => sector.name === selected.name) : -1;
+  const selectedColor = SECTOR_COLORS[(selectedIndex >= 0 ? selectedIndex : 0) % SECTOR_COLORS.length];
+
   return (
-    <Card className="border-border bg-card">
+    <Card className="border-border bg-card" onKeyDown={onCardKeyDown}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
+        {selected ? (
+          <CardAction>
+            <Button type="button" variant="outline" size="sm" autoFocus onClick={closeSector}>
+              <ArrowLeft data-icon="inline-start" />
+              {t("portfolioAnalytics.sectorBack")}
+            </Button>
+          </CardAction>
+        ) : null}
       </CardHeader>
-      <CardContent className="@container/sector">
-        {/* Side by side only when this card's content box can hold a full 19.5rem donut plus a real bar track. */}
-        <div className="flex flex-col items-center gap-4 @min-[740px]/sector:flex-row @min-[740px]/sector:items-center">
-          <div className="w-full max-w-[19.5rem] shrink-0 @min-[740px]/sector:w-[19.5rem]">
-            <SectorAllocationDonut
-              slices={slices}
-              activeName={activeName}
-              focusName={focusName}
-              chartLabel={t("portfolioAnalytics.sectorChartLabel")}
-              onHover={setHoverName}
-              onFocusName={setFocusName}
-            />
+      {selected ? (
+        <CardContent data-sector-view="detail">
+          <SectorCompanyList
+            sector={selected}
+            totalValue={totalValue}
+            currency={currency}
+            color={selectedColor}
+          />
+        </CardContent>
+      ) : (
+        <CardContent className="@container/sector" data-sector-view="overview">
+          {/* Side by side only when this card's content box can hold a full 19.5rem donut plus a real bar track. */}
+          <div className="flex flex-col items-center gap-4 @min-[740px]/sector:flex-row @min-[740px]/sector:items-center">
+            <div className="w-full max-w-[19.5rem] shrink-0 @min-[740px]/sector:w-[19.5rem]">
+              <SectorAllocationDonut
+                slices={slices}
+                activeName={activeName}
+                focusName={focusName}
+                chartLabel={t("portfolioAnalytics.sectorChartLabel")}
+                onHover={setHoverName}
+                onFocusName={setFocusName}
+                onSelect={openSector}
+              />
+            </div>
+            <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
+              {sectors.map((s, i) => {
+                const pct = allocationPercentOfTotal(totalValue, s.value);
+                const hot = activeName === s.name;
+                return (
+                  <BarRow
+                    key={s.name}
+                    label={s.name}
+                    pct={pct}
+                    value={formatAllocationPercent(pct)}
+                    color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+                    compact
+                    hot={hot}
+                    dimmed={activeName != null && !hot}
+                    onHover={() => setHoverName(s.name)}
+                    onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
+                    onActivate={() => openSector(s.name)}
+                  />
+                );
+              })}
+            </div>
           </div>
-          <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
-            {sectors.map((s, i) => {
-              const pct = allocationPercentOfTotal(totalValue, s.value);
-              const hot = activeName === s.name;
-              return (
-                <BarRow
-                  key={s.name}
-                  label={s.name}
-                  pct={pct}
-                  value={formatAllocationPercent(pct)}
-                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-                  compact
-                  hot={hot}
-                  dimmed={activeName != null && !hot}
-                  onHover={() => setHoverName(s.name)}
-                  onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
-                />
-              );
-            })}
-          </div>
-        </div>
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
+  );
+}
+
+function SectorCompanyList({
+  sector,
+  totalValue,
+  currency,
+  color,
+}: {
+  sector: { name: string; value: number; companies: SectorCompany[] };
+  totalValue: number;
+  currency: string;
+  color: string;
+}) {
+  const { t } = useI18n();
+  const sectorPct = allocationPercentOfTotal(totalValue, sector.value);
+  const countLabel =
+    sector.companies.length === 1
+      ? t("portfolioAnalytics.sectorCompanyCountOne")
+      : t("portfolioAnalytics.sectorCompanyCount", { n: sector.companies.length });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <span className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+            <span className="truncate">{sector.name}</span>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{countLabel}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+            {money(sector.value, currency)}
+          </p>
+          <p className="font-mono text-xs tabular-nums text-muted-foreground">{sectorPct.toFixed(1)}%</p>
+        </div>
+      </div>
+      <ul className="space-y-2" aria-label={t("portfolioAnalytics.sectorCompaniesLabel", { sector: sector.name })}>
+        {sector.companies.map((company) => {
+          const share = allocationPercentOfTotal(totalValue, company.value);
+          return (
+            <li key={company.symbol} className="flex items-center gap-3 rounded-md px-1 py-1">
+              <CompanyIdentity
+                symbol={company.symbol}
+                name={company.name}
+                size="sm"
+                primaryLabel="name"
+                className="min-w-0 flex-1"
+              />
+              <div className="shrink-0 text-right">
+                <p className="font-mono text-xs font-medium tabular-nums text-foreground">
+                  {money(company.value, currency)}
+                </p>
+                <p className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                  {t("portfolioAnalytics.sectorPortfolioShare", { pct: `${share.toFixed(1)}%` })}
+                </p>
+                {company.plPct != null ? (
+                  <p
+                    className={cn(
+                      "font-mono text-[11px] tabular-nums",
+                      company.plPct >= 0 ? "text-emerald-400" : "text-red-400",
+                    )}
+                  >
+                    {t("portfolioAnalytics.sectorPl")} {formatPercent(company.plPct, 1)}
+                  </p>
+                ) : null}
+                {company.dayChangePct != null ? (
+                  <p
+                    className={cn(
+                      "font-mono text-[11px] tabular-nums",
+                      company.dayChangePct >= 0 ? "text-emerald-400" : "text-red-400",
+                    )}
+                  >
+                    {t("portfolioAnalytics.sectorDay")} {formatPercent(company.dayChangePct, 1)}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

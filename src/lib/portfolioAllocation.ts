@@ -84,6 +84,91 @@ function polar(cx: number, cy: number, radius: number, angleDeg: number): [numbe
   return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
 }
 
+export type SectorCompanySource = {
+  symbol: string;
+  name: string | null;
+  /** Market value in display currency. Non-positive rows are ignored. */
+  value: number;
+  /** Cost in the same currency. Null when FX or the basis is missing. */
+  cost: number | null;
+  /** Unrealized P&L in the same currency. Null when unknown. */
+  pl: number | null;
+  /** Session change percent. Null when the quote has no day move. */
+  dayChangePct: number | null;
+};
+
+export type SectorCompany = {
+  symbol: string;
+  name: string | null;
+  value: number;
+  /** Unrealized P&L percent. Null when any merged lot lacks a cost basis. */
+  plPct: number | null;
+  dayChangePct: number | null;
+};
+
+/**
+ * Companies inside one sector, merged by ticker and ordered by market value.
+ * P&L is hidden when a merged lot has value but no cost, so the percent is not partial.
+ */
+export function groupSectorCompanies(rows: SectorCompanySource[]): SectorCompany[] {
+  const bySymbol = new Map<
+    string,
+    {
+      symbol: string;
+      name: string | null;
+      value: number;
+      cost: number;
+      pl: number;
+      incompletePl: boolean;
+      dayChangePct: number | null;
+    }
+  >();
+
+  for (const row of rows) {
+    if (!Number.isFinite(row.value) || row.value <= 0) continue;
+    const symbol = row.symbol.trim().toUpperCase();
+    if (!symbol) continue;
+    const costKnown = row.cost != null && Number.isFinite(row.cost) && row.cost >= 0;
+    const positiveCost = costKnown && row.cost != null && row.cost > 0 ? row.cost : null;
+    const pl = row.pl != null && Number.isFinite(row.pl) ? row.pl : null;
+    const day =
+      row.dayChangePct != null && Number.isFinite(row.dayChangePct) ? row.dayChangePct : null;
+    // A zero cost basis is a real figure. A missing cost would make a merged P&L partial.
+    const missingBasis = !costKnown || (positiveCost != null && pl == null);
+    const existing = bySymbol.get(symbol);
+    if (!existing) {
+      bySymbol.set(symbol, {
+        symbol,
+        name: row.name?.trim() || null,
+        value: row.value,
+        cost: positiveCost != null && pl != null ? positiveCost : 0,
+        pl: positiveCost != null && pl != null ? pl : 0,
+        incompletePl: missingBasis,
+        dayChangePct: day,
+      });
+      continue;
+    }
+    existing.value += row.value;
+    if (!existing.name && row.name?.trim()) existing.name = row.name.trim();
+    if (missingBasis) existing.incompletePl = true;
+    else if (positiveCost != null && pl != null && !existing.incompletePl) {
+      existing.cost += positiveCost;
+      existing.pl += pl;
+    }
+    if (existing.dayChangePct == null && day != null) existing.dayChangePct = day;
+  }
+
+  return [...bySymbol.values()]
+    .map((row) => ({
+      symbol: row.symbol,
+      name: row.name,
+      value: row.value,
+      plPct: !row.incompletePl && row.cost > 0 ? (row.pl / row.cost) * 100 : null,
+      dayChangePct: row.dayChangePct,
+    }))
+    .sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
+}
+
 /** SVG path for a donut wedge. Full circles use an even-odd ring. */
 export function donutAnnulusPath(
   cx: number,

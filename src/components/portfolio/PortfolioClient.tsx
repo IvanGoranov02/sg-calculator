@@ -688,6 +688,8 @@ export function PortfolioClient() {
         cost,
         pl,
         estAnnual,
+        dayChangePct:
+          q && !q.fromBroker && Number.isFinite(q.changePercent) ? q.changePercent : null,
       })),
     [rows],
   );

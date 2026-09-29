@@ -6,6 +6,7 @@ import {
   donutAnnulusPath,
   donutSliceAngles,
   formatAllocationPercent,
+  groupSectorCompanies,
 } from "@/lib/portfolioAllocation";
 
 describe("portfolioAllocation", () => {
@@ -64,5 +65,46 @@ describe("portfolioAllocation", () => {
     const grown = donutAnnulusPath(100, 100, 40, 88, 0, 90);
     assert.notEqual(grown, donutAnnulusPath(100, 100, 40, 80, 0, 90));
     assert.match(grown, /^M 100 12 /);
+  });
+
+  it("merges sector companies by ticker and keeps P&L when every lot has a cost", () => {
+    const companies = groupSectorCompanies([
+      { symbol: "aapl", name: "Apple", value: 100, cost: 80, pl: 20, dayChangePct: 1.5 },
+      { symbol: "AAPL", name: null, value: 50, cost: 40, pl: 10, dayChangePct: 1.5 },
+      { symbol: "msft", name: "Microsoft", value: 30, cost: 40, pl: -10, dayChangePct: null },
+    ]);
+    assert.deepEqual(companies, [
+      { symbol: "AAPL", name: "Apple", value: 150, plPct: 25, dayChangePct: 1.5 },
+      { symbol: "MSFT", name: "Microsoft", value: 30, plPct: -25, dayChangePct: null },
+    ]);
+  });
+
+  it("hides combined P&L when a merged lot has no cost basis", () => {
+    const companies = groupSectorCompanies([
+      { symbol: "NVDA", name: "NVIDIA", value: 10, cost: 8, pl: 2, dayChangePct: 0 },
+      { symbol: "nvda", name: "NVIDIA", value: 5, cost: null, pl: null, dayChangePct: 0 },
+    ]);
+    assert.equal(companies.length, 1);
+    assert.equal(companies[0].value, 15);
+    assert.equal(companies[0].plPct, null);
+    assert.equal(companies[0].dayChangePct, 0);
+  });
+
+  it("keeps P&L when a merged lot has a zero cost basis", () => {
+    const companies = groupSectorCompanies([
+      { symbol: "AMD", name: "AMD", value: 20, cost: 10, pl: 10, dayChangePct: -1 },
+      { symbol: "AMD", name: "AMD", value: 5, cost: 0, pl: 5, dayChangePct: -1 },
+    ]);
+    assert.equal(companies[0].value, 25);
+    assert.equal(companies[0].plPct, 100);
+  });
+
+  it("drops sector rows with no market value", () => {
+    assert.deepEqual(
+      groupSectorCompanies([
+        { symbol: "X", name: null, value: 0, cost: 1, pl: 0, dayChangePct: null },
+      ]),
+      [],
+    );
   });
 });
