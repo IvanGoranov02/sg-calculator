@@ -606,8 +606,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       sourceManual: "Manual",
       sourceT212: "Trading 212",
       quoteMissing: "—",
-      divDisclaimer:
-        "Estimated from trailing dividend rate or yield × your shares. Actual payments vary.",
       dividendSummaryTitle: "Estimated annual dividend (full portfolio)",
       dividendSummaryHint:
         "Sum of per-position estimates (~next 12 months from trailing figures). Multiple currencies are shown separately. Not tax or broker advice.",
@@ -714,8 +712,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       yieldOnValue: "Average yield",
       yieldOnCost: "Yield on cost",
       averageYieldOnCost: "Average yield on cost",
-      dps: "Div. per share",
-      growth: "DPS growth (TTM)",
+      dividendYield: "Dividend yield",
+      dps: "Dividend per share",
+      estAnnualIncome: "Estimated annual income",
+      growth: "Dividend per share growth (TTM)",
       growthUnavailable: "Open stock analysis to populate cache",
       incomeGrowthTitle: "Dividend income growth",
       incomeGrowthHint:
@@ -1596,8 +1596,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       sourceManual: "Ръчно",
       sourceT212: "Trading 212",
       quoteMissing: "—",
-      divDisclaimer:
-        "Оценка от trailing дивидент rate или yield × брой акции. Реалните плащания варират.",
       dividendSummaryTitle: "Очакван годишен дивидент (цяло портфолио)",
       dividendSummaryHint:
         "Сума от редовете (~следващи 12 месеца по trailing данни). Различни валути — отделно. Не е данъчен или брокерски съвет.",
@@ -1704,8 +1702,10 @@ export const messages: Record<AppLocale, MessageDict> = {
       yieldOnValue: "Средна доходност",
       yieldOnCost: "Доходност спрямо цена",
       averageYieldOnCost: "Средна доходност спрямо цена",
-      dps: "Див. на акция",
-      growth: "Ръст DPS (TTM)",
+      dividendYield: "Дивидентна доходност",
+      dps: "Дивидент на акция",
+      estAnnualIncome: "Очакван годишен доход",
+      growth: "Ръст на дивидент на акция (TTM)",
       growthUnavailable: "Отвори анализ на акцията за кеш",
       incomeGrowthTitle: "Ръст на дивидентния доход",
       incomeGrowthHint:
