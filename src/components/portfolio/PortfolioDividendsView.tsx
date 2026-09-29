@@ -423,10 +423,10 @@ export function PortfolioDividendsView({
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead>{t("portfolio.colSymbol")}</TableHead>
-                  <TableHead className="text-right">{t("portfolio.colDivYld")}</TableHead>
+                  <TableHead className="text-right">{t("portfolioDividends.dividendYield")}</TableHead>
                   <TableHead className="text-right">{t("portfolioDividends.yieldOnCost")}</TableHead>
                   <TableHead className="text-right">{t("portfolioDividends.dps")}</TableHead>
-                  <TableHead className="text-right">{t("portfolio.colExpDiv")}</TableHead>
+                  <TableHead className="text-right">{t("portfolioDividends.estAnnualIncome")}</TableHead>
                   <TableHead>{t("portfolioDividends.growth")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -610,8 +610,6 @@ export function PortfolioDividendsView({
           ) : null}
         </Card>
       ) : null}
-
-      <p className="text-xs text-muted-foreground">{t("portfolio.divDisclaimer")}</p>
 
       <Card className="border-border bg-card">
         <CardHeader className="space-y-1 pb-2 sm:pb-6">
