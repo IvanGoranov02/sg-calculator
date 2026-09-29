@@ -806,9 +806,13 @@ export function PortfolioClient() {
         value={portfolioView}
         onValueChange={(v) => setPortfolioView(v === "dividends" ? "dividends" : "holdings")}
       >
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="holdings">{t("portfolio.tabHoldings")}</TabsTrigger>
-          <TabsTrigger value="dividends">{t("portfolio.tabDividends")}</TabsTrigger>
+        <TabsList className="mx-auto w-fit self-center">
+          <TabsTrigger className="flex-none px-4" value="holdings">
+            {t("portfolio.tabHoldings")}
+          </TabsTrigger>
+          <TabsTrigger className="flex-none px-4" value="dividends">
+            {t("portfolio.tabDividends")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="holdings" className="mt-6 space-y-6 sm:space-y-8">

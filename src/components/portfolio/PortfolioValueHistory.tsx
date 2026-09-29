@@ -249,7 +249,7 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
         <CardDescription className="text-xs sm:text-sm">{t("portfolio.valueManualHint")}</CardDescription>
       </CardHeader>
       <div className="flex items-center justify-between gap-3 px-4 pb-3 sm:px-6">
-        <Label htmlFor="pv-toggle" className="text-sm font-medium">
+        <Label htmlFor="pv-toggle" className="cursor-pointer text-sm font-medium leading-none">
           {t("portfolio.valueManualToggle")}
         </Label>
         <button
@@ -259,16 +259,12 @@ export function PortfolioManualMonthlyValueCard({ data, saving, onSubmit, onDele
           aria-checked={enabled}
           onClick={() => setEnabled((v) => !v)}
           className={cn(
-            "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-            enabled ? "bg-emerald-500" : "bg-muted",
+            "inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors outline-none",
+            "focus-visible:ring-3 focus-visible:ring-ring/50",
+            enabled ? "justify-end bg-emerald-500" : "justify-start bg-muted",
           )}
         >
-          <span
-            className={cn(
-              "absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform",
-              enabled ? "translate-x-5" : "translate-x-0.5",
-            )}
-          />
+          <span aria-hidden className="pointer-events-none block size-5 rounded-full bg-white shadow-sm" />
         </button>
       </div>
       {enabled ? (
