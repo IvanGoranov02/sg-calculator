@@ -167,7 +167,7 @@ export function PortfolioSummarySection({ analytics }: { analytics: PortfolioAna
   );
 }
 
-/** Holdings + sector allocation side by side. */
+/** Holdings and sector allocation side by side on large screens. */
 export function PortfolioAllocationSection({ analytics }: { analytics: PortfolioAnalyticsData }) {
   const { t } = useI18n();
   const a = analytics;
@@ -290,36 +290,42 @@ function SectorAllocationCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <SectorAllocationDonut
-          slices={slices}
-          activeName={activeName}
-          focusName={focusName}
-          pinnedName={pinnedName}
-          chartLabel={t("portfolioAnalytics.sectorChartLabel")}
-          onHover={setHoverName}
-          onFocusName={setFocusName}
-          onToggle={togglePinned}
-        />
-        <div className="space-y-2" aria-hidden="true">
-          {sectors.map((s, i) => {
-            const pct = allocationPercentOfTotal(totalValue, s.value);
-            const hot = activeName === s.name;
-            return (
-              <BarRow
-                key={s.name}
-                label={s.name}
-                pct={pct}
-                value={formatAllocationPercent(pct)}
-                color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-                hot={hot}
-                dimmed={activeName != null && !hot}
-                onHover={() => setHoverName(s.name)}
-                onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
-                onActivate={() => togglePinned(s.name)}
-              />
-            );
-          })}
+      <CardContent className="@container/sector">
+        {/* Side by side only when this card's content box can hold a full 19.5rem donut plus a real bar track. */}
+        <div className="flex flex-col items-center gap-4 @min-[740px]/sector:flex-row @min-[740px]/sector:items-center">
+          <div className="w-full max-w-[19.5rem] shrink-0 @min-[740px]/sector:w-[19.5rem]">
+            <SectorAllocationDonut
+              slices={slices}
+              activeName={activeName}
+              focusName={focusName}
+              pinnedName={pinnedName}
+              chartLabel={t("portfolioAnalytics.sectorChartLabel")}
+              onHover={setHoverName}
+              onFocusName={setFocusName}
+              onToggle={togglePinned}
+            />
+          </div>
+          <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
+            {sectors.map((s, i) => {
+              const pct = allocationPercentOfTotal(totalValue, s.value);
+              const hot = activeName === s.name;
+              return (
+                <BarRow
+                  key={s.name}
+                  label={s.name}
+                  pct={pct}
+                  value={formatAllocationPercent(pct)}
+                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+                  compact
+                  hot={hot}
+                  dimmed={activeName != null && !hot}
+                  onHover={() => setHoverName(s.name)}
+                  onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
+                  onActivate={() => togglePinned(s.name)}
+                />
+              );
+            })}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -333,6 +339,7 @@ function BarRow({
   pct,
   value,
   color,
+  compact,
   hot,
   dimmed,
   onHover,
@@ -345,6 +352,8 @@ function BarRow({
   pct: number;
   value: string;
   color: string;
+  /** Keep the sector label and percent at their base widths so the bar track fits in the half-width card. */
+  compact?: boolean;
   hot?: boolean;
   dimmed?: boolean;
   onHover?: () => void;
@@ -368,17 +377,17 @@ function BarRow({
       }}
       onClick={onActivate}
     >
-      <div className="w-28 shrink-0 sm:w-40">
+      <div className={cn("w-28 shrink-0", !compact && "sm:w-40")}>
         {symbol ? (
           <CompanyIdentity symbol={symbol} name={name} size="sm" primaryLabel="name" />
         ) : (
-          <span className="truncate text-xs text-foreground/90" title={rowLabel}>{rowLabel}</span>
+          <span className="block truncate text-xs text-foreground/90" title={rowLabel}>{rowLabel}</span>
         )}
       </div>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/10">
+      <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/10">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>
-      <span className="w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:w-20">{value}</span>
+      <span className={cn("w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground", !compact && "sm:w-20")}>{value}</span>
     </div>
   );
 }
