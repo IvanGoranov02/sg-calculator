@@ -101,14 +101,22 @@ export type SectorCompany = {
   symbol: string;
   name: string | null;
   value: number;
-  /** Unrealized P&L percent. Null when any merged lot lacks a cost basis. */
+  /** Unrealized P&L percent. Null when a lot lacks cost or P&L, or combined cost is zero. */
   plPct: number | null;
   dayChangePct: number | null;
 };
 
+/** Known cost (including zero) and P&L. Null when either figure is missing. */
+function knownLotBasis(row: SectorCompanySource): { cost: number; pl: number } | null {
+  if (row.cost == null || !Number.isFinite(row.cost) || row.cost < 0) return null;
+  if (row.pl == null || !Number.isFinite(row.pl)) return null;
+  return { cost: row.cost, pl: row.pl };
+}
+
 /**
  * Companies inside one sector, merged by ticker and ordered by market value.
- * P&L is hidden when a merged lot has value but no cost, so the percent is not partial.
+ * P&L percent is combined profit over combined cost, including a zero-cost lot.
+ * A missing cost or P&L hides the percent. A combined cost of zero does too.
  */
 export function groupSectorCompanies(rows: SectorCompanySource[]): SectorCompany[] {
   const bySymbol = new Map<
@@ -128,32 +136,28 @@ export function groupSectorCompanies(rows: SectorCompanySource[]): SectorCompany
     if (!Number.isFinite(row.value) || row.value <= 0) continue;
     const symbol = row.symbol.trim().toUpperCase();
     if (!symbol) continue;
-    const costKnown = row.cost != null && Number.isFinite(row.cost) && row.cost >= 0;
-    const positiveCost = costKnown && row.cost != null && row.cost > 0 ? row.cost : null;
-    const pl = row.pl != null && Number.isFinite(row.pl) ? row.pl : null;
+    const basis = knownLotBasis(row);
     const day =
       row.dayChangePct != null && Number.isFinite(row.dayChangePct) ? row.dayChangePct : null;
-    // A zero cost basis is a real figure. A missing cost would make a merged P&L partial.
-    const missingBasis = !costKnown || (positiveCost != null && pl == null);
     const existing = bySymbol.get(symbol);
     if (!existing) {
       bySymbol.set(symbol, {
         symbol,
         name: row.name?.trim() || null,
         value: row.value,
-        cost: positiveCost != null && pl != null ? positiveCost : 0,
-        pl: positiveCost != null && pl != null ? pl : 0,
-        incompletePl: missingBasis,
+        cost: basis?.cost ?? 0,
+        pl: basis?.pl ?? 0,
+        incompletePl: basis == null,
         dayChangePct: day,
       });
       continue;
     }
     existing.value += row.value;
     if (!existing.name && row.name?.trim()) existing.name = row.name.trim();
-    if (missingBasis) existing.incompletePl = true;
-    else if (positiveCost != null && pl != null && !existing.incompletePl) {
-      existing.cost += positiveCost;
-      existing.pl += pl;
+    if (basis == null) existing.incompletePl = true;
+    else if (!existing.incompletePl) {
+      existing.cost += basis.cost;
+      existing.pl += basis.pl;
     }
     if (existing.dayChangePct == null && day != null) existing.dayChangePct = day;
   }

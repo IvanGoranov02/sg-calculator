@@ -90,13 +90,28 @@ describe("portfolioAllocation", () => {
     assert.equal(companies[0].dayChangePct, 0);
   });
 
-  it("keeps P&L when a merged lot has a zero cost basis", () => {
+  it("includes a zero-cost lot in merged P&L percent", () => {
+    const paid = { symbol: "AMD", name: "AMD", value: 20, cost: 10, pl: 10, dayChangePct: -1 };
+    const free = { symbol: "amd", name: null, value: 5, cost: 0, pl: 5, dayChangePct: -1 };
+    for (const rows of [
+      [paid, free],
+      [free, paid],
+    ]) {
+      const companies = groupSectorCompanies(rows);
+      assert.equal(companies.length, 1);
+      assert.equal(companies[0].symbol, "AMD");
+      assert.equal(companies[0].value, 25);
+      // (10 + 5) / (10 + 0) = 150%, same as one holdings row for the combined lots.
+      assert.equal(companies[0].plPct, 150);
+    }
+  });
+
+  it("hides P&L when the only lot has a zero cost basis", () => {
     const companies = groupSectorCompanies([
-      { symbol: "AMD", name: "AMD", value: 20, cost: 10, pl: 10, dayChangePct: -1 },
-      { symbol: "AMD", name: "AMD", value: 5, cost: 0, pl: 5, dayChangePct: -1 },
+      { symbol: "AMD", name: "AMD", value: 5, cost: 0, pl: 5, dayChangePct: null },
     ]);
-    assert.equal(companies[0].value, 25);
-    assert.equal(companies[0].plPct, 100);
+    assert.equal(companies[0].value, 5);
+    assert.equal(companies[0].plPct, null);
   });
 
   it("drops sector rows with no market value", () => {

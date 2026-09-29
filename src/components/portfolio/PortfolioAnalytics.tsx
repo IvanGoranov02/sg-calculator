@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
@@ -287,6 +287,9 @@ function SectorAllocationCard({
   currency: string;
 }) {
   const { t } = useI18n();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const pendingFocusName = useRef<string | null>(null);
+  const pendingFocusVisible = useRef(false);
   const [hoverName, setHoverName] = useState<string | null>(null);
   const [focusName, setFocusName] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -303,17 +306,47 @@ function SectorAllocationCard({
     setSelectedName(name);
   }
 
-  function closeSector() {
+  const closeSector = useCallback((fromKeyboard: boolean) => {
+    pendingFocusName.current = selectedName;
+    pendingFocusVisible.current = fromKeyboard;
     setHoverName(null);
-    setFocusName(null);
+    // Keyboard return keeps the wedge as the roving tab stop. A pointer Back does not expand it.
+    setFocusName(fromKeyboard ? selectedName : null);
     setSelectedName(null);
-  }
+  }, [selectedName]);
 
-  function onCardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Escape" || !selected) return;
-    event.preventDefault();
-    closeSector();
-  }
+  useEffect(() => {
+    if (selectedName == null) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      closeSector(true);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedName, closeSector]);
+
+  useEffect(() => {
+    if (selectedName != null) return;
+    const name = pendingFocusName.current;
+    if (!name) return;
+    pendingFocusName.current = null;
+    const path = cardRef.current?.querySelector(
+      `[data-sector-slice="${CSS.escape(name)}"]`,
+    );
+    if (!(path instanceof SVGElement)) return;
+    path.focus({
+      preventScroll: true,
+      focusVisible: pendingFocusVisible.current,
+    } as FocusOptions & { focusVisible?: boolean });
+  }, [selectedName]);
 
   const slices: SectorDonutSlice[] = [];
   for (let i = 0; i < sectors.length; i++) {
@@ -333,12 +366,18 @@ function SectorAllocationCard({
   const selectedColor = SECTOR_COLORS[(selectedIndex >= 0 ? selectedIndex : 0) % SECTOR_COLORS.length];
 
   return (
-    <Card className="border-border bg-card" onKeyDown={onCardKeyDown}>
+    <Card ref={cardRef} className="border-border bg-card">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
         {selected ? (
           <CardAction>
-            <Button type="button" variant="outline" size="sm" autoFocus onClick={closeSector}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              autoFocus
+              onClick={(event) => closeSector(event.detail === 0)}
+            >
               <ArrowLeft data-icon="inline-start" />
               {t("portfolioAnalytics.sectorBack")}
             </Button>
