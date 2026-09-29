@@ -21,6 +21,7 @@ import {
   prepareHistoryBarsForValue,
   pickPortfolioHistorySymbols,
   quantitiesByMonthFromEvents,
+  quantityTimelineForChart,
   quantityTimelineMatchesHoldings,
 } from "@/lib/portfolioValueHistory";
 
@@ -385,7 +386,7 @@ describe("buildPortfolioValueChartSeries", () => {
     assert.equal(series[0]!.source, "computed");
   });
 
-  it("keeps T212 snapshot over computed live value", () => {
+  it("prefers live holdings value over a cash-inclusive T212 snapshot", () => {
     const series = buildPortfolioValueChartSeries({
       snapshots: [
         { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 8000, currency: "EUR" },
@@ -398,8 +399,105 @@ describe("buildPortfolioValueChartSeries", () => {
       liveValue: 4500,
       now: new Date("2026-09-14T12:00:00Z"),
     });
+    assert.equal(series.length, 1);
+    assert.equal(series[0]!.value, 4500);
+    assert.equal(series[0]!.source, "computed");
+  });
+
+  it("keeps a snapshot when holdings cannot be priced", () => {
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [
+        { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 8000, currency: "EUR" },
+      ],
+      manualRows: [],
+      holdings: [],
+      historyBySymbol: {},
+      fx,
+      baseCurrency: "EUR",
+      now: new Date("2026-09-14T12:00:00Z"),
+    });
     assert.equal(series[0]!.value, 8000);
     assert.equal(series[0]!.source, "t212");
+  });
+
+  it("does not mix cash snapshots into a holdings series", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [{ symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 }],
+      ["2024-01", "2026-09"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [
+        { capturedAt: new Date("2024-06-15T12:00:00Z"), totalValue: 99_999, currency: "USD" },
+        { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 99_999, currency: "USD" },
+      ],
+      manualRows: [],
+      holdings: [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }],
+      historyBySymbol: {
+        AAPL: [{ date: "2024-01-31", close: 100 }],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      liveValue: 1500,
+      now: new Date("2026-09-14T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-06"), undefined);
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2026-09")?.value, 1500);
+    assert.equal(series.find((p) => p.month === "2026-09")?.source, "computed");
+  });
+});
+
+describe("quantityTimelineForChart", () => {
+  const events = [
+    { symbolYahoo: "AAPL", date: "2024-01-15", delta: 10 },
+  ];
+  const holdings = [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }];
+  const now = new Date("2024-03-15T12:00:00Z");
+
+  it("draws a finished timeline that matches and reaches an earlier month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: false,
+      scopeDenied: false,
+      events,
+      holdings,
+      now,
+    });
+    assert.equal(timeline?.get("2024-01")?.get("AAPL"), 10);
+    assert.equal(timeline?.has("2024-02"), true);
+  });
+
+  it("draws a partial timeline once it already covers an earlier month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: true,
+      scopeDenied: false,
+      events,
+      holdings,
+      now,
+    });
+    assert.ok(timeline);
+  });
+
+  it("hides a partial timeline that only covers the current month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: true,
+      scopeDenied: false,
+      events: [{ symbolYahoo: "AAPL", date: "2024-03-02", delta: 10 }],
+      holdings,
+      now,
+    });
+    assert.equal(timeline, undefined);
+  });
+
+  it("hides a finished timeline that does not match open positions", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: false,
+      scopeDenied: false,
+      events,
+      holdings: [{ symbolYahoo: "AAPL", quantity: 2, currency: "USD" }],
+      now,
+    });
+    assert.equal(timeline, undefined);
   });
 });
 

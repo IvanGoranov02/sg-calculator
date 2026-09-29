@@ -11,10 +11,12 @@ import {
   mergeT212OrderItems,
   ordersCacheGenerationUnchanged,
   ordersCacheGenerationWhere,
+  rewindSkippedOrdersResumePath,
   shouldRebuildOrdersCacheOnRefresh,
   shouldRecordOrdersScopeDenial,
   stalledOrdersResumeFallback,
   T212_ORDERS_SCOPE_DENIED,
+  t212HoldingSymbolMap,
   t212OrderItemKey,
   trading212SettingsOrdersCachePatch,
   type OrdersCacheGeneration,
@@ -413,6 +415,54 @@ describe("orders cache reset and scope", () => {
     assert.equal(where.apiKeyEnc, "key-a");
     assert.equal(where.environment, "live");
     assert.notEqual(ordersCacheGenerationWhere("user-1", generation({ apiKeyEnc: "key-b" })).apiKeyEnc, where.apiKeyEnc);
+  });
+});
+
+describe("order identity and resume rewind", () => {
+  it("maps fills onto the stored holding symbol when Yahoo keys were disambiguated", () => {
+    const map = t212HoldingSymbolMap([
+      { symbolYahoo: "AAPL-2", symbolT212: "AAPL_US_EQ" },
+    ]);
+    const events = mapT212OrderItemsToQtyEvents(
+      [
+        {
+          fill: { filledAt: "2020-01-15T00:00:00Z", quantity: 4, type: "TRADE" },
+          order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+        },
+      ],
+      map,
+    );
+    assert.equal(events[0]?.symbolYahoo, "AAPL-2");
+  });
+
+  it("rewinds a resume cursor that is older than every cached fill", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const items: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt, quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const oldest = String(Date.parse(filledAt));
+    const skipped = String(Date.parse("2018-01-01T00:00:00.000Z"));
+    const rewound = rewindSkippedOrdersResumePath(
+      items,
+      `/api/v0/equity/history/orders?cursor=${skipped}&limit=50`,
+    );
+    assert.equal(rewound, `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`);
+  });
+
+  it("leaves a healthy resume cursor and the limit=10 restart in place", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const items: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt, quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const healthy = `/api/v0/equity/history/orders?cursor=${Date.parse(filledAt)}&limit=50`;
+    assert.equal(rewindSkippedOrdersResumePath(items, healthy), healthy);
+    assert.equal(rewindSkippedOrdersResumePath(items, T212_ORDERS_LIMIT10_RESTART_PATH), T212_ORDERS_LIMIT10_RESTART_PATH);
   });
 });
 

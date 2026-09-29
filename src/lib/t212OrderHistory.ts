@@ -13,10 +13,14 @@ import {
   normalizeT212OrdersResumePath,
   ordersResumeInLimit10Walk,
   oldestT212HistoryCursorMs,
+  ordersHistoryPathBase,
+  ordersNextPathAvoidingSkip,
   T212_ORDERS_LIMIT10_RESTART_PATH,
   t212HistoryPageLimit,
   t212OrderItemKey,
   t212PathCursor,
+  tagOrdersLimit10WalkPath,
+  stripOrdersLimit10WalkMarker,
   type T212HistoryOrderItem,
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
@@ -52,7 +56,48 @@ export function mergeT212OrderItems(
   return [...map.values()];
 }
 
-export function mapT212OrderItemsToQtyEvents(items: T212HistoryOrderItem[]): QtyEvent[] {
+/** Stored Yahoo key for each T212 ticker, including disambiguated collisions. */
+export function t212HoldingSymbolMap(
+  holdings: { symbolYahoo: string; symbolT212?: string | null }[],
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const h of holdings) {
+    const ticker = h.symbolT212?.trim();
+    const yahoo = h.symbolYahoo.trim().toUpperCase();
+    if (!ticker || !yahoo) continue;
+    map.set(ticker.toUpperCase(), yahoo);
+  }
+  return map;
+}
+
+/**
+ * A saved resume cursor older than every cached fill already skipped a block.
+ * Continue from the oldest fill we actually have. A cursor at or after that fill,
+ * and the cursor-less limit=10 restart, stay as stored.
+ */
+export function rewindSkippedOrdersResumePath(
+  items: T212HistoryOrderItem[],
+  nextPath: string | null,
+): string | null {
+  if (!nextPath?.trim()) return nextPath;
+  const marked = isOrdersLimit10WalkPath(nextPath);
+  const bare = stripOrdersLimit10WalkMarker(nextPath);
+  if (!bare) return nextPath;
+  // The page that produced this cursor is not the cursor itself. Passing the
+  // skipped cursor as the request would step backward inside the gap.
+  const fixed = ordersNextPathAvoidingSkip({
+    requestedPath: `${ordersHistoryPathBase(bare)}?limit=${t212HistoryPageLimit(bare)}`,
+    pageItems: items,
+    nextPagePath: bare,
+  });
+  if (!fixed || fixed === bare) return nextPath;
+  return marked ? tagOrdersLimit10WalkPath(fixed) : fixed;
+}
+
+export function mapT212OrderItemsToQtyEvents(
+  items: T212HistoryOrderItem[],
+  holdingSymbolByT212?: ReadonlyMap<string, string>,
+): QtyEvent[] {
   const out: QtyEvent[] = [];
   for (const item of items) {
     const order = item.order;
@@ -84,8 +129,9 @@ export function mapT212OrderItemsToQtyEvents(items: T212HistoryOrderItem[]): Qty
     }
     if (delta === 0) continue;
 
+    const fromHolding = holdingSymbolByT212?.get(ticker.toUpperCase());
     out.push({
-      symbolYahoo: t212TickerToYahoo(ticker),
+      symbolYahoo: fromHolding ?? t212TickerToYahoo(ticker),
       date,
       delta,
     });
@@ -404,7 +450,8 @@ export async function refreshT212OrdersCache(input: {
     },
   });
   const prevItems = parseCachedOrderItems(prev?.ordersCache);
-  const rawNextPath = prev?.ordersCachePartial ? (prev.ordersCacheNextPath ?? null) : null;
+  const storedNextPath = prev?.ordersCachePartial ? (prev.ordersCacheNextPath ?? null) : null;
+  const rawNextPath = rewindSkippedOrdersResumePath(prevItems, storedNextPath);
   const resumePath = normalizeT212OrdersResumePath(rawNextPath);
 
   const generation: OrdersCacheGeneration = {

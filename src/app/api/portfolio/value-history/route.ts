@@ -10,7 +10,6 @@ import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { normalizePortfolioCurrency } from "@/lib/portfolioFx";
 import {
   buildPortfolioValueChartSeries,
-  calendarMonthsForEvents,
   computeLiveHoldingsValue,
   currentMonthKey,
   isValidMonthKey,
@@ -20,8 +19,7 @@ import {
   pickPortfolioHistorySymbols,
   prepareHistoryBarsForValue,
   classifyPortfolioHistory,
-  quantitiesByMonthFromEvents,
-  quantityTimelineMatchesHoldings,
+  quantityTimelineForChart,
 } from "@/lib/portfolioValueHistory";
 import {
   clearedT212OrdersCacheData,
@@ -32,6 +30,7 @@ import {
   readT212OrdersCache,
   refreshT212OrdersCache,
   shouldRebuildOrdersCacheOnRefresh,
+  t212HoldingSymbolMap,
 } from "@/lib/t212OrderHistory";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 
@@ -87,19 +86,19 @@ export async function GET(request: Request) {
     const thisMonth = currentMonthKey();
     const userRefresh = url.searchParams.get("refresh") === "1";
 
+    const holdingSymbols = t212HoldingSymbolMap(holdings);
+
     if (t212 && isPortfolioEncryptionConfigured() && userRefresh) {
       const scopeDeniedNow = isT212OrdersScopeDenied(ordersError);
-      const previewEvents = mapT212OrderItemsToQtyEvents(orderItems);
-      const previewMonths = calendarMonthsForEvents(previewEvents);
-      let previewTimeline =
-        !ordersPartial && !scopeDeniedNow && previewMonths.length > 0
-          ? quantitiesByMonthFromEvents(previewEvents, previewMonths)
-          : undefined;
-      if (previewTimeline && !quantityTimelineMatchesHoldings(previewTimeline, thisMonth, holdings)) {
-        previewTimeline = undefined;
-      }
+      const previewEvents = mapT212OrderItemsToQtyEvents(orderItems, holdingSymbols);
+      const previewTimeline = quantityTimelineForChart({
+        ordersPartial,
+        scopeDenied: scopeDeniedNow,
+        events: previewEvents,
+        holdings,
+      });
       const timelineCoversEarlierMonth =
-        previewTimeline != null && previewMonths.some((month) => month < thisMonth);
+        previewTimeline != null && [...previewTimeline.keys()].some((month) => month < thisMonth);
       // Same cache clear as a credential reconnect when this walk cannot draw earlier months.
       if (
         shouldRebuildOrdersCacheOnRefresh({
@@ -166,15 +165,13 @@ export async function GET(request: Request) {
     }
 
     const scopeDenied = isT212OrdersScopeDenied(ordersError);
-    const qtyEvents = mapT212OrderItemsToQtyEvents(orderItems);
-    const eventMonths = calendarMonthsForEvents(qtyEvents);
-    let qtyByMonth =
-      !ordersPartial && !scopeDenied && eventMonths.length > 0
-        ? quantitiesByMonthFromEvents(qtyEvents, eventMonths)
-        : undefined;
-    if (qtyByMonth && !quantityTimelineMatchesHoldings(qtyByMonth, thisMonth, holdings)) {
-      qtyByMonth = undefined;
-    }
+    const qtyEvents = mapT212OrderItemsToQtyEvents(orderItems, holdingSymbols);
+    const qtyByMonth = quantityTimelineForChart({
+      ordersPartial,
+      scopeDenied,
+      events: qtyEvents,
+      holdings,
+    });
 
     const quotes =
       holdings.length > 0

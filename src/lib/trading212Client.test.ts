@@ -8,8 +8,12 @@ import {
   normalizeT212OrdersResumePath,
   normalizeT212Position,
   oldestT212HistoryCursorMs,
+  ordersNextPathAvoidingSkip,
   resolveT212NextPagePath,
   retryPathForEmptyHistoryPage,
+  t212CashBalance,
+  t212HoldingsMarketValue,
+  t212OrderItemKey,
   T212_ORDERS_LIMIT10_RESTART_PATH,
   T212_ORDERS_LIMIT10_WALK_PREFIX,
 } from "@/lib/trading212Client";
@@ -220,6 +224,98 @@ describe("nextOrdersPathAfterFalseEnd", () => {
       }),
       null,
     );
+  });
+});
+
+describe("ordersNextPathAvoidingSkip", () => {
+  const page = [
+    {
+      fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 2, type: "TRADE" },
+      order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+    },
+    {
+      fill: { filledAt: "2020-03-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+      order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED", dateModified: "2020-03-01T00:00:00.000Z" },
+    },
+  ];
+  const oldest = String(Date.parse("2020-03-01T00:00:00.000Z"));
+
+  it("keeps a cursor that is not older than the oldest item", () => {
+    const next = `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`;
+    assert.equal(
+      ordersNextPathAvoidingSkip({
+        requestedPath: "/api/v0/equity/history/orders?limit=50",
+        pageItems: page,
+        nextPagePath: next,
+      }),
+      next,
+    );
+  });
+
+  it("rewinds a cursor that jumped past the oldest item on the page", () => {
+    const skipped = String(Date.parse("2019-01-01T00:00:00.000Z"));
+    const fixed = ordersNextPathAvoidingSkip({
+      requestedPath: "/api/v0/equity/history/orders?limit=50",
+      pageItems: page,
+      nextPagePath: `/api/v0/equity/history/orders?cursor=${skipped}&limit=50`,
+    });
+    assert.equal(fixed, `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`);
+  });
+
+  it("does not invent a next page when Trading 212 reported the end", () => {
+    assert.equal(
+      ordersNextPathAvoidingSkip({
+        requestedPath: "/api/v0/equity/history/orders?cursor=1&limit=50",
+        pageItems: page,
+        nextPagePath: null,
+      }),
+      null,
+    );
+  });
+});
+
+describe("t212HoldingsMarketValue", () => {
+  it("uses investments.currentValue when it is already holdings-only", () => {
+    const summary = {
+      totalValue: 10_500,
+      investments: { currentValue: 10_000 },
+      cash: { availableToTrade: 400, inPies: 50, reservedForOrders: 50 },
+    };
+    assert.equal(t212CashBalance(summary), 500);
+    assert.equal(t212HoldingsMarketValue(summary), 10_000);
+  });
+
+  it("removes cash when totalValue and currentValue are the same account total", () => {
+    const summary = {
+      totalValue: 10_500,
+      investments: { currentValue: 10_500 },
+      cash: { availableToTrade: 500 },
+    };
+    assert.equal(t212HoldingsMarketValue(summary), 10_000);
+  });
+
+  it("subtracts cash from totalValue when investments are missing", () => {
+    assert.equal(
+      t212HoldingsMarketValue({
+        totalValue: 8_000,
+        cash: { availableToTrade: 300, reservedForOrders: 200 },
+      }),
+      7_500,
+    );
+  });
+});
+
+describe("t212OrderItemKey", () => {
+  it("keeps two fills that share ticker, time, and quantity when fill ids differ", () => {
+    const a = {
+      fill: { id: 1, filledAt: "2024-06-01T00:00:00.000Z", quantity: 1 },
+      order: { ticker: "AAPL_US_EQ", side: "BUY" },
+    };
+    const b = {
+      fill: { id: 2, filledAt: "2024-06-01T00:00:00.000Z", quantity: 1 },
+      order: { ticker: "AAPL_US_EQ", side: "BUY" },
+    };
+    assert.notEqual(t212OrderItemKey(a), t212OrderItemKey(b));
   });
 });
 

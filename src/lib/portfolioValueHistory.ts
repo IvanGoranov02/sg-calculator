@@ -248,6 +248,31 @@ export function quantityTimelineMatchesHoldings(
   return true;
 }
 
+/**
+ * Quantity timeline safe to draw.
+ * A partial walk is used only once it already matches open positions and reaches
+ * an earlier month — otherwise the chart stays on the live holdings value while
+ * paging continues. A finished walk that does not match is not drawn.
+ */
+export function quantityTimelineForChart(input: {
+  ordersPartial: boolean;
+  scopeDenied: boolean;
+  events: QtyEvent[];
+  holdings: HoldingRow[];
+  now?: Date;
+}): Map<string, Map<string, number>> | undefined {
+  if (input.scopeDenied) return undefined;
+  const now = input.now ?? new Date();
+  const months = calendarMonthsForEvents(input.events, now);
+  if (months.length === 0) return undefined;
+  const qtyByMonth = quantitiesByMonthFromEvents(input.events, months);
+  const thisMonth = currentMonthKey(now);
+  if (!quantityTimelineMatchesHoldings(qtyByMonth, thisMonth, input.holdings)) return undefined;
+  const coversEarlier = months.some((month) => month < thisMonth);
+  if (input.ordersPartial && !coversEarlier) return undefined;
+  return qtyByMonth;
+}
+
 /** Yahoo daily-history fan-out for one value-chart request. */
 export const PORTFOLIO_HISTORY_SYMBOL_CAP = 60;
 
@@ -452,9 +477,13 @@ export function buildPortfolioValueChartSeries(input: {
     if (v != null) computedByMonth.set(thisMonth, v);
   }
 
+  const holdingsBacked = [...computedByMonth.values()].some((v) => v != null);
+  // Account snapshots store the broker total, which includes cash. Once holdings
+  // can be priced, the series is holdings market value only — do not mix those
+  // snapshots back in for the current month or for gaps.
   const months = resolveMonthRange(
     [
-      ...t212ByMonth.keys(),
+      ...(holdingsBacked ? [] : [...t212ByMonth.keys()]),
       ...manualByMonth.keys(),
       ...[...computedByMonth.entries()].filter(([, v]) => v != null).map(([m]) => m),
     ],
@@ -472,7 +501,7 @@ export function buildPortfolioValueChartSeries(input: {
     if (manualByMonth.has(month)) {
       value = manualByMonth.get(month)!;
       source = "manual";
-    } else if (t212ByMonth.has(month)) {
+    } else if (!holdingsBacked && t212ByMonth.has(month)) {
       value = t212ByMonth.get(month)!;
       source = "t212";
     } else {

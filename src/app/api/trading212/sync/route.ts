@@ -6,7 +6,12 @@ import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioE
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
 import { logApiException } from "@/lib/serverDebugLog";
 import { mapT212PositionToHolding, mergeT212HoldingRows } from "@/lib/t212PositionSync";
-import { fetchT212AccountSummary, fetchT212Positions, type T212RequestError } from "@/lib/trading212Client";
+import {
+  fetchT212AccountSummary,
+  fetchT212Positions,
+  t212HoldingsMarketValue,
+  type T212RequestError,
+} from "@/lib/trading212Client";
 import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
 import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
@@ -121,12 +126,13 @@ export async function POST() {
           lastError: null,
         },
       });
-      if (summary?.totalValue != null && Number.isFinite(summary.totalValue) && summary.totalValue >= 0) {
+      const holdingsValue = summary ? t212HoldingsMarketValue(summary) : null;
+      if (holdingsValue != null) {
         await tx.portfolioAccountSnapshot.create({
           data: {
             userId,
-            totalValue: new Prisma.Decimal(summary.totalValue),
-            currency: summary.currency ?? accountCurrency ?? "USD",
+            totalValue: new Prisma.Decimal(holdingsValue),
+            currency: summary?.currency ?? accountCurrency ?? "USD",
           },
         });
       }
@@ -150,7 +156,7 @@ export async function POST() {
       positionsSynced: mergedRows.length,
       skippedDueToManual,
       accountCurrency: summary?.currency ?? null,
-      totalValue: summary?.totalValue ?? null,
+      totalValue: summary ? t212HoldingsMarketValue(summary) : null,
     });
   } catch (e) {
     if (isPrismaInfrastructureError(e)) {
