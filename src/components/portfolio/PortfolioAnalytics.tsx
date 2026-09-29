@@ -264,8 +264,8 @@ function SectorAllocationCard({
   const { t } = useI18n();
   const [hoverName, setHoverName] = useState<string | null>(null);
   const [focusName, setFocusName] = useState<string | null>(null);
-  const [pinnedName, setPinnedName] = useState<string | null>(null);
-  const activeName = hoverName ?? focusName ?? pinnedName;
+  // Expanded only while the pointer is over a sector, or while a wedge has keyboard focus.
+  const activeName = hoverName ?? focusName;
 
   const slices: SectorDonutSlice[] = [];
   for (let i = 0; i < sectors.length; i++) {
@@ -281,10 +281,6 @@ function SectorAllocationCard({
     });
   }
 
-  function togglePinned(name: string) {
-    setPinnedName((current) => (current === name ? null : name));
-  }
-
   return (
     <Card className="border-border bg-card">
       <CardHeader className="pb-3">
@@ -298,11 +294,9 @@ function SectorAllocationCard({
               slices={slices}
               activeName={activeName}
               focusName={focusName}
-              pinnedName={pinnedName}
               chartLabel={t("portfolioAnalytics.sectorChartLabel")}
               onHover={setHoverName}
               onFocusName={setFocusName}
-              onToggle={togglePinned}
             />
           </div>
           <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
@@ -321,7 +315,6 @@ function SectorAllocationCard({
                   dimmed={activeName != null && !hot}
                   onHover={() => setHoverName(s.name)}
                   onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
-                  onActivate={() => togglePinned(s.name)}
                 />
               );
             })}
@@ -370,11 +363,18 @@ function BarRow({
         onActivate && "cursor-pointer",
       )}
       onPointerEnter={(event) => {
-        if (event.pointerType === "mouse") onHover?.();
+        if (event.pointerType === "mouse" || event.pointerType === "pen") onHover?.();
       }}
       onPointerLeave={(event) => {
-        if (event.pointerType === "mouse") onHoverEnd?.();
+        if (event.pointerType === "mouse" || event.pointerType === "pen") onHoverEnd?.();
       }}
+      onPointerDown={(event) => {
+        if (event.pointerType === "touch") onHover?.();
+      }}
+      onPointerUp={(event) => {
+        if (event.pointerType === "touch") onHoverEnd?.();
+      }}
+      onPointerCancel={() => onHoverEnd?.()}
       onClick={onActivate}
     >
       <div className={cn("w-28 shrink-0", !compact && "sm:w-40")}>
