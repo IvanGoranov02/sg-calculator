@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { isTrading212AuthFailure, normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
+const RECENT_DIVIDENDS_LIMIT = 5;
 
 function fmtMoney(n: number, currency: string) {
   try {
@@ -83,6 +84,7 @@ export function PortfolioDividendsView({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
+  const [paymentsExpanded, setPaymentsExpanded] = useState(false);
 
   const load = useCallback(
     async (forceRefresh: boolean) => {
@@ -237,6 +239,10 @@ export function PortfolioDividendsView({
 
   const hasPositions = data.positions.length > 0;
   const hasPayments = data.payments.length > 0;
+  const visiblePayments = paymentsExpanded
+    ? data.payments
+    : data.payments.slice(0, RECENT_DIVIDENDS_LIMIT);
+  const canExpandPayments = data.payments.length > RECENT_DIVIDENDS_LIMIT;
 
   return (
     <div className="relative space-y-6 sm:space-y-8">
@@ -501,12 +507,11 @@ export function PortfolioDividendsView({
 
       {hasPayments ? (
         <Card className="border-border bg-card">
-          <CardHeader className="space-y-1 pb-2">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.paymentsTitle")}</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">{t("portfolioDividends.paymentsHint")}</CardDescription>
           </CardHeader>
           <div className="-mx-px overflow-x-auto">
-            <Table className="min-w-[32rem]">
+            <Table id="recent-dividends" className="min-w-[32rem]">
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead>{t("portfolio.t212DivColTicker")}</TableHead>
@@ -518,7 +523,7 @@ export function PortfolioDividendsView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.payments.slice(0, 50).map((p) => (
+                {visiblePayments.map((p) => (
                   <TableRow key={p.id} className="border-border">
                     <TableCell>
                       <CompanyIdentity
@@ -565,6 +570,28 @@ export function PortfolioDividendsView({
               </TableBody>
             </Table>
           </div>
+          {canExpandPayments ? (
+            <div className="flex justify-center px-4 pb-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                aria-expanded={paymentsExpanded}
+                aria-controls="recent-dividends"
+                onClick={() => setPaymentsExpanded((open) => !open)}
+              >
+                {paymentsExpanded
+                  ? t("portfolioDividends.paymentsCollapse")
+                  : t("portfolioDividends.paymentsExpand")}
+                <ChevronDown
+                  data-icon="inline-end"
+                  className={cn("transition-transform", paymentsExpanded && "rotate-180")}
+                  aria-hidden
+                />
+              </Button>
+            </div>
+          ) : null}
         </Card>
       ) : null}
 
