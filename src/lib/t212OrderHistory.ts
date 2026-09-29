@@ -8,7 +8,15 @@ import type { QtyEvent } from "@/lib/portfolioValueHistory";
 import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import {
   fetchT212HistoryOrders,
+  isOrdersLimit10RestartPath,
+  isOrdersLimit10WalkPath,
   normalizeT212OrdersResumePath,
+  ordersResumeInLimit10Walk,
+  oldestT212HistoryCursorMs,
+  T212_ORDERS_LIMIT10_RESTART_PATH,
+  t212HistoryPageLimit,
+  t212OrderItemKey,
+  t212PathCursor,
   type T212HistoryOrderItem,
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
@@ -32,13 +40,7 @@ const SHARE_ADD_FILL_TYPES = new Set([
   "FOP_CORRECTION",
 ]);
 
-export function t212OrderItemKey(item: T212HistoryOrderItem): string {
-  const ticker = (item.order?.ticker ?? item.order?.instrument?.ticker ?? "").trim();
-  const filledAt = item.fill?.filledAt ?? item.order?.createdAt ?? "";
-  const qty = item.fill?.quantity ?? item.order?.filledQuantity ?? item.order?.quantity ?? "";
-  const side = (item.order?.side ?? "").trim().toUpperCase();
-  return `${ticker}|${filledAt}|${qty}|${side}`;
-}
+export { t212OrderItemKey };
 
 export function mergeT212OrderItems(
   prev: T212HistoryOrderItem[],
@@ -232,19 +234,65 @@ export type OrdersCacheRefreshDecision = {
   nextPagePath: string | null;
   /** This cache already reconstructs months that match open positions. */
   usedQuantityTimeline: boolean;
+  /** Those months start before the current calendar month. */
+  timelineCoversEarlierMonth: boolean;
 };
 
 /**
- * Refresh re-probes `history:orders` when the stored walk cannot draw the chart
- * (missing scope, empty cache, or a finished walk that does not match positions).
- * A healthy timeline stays put. A partial walk with a resume cursor continues.
+ * Refresh re-probes `history:orders` when the stored walk cannot draw earlier months
+ * (missing scope, empty cache, a finished walk that does not match positions,
+ * or a finished walk whose fills only cover the current month).
+ * A timeline that already matches and starts before this month stays put.
+ * A partial walk with a resume cursor continues.
  */
 export function shouldRebuildOrdersCacheOnRefresh(input: OrdersCacheRefreshDecision): boolean {
   if (!input.userRefresh) return false;
   if (input.scopeDenied) return true;
-  if (input.usedQuantityTimeline) return false;
+  if (input.usedQuantityTimeline && input.timelineCoversEarlierMonth) return false;
   if (input.ordersPartial && normalizeT212OrdersResumePath(input.nextPagePath)) return false;
   return true;
+}
+
+/**
+ * A resumed limit=50 cursor (epoch millis of the oldest fill) that comes back empty
+ * is poisoned, including the limit=10 retry of that same cursor. Restart at limit=10
+ * with no cursor. A cursor saved during that walk, or a cursor-less walk that already
+ * returned fills, is a real end — do not start limit=50 again.
+ */
+export function stalledOrdersResumeFallback(input: {
+  prevItems: T212HistoryOrderItem[];
+  resumePath: string | null;
+  fetchedItems: T212HistoryOrderItem[];
+  fetchPartial: boolean;
+}): string | null {
+  if (!input.resumePath || input.fetchPartial) return null;
+  if (isOrdersLimit10WalkPath(input.resumePath)) return null;
+
+  const oldestPrev = oldestT212HistoryCursorMs(input.prevItems);
+  const fetchedOlder =
+    oldestPrev != null &&
+    input.fetchedItems.some((item) => {
+      const ms = oldestT212HistoryCursorMs([item]);
+      return ms != null && ms < oldestPrev;
+    });
+  if (fetchedOlder) return null;
+  if (input.fetchedItems.length > 0 && oldestPrev == null) return null;
+
+  if (isOrdersLimit10RestartPath(input.resumePath)) {
+    if (input.fetchedItems.length === 0) return T212_ORDERS_LIMIT10_RESTART_PATH;
+    return null;
+  }
+
+  const cursor = t212PathCursor(input.resumePath);
+  const poisonedTimestamp =
+    input.fetchedItems.length === 0 &&
+    cursor != null &&
+    oldestPrev != null &&
+    cursor === String(oldestPrev);
+  const limit50FalseEnd =
+    input.fetchedItems.length === 0 && t212HistoryPageLimit(input.resumePath) > 10;
+  if (poisonedTimestamp || limit50FalseEnd) return T212_ORDERS_LIMIT10_RESTART_PATH;
+  return null;
 }
 
 export type T212OrdersCacheWriteDecision = {
@@ -270,6 +318,22 @@ export function decideT212OrdersCacheWrite(
       error: fetch.error ?? "Trading 212 order fetch returned no rows.",
       replaced: false,
       nextPagePath: fetch.nextPagePath ?? prevNextPagePath,
+    };
+  }
+
+  const stalled = stalledOrdersResumeFallback({
+    prevItems,
+    resumePath: prevNextPagePath,
+    fetchedItems: fetch.items,
+    fetchPartial: fetch.partial,
+  });
+  if (stalled) {
+    return {
+      items: mergeT212OrderItems(prevItems, fetch.items),
+      partial: true,
+      error: null,
+      replaced: false,
+      nextPagePath: stalled,
     };
   }
 
@@ -340,9 +404,8 @@ export async function refreshT212OrdersCache(input: {
     },
   });
   const prevItems = parseCachedOrderItems(prev?.ordersCache);
-  const resumePath = prev?.ordersCachePartial
-    ? normalizeT212OrdersResumePath(prev.ordersCacheNextPath)
-    : null;
+  const rawNextPath = prev?.ordersCachePartial ? (prev.ordersCacheNextPath ?? null) : null;
+  const resumePath = normalizeT212OrdersResumePath(rawNextPath);
 
   const generation: OrdersCacheGeneration = {
     apiKeyEnc: input.apiKeyEnc,
@@ -357,6 +420,7 @@ export async function refreshT212OrdersCache(input: {
     maxPages: input.maxPages ?? 6,
     minRequestIntervalMs: input.minRequestIntervalMs ?? 400,
     startPath: resumePath,
+    limit10Walk: ordersResumeInLimit10Walk(rawNextPath),
   });
 
   async function commitIfCurrent(data: Prisma.Trading212ConnectionUpdateInput): Promise<boolean> {
@@ -412,7 +476,7 @@ export async function refreshT212OrdersCache(input: {
     };
   }
 
-  const decision = decideT212OrdersCacheWrite(prevItems, result, resumePath);
+  const decision = decideT212OrdersCacheWrite(prevItems, result, rawNextPath);
 
   const shouldTouchCachedAt =
     !decision.partial &&

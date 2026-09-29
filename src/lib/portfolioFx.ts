@@ -7,6 +7,8 @@ export type PortfolioFxRates = {
   eurPerUsd: number | null;
   /** GBP per 1 USD. */
   gbpPerUsd: number | null;
+  /** USD per 1 unit of another ISO currency (CHF, CAD, AUD, HKD, JPY). */
+  usdPerUnit?: Partial<Record<string, number | null>>;
 };
 
 /** Official BGN↔EUR peg: 1 EUR = 1.95583 BGN (Bulgaria euro adoption, fixed rate). */
@@ -90,9 +92,15 @@ export function listingCurrencyOverride(symbol: string): string | null {
   return inferred === "USD" ? null : inferred;
 }
 
+function usdPerListedUnit(fx: PortfolioFxRates, ccy: string): number | null {
+  const rate = fx.usdPerUnit?.[ccy];
+  return rate != null && rate > 0 ? rate : null;
+}
+
 /**
  * Convert `amount` from `from` to `to`. Returns null if cross-rate is unavailable.
- * Supports USD, EUR, GBP via USD bridge; BGN via the official EUR peg.
+ * Supports USD, EUR, GBP via USD bridge; BGN via the official EUR peg;
+ * other ISO codes when `usdPerUnit` has a positive USD rate.
  */
 export function convertPortfolioMoney(
   amount: number,
@@ -123,6 +131,8 @@ export function convertPortfolioMoney(
       if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return eur / fx.eurPerUsd;
     }
+    const listed = usdPerListedUnit(fx, ccy);
+    if (listed != null) return amt * listed;
     return null;
   };
 
@@ -140,6 +150,8 @@ export function convertPortfolioMoney(
       if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return usd * fx.eurPerUsd * BGN_PER_EUR;
     }
+    const listed = usdPerListedUnit(fx, ccy);
+    if (listed != null) return usd / listed;
     return null;
   };
 

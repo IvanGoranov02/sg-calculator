@@ -13,12 +13,17 @@ import {
   ordersCacheGenerationWhere,
   shouldRebuildOrdersCacheOnRefresh,
   shouldRecordOrdersScopeDenial,
+  stalledOrdersResumeFallback,
   T212_ORDERS_SCOPE_DENIED,
   t212OrderItemKey,
   trading212SettingsOrdersCachePatch,
   type OrdersCacheGeneration,
 } from "@/lib/t212OrderHistory";
-import type { T212HistoryOrderItem } from "@/lib/trading212Client";
+import {
+  T212_ORDERS_LIMIT10_RESTART_PATH,
+  T212_ORDERS_LIMIT10_WALK_PREFIX,
+  type T212HistoryOrderItem,
+} from "@/lib/trading212Client";
 
 describe("t212OrderHistory", () => {
   it("maps buy and sell fills to signed quantity events", () => {
@@ -114,6 +119,101 @@ describe("decideT212OrdersCacheWrite", () => {
     assert.equal(decision.items.length, prev.length + 1);
     assert.equal(decision.partial, false);
     assert.equal(decision.replaced, true);
+    assert.equal(decision.nextPagePath, null);
+  });
+
+  it("does not finish a resumed limit=50 walk that returned no older fills", () => {
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const decision = decideT212OrdersCacheWrite(
+      newest,
+      { items: [], partial: false },
+      "/api/v0/equity/history/orders?cursor=999&limit=50",
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.items.length, 1);
+    assert.equal(decision.nextPagePath, T212_ORDERS_LIMIT10_RESTART_PATH);
+  });
+
+  it("restarts from limit=10 with no cursor when the empty page cursor is the fill time", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt, quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const cursor = String(Date.parse(filledAt));
+    const poisoned = `/api/v0/equity/history/orders?cursor=${cursor}&limit=10`;
+    assert.equal(
+      stalledOrdersResumeFallback({
+        prevItems: newest,
+        resumePath: poisoned,
+        fetchedItems: [],
+        fetchPartial: false,
+      }),
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+    const decision = decideT212OrdersCacheWrite(newest, { items: [], partial: false }, poisoned);
+    assert.equal(decision.partial, true);
+    assert.equal(decision.items.length, 1);
+    assert.equal(decision.nextPagePath, T212_ORDERS_LIMIT10_RESTART_PATH);
+    assert.equal(decision.nextPagePath?.includes(`cursor=${cursor}`), false);
+  });
+
+  it("finishes a cursor-less limit=10 walk that returned fills", () => {
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const older: T212HistoryOrderItem = {
+      fill: { filledAt: "2020-03-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+      order: { ticker: "OLD_US_EQ", side: "BUY", status: "FILLED" },
+    };
+    const decision = decideT212OrdersCacheWrite(
+      newest,
+      { items: [older], partial: false },
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+    assert.equal(decision.partial, false);
+    assert.equal(decision.nextPagePath, null);
+    assert.equal(decision.items.length, 2);
+  });
+
+  it("keeps retrying when the cursor-less limit=10 restart itself returns nothing", () => {
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const decision = decideT212OrdersCacheWrite(
+      newest,
+      { items: [], partial: false },
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.nextPagePath, T212_ORDERS_LIMIT10_RESTART_PATH);
+  });
+
+  it("accepts an empty page once the limit=10 walk cursor was already in progress", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt, quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const cursor = String(Date.parse(filledAt));
+    const walked = `${T212_ORDERS_LIMIT10_WALK_PREFIX}/api/v0/equity/history/orders?cursor=${cursor}&limit=10`;
+    const decision = decideT212OrdersCacheWrite(newest, { items: [], partial: false }, walked);
+    assert.equal(decision.partial, false);
     assert.equal(decision.nextPagePath, null);
   });
 
@@ -323,10 +423,21 @@ describe("shouldRebuildOrdersCacheOnRefresh", () => {
     ordersPartial: false,
     nextPagePath: null,
     usedQuantityTimeline: true,
+    timelineCoversEarlierMonth: true,
   };
 
   it("keeps a healthy timeline on refresh", () => {
     assert.equal(shouldRebuildOrdersCacheOnRefresh(healthy), false);
+  });
+
+  it("restarts a matching timeline that only covers the current month", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        timelineCoversEarlierMonth: false,
+      }),
+      true,
+    );
   });
 
   it("does not rebuild on background loads even when scope was denied", () => {
@@ -381,6 +492,24 @@ describe("shouldRebuildOrdersCacheOnRefresh", () => {
         ...healthy,
         ordersPartial: true,
         nextPagePath: "/api/v0/equity/history/orders?cursor=abc",
+        usedQuantityTimeline: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        ordersPartial: true,
+        nextPagePath: T212_ORDERS_LIMIT10_RESTART_PATH,
+        usedQuantityTimeline: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        ordersPartial: true,
+        nextPagePath: `${T212_ORDERS_LIMIT10_WALK_PREFIX}/api/v0/equity/history/orders?cursor=5&limit=10`,
         usedQuantityTimeline: false,
       }),
       false,

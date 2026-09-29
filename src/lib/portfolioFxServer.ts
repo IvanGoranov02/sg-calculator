@@ -17,11 +17,29 @@ async function usdPerUnit(pairSymbol: string): Promise<number | null> {
   }
 }
 
+const EXTRA_USD_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ["CHF", "CHFUSD=X"],
+  ["CAD", "CADUSD=X"],
+  ["AUD", "AUDUSD=X"],
+  ["HKD", "HKDUSD=X"],
+  ["JPY", "JPYUSD=X"],
+];
+
 /** Fetch spot rates used to convert quote currency ↔ holding currency. */
 export async function fetchPortfolioFxRates(): Promise<PortfolioFxRates> {
-  const [eurUsd, gbpUsd] = await Promise.all([usdPerUnit("EURUSD=X"), usdPerUnit("GBPUSD=X")]);
+  const [eurUsd, gbpUsd, ...extra] = await Promise.all([
+    usdPerUnit("EURUSD=X"),
+    usdPerUnit("GBPUSD=X"),
+    ...EXTRA_USD_PAIRS.map(([, symbol]) => usdPerUnit(symbol)),
+  ]);
+  const usdPerUnitRates: Partial<Record<string, number>> = {};
+  EXTRA_USD_PAIRS.forEach(([ccy], i) => {
+    const rate = extra[i];
+    if (rate != null && rate > 0) usdPerUnitRates[ccy] = rate;
+  });
   return {
     eurPerUsd: eurUsd != null && eurUsd > 0 ? 1 / eurUsd : null,
     gbpPerUsd: gbpUsd != null && gbpUsd > 0 ? 1 / gbpUsd : null,
+    usdPerUnit: usdPerUnitRates,
   };
 }
