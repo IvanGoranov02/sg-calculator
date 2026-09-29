@@ -290,10 +290,10 @@ function SectorAllocationCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
       </CardHeader>
-      <CardContent>
-        {/* Row from md, stack at lg beside holdings, row again from 1440px. The ! wins over lg because Tailwind emits min-[1440px] first. */}
-        <div className="flex flex-col items-center gap-4 md:flex-row md:items-center lg:flex-col min-[1440px]:flex-row!">
-          <div className="w-full max-w-[19.5rem] shrink-0 md:w-[19.5rem] lg:w-full lg:shrink min-[1440px]:w-auto! min-[1440px]:max-w-[19.5rem]! min-[1440px]:min-w-0! min-[1440px]:shrink! min-[1440px]:basis-[19.5rem]!">
+      <CardContent className="@container/sector">
+        {/* Side by side only when this card's content box can hold a full 19.5rem donut plus a real bar track. */}
+        <div className="flex flex-col items-center gap-4 @min-[740px]/sector:flex-row @min-[740px]/sector:items-center">
+          <div className="w-full max-w-[19.5rem] shrink-0 @min-[740px]/sector:w-[19.5rem]">
             <SectorAllocationDonut
               slices={slices}
               activeName={activeName}
@@ -305,7 +305,7 @@ function SectorAllocationCard({
               onToggle={togglePinned}
             />
           </div>
-          <div className="w-full min-w-0 flex-1 space-y-2 min-[1440px]:min-w-[15rem]!" aria-hidden="true">
+          <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
             {sectors.map((s, i) => {
               const pct = allocationPercentOfTotal(totalValue, s.value);
               const hot = activeName === s.name;
