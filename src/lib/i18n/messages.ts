@@ -711,8 +711,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     portfolioDividends: {
       errorLoad: "Could not load dividend data.",
-      yieldOnValue: "Portfolio yield (on value)",
+      yieldOnValue: "Average yield",
       yieldOnCost: "Yield on cost",
+      averageYieldOnCost: "Average yield on cost",
       dps: "Div. per share",
       growth: "DPS growth (TTM)",
       growthUnavailable: "Open stock analysis to populate cache",
@@ -1698,8 +1699,9 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     portfolioDividends: {
       errorLoad: "Неуспешно зареждане на данни за дивиденти.",
-      yieldOnValue: "Доходност на портфейла (спрямо стойност)",
+      yieldOnValue: "Средна доходност",
       yieldOnCost: "Доходност спрямо цена",
+      averageYieldOnCost: "Средна доходност спрямо цена",
       dps: "Див. на акция",
       growth: "Ръст DPS (TTM)",
       growthUnavailable: "Отвори анализ на акцията за кеш",
