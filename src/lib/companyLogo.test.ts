@@ -85,7 +85,7 @@ describe("companyLogo", () => {
   it("maps the Xetra universe of US listings, not a handful of names", () => {
     assert.equal(fmpLogoSymbol("NVD.DE"), "NVDA");
     assert.equal(fmpLogoSymbol("NVDd_EQ"), "NVDA");
-    assert.equal(fmpLogoSymbol("NVDD"), "NVDA");
+    assert.equal(fmpLogoSymbol("NVDD"), "NVDD");
     assert.equal(fmpLogoSymbol("GS2C.DE"), "GME");
     assert.equal(fmpLogoSymbol("GS2Cd_EQ"), "GME");
     assert.equal(fmpLogoSymbol("WDP.DE"), "DIS");
@@ -151,5 +151,30 @@ describe("companyLogo", () => {
     assert.equal(fmpLogoSymbol("BOX"), "BOX");
     assert.equal(fmpLogoSymbol("BOX.DE"), "BDX");
     assert.equal(fmpLogoSymbol("PRLD"), "PRLD");
+  });
+
+  it("does not rewrite bare US ETFs and tickers that already have FMP logos", () => {
+    assert.equal(fmpLogoSymbol("EWG"), "EWG");
+    assert.equal(fmpLogoSymbol("EWL"), "EWL");
+    assert.equal(fmpLogoSymbol("EDC"), "EDC");
+    assert.equal(fmpLogoSymbol("FAS"), "FAS");
+    assert.equal(fmpLogoSymbol("FB"), "FB");
+    assert.equal(fmpLogoSymbol("FRI"), "FRI");
+    assert.equal(fmpLogoSymbol("NVD"), "NVD");
+    assert.equal(fmpLogoSymbol("NVDD"), "NVDD");
+    assert.equal(fmpLogoSymbol("RWL"), "RWL");
+    assert.equal(fmpLogoSymbol("XPH"), "XPH");
+    assert.equal(fmpLogoSymbol("EWG_US_EQ"), "EWG");
+    assert.equal(fmpLogoSymbol("FAS_US_EQ"), "FAS");
+    assert.equal(fmpLogoSymbol("FB_US_EQ"), "FB");
+  });
+
+  it("maps WDP to Disney only on Xetra, not on Euronext", () => {
+    assert.equal(fmpLogoSymbol("WDP.DE"), "DIS");
+    assert.equal(fmpLogoSymbol("WDPd_EQ"), "DIS");
+    assert.equal(fmpLogoSymbol("WDP"), "WDP");
+    assert.equal(fmpLogoSymbol("WDP.BR"), "WDP");
+    assert.equal(fmpLogoSymbol("WDP.AS"), "WDP");
+    assert.equal(fmpLogoSymbol("WDPb_EQ"), "WDP");
   });
 });

@@ -333,7 +333,16 @@ describe("usPrimarySymbolForLogo", () => {
     assert.equal(usPrimarySymbolForLogo("NFL"), "NFL");
     assert.equal(usPrimarySymbolForLogo("NFCD"), "NFLX");
     assert.equal(usPrimarySymbolForLogo("APCD"), "AAPL");
-    assert.equal(usPrimarySymbolForLogo("NVD"), "NVDA");
+    assert.equal(usPrimarySymbolForLogo("NVD"), "NVD");
+    assert.equal(usPrimarySymbolForLogo("NVD", { germanVenue: true }), "NVDA");
+    assert.equal(usPrimarySymbolForLogo("NVDD"), "NVDD");
+    assert.equal(usPrimarySymbolForLogo("NVDD", { germanVenue: true }), "NVDA");
+    assert.equal(usPrimarySymbolForLogo("EWG"), "EWG");
+    assert.equal(usPrimarySymbolForLogo("FAS"), "FAS");
+    assert.equal(usPrimarySymbolForLogo("FB"), "FB");
+    assert.equal(usPrimarySymbolForLogo("WDP"), "WDP");
+    assert.equal(usPrimarySymbolForLogo("WDP", { euVenue: true }), "WDP");
+    assert.equal(usPrimarySymbolForLogo("WDP", { germanVenue: true }), "DIS");
     assert.equal(usPrimarySymbolForLogo("GIS"), "GIS");
     assert.equal(usPrimarySymbolForLogo("GIS", { germanVenue: true }), "GILD");
     assert.equal(usPrimarySymbolForLogo("US0378331005"), "AAPL");

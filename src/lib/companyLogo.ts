@@ -12,6 +12,9 @@ const FMP_LOGO_BASE = "https://financialmodelingprep.com/image-stock";
 /** Xetra, Frankfurt, and other Deutsche Börse venues that use local mnemonics. */
 const GERMAN_LISTING_SUFFIX = /\.(DE|F|DU|HM|MU|BE|HA|XC|XD)$/i;
 
+/** Non-German EU venues. Brussels is .BR; .BE above is Berlin. */
+const EU_LISTING_SUFFIX = /\.(L|PA|AS|BR|MI|SW|MC|VI|ST|OL|CO|HE|WA|IR|LS|IC|AT)$/i;
+
 const ISIN_RE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
 function normalizeLogoSymbolInput(symbol: string): string {
@@ -38,17 +41,28 @@ function isGermanListingSymbol(symbol: string): boolean {
   return false;
 }
 
+function listingVenueFlags(symbol: string): { germanVenue: boolean; euVenue: boolean } {
+  const germanVenue = isGermanListingSymbol(symbol);
+  if (germanVenue) return { germanVenue: true, euVenue: true };
+  if (EU_LISTING_SUFFIX.test(symbol)) return { germanVenue: false, euVenue: true };
+  if (/_EQ$/i.test(symbol)) {
+    const parsed = parseT212Ticker(symbol);
+    if (parsed.yahooSuffix) return { germanVenue: false, euVenue: true };
+  }
+  return { germanVenue: false, euVenue: false };
+}
+
 export function fmpLogoSymbol(symbol: string): string {
   const raw = symbol.trim();
   if (!raw) return "";
   const upper = raw.toUpperCase();
   if (ISIN_RE.test(upper)) return usPrimarySymbolForLogo(upper);
 
-  const germanVenue = isGermanListingSymbol(raw);
+  const venue = listingVenueFlags(raw);
   if (/_EQ$/i.test(raw)) {
-    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw), { germanVenue });
+    return usPrimarySymbolForLogo(germanYahooBaseForLogo(raw), venue);
   }
-  return usPrimarySymbolForLogo(normalizeLogoSymbolInput(symbol), { germanVenue });
+  return usPrimarySymbolForLogo(normalizeLogoSymbolInput(symbol), venue);
 }
 
 export function companyLogoUrl(symbol: string): string {
