@@ -42,6 +42,7 @@ export function SectorAllocationDonut({
   chartLabel,
   onHover,
   onFocusName,
+  onSelect,
 }: {
   slices: SectorDonutSlice[];
   activeName: string | null;
@@ -49,6 +50,8 @@ export function SectorAllocationDonut({
   chartLabel: string;
   onHover: (name: string | null) => void;
   onFocusName: (name: string | null) => void;
+  /** Opens the sector company list. Does not pin the hover expansion. */
+  onSelect: (name: string) => void;
 }) {
   const buttonRefs = useRef<Array<SVGPathElement | null>>([]);
   // Stays set from pointerdown until focus leaves the chart, so a click that
@@ -96,6 +99,7 @@ export function SectorAllocationDonut({
     }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
+      onSelect(slices[index].name);
       return;
     }
     if (event.key === "Escape") {
@@ -207,6 +211,7 @@ export function SectorAllocationDonut({
                 if (event.currentTarget.matches(":focus-visible")) onFocusName(slice.name);
               }}
               onBlur={onSliceBlur}
+              onClick={() => onSelect(slice.name)}
               onKeyDown={(event) => onKeyDown(event, index)}
               onKeyUp={onKeyUp}
             />
