@@ -104,6 +104,32 @@ describe("companyLogo", () => {
     );
   });
 
+  it("resolves the Portfolio screenshot holdings to real FMP logos", () => {
+    // Trading 212 EUR book: local Xetra codes that 404 on FMP must use the US ticker.
+    assert.equal(fmpLogoSymbol("ASML.AS"), "ASML");
+    assert.equal(fmpLogoSymbol("AMZ.DE"), "AMZN");
+    assert.equal(fmpLogoSymbol("FB2A.DE"), "META");
+    assert.equal(fmpLogoSymbol("ABEA.DE"), "GOOGL");
+    assert.equal(fmpLogoSymbol("NFC.DE"), "NFLX");
+    assert.equal(fmpLogoSymbol("M4I.DE"), "MA");
+    assert.equal(fmpLogoSymbol("M4Id_EQ"), "MA");
+    assert.equal(fmpLogoSymbol("UNH.DE"), "UNH");
+    assert.equal(fmpLogoSymbol("MSF.DE"), "MSFT");
+    assert.equal(fmpLogoSymbol("UT8.DE"), "UBER");
+    assert.equal(fmpLogoSymbol("UT8d_EQ"), "UBER");
+    assert.equal(fmpLogoSymbol("87Q.DE"), "DUOL");
+    assert.equal(fmpLogoSymbol("87Qd_EQ"), "DUOL");
+    assert.equal(fmpLogoSymbol("DUOL.L"), "DUOL");
+    assert.equal(
+      companyLogoUrl("UT8.DE"),
+      "https://financialmodelingprep.com/image-stock/UBER.png",
+    );
+    assert.equal(
+      companyLogoUrl("M4I.DE"),
+      "https://financialmodelingprep.com/image-stock/MA.png",
+    );
+  });
+
   it("maps the same ISIN and non-German EU venue symbols to the US ticker", () => {
     assert.equal(fmpLogoSymbol("US0378331005"), "AAPL");
     assert.equal(fmpLogoSymbol("US67066G1040"), "NVDA");
