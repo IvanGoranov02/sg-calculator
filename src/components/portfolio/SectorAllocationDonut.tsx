@@ -51,7 +51,8 @@ export function SectorAllocationDonut({
   onFocusName: (name: string | null) => void;
 }) {
   const buttonRefs = useRef<Array<SVGPathElement | null>>([]);
-  // Pointer clicks focus the wedge; that must not count as keyboard selection.
+  // Stays set from pointerdown until focus leaves the chart, so a click that
+  // focuses after pointerup cannot pin the wedge through :focus-visible.
   const pointerFocusRef = useRef(false);
   const angles = useMemo(
     () => donutSliceAngles(slices.map((slice) => slice.value), { gapDegrees: 0.8, minSweepDegrees: 3 }),
@@ -93,6 +94,10 @@ export function SectorAllocationDonut({
       moveFocus(last);
       return;
     }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       onFocusName(null);
@@ -100,9 +105,14 @@ export function SectorAllocationDonut({
     }
   }
 
+  function onKeyUp(event: KeyboardEvent<SVGPathElement>) {
+    if (event.key === " ") event.preventDefault();
+  }
+
   function onGroupBlur(event: FocusEvent<SVGSVGElement>) {
     const next = event.relatedTarget;
     if (next instanceof Node && event.currentTarget.contains(next)) return;
+    pointerFocusRef.current = false;
     onFocusName(null);
   }
 
@@ -111,13 +121,14 @@ export function SectorAllocationDonut({
   }
 
   function onChartLeave(event: PointerEvent<SVGSVGElement>) {
-    if (!isPointingDevice(event.pointerType)) return;
-    onHover(null);
-    onFocusName(null);
-    const active = document.activeElement;
-    if (active instanceof SVGElement && event.currentTarget.contains(active)) {
-      active.blur();
-    }
+    if (isPointingDevice(event.pointerType)) onHover(null);
+  }
+
+  function onSliceBlur(event: FocusEvent<SVGPathElement>) {
+    const next = event.relatedTarget;
+    const svg = event.currentTarget.ownerSVGElement;
+    if (next instanceof Node && svg?.contains(next)) return;
+    pointerFocusRef.current = false;
   }
 
   const activeIndex = slices.findIndex((slice) => slice.name === activeName);
@@ -177,11 +188,9 @@ export function SectorAllocationDonut({
                 if (event.pointerType === "touch") onHover(slice.name);
               }}
               onPointerUp={(event) => {
-                pointerFocusRef.current = false;
                 if (event.pointerType === "touch") onHover(null);
               }}
               onPointerCancel={() => {
-                pointerFocusRef.current = false;
                 onHover(null);
               }}
               onPointerEnter={(event) => {
@@ -191,17 +200,15 @@ export function SectorAllocationDonut({
                 if (!isPointingDevice(event.pointerType)) return;
                 const next = event.relatedTarget;
                 if (next instanceof Element && next.closest("[data-sector-slice]")) return;
-                // Hole, gap, or off the chart: drop hover and any click focus.
                 onHover(null);
-                onFocusName(null);
               }}
               onFocus={(event) => {
-                const fromPointer = pointerFocusRef.current;
-                pointerFocusRef.current = false;
-                if (fromPointer) return;
+                if (pointerFocusRef.current) return;
                 if (event.currentTarget.matches(":focus-visible")) onFocusName(slice.name);
               }}
+              onBlur={onSliceBlur}
               onKeyDown={(event) => onKeyDown(event, index)}
+              onKeyUp={onKeyUp}
             />
           );
         })}
