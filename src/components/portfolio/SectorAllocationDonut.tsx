@@ -6,15 +6,34 @@ import { donutAnnulusPath, donutSliceAngles } from "@/lib/portfolioAllocation";
 
 export type SectorDonutSlice = {
   name: string;
+  /** Whole-percent label shared with the bar list and the center readout. */
   pctLabel: string;
+  /** One-decimal label drawn outside the ring, like a holdings donut. */
+  ringLabel: string;
   color: string;
   value: number;
 };
 
-const VIEW = 200;
-const CENTER = 100;
-const INNER_RADIUS = 58;
-const OUTER_RADIUS = 80;
+const VIEW = 360;
+const CENTER = 180;
+const INNER_RADIUS = 82;
+const OUTER_RADIUS = 118;
+const LABEL_RADIUS = 136;
+/** Outside percentages need about this much of the ring or they collide. */
+const LABEL_MIN_SWEEP = 16;
+
+function calloutPlacement(midDeg: number): { x: number; y: number; anchor: "start" | "middle" | "end" } {
+  const rad = ((midDeg - 90) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const anchor = cos > 0.4 ? "start" : cos < -0.4 ? "end" : "middle";
+  const radius = anchor === "middle" ? LABEL_RADIUS + 8 : LABEL_RADIUS;
+  return {
+    x: CENTER + radius * cos,
+    y: CENTER + radius * sin,
+    anchor,
+  };
+}
 
 export function SectorAllocationDonut({
   slices,
@@ -37,7 +56,7 @@ export function SectorAllocationDonut({
 }) {
   const buttonRefs = useRef<Array<SVGPathElement | null>>([]);
   const angles = useMemo(
-    () => donutSliceAngles(slices.map((slice) => slice.value), { gapDegrees: 2.6, minSweepDegrees: 4 }),
+    () => donutSliceAngles(slices.map((slice) => slice.value), { gapDegrees: 0.8, minSweepDegrees: 3 }),
     [slices],
   );
 
@@ -102,11 +121,18 @@ export function SectorAllocationDonut({
   const activeAngle = activeIndex >= 0 ? angles[activeIndex] : null;
   const activePath =
     active && activeAngle
-      ? donutAnnulusPath(CENTER, CENTER, INNER_RADIUS, OUTER_RADIUS, activeAngle.startAngle, activeAngle.endAngle)
+      ? donutAnnulusPath(
+          CENTER,
+          CENTER,
+          INNER_RADIUS,
+          OUTER_RADIUS + 6,
+          activeAngle.startAngle,
+          activeAngle.endAngle,
+        )
       : null;
 
   return (
-    <div className="relative mx-auto w-full max-w-[16.5rem]">
+    <div className="relative mx-auto w-full max-w-[19.5rem]">
       <svg
         viewBox={`0 0 ${VIEW} ${VIEW}`}
         role="group"
@@ -140,7 +166,7 @@ export function SectorAllocationDonut({
               className="cursor-pointer outline-none"
               role="button"
               tabIndex={slice.name === tabName ? 0 : -1}
-              aria-label={`${slice.name}, ${slice.pctLabel}`}
+              aria-label={`${slice.name}, ${slice.ringLabel}`}
               aria-pressed={pinnedName === slice.name}
               data-sector-slice={slice.name}
               data-active={slice.name === activeName ? "true" : "false"}
@@ -159,20 +185,43 @@ export function SectorAllocationDonut({
           );
         })}
         {active && activePath ? (
-          <g key={active.name} pointerEvents="none" className="sector-wedge-pop">
-            <path
-              d={activePath}
-              fill={active.color}
-              fillRule="evenodd"
-              stroke={focusName === active.name ? "var(--ring)" : "var(--card)"}
-              strokeWidth={focusName === active.name ? 2.5 : 1.5}
-            />
-          </g>
+          <path
+            pointerEvents="none"
+            d={activePath}
+            fill={active.color}
+            fillRule="evenodd"
+            stroke={focusName === active.name ? "var(--ring)" : "none"}
+            strokeWidth={focusName === active.name ? 2 : 0}
+          />
         ) : null}
+        {slices.map((slice, index) => {
+          const angle = angles[index];
+          const sweep = angle.endAngle - angle.startAngle;
+          const activeWedge = slice.name === activeName;
+          if (!activeWedge && sweep < LABEL_MIN_SWEEP) return null;
+          const mid = sweep >= 359.5 ? 0 : (angle.startAngle + angle.endAngle) / 2;
+          const place = calloutPlacement(mid);
+          return (
+            <text
+              key={`${slice.name}-label`}
+              x={place.x}
+              y={place.y}
+              textAnchor={place.anchor}
+              dominantBaseline="central"
+              fill={activeWedge ? "var(--foreground)" : "var(--muted-foreground)"}
+              fontSize={activeWedge ? 13 : 11}
+              fontWeight={activeWedge ? 600 : 500}
+              className="pointer-events-none font-mono"
+              opacity={activeName != null && !activeWedge ? 0.45 : 1}
+            >
+              {slice.ringLabel}
+            </text>
+          );
+        })}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
         {active ? (
-          <div className="flex w-[46%] flex-col items-center gap-1 text-center">
+          <div className="flex w-[34%] flex-col items-center gap-1 text-center">
             <p className="line-clamp-3 text-[11px] leading-tight font-medium text-foreground">
               <span
                 className="mr-1 inline-block size-1.5 translate-y-[-1px] rounded-full"
@@ -181,7 +230,7 @@ export function SectorAllocationDonut({
               {active.name}
             </p>
             <p className="font-mono text-lg leading-none font-semibold tabular-nums text-foreground">
-              {active.pctLabel}
+              {active.ringLabel}
             </p>
           </div>
         ) : null}

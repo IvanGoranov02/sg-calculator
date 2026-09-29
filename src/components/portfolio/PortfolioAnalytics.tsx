@@ -275,6 +275,7 @@ function SectorAllocationCard({
     slices.push({
       name: sector.name,
       pctLabel: formatAllocationPercent(pct),
+      ringLabel: `${pct.toFixed(1)}%`,
       color: SECTOR_COLORS[i % SECTOR_COLORS.length],
       value: sector.value,
     });

@@ -140,20 +140,6 @@
   .animate-page-in {
     animation: page-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  .sector-wedge-pop {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: sector-wedge-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-@keyframes sector-wedge-pop {
-  from {
-    transform: scale(1);
-  }
-  to {
-    transform: scale(1.065);
-  }
 }
 
 @keyframes page-in {
