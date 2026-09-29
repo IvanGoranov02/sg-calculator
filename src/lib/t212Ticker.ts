@@ -1,3 +1,5 @@
+import crossListingLogos from "@/lib/data/euCrossListingLogos.json";
+
 /**
  * Map Trading 212 instrument tickers (e.g. AAPL_US_EQ, MSFTd_EQ, BPl_EQ) to Yahoo-style symbols.
  *
@@ -89,134 +91,104 @@ const GERMAN_YAHOO_SYMBOL_OVERRIDES: Record<string, string[]> = {
   CCC3: ["CCC3.DE", "CCC3.F"],
 };
 
-/** US Nasdaq symbols that also trade on Xetra/Frankfurt under local or truncated codes. */
-const US_PRIMARY_FOR_GERMAN_LISTINGS: readonly string[] = [
-  "META",
-  "GOOGL",
-  "GOOG",
-  "AAPL",
-  "TSLA",
-  "NFLX",
-  "UBER",
-  "INTC",
-  "PYPL",
-  "KO",
-];
-
 /**
- * German Yahoo 3-char truncations where reverse lookup is unambiguous for logos.
- * Do not add bare 3-char keys that are also valid US tickers (AAP, INT, GOO, …) or
- * wrong Yahoo truncations (ABE, UBE, NFL) — EU duals use explicit local codes (APC, NFC, UBER.DE).
+ * EU listing symbol → US composite ticker for FMP logos.
+ * Built from every US-ISIN common stock on Xetra plus that ISIN's other EU venue symbols.
+ * Keys are omitted when they equal the US ticker. The map is venue-gated: bare US
+ * tickers are not rewritten. Collisions with a different US company (Xetra "BAC" is
+ * Verizon, US "BAC" is Bank of America) live in `ambiguousGermanToUs` and apply only
+ * on German venues. WDP → DIS is German-only (Euronext WDP is Warehouses De Pauw).
  */
-const GERMAN_TRUNCATED_US_LOGO: Record<string, string> = {
-  MSF: "MSFT",
-  AMZ: "AMZN",
+const EU_LISTING_TO_US_LOGO: Record<string, string> = crossListingLogos.euToUs;
+const AMBIGUOUS_GERMAN_TO_US_LOGO: Record<string, string> = crossListingLogos.ambiguousGermanToUs;
+const ISIN_TO_US_LOGO: Record<string, string> = crossListingLogos.isinToUs;
+const LOGO_DO_NOT_STUB = new Set(crossListingLogos.doNotStub);
+const CROSS_LISTED_US_TICKERS = new Set(Object.values(ISIN_TO_US_LOGO));
+
+export type UsLogoResolveOptions = {
+  /** True for Xetra/Frankfurt symbols (.DE/.F or T212 `d`/`f`). Enables mnemonic collisions. */
+  germanVenue?: boolean;
+  /** True for any EU/local listing suffix or non-US T212 venue. */
+  euVenue?: boolean;
 };
 
-function germanOverrideArraysEqual(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i]);
-}
+/**
+ * Letter Xetra mnemonics that tests and holdings pass without a venue suffix.
+ * Live US symbols (EWG, FAS, FB, NVD, WDP, …) are intentionally absent.
+ */
+const BARE_XETRA_LETTER_ALIAS = new Set(["ABEA", "ABEC", "AMZ", "APC", "INL", "MSF", "NFC"]);
 
-let euListingToUsLogoMapCache: Record<string, string> | null = null;
-let localXetraThreeCharStubPrefixesCache: Set<string> | null = null;
+/**
+ * Xetra codes that are a different company on other EU venues.
+ * WDP is Disney on Xetra and Warehouses De Pauw on Euronext.
+ */
+const GERMAN_ONLY_EU_LOGO = new Set(["WDP"]);
 
-/** 3-char local Xetra roots that may appear as `{code}D` after T212 uppercasing (NFCd → NFCD). */
-function localXetraThreeCharStubPrefixes(): Set<string> {
-  if (localXetraThreeCharStubPrefixesCache) return localXetraThreeCharStubPrefixesCache;
-
-  const out = new Set<string>();
-  for (const key of Object.keys(GERMAN_TRUNCATED_US_LOGO)) {
-    if (key.length === 3) out.add(key);
-  }
-  for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
-    const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
-    if (!syms) continue;
-    for (const yahoo of syms) {
-      const germanBase = yahoo.split(".")[0]?.toUpperCase();
-      if (germanBase?.length === 3) out.add(germanBase);
-    }
-  }
-  for (const localKey of Object.keys(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
-    if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
-    const ku = localKey.toUpperCase();
-    if (ku.length === 3) out.add(ku);
-  }
-
-  localXetraThreeCharStubPrefixesCache = out;
-  return out;
-}
-
-/** EU / German listing ticker → US primary symbol for FMP logo URLs. */
-function euListingToUsLogoMap(): Record<string, string> {
-  if (euListingToUsLogoMapCache) return euListingToUsLogoMapCache;
-
-  const map: Record<string, string> = {
-    ...GERMAN_TRUNCATED_US_LOGO,
-  };
-
-  for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
-    const syms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
-    if (!syms) continue;
-    map[usPrimary] = usPrimary;
-    for (const yahoo of syms) {
-      const germanBase = yahoo.split(".")[0]?.toUpperCase();
-      if (germanBase) map[germanBase] = usPrimary;
-    }
-  }
-
-  for (const [localKey, syms] of Object.entries(GERMAN_YAHOO_SYMBOL_OVERRIDES)) {
-    if (US_PRIMARY_FOR_GERMAN_LISTINGS.includes(localKey)) continue;
-    for (const usPrimary of US_PRIMARY_FOR_GERMAN_LISTINGS) {
-      const usSyms = GERMAN_YAHOO_SYMBOL_OVERRIDES[usPrimary];
-      if (usSyms && germanOverrideArraysEqual(usSyms, syms)) {
-        map[localKey.toUpperCase()] = usPrimary;
-        break;
-      }
-    }
-  }
-
-  // Full-ticker Xetra listings (MSFT.DE) and legacy MSFTD / AMZD portfolio keys.
-  map.MSFT = "MSFT";
-  map.AMZN = "AMZN";
-  map.AMZD = "AMZN";
-
-  for (const [key, usPrimary] of Object.entries(map)) {
-    const ku = key.toUpperCase();
-    if (ku.endsWith("D")) continue;
-    const stubKey = `${ku}D`;
-    if (isUppercaseXetraStub(stubKey)) {
-      map[stubKey] = usPrimary;
-    }
-  }
-
-  euListingToUsLogoMapCache = map;
-  return map;
+function isBareLogoAlias(base: string): boolean {
+  if (/[0-9]/.test(base)) return true;
+  return BARE_XETRA_LETTER_ALIAS.has(base);
 }
 
 /**
- * Resolve a normalized ticker (no exchange suffix) to the US primary symbol for FMP logos.
- * Leaves genuine US tickers unchanged (e.g. GILD is not treated as a Xetra stub).
+ * Resolve a normalized ticker (no exchange suffix) or ISIN to the US primary symbol for FMP logos.
+ * The cross-listing map applies to EU/local venues and to explicit local codes (digits or the
+ * small Xetra letter allowlist). Bare US ETFs and tickers that already have an FMP logo stay put.
  */
-export function usPrimarySymbolForLogo(normalizedBase: string): string {
+export function usPrimarySymbolForLogo(
+  normalizedBase: string,
+  opts?: UsLogoResolveOptions,
+): string {
   const base = normalizedBase.trim().toUpperCase();
   if (!base) return base;
 
-  const map = euListingToUsLogoMap();
-  const direct = map[base];
-  if (direct) return direct;
+  const fromIsin = ISIN_TO_US_LOGO[base];
+  if (fromIsin) return fromIsin;
 
-  if (isUppercaseXetraStub(base)) {
-    const stripped = base.slice(0, -1);
-    const fromStub = map[stripped];
-    if (fromStub) return fromStub;
+  const german = Boolean(opts?.germanVenue);
+  const eu = german || Boolean(opts?.euVenue);
+
+  // T212 uppercases the Xetra letter on 3-char mnemonics (APCd → APCD, NFCd → NFCD).
+  // Do not strip that off German venues: NVDD is the Direxion NVDA bear ETF, not Nvidia.
+  if (/^[A-Z0-9]{3}D$/.test(base) && !LOGO_DO_NOT_STUB.has(base)) {
+    const prefix = base.slice(0, -1);
+    const prefixAllowed = german || BARE_XETRA_LETTER_ALIAS.has(prefix);
+    if (prefixAllowed && !(GERMAN_ONLY_EU_LOGO.has(prefix) && !german)) {
+      const fromLocal =
+        EU_LISTING_TO_US_LOGO[prefix] || (german ? AMBIGUOUS_GERMAN_TO_US_LOGO[prefix] : undefined);
+      if (fromLocal) return fromLocal;
+    }
   }
 
-  // T212 lowercase Xetra suffix on known 3-char local codes (NFCd → NFCD), not US tickers (GOOD).
-  if (/^[A-Z0-9]{3}D$/.test(base)) {
-    const prefix = base.slice(0, -1);
-    if (localXetraThreeCharStubPrefixes().has(prefix)) {
-      const fromLocal = map[prefix];
-      if (fromLocal) return fromLocal;
+  const direct = EU_LISTING_TO_US_LOGO[base];
+  if (direct && !(GERMAN_ONLY_EU_LOGO.has(base) && !german)) {
+    if (eu || isBareLogoAlias(base)) return direct;
+  }
+
+  if (german) {
+    const germanAlias = AMBIGUOUS_GERMAN_TO_US_LOGO[base];
+    if (germanAlias) return germanAlias;
+  }
+
+  // The symbol is the US listing itself (GILD, CRWD, BAC, GIS).
+  if (CROSS_LISTED_US_TICKERS.has(base)) return base;
+
+  // SEC tickers that look like a local code plus T212's uppercased "d" (PRLD, KOD).
+  if (LOGO_DO_NOT_STUB.has(base)) return base;
+
+  // Legacy uppercase Xetra stub: FB2AD, MSFTD, AAPLD (US ticker or mnemonic + D).
+  if (isUppercaseXetraStub(base)) {
+    const stripped = base.slice(0, -1);
+    const strippedAllowed =
+      german ||
+      /[0-9]/.test(stripped) ||
+      BARE_XETRA_LETTER_ALIAS.has(stripped) ||
+      CROSS_LISTED_US_TICKERS.has(stripped);
+    if (strippedAllowed && !(GERMAN_ONLY_EU_LOGO.has(stripped) && !german)) {
+      const fromStub =
+        EU_LISTING_TO_US_LOGO[stripped] ||
+        (german ? AMBIGUOUS_GERMAN_TO_US_LOGO[stripped] : undefined) ||
+        (CROSS_LISTED_US_TICKERS.has(stripped) ? stripped : undefined);
+      if (fromStub) return fromStub;
     }
   }
 
