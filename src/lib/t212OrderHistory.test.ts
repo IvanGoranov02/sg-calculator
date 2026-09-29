@@ -533,6 +533,49 @@ describe("order identity and resume rewind", () => {
     assert.equal(rewound, `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`);
   });
 
+  it("rewinds a cursor between createdAt and the fill back to the fill", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const fillMs = Date.parse(filledAt);
+    const items: T212HistoryOrderItem[] = [
+      {
+        fill: { id: 1, filledAt, quantity: 1, type: "TRADE" },
+        order: {
+          ticker: "AAPL_US_EQ",
+          side: "BUY",
+          status: "FILLED",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          dateModified: filledAt,
+        },
+      },
+    ];
+    const between = Date.parse("2024-03-01T00:00:00.000Z");
+    assert.equal(
+      rewindSkippedOrdersResumePath(
+        items,
+        `/api/v0/equity/history/orders?cursor=${between}&limit=50`,
+      ),
+      `/api/v0/equity/history/orders?cursor=${fillMs}&limit=50`,
+    );
+  });
+
+  it("keeps the 1ms step behind the fill when createdAt is earlier", () => {
+    const fillMs = Date.parse("2024-06-01T00:00:00.000Z");
+    const items: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: {
+          ticker: "AAPL_US_EQ",
+          side: "BUY",
+          status: "FILLED",
+          createdAt: "2024-01-01T00:00:00.000Z",
+          dateModified: "2024-06-01T00:00:00.000Z",
+        },
+      },
+    ];
+    const stepped = `/api/v0/equity/history/orders?cursor=${fillMs - 1}&limit=50`;
+    assert.equal(rewindSkippedOrdersResumePath(items, stepped), stepped);
+  });
+
   it("leaves a healthy resume cursor and the limit=10 restart in place", () => {
     const filledAt = "2024-06-01T00:00:00.000Z";
     const items: T212HistoryOrderItem[] = [

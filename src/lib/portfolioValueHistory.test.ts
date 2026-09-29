@@ -239,8 +239,24 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
       "USD",
       ["2024-03"],
     );
-    // MSFT has no bars (typical UCITS gap). 10 * 100 stays on the chart.
+    // MSFT was fetched and came back empty (typical UCITS gap). 10 * 100 stays.
     assert.equal(byMonth.get("2024-03"), 1000);
+  });
+
+  it("returns null when a contributor was never fetched", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      {
+        AAPL: [{ date: "2024-03-28", close: 100 }],
+      },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+      ["2024-03"],
+    );
+    assert.equal(byMonth.get("2024-03"), null);
   });
 
   it("returns null when a name with history has no close in that month", () => {
@@ -338,6 +354,38 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
           { date: "2024-03-29", close: 120 },
         ],
         MSFT: [{ date: "2024-04-30", close: 200 }],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      now: new Date("2024-03-31T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2024-02")?.value, 1100);
+    assert.equal(series.find((p) => p.month === "2024-03"), undefined);
+  });
+
+  it("omits a month that includes a symbol dropped by the history cap", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [
+        { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
+        { symbolYahoo: "MSFT", date: "2024-03-10", delta: 5 },
+      ],
+      ["2024-01", "2024-02", "2024-03"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [],
+      manualRows: [],
+      holdings: [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      historyBySymbol: {
+        AAPL: [
+          { date: "2024-01-31", close: 100 },
+          { date: "2024-02-29", close: 110 },
+          { date: "2024-03-29", close: 120 },
+        ],
       },
       fx: { eurPerUsd: null, gbpPerUsd: null },
       baseCurrency: "USD",

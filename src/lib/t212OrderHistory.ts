@@ -111,6 +111,11 @@ export function rewindSkippedOrdersResumePath(
   const marked = isOrdersLimit10WalkPath(nextPath);
   const bare = stripOrdersLimit10WalkMarker(nextPath);
   if (!bare) return nextPath;
+  const oldest = oldestT212HistoryCursorMs(items);
+  const savedMs = Number(t212PathCursor(bare));
+  // Duplicate-page recovery stores exactly 1ms behind the oldest fill. A real
+  // skip is older than that. Leave the 1ms step so the next poll can move.
+  if (oldest != null && Number.isFinite(savedMs) && savedMs === oldest - 1) return nextPath;
   // The page that produced this cursor is not the cursor itself. Passing the
   // skipped cursor as the request would step backward inside the gap.
   const fixed = ordersNextPathAvoidingSkip({

@@ -265,18 +265,13 @@ function parseTimeMs(raw: string | undefined): number | null {
 }
 
 /**
- * Milliseconds cursor for one order. History is sorted by `dateModified`, which can
- * be older than `filledAt` on cancelled rows. The earliest stamp is how far this
- * item reaches.
+ * Milliseconds cursor for one order. History is ordered by `dateModified`
+ * (fill / execution time), then `filledAt`. `createdAt` is when the order was
+ * placed and is earlier whenever the fill was not immediate. Using it makes a
+ * jumped cursor look healthy and aims the 1ms step at creation time.
  */
 export function t212HistoryOrderTimeMs(item: T212HistoryOrderItem): number | null {
-  const stamps = [
-    parseTimeMs(item.order?.dateModified),
-    parseTimeMs(item.fill?.filledAt),
-    parseTimeMs(item.order?.createdAt),
-  ].filter((ms): ms is number => ms != null);
-  if (stamps.length === 0) return null;
-  return Math.min(...stamps);
+  return parseTimeMs(item.order?.dateModified) ?? parseTimeMs(item.fill?.filledAt);
 }
 
 export function ordersHistoryPathBase(path: string): string {
@@ -704,6 +699,13 @@ export async function fetchAllT212Paginated<T>(
     return tagOrdersLimit10WalkPath(candidate);
   }
 
+  /** A repeated cursor is not the end of history. Resume 1ms behind the oldest fill. */
+  function resumePathBehindOldestFill(items: T[], fromPath: string): string | null {
+    const oldest = oldestT212HistoryCursorMs(items as T212HistoryOrderItem[]);
+    if (oldest == null) return pathForNextPoll(fromPath);
+    return pathForNextPoll(ordersPathWithCursor(fromPath, oldest - 1));
+  }
+
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
     if (lastRequestAt > 0 && elapsed < minRequestIntervalMs) {
@@ -717,6 +719,10 @@ export async function fetchAllT212Paginated<T>(
       const requestedCursor = t212PathCursor(pagePath);
       if (requestedCursor) {
         if (seenOrderCursors.has(requestedCursor)) {
+          // The previous page handed back a cursor we already requested. That is
+          // a stall, not a finished walk — keep paging from the oldest fill.
+          partial = true;
+          nextPagePath = resumePathBehindOldestFill(out, pagePath);
           path = null;
           break;
         }
@@ -763,8 +769,9 @@ export async function fetchAllT212Paginated<T>(
           });
         }
         // Overlap with fills already collected (a limit=10 restart, or a rewound cursor).
-        // Follow a next cursor we have not requested. If this page did not move and
-        // offers no new cursor, step 1ms once; a second stall is the end of history.
+        // Follow a next cursor we have not requested. If this page did not move,
+        // step 1ms once inside this fetch. A second stall stays partial: storing
+        // it as finished would keep a gapped cache on Refresh.
         if (options?.avoidSkippedOrdersCursor && added === 0 && pageItems.length > 0) {
           const nextCursor = normalizedNext ? t212PathCursor(normalizedNext) : null;
           if (normalizedNext && nextCursor && !seenOrderCursors.has(nextCursor)) {
@@ -779,8 +786,19 @@ export async function fetchAllT212Paginated<T>(
               break;
             }
           }
+          partial = true;
+          nextPagePath = resumePathBehindOldestFill(out.length > 0 ? out : pageItems, pagePath);
           path = null;
           break;
+        }
+        if (options?.avoidSkippedOrdersCursor && normalizedNext) {
+          const nextCursor = t212PathCursor(normalizedNext);
+          if (nextCursor && seenOrderCursors.has(nextCursor)) {
+            partial = true;
+            nextPagePath = resumePathBehindOldestFill(out.length > 0 ? out : pageItems, pagePath);
+            path = null;
+            break;
+          }
         }
         const retryPath: string | null = options?.retryEmptyPages
           ? retryPathForEmptyHistoryPage({

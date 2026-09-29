@@ -299,6 +299,26 @@ export function pickPortfolioHistorySymbols(
   return { symbols: ordered.slice(0, max), complete: false };
 }
 
+/**
+ * Bars only when this symbol was part of the history request.
+ * An empty array means Yahoo returned nothing. A missing key means the name
+ * was never fetched (symbol cap), which is not the same as an empty listing.
+ */
+function historyBarsIfFetched(
+  historyBySymbol: Record<string, QuoteHistoryBar[]>,
+  sym: string,
+  holdingYahoo?: string,
+): QuoteHistoryBar[] | undefined {
+  const keys = [sym, holdingYahoo?.trim() ?? "", holdingYahoo?.trim().toUpperCase() ?? ""];
+  for (const key of keys) {
+    if (!key) continue;
+    if (Object.prototype.hasOwnProperty.call(historyBySymbol, key)) {
+      return historyBySymbol[key] ?? [];
+    }
+  }
+  return undefined;
+}
+
 export function computeMonthlyValuesFromHoldings(
   holdings: HoldingRow[],
   historyBySymbol: Record<string, QuoteHistoryBar[]>,
@@ -341,10 +361,16 @@ export function computeMonthlyValuesFromHoldings(
     let blocked = false;
     for (const { sym, qty } of contributors) {
       const h = holdingBySymbol.get(sym);
-      const bars = historyBySymbol[sym] ?? historyBySymbol[h?.symbolYahoo ?? ""] ?? [];
-      // A name with no daily history (some UCITS listings) must not wipe every
-      // month that includes it. A name that has history but no close this month,
-      // or that cannot be converted, still blanks the month so the total is not short.
+      const bars = historyBarsIfFetched(historyBySymbol, sym, h?.symbolYahoo);
+      // A name that was requested and came back empty (some UCITS listings) must
+      // not wipe every month that includes it. A name missing from the fetched
+      // set was dropped by the Yahoo cap — blank the month so the total is not
+      // short. A name that has bars but no close this month, or that cannot be
+      // converted, still blanks the month.
+      if (bars == null) {
+        blocked = true;
+        break;
+      }
       if (bars.length === 0) continue;
       const close = monthEndCloseFromBars(bars, month);
       if (close == null) {
