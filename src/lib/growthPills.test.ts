@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { computeTtmDpsGrowthPills } from "@/lib/dividendMetrics";
 import {
   computeGrowthPills,
+  computePriceHorizonCagr,
   growthPillsForKey,
   growthPillsEntries,
   growthPillColorPositive,
@@ -136,5 +137,85 @@ describe("growthPillsEntries", () => {
     assert.equal(visibleEntries[1]!.pills.threeYear, null);
     assert.ok(fullEntries[0]!.pills.threeYear != null);
     assert.ok(fullEntries[1]!.pills.threeYear != null);
+  });
+});
+
+const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+
+function weekdayBars(startIso: string, endIso: string, closeAt: (iso: string) => number) {
+  const bars: { date: string; close: number }[] = [];
+  const cursor = new Date(`${startIso}T12:00:00Z`);
+  const endMs = Date.parse(`${endIso}T12:00:00Z`);
+  while (cursor.getTime() <= endMs) {
+    const day = cursor.getUTCDay();
+    const iso = cursor.toISOString().slice(0, 10);
+    if (day !== 0 && day !== 6) bars.push({ date: iso, close: closeAt(iso) });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return bars;
+}
+
+function compoundClose(originIso: string, rate: number) {
+  const origin = Date.parse(`${originIso}T12:00:00Z`);
+  return (iso: string) => {
+    const years = (Date.parse(`${iso}T12:00:00Z`) - origin) / MS_PER_YEAR;
+    return 100 * Math.pow(1 + rate, years);
+  };
+}
+
+describe("computePriceHorizonCagr", () => {
+  const end = "2026-09-29";
+
+  it("returns null horizons when history is empty or a single bar", () => {
+    assert.deepEqual(computePriceHorizonCagr([]), { fiveYear: null, tenYear: null });
+    assert.deepEqual(computePriceHorizonCagr([{ date: end, close: 100 }]), {
+      fiveYear: null,
+      tenYear: null,
+    });
+  });
+
+  it("annualizes 5Y and 10Y when public history covers both", () => {
+    const bars = weekdayBars("2010-01-04", end, compoundClose("2010-01-04", 0.1));
+    const pills = computePriceHorizonCagr(bars);
+    assert.ok(pills.fiveYear != null && Math.abs(pills.fiveYear - 10) < 0.08);
+    assert.ok(pills.tenYear != null && Math.abs(pills.tenYear - 10) < 0.08);
+  });
+
+  it("shows 5Y and omits 10Y when history covers about seven years", () => {
+    const bars = weekdayBars("2019-09-27", end, compoundClose("2019-09-27", 0.1));
+    const pills = computePriceHorizonCagr(bars);
+    assert.ok(pills.fiveYear != null && Math.abs(pills.fiveYear - 10) < 0.08);
+    assert.equal(pills.tenYear, null);
+  });
+
+  it("omits both horizons for a listing younger than about five years", () => {
+    const bars = weekdayBars("2024-06-03", end, compoundClose("2024-06-03", 0.2));
+    const pills = computePriceHorizonCagr(bars);
+    assert.equal(pills.fiveYear, null);
+    assert.equal(pills.tenYear, null);
+  });
+
+  it("still counts a horizon when the anniversary falls within the coverage slack", () => {
+    const bars = weekdayBars("2021-10-04", end, compoundClose("2021-10-04", 0.1));
+    const pills = computePriceHorizonCagr(bars);
+    assert.ok(pills.fiveYear != null);
+    assert.equal(pills.tenYear, null);
+  });
+
+  it("omits 5Y when the anniversary price is missing from a gap", () => {
+    const early = weekdayBars("2010-01-04", "2021-08-01", () => 50);
+    const late = weekdayBars("2021-12-01", end, () => 80);
+    const pills = computePriceHorizonCagr([...early, ...late]);
+    assert.equal(pills.fiveYear, null);
+    assert.ok(pills.tenYear != null);
+  });
+
+  it("does not treat a missing horizon as 0%", () => {
+    const bars = weekdayBars("2023-01-03", end, () => 40);
+    const pills = computePriceHorizonCagr(bars);
+    assert.notEqual(pills.fiveYear, 0);
+    assert.notEqual(pills.tenYear, 0);
+    assert.equal(pills.fiveYear, null);
+    assert.equal(pills.tenYear, null);
   });
 });

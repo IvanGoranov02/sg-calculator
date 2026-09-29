@@ -22,7 +22,7 @@ import {
 } from "@/lib/format";
 import type { HistoricalEodBar, PerformanceRange, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { computeGrowthPills } from "@/lib/growthPills";
+import { computeGrowthPills, computePriceHorizonCagr } from "@/lib/growthPills";
 import { cn } from "@/lib/utils";
 
 const rangeIds: PerformanceRange[] = ["1d", "1w", "1m", "1y", "5y", "max"];
@@ -146,6 +146,8 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
     return computeGrowthPills(closes, TRADING_DAYS_PER_YEAR);
   }, [data.historical]);
 
+  const priceHorizons = useMemo(() => computePriceHorizonCagr(data.historical), [data.historical]);
+
   const pillLabels = useMemo(
     () => ({
       oneYear: t("chartsFund.pill1Y"),
@@ -153,6 +155,14 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
       threeYear: t("chartsFund.pill3Y"),
     }),
     [t],
+  );
+
+  const horizonPills = useMemo(
+    () => [
+      { label: t("chartsFund.pill5Y"), pct: priceHorizons.fiveYear },
+      { label: t("chartsFund.pill10Y"), pct: priceHorizons.tenYear },
+    ],
+    [t, priceHorizons],
   );
 
   const volumeLabel =
@@ -275,7 +285,12 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
             </ResponsiveContainer>
           </div>
         </div>
-        <GrowthPillsRow pills={growthPills} labels={pillLabels} className="mt-2" />
+        <GrowthPillsRow
+          pills={growthPills}
+          labels={pillLabels}
+          extraPills={horizonPills}
+          className="mt-2"
+        />
       </CardContent>
     </Card>
   );

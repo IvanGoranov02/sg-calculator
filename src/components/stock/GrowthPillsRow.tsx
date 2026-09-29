@@ -41,14 +41,27 @@ type GrowthPillsRowProps = {
   };
   invertColors?: boolean;
   className?: string;
+  /** Extra horizons rendered only when a finite percent exists (missing periods are omitted). */
+  extraPills?: { label: string; pct: number | null }[];
 };
 
-export function GrowthPillsRow({ pills, labels, invertColors = false, className }: GrowthPillsRowProps) {
+export function GrowthPillsRow({
+  pills,
+  labels,
+  invertColors = false,
+  className,
+  extraPills,
+}: GrowthPillsRowProps) {
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
       <GrowthPill label={labels.oneYear} pct={pills.oneYear} invertColors={invertColors} />
       <GrowthPill label={labels.twoYear} pct={pills.twoYear} invertColors={invertColors} />
       <GrowthPill label={labels.threeYear} pct={pills.threeYear} invertColors={invertColors} />
+      {extraPills?.map((pill) =>
+        pill.pct != null && Number.isFinite(pill.pct) ? (
+          <GrowthPill key={pill.label} label={pill.label} pct={pill.pct} invertColors={invertColors} />
+        ) : null,
+      )}
     </div>
   );
 }
