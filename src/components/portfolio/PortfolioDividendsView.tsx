@@ -296,20 +296,23 @@ export function PortfolioDividendsView({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {mergedEstAnnualParts ? (
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/25 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {preferredCurrency} · {t("portfolio.dividendPerYearLabel")}
-            </p>
-            <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
+            <p className="text-2xl font-semibold tabular-nums leading-tight text-emerald-400">
+              <span className="sr-only">{t("portfolio.dividendPerYearLabel")}: </span>
               {fmtMoney(mergedEstAnnualParts.annual, preferredCurrency)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
               {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(mergedEstAnnualParts.month, preferredCurrency)}
+            </p>
+            <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+              {t("portfolio.dividendPerDayLabel")}: {fmtMoney(mergedEstAnnualParts.day, preferredCurrency)}
             </p>
           </div>
         ) : null}
         {data.summary.portfolioYieldOnValue != null ? (
           <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnValue")}</p>
+            <p className="text-base font-medium leading-snug text-foreground">
+              {t("portfolioDividends.yieldOnValue")}
+            </p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">
               {formatDecimalAsPercent(data.summary.portfolioYieldOnValue / 100)}
             </p>
@@ -317,7 +320,9 @@ export function PortfolioDividendsView({
         ) : null}
         {data.summary.portfolioYieldOnCost != null ? (
           <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-xs text-muted-foreground">{t("portfolioDividends.yieldOnCost")}</p>
+            <p className="text-base font-medium leading-snug text-foreground">
+              {t("portfolioDividends.averageYieldOnCost")}
+            </p>
             <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
               {formatDecimalAsPercent(data.summary.portfolioYieldOnCost / 100)}
             </p>
