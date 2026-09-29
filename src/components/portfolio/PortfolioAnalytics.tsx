@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, PieChart, TrendingUp, Wallet } from "lucide-react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
+import { SectorAllocationDonut, type SectorDonutSlice } from "@/components/portfolio/SectorAllocationDonut";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   allocationPercentOfTotal,
@@ -195,25 +196,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
       </Card>
 
       {a.hasRealSectors ? (
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {a.sectors.map((s, i) => {
-              const pct = allocationPercentOfTotal(a.totalValue, s.value);
-              return (
-                <BarRow
-                  key={s.name}
-                  label={s.name}
-                  pct={pct}
-                  value={formatAllocationPercent(pct)}
-                  color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
-                />
-              );
-            })}
-          </CardContent>
-        </Card>
+        <SectorAllocationCard sectors={a.sectors} totalValue={a.totalValue} />
       ) : null}
     </div>
   );
@@ -271,6 +254,77 @@ function SummaryCard({
   );
 }
 
+function SectorAllocationCard({
+  sectors,
+  totalValue,
+}: {
+  sectors: { name: string; value: number }[];
+  totalValue: number;
+}) {
+  const { t } = useI18n();
+  const [hoverName, setHoverName] = useState<string | null>(null);
+  const [focusName, setFocusName] = useState<string | null>(null);
+  const [pinnedName, setPinnedName] = useState<string | null>(null);
+  const activeName = hoverName ?? focusName ?? pinnedName;
+
+  const slices: SectorDonutSlice[] = [];
+  for (let i = 0; i < sectors.length; i++) {
+    const sector = sectors[i];
+    if (sector.value <= 0) continue;
+    const pct = allocationPercentOfTotal(totalValue, sector.value);
+    slices.push({
+      name: sector.name,
+      pctLabel: formatAllocationPercent(pct),
+      color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+      value: sector.value,
+    });
+  }
+
+  function togglePinned(name: string) {
+    setPinnedName((current) => (current === name ? null : name));
+  }
+
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <SectorAllocationDonut
+          slices={slices}
+          activeName={activeName}
+          focusName={focusName}
+          pinnedName={pinnedName}
+          chartLabel={t("portfolioAnalytics.sectorChartLabel")}
+          onHover={setHoverName}
+          onFocusName={setFocusName}
+          onToggle={togglePinned}
+        />
+        <div className="space-y-2" aria-hidden="true">
+          {sectors.map((s, i) => {
+            const pct = allocationPercentOfTotal(totalValue, s.value);
+            const hot = activeName === s.name;
+            return (
+              <BarRow
+                key={s.name}
+                label={s.name}
+                pct={pct}
+                value={formatAllocationPercent(pct)}
+                color={SECTOR_COLORS[i % SECTOR_COLORS.length]}
+                hot={hot}
+                dimmed={activeName != null && !hot}
+                onHover={() => setHoverName(s.name)}
+                onHoverEnd={() => setHoverName((current) => (current === s.name ? null : current))}
+                onActivate={() => togglePinned(s.name)}
+              />
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function BarRow({
   symbol,
   name,
@@ -278,6 +332,11 @@ function BarRow({
   pct,
   value,
   color,
+  hot,
+  dimmed,
+  onHover,
+  onHoverEnd,
+  onActivate,
 }: {
   symbol?: string;
   name?: string | null;
@@ -285,10 +344,29 @@ function BarRow({
   pct: number;
   value: string;
   color: string;
+  hot?: boolean;
+  dimmed?: boolean;
+  onHover?: () => void;
+  onHoverEnd?: () => void;
+  onActivate?: () => void;
 }) {
   const rowLabel = name?.trim() || symbol || label || "";
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-md px-1 py-0.5 transition-opacity sm:gap-3",
+        hot && "bg-foreground/[0.06]",
+        dimmed && "opacity-45",
+        onActivate && "cursor-pointer",
+      )}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") onHover?.();
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse") onHoverEnd?.();
+      }}
+      onClick={onActivate}
+    >
       <div className="w-28 shrink-0 sm:w-40">
         {symbol ? (
           <CompanyIdentity symbol={symbol} name={name} size="sm" primaryLabel="name" />
@@ -296,7 +374,7 @@ function BarRow({
           <span className="truncate text-xs text-foreground/90" title={rowLabel}>{rowLabel}</span>
         )}
       </div>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/10">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>
       <span className="w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:w-20">{value}</span>
