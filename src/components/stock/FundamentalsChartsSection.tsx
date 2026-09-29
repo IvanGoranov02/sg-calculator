@@ -403,28 +403,24 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
       <div
         className={cn(
-          "sticky top-0 z-20 -mx-4 flex flex-col gap-2 border-b border-border bg-background/90 px-4 py-3 shadow-[0_6px_28px_rgba(0,0,0,0.5)] backdrop-blur-md sm:mx-0 sm:rounded-lg sm:border sm:border-border",
+          "sticky top-0 z-20 -mx-4 flex border-b border-border bg-background/90 px-3 py-2 shadow-[0_6px_28px_rgba(0,0,0,0.5)] backdrop-blur-md sm:mx-0 sm:w-fit sm:rounded-lg sm:border sm:border-border",
         )}
       >
-        <div className="flex w-full flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <Label htmlFor="fund-chart-range" className="text-xs text-muted-foreground">
-              {t("chartsFund.filterTimeRange")}
-            </Label>
-            <select
-              id="fund-chart-range"
-              className={selectClass}
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
-            >
-              <option value="5y">{t("chartsFund.range5y")}</option>
-              <option value="3y">{t("chartsFund.range3y")}</option>
-              <option value="1y">{t("chartsFund.range1y")}</option>
-              <option value="custom">{t("chartsFund.rangeCustom")}</option>
-            </select>
-          </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <select
+            id="fund-chart-range"
+            aria-label={t("chartsFund.filterTimeRange")}
+            className={selectClass}
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value as ChartTimeRange)}
+          >
+            <option value="5y">{t("chartsFund.range5y")}</option>
+            <option value="3y">{t("chartsFund.range3y")}</option>
+            <option value="1y">{t("chartsFund.range1y")}</option>
+            <option value="custom">{t("chartsFund.rangeCustom")}</option>
+          </select>
           {timeRange === "custom" && mergedYearOptions.length > 0 ? (
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fund-from-y" className="text-xs text-muted-foreground">
                   {t("chartsFund.filterFromYear")}
@@ -461,36 +457,33 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               </div>
             </div>
           ) : null}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-muted-foreground">{t("chartsFund.filterGranularity")}</span>
-            <div className="flex flex-wrap gap-1.5">
-              <Button
-                type="button"
-                size="sm"
-                variant={freq === "quarterly" ? "default" : "outline"}
-                className={cn(
-                  "rounded-lg",
-                  freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                )}
-                onClick={() => setFreq("quarterly")}
-                disabled={!hasQuarterly}
-                title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
-              >
-                {t("chartsFund.quarterly")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={freq === "annual" ? "default" : "outline"}
-                className={cn(
-                  "rounded-lg",
-                  freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                )}
-                onClick={() => setFreq("annual")}
-              >
-                {t("chartsFund.annual")}
-              </Button>
-            </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("chartsFund.filterGranularity")}>
+            <Button
+              type="button"
+              size="lg"
+              variant={freq === "quarterly" ? "default" : "outline"}
+              className={cn(
+                "rounded-lg",
+                freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+              )}
+              onClick={() => setFreq("quarterly")}
+              disabled={!hasQuarterly}
+              title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
+            >
+              {t("chartsFund.quarterly")}
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              variant={freq === "annual" ? "default" : "outline"}
+              className={cn(
+                "rounded-lg",
+                freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+              )}
+              onClick={() => setFreq("annual")}
+            >
+              {t("chartsFund.annual")}
+            </Button>
           </div>
         </div>
       </div>
