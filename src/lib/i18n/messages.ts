@@ -562,9 +562,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       fullTitle: "Watchlist full ({max} max)",
       colDip: "vs 200 SMA",
       dipTitle: "Stock Price vs {range} Moving Average",
-      dipSubtitle:
-        "Red-orange: below the lookback SMA. Blue: above. Tooltip also shows vs 200 SMA when available.",
-      dipYAxisLabel: "Price vs {range} SMA",
       dipVsSma: "vs 200 SMA",
       dipVsWindowSma: "vs {range} SMA",
       dipLookback: "Lookback change",
@@ -1552,9 +1549,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       fullTitle: "Списъкът е пълен (макс. {max})",
       colDip: "спр. 200 SMA",
       dipTitle: "Цена на акция спрямо {range} плъзгаща средна",
-      dipSubtitle:
-        "Червено-оранжево: под SMA за периода. Синьо: над. Подсказката показва и спр. 200 SMA, когато е налична.",
-      dipYAxisLabel: "Цена спрямо {range} SMA",
       dipVsSma: "спр. 200 SMA",
       dipVsWindowSma: "спр. {range} SMA",
       dipLookback: "Промяна за периода",
