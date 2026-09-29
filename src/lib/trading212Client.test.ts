@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  fetchT212HistoryOrders,
   normalizePositionsPayload,
   nextOrdersPathAfterFalseEnd,
   normalizeT212NextPagePath,
   normalizeT212OrdersResumePath,
   normalizeT212Position,
   oldestT212HistoryCursorMs,
+  ordersNextPathAvoidingSkip,
+  t212HistoryOrderTimeMs,
   resolveT212NextPagePath,
   retryPathForEmptyHistoryPage,
+  t212CashBalance,
+  t212HoldingsMarketValue,
+  t212OrderItemKey,
   T212_ORDERS_LIMIT10_RESTART_PATH,
   T212_ORDERS_LIMIT10_WALK_PREFIX,
 } from "@/lib/trading212Client";
@@ -179,6 +185,33 @@ describe("nextOrdersPathAfterFalseEnd", () => {
     assert.equal(path?.includes(`cursor=${cursor}`), false);
   });
 
+  it("still matches the fill cursor when createdAt is earlier than the fill", () => {
+    const filledAt = "2020-03-01T00:00:00.000Z";
+    const createdAt = "2019-01-01T00:00:00.000Z";
+    const withCreated: T212HistoryOrderItem = {
+      fill: { filledAt, quantity: 1, type: "TRADE" },
+      order: {
+        ticker: "AAPL_US_EQ",
+        side: "BUY",
+        status: "FILLED",
+        createdAt,
+        dateModified: filledAt,
+      },
+    };
+    const cursor = String(Date.parse(filledAt));
+    assert.equal(t212HistoryOrderTimeMs(withCreated), Date.parse(filledAt));
+    assert.notEqual(t212HistoryOrderTimeMs(withCreated), Date.parse(createdAt));
+    assert.equal(
+      nextOrdersPathAfterFalseEnd({
+        requestedPath: `/api/v0/equity/history/orders?cursor=${cursor}&limit=10`,
+        pageItemCount: 0,
+        collected: [withCreated],
+        triedFallbackPaths: new Set(),
+      }),
+      T212_ORDERS_LIMIT10_RESTART_PATH,
+    );
+  });
+
   it("accepts a short page as the end", () => {
     assert.equal(
       nextOrdersPathAfterFalseEnd({
@@ -220,6 +253,272 @@ describe("nextOrdersPathAfterFalseEnd", () => {
       }),
       null,
     );
+  });
+});
+
+describe("ordersNextPathAvoidingSkip", () => {
+  const page = [
+    {
+      fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 2, type: "TRADE" },
+      order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+    },
+    {
+      fill: { filledAt: "2020-03-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+      order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED", dateModified: "2020-03-01T00:00:00.000Z" },
+    },
+  ];
+  const oldest = String(Date.parse("2020-03-01T00:00:00.000Z"));
+
+  it("keeps a cursor that is not older than the oldest item", () => {
+    const next = `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`;
+    assert.equal(
+      ordersNextPathAvoidingSkip({
+        requestedPath: "/api/v0/equity/history/orders?limit=50",
+        pageItems: page,
+        nextPagePath: next,
+      }),
+      next,
+    );
+  });
+
+  it("rewinds a cursor that jumped past the oldest item on the page", () => {
+    const skipped = String(Date.parse("2019-01-01T00:00:00.000Z"));
+    const fixed = ordersNextPathAvoidingSkip({
+      requestedPath: "/api/v0/equity/history/orders?limit=50",
+      pageItems: page,
+      nextPagePath: `/api/v0/equity/history/orders?cursor=${skipped}&limit=50`,
+    });
+    assert.equal(fixed, `/api/v0/equity/history/orders?cursor=${oldest}&limit=50`);
+  });
+
+  it("does not invent a next page when Trading 212 reported the end", () => {
+    assert.equal(
+      ordersNextPathAvoidingSkip({
+        requestedPath: "/api/v0/equity/history/orders?cursor=1&limit=50",
+        pageItems: page,
+        nextPagePath: null,
+      }),
+      null,
+    );
+  });
+
+  it("rewinds a cursor that sits between createdAt and the fill", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const createdAt = "2024-01-01T00:00:00.000Z";
+    const fillMs = Date.parse(filledAt);
+    const between = String(Date.parse("2024-03-15T00:00:00.000Z"));
+    const row: T212HistoryOrderItem = {
+      fill: { filledAt, quantity: 1, type: "TRADE" },
+      order: {
+        ticker: "AAPL_US_EQ",
+        side: "BUY",
+        status: "FILLED",
+        createdAt,
+        dateModified: filledAt,
+      },
+    };
+    assert.equal(t212HistoryOrderTimeMs(row), fillMs);
+    assert.equal(
+      ordersNextPathAvoidingSkip({
+        requestedPath: "/api/v0/equity/history/orders?limit=50",
+        pageItems: [row],
+        nextPagePath: `/api/v0/equity/history/orders?cursor=${between}&limit=50`,
+      }),
+      `/api/v0/equity/history/orders?cursor=${fillMs}&limit=50`,
+    );
+  });
+
+  it("uses filledAt when dateModified is absent and createdAt is earlier", () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const row: T212HistoryOrderItem = {
+      fill: { filledAt, quantity: 1, type: "TRADE" },
+      order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED", createdAt: "2024-05-01T00:00:00.000Z" },
+    };
+    assert.equal(t212HistoryOrderTimeMs(row), Date.parse(filledAt));
+  });
+
+  it("requests the oldest fill cursor instead of a jumped nextPagePath", async () => {
+    const oldest = "2024-06-01T00:00:00.000Z";
+    const oldestMs = Date.parse(oldest);
+    const skipped = Date.parse("2018-01-01T00:00:00.000Z");
+    const requested: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requested.push(url);
+      const body =
+        requested.length === 1
+          ? {
+              items: [
+                {
+                  fill: { id: 1, filledAt: oldest, quantity: 1, type: "TRADE" },
+                  order: {
+                    ticker: "AAPL_US_EQ",
+                    side: "BUY",
+                    status: "FILLED",
+                    dateModified: oldest,
+                  },
+                },
+              ],
+              nextPagePath: `/api/v0/equity/history/orders?cursor=${skipped}&limit=50`,
+            }
+          : {
+              items: [
+                {
+                  fill: { id: 2, filledAt: "2023-01-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+                  order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+                },
+              ],
+              nextPagePath: null,
+            };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    try {
+      const result = await fetchT212HistoryOrders("live", "k", "s", {
+        maxPages: 2,
+        minRequestIntervalMs: 0,
+      });
+      assert.equal(requested.length, 2);
+      assert.match(requested[1]!, new RegExp(`cursor=${oldestMs}(&|$)`));
+      assert.equal(requested[1]!.includes(String(skipped)), false);
+      assert.equal(result.partial, false);
+      assert.equal(result.items.length, 2);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("stays partial when nextPagePath repeats the cursor, stepping behind the fill", async () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const createdAt = "2024-05-01T00:00:00.000Z";
+    const fillMs = Date.parse(filledAt);
+    const createdMs = Date.parse(createdAt);
+    const start = `/api/v0/equity/history/orders?cursor=${fillMs}&limit=50`;
+    let calls = 0;
+    const original = globalThis.fetch;
+    globalThis.fetch = async () => {
+      calls += 1;
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              fill: { id: 1, filledAt, quantity: 1, type: "TRADE" },
+              order: {
+                ticker: "AAPL_US_EQ",
+                side: "BUY",
+                status: "FILLED",
+                createdAt,
+                dateModified: filledAt,
+              },
+            },
+          ],
+          nextPagePath: start,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    };
+    try {
+      const result = await fetchT212HistoryOrders("live", "k", "s", {
+        maxPages: 2,
+        minRequestIntervalMs: 0,
+        startPath: start,
+      });
+      assert.equal(result.partial, true);
+      assert.equal(result.nextPagePath, `/api/v0/equity/history/orders?cursor=${fillMs - 1}&limit=50`);
+      assert.equal(String(result.nextPagePath).includes(String(createdMs - 1)), false);
+      assert.equal(calls, 1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("stays partial when a second page only repeats fills and the 1ms step was already used", async () => {
+    const filledAt = "2024-06-01T00:00:00.000Z";
+    const createdAt = "2024-05-01T00:00:00.000Z";
+    const fillMs = Date.parse(filledAt);
+    const first = `/api/v0/equity/history/orders?cursor=${fillMs - 1}&limit=50`;
+    const second = `/api/v0/equity/history/orders?cursor=${fillMs}&limit=50`;
+    const item = {
+      fill: { id: 1, filledAt, quantity: 1, type: "TRADE" },
+      order: {
+        ticker: "AAPL_US_EQ",
+        side: "BUY",
+        status: "FILLED",
+        createdAt,
+        dateModified: filledAt,
+      },
+    };
+    const original = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const nextPagePath = url.includes(`cursor=${fillMs}&`) || url.endsWith(`cursor=${fillMs}`)
+        ? first
+        : second;
+      return new Response(JSON.stringify({ items: [item], nextPagePath }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    try {
+      const result = await fetchT212HistoryOrders("live", "k", "s", {
+        maxPages: 2,
+        minRequestIntervalMs: 0,
+        startPath: first,
+      });
+      assert.equal(result.partial, true);
+      assert.equal(result.nextPagePath, `/api/v0/equity/history/orders?cursor=${fillMs - 1}&limit=50`);
+      assert.notEqual(result.nextPagePath, null);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});
+
+describe("t212HoldingsMarketValue", () => {
+  it("uses investments.currentValue when it is already holdings-only", () => {
+    const summary = {
+      totalValue: 10_500,
+      investments: { currentValue: 10_000 },
+      cash: { availableToTrade: 400, inPies: 50, reservedForOrders: 50 },
+    };
+    assert.equal(t212CashBalance(summary), 500);
+    assert.equal(t212HoldingsMarketValue(summary), 10_000);
+  });
+
+  it("removes cash when totalValue and currentValue are the same account total", () => {
+    const summary = {
+      totalValue: 10_500,
+      investments: { currentValue: 10_500 },
+      cash: { availableToTrade: 500 },
+    };
+    assert.equal(t212HoldingsMarketValue(summary), 10_000);
+  });
+
+  it("subtracts cash from totalValue when investments are missing", () => {
+    assert.equal(
+      t212HoldingsMarketValue({
+        totalValue: 8_000,
+        cash: { availableToTrade: 300, reservedForOrders: 200 },
+      }),
+      7_500,
+    );
+  });
+});
+
+describe("t212OrderItemKey", () => {
+  it("keeps two fills that share ticker, time, and quantity when fill ids differ", () => {
+    const a = {
+      fill: { id: 1, filledAt: "2024-06-01T00:00:00.000Z", quantity: 1 },
+      order: { ticker: "AAPL_US_EQ", side: "BUY" },
+    };
+    const b = {
+      fill: { id: 2, filledAt: "2024-06-01T00:00:00.000Z", quantity: 1 },
+      order: { ticker: "AAPL_US_EQ", side: "BUY" },
+    };
+    assert.notEqual(t212OrderItemKey(a), t212OrderItemKey(b));
   });
 });
 

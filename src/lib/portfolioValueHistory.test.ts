@@ -21,6 +21,7 @@ import {
   prepareHistoryBarsForValue,
   pickPortfolioHistorySymbols,
   quantitiesByMonthFromEvents,
+  quantityTimelineForChart,
   quantityTimelineMatchesHoldings,
 } from "@/lib/portfolioValueHistory";
 
@@ -224,7 +225,7 @@ describe("portfolioValueHistory quantity timeline", () => {
 });
 
 describe("computeMonthlyValuesFromHoldings coverage", () => {
-  it("returns null when any contributor lacks a month-end close", () => {
+  it("prices a month from the names that have daily history", () => {
     const byMonth = computeMonthlyValuesFromHoldings(
       [
         { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
@@ -233,6 +234,40 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
       {
         AAPL: [{ date: "2024-03-28", close: 100 }],
         MSFT: [],
+      },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+      ["2024-03"],
+    );
+    // MSFT was fetched and came back empty (typical UCITS gap). 10 * 100 stays.
+    assert.equal(byMonth.get("2024-03"), 1000);
+  });
+
+  it("returns null when a contributor was never fetched", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      {
+        AAPL: [{ date: "2024-03-28", close: 100 }],
+      },
+      { eurPerUsd: null, gbpPerUsd: null },
+      "USD",
+      ["2024-03"],
+    );
+    assert.equal(byMonth.get("2024-03"), null);
+  });
+
+  it("returns null when a name with history has no close in that month", () => {
+    const byMonth = computeMonthlyValuesFromHoldings(
+      [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      {
+        AAPL: [{ date: "2024-03-28", close: 100 }],
+        MSFT: [{ date: "2024-04-30", close: 200 }],
       },
       { eurPerUsd: null, gbpPerUsd: null },
       "USD",
@@ -263,7 +298,7 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
     assert.equal(byMonth.get("2024-03"), 80 * 10 * 1.1 * 0.92);
   });
 
-  it("keeps earlier months when a later month cannot be priced", () => {
+  it("keeps a later month when a new name has no daily history", () => {
     const qtyByMonth = quantitiesByMonthFromEvents(
       [
         { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
@@ -285,6 +320,72 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
           { date: "2024-03-29", close: 120 },
         ],
         MSFT: [],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      now: new Date("2024-03-31T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2024-02")?.value, 1100);
+    // March is AAPL only (120 * 10). MSFT has no bars, so it does not erase the month.
+    assert.equal(series.find((p) => p.month === "2024-03")?.value, 1200);
+  });
+
+  it("omits a month when a held name has history but no close that month", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [
+        { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
+        { symbolYahoo: "MSFT", date: "2024-03-10", delta: 5 },
+      ],
+      ["2024-01", "2024-02", "2024-03"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [],
+      manualRows: [],
+      holdings: [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      historyBySymbol: {
+        AAPL: [
+          { date: "2024-01-31", close: 100 },
+          { date: "2024-02-29", close: 110 },
+          { date: "2024-03-29", close: 120 },
+        ],
+        MSFT: [{ date: "2024-04-30", close: 200 }],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      now: new Date("2024-03-31T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2024-02")?.value, 1100);
+    assert.equal(series.find((p) => p.month === "2024-03"), undefined);
+  });
+
+  it("omits a month that includes a symbol dropped by the history cap", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [
+        { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
+        { symbolYahoo: "MSFT", date: "2024-03-10", delta: 5 },
+      ],
+      ["2024-01", "2024-02", "2024-03"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [],
+      manualRows: [],
+      holdings: [
+        { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
+        { symbolYahoo: "MSFT", quantity: 5, currency: "USD" },
+      ],
+      historyBySymbol: {
+        AAPL: [
+          { date: "2024-01-31", close: 100 },
+          { date: "2024-02-29", close: 110 },
+          { date: "2024-03-29", close: 120 },
+        ],
       },
       fx: { eurPerUsd: null, gbpPerUsd: null },
       baseCurrency: "USD",
@@ -385,7 +486,7 @@ describe("buildPortfolioValueChartSeries", () => {
     assert.equal(series[0]!.source, "computed");
   });
 
-  it("keeps T212 snapshot over computed live value", () => {
+  it("prefers live holdings value over a cash-inclusive T212 snapshot", () => {
     const series = buildPortfolioValueChartSeries({
       snapshots: [
         { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 8000, currency: "EUR" },
@@ -398,8 +499,105 @@ describe("buildPortfolioValueChartSeries", () => {
       liveValue: 4500,
       now: new Date("2026-09-14T12:00:00Z"),
     });
+    assert.equal(series.length, 1);
+    assert.equal(series[0]!.value, 4500);
+    assert.equal(series[0]!.source, "computed");
+  });
+
+  it("keeps a snapshot when holdings cannot be priced", () => {
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [
+        { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 8000, currency: "EUR" },
+      ],
+      manualRows: [],
+      holdings: [],
+      historyBySymbol: {},
+      fx,
+      baseCurrency: "EUR",
+      now: new Date("2026-09-14T12:00:00Z"),
+    });
     assert.equal(series[0]!.value, 8000);
     assert.equal(series[0]!.source, "t212");
+  });
+
+  it("does not mix cash snapshots into a holdings series", () => {
+    const qtyByMonth = quantitiesByMonthFromEvents(
+      [{ symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 }],
+      ["2024-01", "2026-09"],
+    );
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [
+        { capturedAt: new Date("2024-06-15T12:00:00Z"), totalValue: 99_999, currency: "USD" },
+        { capturedAt: new Date("2026-09-10T12:00:00Z"), totalValue: 99_999, currency: "USD" },
+      ],
+      manualRows: [],
+      holdings: [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }],
+      historyBySymbol: {
+        AAPL: [{ date: "2024-01-31", close: 100 }],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      baseCurrency: "USD",
+      qtyByMonth,
+      liveValue: 1500,
+      now: new Date("2026-09-14T12:00:00Z"),
+    });
+    assert.equal(series.find((p) => p.month === "2024-06"), undefined);
+    assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
+    assert.equal(series.find((p) => p.month === "2026-09")?.value, 1500);
+    assert.equal(series.find((p) => p.month === "2026-09")?.source, "computed");
+  });
+});
+
+describe("quantityTimelineForChart", () => {
+  const events = [
+    { symbolYahoo: "AAPL", date: "2024-01-15", delta: 10 },
+  ];
+  const holdings = [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }];
+  const now = new Date("2024-03-15T12:00:00Z");
+
+  it("draws a finished timeline that matches and reaches an earlier month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: false,
+      scopeDenied: false,
+      events,
+      holdings,
+      now,
+    });
+    assert.equal(timeline?.get("2024-01")?.get("AAPL"), 10);
+    assert.equal(timeline?.has("2024-02"), true);
+  });
+
+  it("draws a partial timeline once it already covers an earlier month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: true,
+      scopeDenied: false,
+      events,
+      holdings,
+      now,
+    });
+    assert.ok(timeline);
+  });
+
+  it("hides a partial timeline that only covers the current month", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: true,
+      scopeDenied: false,
+      events: [{ symbolYahoo: "AAPL", date: "2024-03-02", delta: 10 }],
+      holdings,
+      now,
+    });
+    assert.equal(timeline, undefined);
+  });
+
+  it("hides a finished timeline that does not match open positions", () => {
+    const timeline = quantityTimelineForChart({
+      ordersPartial: false,
+      scopeDenied: false,
+      events,
+      holdings: [{ symbolYahoo: "AAPL", quantity: 2, currency: "USD" }],
+      now,
+    });
+    assert.equal(timeline, undefined);
   });
 });
 

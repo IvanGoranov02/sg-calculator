@@ -248,6 +248,31 @@ export function quantityTimelineMatchesHoldings(
   return true;
 }
 
+/**
+ * Quantity timeline safe to draw.
+ * A partial walk is used only once it already matches open positions and reaches
+ * an earlier month — otherwise the chart stays on the live holdings value while
+ * paging continues. A finished walk that does not match is not drawn.
+ */
+export function quantityTimelineForChart(input: {
+  ordersPartial: boolean;
+  scopeDenied: boolean;
+  events: QtyEvent[];
+  holdings: HoldingRow[];
+  now?: Date;
+}): Map<string, Map<string, number>> | undefined {
+  if (input.scopeDenied) return undefined;
+  const now = input.now ?? new Date();
+  const months = calendarMonthsForEvents(input.events, now);
+  if (months.length === 0) return undefined;
+  const qtyByMonth = quantitiesByMonthFromEvents(input.events, months);
+  const thisMonth = currentMonthKey(now);
+  if (!quantityTimelineMatchesHoldings(qtyByMonth, thisMonth, input.holdings)) return undefined;
+  const coversEarlier = months.some((month) => month < thisMonth);
+  if (input.ordersPartial && !coversEarlier) return undefined;
+  return qtyByMonth;
+}
+
 /** Yahoo daily-history fan-out for one value-chart request. */
 export const PORTFOLIO_HISTORY_SYMBOL_CAP = 60;
 
@@ -272,6 +297,26 @@ export function pickPortfolioHistorySymbols(
   }
   if (ordered.length <= max) return { symbols: ordered, complete: true };
   return { symbols: ordered.slice(0, max), complete: false };
+}
+
+/**
+ * Bars only when this symbol was part of the history request.
+ * An empty array means Yahoo returned nothing. A missing key means the name
+ * was never fetched (symbol cap), which is not the same as an empty listing.
+ */
+function historyBarsIfFetched(
+  historyBySymbol: Record<string, QuoteHistoryBar[]>,
+  sym: string,
+  holdingYahoo?: string,
+): QuoteHistoryBar[] | undefined {
+  const keys = [sym, holdingYahoo?.trim() ?? "", holdingYahoo?.trim().toUpperCase() ?? ""];
+  for (const key of keys) {
+    if (!key) continue;
+    if (Object.prototype.hasOwnProperty.call(historyBySymbol, key)) {
+      return historyBySymbol[key] ?? [];
+    }
+  }
+  return undefined;
 }
 
 export function computeMonthlyValuesFromHoldings(
@@ -312,25 +357,37 @@ export function computeMonthlyValuesFromHoldings(
     }
 
     let total = 0;
-    let complete = true;
+    let priced = 0;
+    let blocked = false;
     for (const { sym, qty } of contributors) {
       const h = holdingBySymbol.get(sym);
-      const bars = historyBySymbol[sym] ?? historyBySymbol[h?.symbolYahoo ?? ""] ?? [];
+      const bars = historyBarsIfFetched(historyBySymbol, sym, h?.symbolYahoo);
+      // A name that was requested and came back empty (some UCITS listings) must
+      // not wipe every month that includes it. A name missing from the fetched
+      // set was dropped by the Yahoo cap — blank the month so the total is not
+      // short. A name that has bars but no close this month, or that cannot be
+      // converted, still blanks the month.
+      if (bars == null) {
+        blocked = true;
+        break;
+      }
+      if (bars.length === 0) continue;
       const close = monthEndCloseFromBars(bars, month);
       if (close == null) {
-        complete = false;
+        blocked = true;
         break;
       }
       const pxCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
       const mv = convertPortfolioMoney(close * qty, pxCcy, base, fx);
       if (mv == null) {
-        complete = false;
+        blocked = true;
         break;
       }
       total += mv;
+      priced += 1;
     }
 
-    out.set(month, complete ? total : null);
+    out.set(month, !blocked && priced > 0 ? total : null);
   }
 
   return out;
@@ -452,9 +509,13 @@ export function buildPortfolioValueChartSeries(input: {
     if (v != null) computedByMonth.set(thisMonth, v);
   }
 
+  const holdingsBacked = [...computedByMonth.values()].some((v) => v != null);
+  // Account snapshots store the broker total, which includes cash. Once holdings
+  // can be priced, the series is holdings market value only — do not mix those
+  // snapshots back in for the current month or for gaps.
   const months = resolveMonthRange(
     [
-      ...t212ByMonth.keys(),
+      ...(holdingsBacked ? [] : [...t212ByMonth.keys()]),
       ...manualByMonth.keys(),
       ...[...computedByMonth.entries()].filter(([, v]) => v != null).map(([m]) => m),
     ],
@@ -472,7 +533,7 @@ export function buildPortfolioValueChartSeries(input: {
     if (manualByMonth.has(month)) {
       value = manualByMonth.get(month)!;
       source = "manual";
-    } else if (t212ByMonth.has(month)) {
+    } else if (!holdingsBacked && t212ByMonth.has(month)) {
       value = t212ByMonth.get(month)!;
       source = "t212";
     } else {

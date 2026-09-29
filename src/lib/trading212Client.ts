@@ -39,13 +39,19 @@ export type T212Position = {
 export type T212AccountSummary = {
   currency?: string;
   id?: number;
+  /** Account total. Trading 212 includes cash in this figure. */
   totalValue?: number;
   cash?: {
     availableToTrade?: number;
     inPies?: number;
     reservedForOrders?: number;
   };
-  investments?: { value?: number };
+  investments?: {
+    /** Current market value of open investments. */
+    currentValue?: number;
+    /** Legacy alias some payloads still send. */
+    value?: number;
+  };
 };
 
 export type T212Paginated<T> = {
@@ -63,12 +69,16 @@ export type T212HistoryDividendItem = {
 
 export type T212HistoryOrderItem = {
   fill?: {
+    id?: number | string;
     filledAt?: string;
     quantity?: number;
     type?: string;
   };
   order?: {
+    id?: number | string;
     createdAt?: string;
+    /** Sort key Trading 212 uses for history cursors. */
+    dateModified?: string;
     filledQuantity?: number;
     quantity?: number;
     side?: string;
@@ -80,11 +90,48 @@ export type T212HistoryOrderItem = {
 
 /** Identity for one fill. Limit=10 restarts overlap limit=50 pages; callers dedupe on this. */
 export function t212OrderItemKey(item: T212HistoryOrderItem): string {
+  const fillId = item.fill?.id;
+  if (fillId != null && String(fillId).trim()) return `fill:${String(fillId).trim()}`;
   const ticker = (item.order?.ticker ?? item.order?.instrument?.ticker ?? "").trim();
-  const filledAt = item.fill?.filledAt ?? item.order?.createdAt ?? "";
+  const filledAt = item.fill?.filledAt ?? item.order?.dateModified ?? item.order?.createdAt ?? "";
   const qty = item.fill?.quantity ?? item.order?.filledQuantity ?? item.order?.quantity ?? "";
   const side = (item.order?.side ?? "").trim().toUpperCase();
   return `${ticker}|${filledAt}|${qty}|${side}`;
+}
+
+function finiteMoney(n: number | undefined): number | null {
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/** Cash that must not be counted as portfolio value (free, reserved, and uninvested pie cash). */
+export function t212CashBalance(summary: T212AccountSummary): number {
+  const cash = summary.cash;
+  if (!cash) return 0;
+  let sum = 0;
+  for (const part of [cash.availableToTrade, cash.inPies, cash.reservedForOrders]) {
+    const n = finiteMoney(part);
+    if (n != null) sum += n;
+  }
+  return sum;
+}
+
+/**
+ * Holdings market value only. `totalValue` is the account total and includes cash.
+ * `investments.currentValue` is the open investments. When that field is missing,
+ * or it repeats `totalValue`, cash is removed.
+ */
+export function t212HoldingsMarketValue(summary: T212AccountSummary): number | null {
+  const cash = t212CashBalance(summary);
+  const total = finiteMoney(summary.totalValue);
+  const investments = finiteMoney(summary.investments?.currentValue) ?? finiteMoney(summary.investments?.value);
+  if (investments != null && investments >= 0) {
+    if (total != null && cash > 0 && Math.abs(investments - total) < 0.01) {
+      return Math.max(0, investments - cash);
+    }
+    return investments;
+  }
+  if (total != null && total >= 0) return Math.max(0, total - cash);
+  return null;
 }
 
 export type T212RequestError = Error & {
@@ -211,12 +258,60 @@ export function t212HistoryPageLimit(path: string): number {
   return Number.isFinite(limit) && limit > 0 ? limit : 50;
 }
 
-/** Milliseconds cursor from a fill. Trading 212 history cursors are epoch millis. */
-export function t212HistoryOrderTimeMs(item: T212HistoryOrderItem): number | null {
-  const raw = item.fill?.filledAt ?? item.order?.createdAt;
+function parseTimeMs(raw: string | undefined): number | null {
   if (!raw) return null;
   const ms = Date.parse(raw);
   return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Milliseconds cursor for one order. History is ordered by `dateModified`
+ * (fill / execution time), then `filledAt`. `createdAt` is when the order was
+ * placed and is earlier whenever the fill was not immediate. Using it makes a
+ * jumped cursor look healthy and aims the 1ms step at creation time.
+ */
+export function t212HistoryOrderTimeMs(item: T212HistoryOrderItem): number | null {
+  return parseTimeMs(item.order?.dateModified) ?? parseTimeMs(item.fill?.filledAt);
+}
+
+export function ordersHistoryPathBase(path: string): string {
+  const q = path.indexOf("?");
+  const base = (q >= 0 ? path.slice(0, q) : path).trim();
+  return base || "/api/v0/equity/history/orders";
+}
+
+/** Orders page that continues strictly before `cursorMs`, keeping the page limit. */
+export function ordersPathWithCursor(path: string, cursorMs: number): string {
+  const limit = t212HistoryPageLimit(path);
+  return `${ordersHistoryPathBase(path)}?cursor=${cursorMs}&limit=${limit}`;
+}
+
+/**
+ * Trading 212 builds `nextPagePath` from filled orders only, then returns cancelled
+ * rows on the same page. The cursor jumps older than every item just received and
+ * drops the block in between (smaller than `limit`). Accounts with cancelled orders
+ * lose fills; accounts without them paginate normally.
+ * When the cursor is older than the oldest item on the page, continue from that item.
+ * A cursor at or after the oldest item is left alone so a healthy walk is unchanged.
+ * A missing next path is not rewritten here — the false-end fallback handles it.
+ */
+export function ordersNextPathAvoidingSkip(input: {
+  requestedPath: string;
+  pageItems: T212HistoryOrderItem[];
+  nextPagePath: string | null;
+}): string | null {
+  if (!input.nextPagePath) return null;
+  const oldest = oldestT212HistoryCursorMs(input.pageItems);
+  if (oldest == null) return input.nextPagePath;
+  const apiCursor = t212PathCursor(input.nextPagePath);
+  const apiMs = apiCursor != null ? Number(apiCursor) : NaN;
+  if (!Number.isFinite(apiMs) || apiMs >= oldest) return input.nextPagePath;
+
+  const requested = t212PathCursor(input.requestedPath);
+  const requestedMs = requested != null ? Number(requested) : NaN;
+  let nextMs = oldest;
+  if (Number.isFinite(requestedMs) && nextMs >= requestedMs) nextMs = requestedMs - 1;
+  return ordersPathWithCursor(input.requestedPath, nextMs);
 }
 
 export function oldestT212HistoryCursorMs(items: T212HistoryOrderItem[]): number | null {
@@ -514,6 +609,12 @@ export async function fetchT212HistoryOrders(
       ordersLimit10Walk: limit10Walk,
       falseEndFallbackPath: (input) => nextOrdersPathAfterFalseEnd(input),
       itemKey: t212OrderItemKey,
+      avoidSkippedOrdersCursor: (input) =>
+        ordersNextPathAvoidingSkip({
+          requestedPath: input.requestedPath,
+          pageItems: input.pageItems,
+          nextPagePath: input.nextPagePath,
+        }),
     },
   );
 }
@@ -564,6 +665,15 @@ export async function fetchAllT212Paginated<T>(
     }) => string | null;
     /** Orders only. Resume is already the cursor-less limit=10 walk. */
     ordersLimit10Walk?: boolean;
+    /**
+     * Orders only. Replace a next cursor that is older than every item on the page.
+     * Dividends and positions must not use this.
+     */
+    avoidSkippedOrdersCursor?: (input: {
+      requestedPath: string;
+      pageItems: T[];
+      nextPagePath: string | null;
+    }) => string | null;
   },
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
@@ -581,11 +691,19 @@ export async function fetchAllT212Paginated<T>(
   const retriedCursors = new Set<string>();
   const triedFallbackPaths = new Set<string>();
   const seenItemKeys = new Set<string>();
+  const seenOrderCursors = new Set<string>();
   let limit10Walk = Boolean(options?.ordersLimit10Walk);
 
   function pathForNextPoll(candidate: string | null): string | null {
     if (!candidate || !limit10Walk) return candidate;
     return tagOrdersLimit10WalkPath(candidate);
+  }
+
+  /** A repeated cursor is not the end of history. Resume 1ms behind the oldest fill. */
+  function resumePathBehindOldestFill(items: T[], fromPath: string): string | null {
+    const oldest = oldestT212HistoryCursorMs(items as T212HistoryOrderItem[]);
+    if (oldest == null) return pathForNextPoll(fromPath);
+    return pathForNextPoll(ordersPathWithCursor(fromPath, oldest - 1));
   }
 
   async function waitForSlot(): Promise<void> {
@@ -597,6 +715,20 @@ export async function fetchAllT212Paginated<T>(
 
   while (path && pages < maxPages) {
     const pagePath: string = path;
+    if (options?.avoidSkippedOrdersCursor) {
+      const requestedCursor = t212PathCursor(pagePath);
+      if (requestedCursor) {
+        if (seenOrderCursors.has(requestedCursor)) {
+          // The previous page handed back a cursor we already requested. That is
+          // a stall, not a finished walk — keep paging from the oldest fill.
+          partial = true;
+          nextPagePath = resumePathBehindOldestFill(out, pagePath);
+          path = null;
+          break;
+        }
+        seenOrderCursors.add(requestedCursor);
+      }
+    }
     let retries429 = 0;
     for (;;) {
       try {
@@ -606,6 +738,7 @@ export async function fetchAllT212Paginated<T>(
         const page: T212Paginated<T> = result.data;
         pages += 1;
         const pageItems = Array.isArray(page.items) ? page.items : [];
+        const sizeBefore = out.length;
         if (options?.itemKey) {
           for (const item of pageItems) {
             const key = options.itemKey(item);
@@ -616,6 +749,7 @@ export async function fetchAllT212Paginated<T>(
         } else if (pageItems.length > 0) {
           out.push(...pageItems);
         }
+        const added = out.length - sizeBefore;
         const resolution = resolveT212NextPagePath(page.nextPagePath, {
           requireCursor: options?.requireCursor,
         });
@@ -626,7 +760,46 @@ export async function fetchAllT212Paginated<T>(
           path = null;
           break;
         }
-        const normalizedNext: string | null = resolution.action === "follow" ? resolution.path : null;
+        let normalizedNext: string | null = resolution.action === "follow" ? resolution.path : null;
+        if (options?.avoidSkippedOrdersCursor) {
+          normalizedNext = options.avoidSkippedOrdersCursor({
+            requestedPath: pagePath,
+            pageItems,
+            nextPagePath: normalizedNext,
+          });
+        }
+        // Overlap with fills already collected (a limit=10 restart, or a rewound cursor).
+        // Follow a next cursor we have not requested. If this page did not move,
+        // step 1ms once inside this fetch. A second stall stays partial: storing
+        // it as finished would keep a gapped cache on Refresh.
+        if (options?.avoidSkippedOrdersCursor && added === 0 && pageItems.length > 0) {
+          const nextCursor = normalizedNext ? t212PathCursor(normalizedNext) : null;
+          if (normalizedNext && nextCursor && !seenOrderCursors.has(nextCursor)) {
+            path = normalizedNext;
+            break;
+          }
+          const requestedMs = Number(t212PathCursor(pagePath));
+          if (Number.isFinite(requestedMs)) {
+            const steppedCursor = String(requestedMs - 1);
+            if (!seenOrderCursors.has(steppedCursor)) {
+              path = ordersPathWithCursor(pagePath, requestedMs - 1);
+              break;
+            }
+          }
+          partial = true;
+          nextPagePath = resumePathBehindOldestFill(out.length > 0 ? out : pageItems, pagePath);
+          path = null;
+          break;
+        }
+        if (options?.avoidSkippedOrdersCursor && normalizedNext) {
+          const nextCursor = t212PathCursor(normalizedNext);
+          if (nextCursor && seenOrderCursors.has(nextCursor)) {
+            partial = true;
+            nextPagePath = resumePathBehindOldestFill(out.length > 0 ? out : pageItems, pagePath);
+            path = null;
+            break;
+          }
+        }
         const retryPath: string | null = options?.retryEmptyPages
           ? retryPathForEmptyHistoryPage({
               requestedPath: pagePath,

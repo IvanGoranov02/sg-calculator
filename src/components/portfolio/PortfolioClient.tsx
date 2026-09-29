@@ -244,7 +244,9 @@ export function PortfolioClient() {
 
   const scheduleHistoryPoll = useCallback(() => {
     // history:orders allows 6 requests/minute. Do not start another walk inside that window.
-    if (historyPollCount.current >= 10) {
+    // Two pages per poll. A book with many cancelled orders needs more than 10 polls
+    // before older months exist; stopping early leaves the chart on the current month.
+    if (historyPollCount.current >= 24) {
       setHistoryBackfillPaused(true);
       clearHistoryPoll();
       return;

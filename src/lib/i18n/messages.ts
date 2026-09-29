@@ -682,7 +682,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       tabDividends: "Dividends",
       valueChartTitle: "Portfolio value over time",
       valueChartHint:
-        "Trading 212 account snapshots and live holdings (same currency as the rest of this tab). Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
+        "Holdings market value only — cash is not included. Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
       valueChartLoading: "Loading portfolio history…",
       valueHistoryPartial: "Loading earlier months from Trading 212…",
       valueHistoryPartialPaused:
@@ -1670,7 +1670,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       tabDividends: "Дивиденти",
       valueChartTitle: "Стойност на портфолиото във времето",
       valueChartHint:
-        "Снимки от Trading 212 и текущите позиции (същата валута като таба). Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
+        "Само пазарната стойност на позициите — кешът не влиза. Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
       valueChartLoading: "Зареждане на история на портфолиото…",
       valueHistoryPartial: "Зареждане на по-ранни месеци от Trading 212…",
       valueHistoryPartialPaused:
