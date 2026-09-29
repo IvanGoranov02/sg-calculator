@@ -4,10 +4,12 @@
 
 import type { QuoteHistoryBar } from "@/lib/dipFinder";
 import { normalizeIsoDateString } from "@/lib/format";
+import { PORTFOLIO_HISTORY_SYMBOL_CAP } from "@/lib/portfolioValueHistory";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 const HISTORY_YEARS = 5;
-const MAX_SYMBOLS = 40;
+const MAX_SYMBOLS = PORTFOLIO_HISTORY_SYMBOL_CAP;
+const FETCH_CHUNK = 20;
 
 function toIsoDate(d: unknown): string | null {
   if (d == null || d === "") return null;
@@ -79,15 +81,18 @@ export async function fetchPortfolioQuoteHistory(
     })();
 
   const history: Record<string, QuoteHistoryBar[]> = {};
-  await Promise.all(
-    unique.map(async (sym) => {
-      try {
-        history[sym] = await fetchDailyCloses(sym, from);
-      } catch {
-        history[sym] = [];
-      }
-    }),
-  );
+  for (let i = 0; i < unique.length; i += FETCH_CHUNK) {
+    const chunk = unique.slice(i, i + FETCH_CHUNK);
+    await Promise.all(
+      chunk.map(async (sym) => {
+        try {
+          history[sym] = await fetchDailyCloses(sym, from);
+        } catch {
+          history[sym] = [];
+        }
+      }),
+    );
+  }
 
   return history;
 }

@@ -3,12 +3,15 @@ import { describe, it } from "node:test";
 
 import {
   normalizePositionsPayload,
+  nextOrdersPathAfterFalseEnd,
   normalizeT212NextPagePath,
   normalizeT212OrdersResumePath,
   normalizeT212Position,
+  oldestT212HistoryCursorMs,
   resolveT212NextPagePath,
   retryPathForEmptyHistoryPage,
 } from "@/lib/trading212Client";
+import type { T212HistoryOrderItem } from "@/lib/trading212Client";
 
 describe("normalizePositionsPayload", () => {
   it("accepts a top-level array", () => {
@@ -117,6 +120,72 @@ describe("retryPathForEmptyHistoryPage", () => {
         itemCount: 10,
         nextPagePath: null,
         retriedCursors: new Set(),
+      }),
+      null,
+    );
+  });
+});
+
+describe("nextOrdersPathAfterFalseEnd", () => {
+  const older: T212HistoryOrderItem = {
+    fill: { filledAt: "2020-03-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+    order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+  };
+  const newer: T212HistoryOrderItem = {
+    fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 2, type: "TRADE" },
+    order: { ticker: "MSFT_US_EQ", side: "BUY", status: "FILLED" },
+  };
+  const oldestMs = String(Date.parse("2020-03-01T00:00:00.000Z"));
+
+  it("continues after a full page that claims to be the end", () => {
+    const path = nextOrdersPathAfterFalseEnd({
+      requestedPath: "/api/v0/equity/history/orders?limit=50",
+      pageItemCount: 50,
+      collected: [newer, older],
+      triedFallbackCursors: new Set(),
+    });
+    assert.equal(path, `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`);
+    assert.equal(oldestT212HistoryCursorMs([newer, older]), Number(oldestMs));
+  });
+
+  it("continues after an empty page once the limit=10 retry is exhausted", () => {
+    const path = nextOrdersPathAfterFalseEnd({
+      requestedPath: "/api/v0/equity/history/orders?cursor=999&limit=10",
+      pageItemCount: 0,
+      collected: [newer, older],
+      triedFallbackCursors: new Set(),
+    });
+    assert.equal(path, `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`);
+  });
+
+  it("accepts a short page as the end", () => {
+    assert.equal(
+      nextOrdersPathAfterFalseEnd({
+        requestedPath: "/api/v0/equity/history/orders?cursor=999&limit=50",
+        pageItemCount: 12,
+        collected: [older],
+        triedFallbackCursors: new Set(),
+      }),
+      null,
+    );
+  });
+
+  it("does not request the same timestamp cursor twice", () => {
+    assert.equal(
+      nextOrdersPathAfterFalseEnd({
+        requestedPath: `/api/v0/equity/history/orders?cursor=${oldestMs}&limit=10`,
+        pageItemCount: 0,
+        collected: [older],
+        triedFallbackCursors: new Set(),
+      }),
+      null,
+    );
+    assert.equal(
+      nextOrdersPathAfterFalseEnd({
+        requestedPath: "/api/v0/equity/history/orders?limit=50",
+        pageItemCount: 50,
+        collected: [older],
+        triedFallbackCursors: new Set([oldestMs]),
       }),
       null,
     );

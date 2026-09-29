@@ -98,7 +98,9 @@ export async function GET(request: Request) {
       if (previewTimeline && !quantityTimelineMatchesHoldings(previewTimeline, thisMonth, holdings)) {
         previewTimeline = undefined;
       }
-      // Same cache clear as a credential reconnect, only when this walk cannot draw the chart.
+      const timelineCoversEarlierMonth =
+        previewTimeline != null && previewMonths.some((month) => month < thisMonth);
+      // Same cache clear as a credential reconnect when this walk cannot draw earlier months.
       if (
         shouldRebuildOrdersCacheOnRefresh({
           userRefresh: true,
@@ -106,6 +108,7 @@ export async function GET(request: Request) {
           ordersPartial,
           nextPagePath: ordersNextPath,
           usedQuantityTimeline: previewTimeline != null,
+          timelineCoversEarlierMonth,
         })
       ) {
         await prisma.trading212Connection.updateMany({
@@ -188,13 +191,10 @@ export async function GET(request: Request) {
 
     const liveValue = computeLiveHoldingsValue(holdings, quotes, fx, baseCurrency);
 
-    const { symbols: historySymbols, complete: historyComplete } = pickPortfolioHistorySymbols(
-      holdings,
-      qtyByMonth,
-    );
-    if (qtyByMonth && !historyComplete) {
-      qtyByMonth = undefined;
-    }
+    // Symbols past the Yahoo cap are omitted. Months that still include one stay blank;
+    // months whose holdings are all in the fetched set still plot. Dropping the whole
+    // timeline here left large portfolios stuck on the current month.
+    const { symbols: historySymbols } = pickPortfolioHistorySymbols(holdings, qtyByMonth);
 
     let historyBySymbol: Record<string, import("@/lib/dipFinder").QuoteHistoryBar[]> = {};
     if (qtyByMonth && historySymbols.length > 0) {

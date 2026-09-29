@@ -137,6 +137,74 @@ export function normalizeT212OrdersResumePath(raw: string | null | undefined): s
   return normalizeT212NextPagePath(raw, { requireCursor: true });
 }
 
+export function t212PathCursor(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const qIndex = path.indexOf("?");
+  if (qIndex < 0) return null;
+  const cursor = new URLSearchParams(path.slice(qIndex + 1)).get("cursor")?.trim();
+  return cursor || null;
+}
+
+export function t212HistoryPageLimit(path: string): number {
+  const qIndex = path.indexOf("?");
+  if (qIndex < 0) return 50;
+  const limit = Number(new URLSearchParams(path.slice(qIndex + 1)).get("limit") ?? "50");
+  return Number.isFinite(limit) && limit > 0 ? limit : 50;
+}
+
+/** Milliseconds cursor from a fill. Trading 212 history cursors are epoch millis. */
+export function t212HistoryOrderTimeMs(item: T212HistoryOrderItem): number | null {
+  const raw = item.fill?.filledAt ?? item.order?.createdAt;
+  if (!raw) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function oldestT212HistoryCursorMs(items: T212HistoryOrderItem[]): number | null {
+  let oldest: number | null = null;
+  for (const item of items) {
+    const ms = t212HistoryOrderTimeMs(item);
+    if (ms == null) continue;
+    if (oldest == null || ms < oldest) oldest = ms;
+  }
+  return oldest;
+}
+
+const T212_ORDERS_FALLBACK_LIMIT = 10;
+
+/**
+ * Continue past a false end by asking for fills older than the oldest one we have.
+ * Limit 10: a limit=50 cursor often returns an empty page even when older fills exist.
+ */
+export function ordersFalseEndFallbackPath(items: T212HistoryOrderItem[]): string | null {
+  const ms = oldestT212HistoryCursorMs(items);
+  if (ms == null) return null;
+  return `/api/v0/equity/history/orders?cursor=${ms}&limit=${T212_ORDERS_FALLBACK_LIMIT}`;
+}
+
+/**
+ * A full page, or an empty page, with no next path is not proof that history ended.
+ * A short page is. The same timestamp cursor is not requested twice.
+ */
+export function nextOrdersPathAfterFalseEnd(input: {
+  requestedPath: string;
+  pageItemCount: number;
+  collected: T212HistoryOrderItem[];
+  triedFallbackCursors: ReadonlySet<string>;
+}): string | null {
+  if (input.collected.length === 0) return null;
+  const limit = t212HistoryPageLimit(input.requestedPath);
+  const fullPage = input.pageItemCount >= limit;
+  const emptyPage = input.pageItemCount === 0;
+  if (!fullPage && !emptyPage) return null;
+  const fallback = ordersFalseEndFallbackPath(input.collected);
+  const cursor = t212PathCursor(fallback);
+  if (!fallback || !cursor) return null;
+  if (input.triedFallbackCursors.has(cursor)) return null;
+  if (t212PathCursor(input.requestedPath) === cursor) return null;
+  return fallback;
+}
+
 /**
  * A full page followed by an empty terminal page drops older fills at limit=50.
  * Retry that cursor once at limit=10 before accepting the end of history.
@@ -374,6 +442,7 @@ export async function fetchT212HistoryOrders(
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
       requireCursor: true,
       retryEmptyPages: true,
+      falseEndFallbackPath: (input) => nextOrdersPathAfterFalseEnd(input),
     },
   );
 }
@@ -410,6 +479,16 @@ export async function fetchAllT212Paginated<T>(
     requireCursor?: boolean;
     /** Orders only. Dividends and positions must not retry an empty page at a smaller limit. */
     retryEmptyPages?: boolean;
+    /**
+     * Orders only. When the broker reports the end after a full or empty page,
+     * return a path that walks older fills instead of accepting that end.
+     */
+    falseEndFallbackPath?: (input: {
+      requestedPath: string;
+      pageItemCount: number;
+      collected: T[];
+      triedFallbackCursors: ReadonlySet<string>;
+    }) => string | null;
   },
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
@@ -425,6 +504,7 @@ export async function fetchAllT212Paginated<T>(
   let status: number | undefined;
   let nextPagePath: string | null = null;
   const retriedCursors = new Set<string>();
+  const triedFallbackCursors = new Set<string>();
 
   async function waitForSlot(): Promise<void> {
     const elapsed = Date.now() - lastRequestAt;
@@ -465,11 +545,25 @@ export async function fetchAllT212Paginated<T>(
             })
           : null;
         if (retryPath) {
-          const cursor = new URLSearchParams(pagePath.slice(pagePath.indexOf("?") + 1)).get("cursor");
+          const cursor = t212PathCursor(pagePath);
           if (cursor) retriedCursors.add(cursor);
           path = retryPath;
-        } else {
+        } else if (normalizedNext) {
           path = normalizedNext;
+        } else {
+          const fallback = options?.falseEndFallbackPath?.({
+            requestedPath: pagePath,
+            pageItemCount: pageItems.length,
+            collected: out,
+            triedFallbackCursors,
+          });
+          const fallbackCursor = t212PathCursor(fallback);
+          if (fallback && fallbackCursor) {
+            triedFallbackCursors.add(fallbackCursor);
+            path = fallback;
+          } else {
+            path = null;
+          }
         }
         break;
       } catch (e) {

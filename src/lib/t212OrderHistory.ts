@@ -9,6 +9,10 @@ import { t212TickerToYahoo } from "@/lib/t212Ticker";
 import {
   fetchT212HistoryOrders,
   normalizeT212OrdersResumePath,
+  oldestT212HistoryCursorMs,
+  ordersFalseEndFallbackPath,
+  t212HistoryOrderTimeMs,
+  t212PathCursor,
   type T212HistoryOrderItem,
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
@@ -232,19 +236,50 @@ export type OrdersCacheRefreshDecision = {
   nextPagePath: string | null;
   /** This cache already reconstructs months that match open positions. */
   usedQuantityTimeline: boolean;
+  /** Those months start before the current calendar month. */
+  timelineCoversEarlierMonth: boolean;
 };
 
 /**
- * Refresh re-probes `history:orders` when the stored walk cannot draw the chart
- * (missing scope, empty cache, or a finished walk that does not match positions).
- * A healthy timeline stays put. A partial walk with a resume cursor continues.
+ * Refresh re-probes `history:orders` when the stored walk cannot draw earlier months
+ * (missing scope, empty cache, a finished walk that does not match positions,
+ * or a finished walk whose fills only cover the current month).
+ * A timeline that already matches and starts before this month stays put.
+ * A partial walk with a resume cursor continues.
  */
 export function shouldRebuildOrdersCacheOnRefresh(input: OrdersCacheRefreshDecision): boolean {
   if (!input.userRefresh) return false;
   if (input.scopeDenied) return true;
-  if (input.usedQuantityTimeline) return false;
+  if (input.usedQuantityTimeline && input.timelineCoversEarlierMonth) return false;
   if (input.ordersPartial && normalizeT212OrdersResumePath(input.nextPagePath)) return false;
   return true;
+}
+
+/**
+ * A resumed walk that came back "finished" without any older fill is not finished.
+ * Trading 212 often ends a limit=50 cursor early; the next request uses the oldest
+ * fill time at limit=10. A resume that already was that timestamp cursor is a real end.
+ */
+export function stalledOrdersResumeFallback(input: {
+  prevItems: T212HistoryOrderItem[];
+  resumePath: string | null;
+  fetchedItems: T212HistoryOrderItem[];
+  fetchPartial: boolean;
+}): string | null {
+  if (!input.resumePath || input.fetchPartial) return null;
+  const oldestPrev = oldestT212HistoryCursorMs(input.prevItems);
+  const fetchedOlder =
+    oldestPrev != null &&
+    input.fetchedItems.some((item) => {
+      const ms = t212HistoryOrderTimeMs(item);
+      return ms != null && ms < oldestPrev;
+    });
+  if (fetchedOlder) return null;
+  if (input.fetchedItems.length > 0 && oldestPrev == null) return null;
+  const fallback = ordersFalseEndFallbackPath(input.prevItems);
+  if (!fallback) return null;
+  if (t212PathCursor(input.resumePath) === t212PathCursor(fallback)) return null;
+  return fallback;
 }
 
 export type T212OrdersCacheWriteDecision = {
@@ -270,6 +305,22 @@ export function decideT212OrdersCacheWrite(
       error: fetch.error ?? "Trading 212 order fetch returned no rows.",
       replaced: false,
       nextPagePath: fetch.nextPagePath ?? prevNextPagePath,
+    };
+  }
+
+  const stalled = stalledOrdersResumeFallback({
+    prevItems,
+    resumePath: prevNextPagePath,
+    fetchedItems: fetch.items,
+    fetchPartial: fetch.partial,
+  });
+  if (stalled) {
+    return {
+      items: mergeT212OrderItems(prevItems, fetch.items),
+      partial: true,
+      error: null,
+      replaced: false,
+      nextPagePath: stalled,
     };
   }
 

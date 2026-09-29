@@ -49,6 +49,13 @@ describe("convertPortfolioMoney", () => {
     assert.ok(usd != null);
     assert.equal(Number(usd!.toFixed(2)), 1.18);
   });
+
+  it("converts CHF when a USD rate is present and refuses it otherwise", () => {
+    assert.equal(convertPortfolioMoney(10, "CHF", "EUR", fx), null);
+    const eur = convertPortfolioMoney(10, "CHF", "EUR", { ...fx, usdPerUnit: { CHF: 1.1 } });
+    assert.ok(eur != null);
+    assert.equal(Number(eur!.toFixed(2)), 9.35);
+  });
 });
 
 describe("normalizeQuotePrice", () => {

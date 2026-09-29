@@ -248,11 +248,14 @@ export function quantityTimelineMatchesHoldings(
   return true;
 }
 
+/** Yahoo daily-history fan-out for one value-chart request. */
+export const PORTFOLIO_HISTORY_SYMBOL_CAP = 60;
+
 /** Prioritize live holdings, then event symbols; false when the Yahoo cap would drop names. */
 export function pickPortfolioHistorySymbols(
   holdings: HoldingRow[],
   qtyByMonth?: Map<string, Map<string, number>>,
-  max = 40,
+  max = PORTFOLIO_HISTORY_SYMBOL_CAP,
 ): { symbols: string[]; complete: boolean } {
   const holdingSyms = holdings
     .map((h) => h.symbolYahoo.trim().toUpperCase())

@@ -13,6 +13,7 @@ import {
   ordersCacheGenerationWhere,
   shouldRebuildOrdersCacheOnRefresh,
   shouldRecordOrdersScopeDenial,
+  stalledOrdersResumeFallback,
   T212_ORDERS_SCOPE_DENIED,
   t212OrderItemKey,
   trading212SettingsOrdersCachePatch,
@@ -114,6 +115,48 @@ describe("decideT212OrdersCacheWrite", () => {
     assert.equal(decision.items.length, prev.length + 1);
     assert.equal(decision.partial, false);
     assert.equal(decision.replaced, true);
+    assert.equal(decision.nextPagePath, null);
+  });
+
+  it("does not finish a resumed walk that returned no older fills", () => {
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const decision = decideT212OrdersCacheWrite(
+      newest,
+      { items: [], partial: false },
+      "/api/v0/equity/history/orders?cursor=999&limit=50",
+    );
+    assert.equal(decision.partial, true);
+    assert.equal(decision.items.length, 1);
+    assert.equal(
+      decision.nextPagePath,
+      "/api/v0/equity/history/orders?cursor=1717200000000&limit=10",
+    );
+  });
+
+  it("accepts the end once the timestamp fallback itself returns nothing older", () => {
+    const newest: T212HistoryOrderItem[] = [
+      {
+        fill: { filledAt: "2024-06-01T00:00:00.000Z", quantity: 1, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "FILLED" },
+      },
+    ];
+    const fallback = "/api/v0/equity/history/orders?cursor=1717200000000&limit=10";
+    assert.equal(
+      stalledOrdersResumeFallback({
+        prevItems: newest,
+        resumePath: fallback,
+        fetchedItems: [],
+        fetchPartial: false,
+      }),
+      null,
+    );
+    const decision = decideT212OrdersCacheWrite(newest, { items: [], partial: false }, fallback);
+    assert.equal(decision.partial, false);
     assert.equal(decision.nextPagePath, null);
   });
 
@@ -323,10 +366,21 @@ describe("shouldRebuildOrdersCacheOnRefresh", () => {
     ordersPartial: false,
     nextPagePath: null,
     usedQuantityTimeline: true,
+    timelineCoversEarlierMonth: true,
   };
 
   it("keeps a healthy timeline on refresh", () => {
     assert.equal(shouldRebuildOrdersCacheOnRefresh(healthy), false);
+  });
+
+  it("restarts a matching timeline that only covers the current month", () => {
+    assert.equal(
+      shouldRebuildOrdersCacheOnRefresh({
+        ...healthy,
+        timelineCoversEarlierMonth: false,
+      }),
+      true,
+    );
   });
 
   it("does not rebuild on background loads even when scope was denied", () => {
