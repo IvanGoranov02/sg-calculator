@@ -300,13 +300,11 @@ export function PortfolioDividendsView({
               <span className="sr-only">{t("portfolio.dividendPerYearLabel")}: </span>
               {fmtMoney(mergedEstAnnualParts.annual, preferredCurrency)}
             </p>
-            <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-              {fmtMoney(mergedEstAnnualParts.month, preferredCurrency)}{" "}
-              {t("portfolio.dividendPerMonthLabel")}
+            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+              {t("portfolio.dividendPerMonthLabel")}: {fmtMoney(mergedEstAnnualParts.month, preferredCurrency)}
             </p>
-            <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-              {fmtMoney(mergedEstAnnualParts.day, preferredCurrency)}{" "}
-              {t("portfolio.dividendPerDayLabel")}
+            <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+              {t("portfolio.dividendPerDayLabel")}: {fmtMoney(mergedEstAnnualParts.day, preferredCurrency)}
             </p>
           </div>
         ) : null}
