@@ -17,6 +17,7 @@ import {
   searchQueryForPortfolioSymbol,
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
+import { extractDividendPayDate, extractExDividendDate } from "@/lib/calendarEvents";
 import {
   parseT212Ticker,
   t212QuoteCurrency,
@@ -44,6 +45,14 @@ export type PortfolioQuoteRow = {
   dipVsSma200Pct: number | null;
   /** Next earnings date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
   nextEarnings: string | null;
+  /** Next ex-dividend date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
+  exDividendDate?: string | null;
+  /** Next dividend pay date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
+  dividendPayDate?: string | null;
+  /** Latest cash dividend per share in quote currency (major units, not pence). */
+  lastDividendPerShare?: number | null;
+  /** Date tied to `lastDividendPerShare` (ISO yyyy-mm-dd), when Yahoo publishes one. */
+  lastDividendDate?: string | null;
   /** GICS-style sector from Yahoo assetProfile, when available. */
   sector: string | null;
   /** True when price comes from the broker sync rather than Yahoo. */
@@ -64,6 +73,37 @@ function pickNextEarnings(qs: Record<string, unknown> | null): string | null {
   const upcoming = parsed.filter((d) => d.getTime() >= t0).sort((a, b) => a.getTime() - b.getTime());
   const pick = upcoming[0] ?? parsed[parsed.length - 1];
   return pick.toISOString().slice(0, 10);
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function isoDateOnly(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const d = value instanceof Date ? value : new Date(value as string | number);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+/** Previous cash dividend from quote / quoteSummary (already fetched for portfolio rows). */
+function readLastDividend(
+  raw: Record<string, unknown>,
+  qs: Record<string, unknown> | null,
+): { perShare: number | null; date: string | null } {
+  const dks = (qs?.defaultKeyStatistics ?? null) as Record<string, unknown> | null;
+  const sd = (qs?.summaryDetail ?? null) as Record<string, unknown> | null;
+  const perShare =
+    finiteNumber(dks?.lastDividendValue) ??
+    finiteNumber(raw.lastDividendValue) ??
+    finiteNumber(sd?.lastDividendValue);
+  const date =
+    isoDateOnly(dks?.lastDividendDate) ??
+    isoDateOnly(raw.lastDividendDate) ??
+    isoDateOnly(sd?.lastDividendDate);
+  return { perShare: perShare != null && perShare > 0 ? perShare : null, date };
 }
 
 /** Build candidate Yahoo tickers for a stored portfolio symbol (often T212-derived). */
@@ -187,6 +227,14 @@ function rawQuoteToRow(
     dividendRate = dividendRate / 100;
   }
 
+  const lastDividend = readLastDividend(raw, qs);
+  let lastDividendPerShare = lastDividend.perShare;
+  if (lastDividendPerShare != null && isPenceQuoteCurrency(metrics.currency)) {
+    lastDividendPerShare = lastDividendPerShare / 100;
+  }
+
+  const summaryDetail = (qs?.summaryDetail ?? null) as Record<string, unknown> | null;
+
   const row: PortfolioQuoteRow = {
     symbol: portfolioKey,
     resolvedYahooSymbol: resolvedYahoo,
@@ -199,6 +247,13 @@ function rawQuoteToRow(
     twoHundredDayAverage: sma,
     dipVsSma200Pct,
     nextEarnings: pickNextEarnings(qs),
+    exDividendDate:
+      extractExDividendDate(qs) ??
+      isoDateOnly(summaryDetail?.exDividendDate) ??
+      isoDateOnly(raw.exDividendDate),
+    dividendPayDate: extractDividendPayDate(qs) ?? isoDateOnly(raw.dividendDate),
+    lastDividendPerShare,
+    lastDividendDate: lastDividend.date,
     sector: pickSector(qs),
   };
 
@@ -315,6 +370,10 @@ function mergeBrokerQuote(
     twoHundredDayAverage: dip.twoHundredDayAverage,
     dipVsSma200Pct: dip.dipVsSma200Pct,
     nextEarnings: best?.nextEarnings ?? null,
+    exDividendDate: best?.exDividendDate ?? null,
+    dividendPayDate: best?.dividendPayDate ?? null,
+    lastDividendPerShare: best?.lastDividendPerShare ?? null,
+    lastDividendDate: best?.lastDividendDate ?? null,
     sector: best?.sector ?? null,
     fromBroker: true,
   };
