@@ -97,6 +97,16 @@ function isEarningsSoon(iso: string): boolean {
   return days >= -1 && days <= 14;
 }
 
+type PortfolioView = "holdings" | "dividends";
+
+function portfolioViewHref(view: PortfolioView, search: string): string {
+  const params = new URLSearchParams(search);
+  if (view === "holdings") params.delete("view");
+  else params.set("view", "dividends");
+  const q = params.toString();
+  return q ? `/portfolio?${q}` : "/portfolio";
+}
+
 export function PortfolioClient() {
   const { t, locale } = useI18n();
   const { displayCurrency, dateFormat } = usePreferences();
@@ -104,17 +114,30 @@ export function PortfolioClient() {
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const portfolioView = searchParams.get("view") === "dividends" ? "dividends" : "holdings";
+  const urlView: PortfolioView = searchParams.get("view") === "dividends" ? "dividends" : "holdings";
+  // router.replace updates search params asynchronously. Keep the selected tab local so
+  // a Holdings click is not ignored while Dividends is still the active tab.
+  const [portfolioView, setPortfolioViewState] = useState<PortfolioView>(urlView);
+  const desiredView = useRef<PortfolioView>(urlView);
+  const userChoseView = useRef(false);
   const setPortfolioView = useCallback(
-    (view: "holdings" | "dividends") => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (view === "holdings") params.delete("view");
-      else params.set("view", view);
-      const q = params.toString();
-      router.replace(q ? `/portfolio?${q}` : "/portfolio", { scroll: false });
+    (view: PortfolioView) => {
+      userChoseView.current = true;
+      desiredView.current = view;
+      setPortfolioViewState(view);
+      router.replace(portfolioViewHref(view, window.location.search), { scroll: false });
     },
-    [router, searchParams],
+    [router],
   );
+  useEffect(() => {
+    if (!userChoseView.current) {
+      desiredView.current = urlView;
+      setPortfolioViewState(urlView);
+      return;
+    }
+    if (urlView === desiredView.current) return;
+    router.replace(portfolioViewHref(desiredView.current, window.location.search), { scroll: false });
+  }, [router, urlView]);
   const [holdings, setHoldings] = useState<HoldingApi[]>([]);
   const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
   const [trading212, setTrading212] = useState<Trading212Api | null>(null);
