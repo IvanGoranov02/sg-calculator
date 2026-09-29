@@ -786,15 +786,27 @@ export function PortfolioClient() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{t("portfolio.title")}</h1>
-        </div>
+    <Tabs
+      className="gap-6 sm:gap-8"
+      value={portfolioView}
+      onValueChange={(v) => setPortfolioView(v === "dividends" ? "dividends" : "holdings")}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:gap-x-4">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+          {t("portfolio.title")}
+        </h1>
+        <TabsList className="w-fit">
+          <TabsTrigger className="flex-none px-4" value="holdings">
+            {t("portfolio.tabHoldings")}
+          </TabsTrigger>
+          <TabsTrigger className="flex-none px-4" value="dividends">
+            {t("portfolio.tabDividends")}
+          </TabsTrigger>
+        </TabsList>
         <Button
           type="button"
           variant="outline"
-          className="w-full shrink-0 border-border sm:w-auto"
+          className="shrink-0 border-border"
           onClick={() => void refreshPortfolioData()}
           disabled={loading || syncing}
           aria-busy={loading || syncing}
@@ -804,20 +816,7 @@ export function PortfolioClient() {
         </Button>
       </div>
 
-      <Tabs
-        value={portfolioView}
-        onValueChange={(v) => setPortfolioView(v === "dividends" ? "dividends" : "holdings")}
-      >
-        <TabsList className="mx-auto w-fit self-center">
-          <TabsTrigger className="flex-none px-4" value="holdings">
-            {t("portfolio.tabHoldings")}
-          </TabsTrigger>
-          <TabsTrigger className="flex-none px-4" value="dividends">
-            {t("portfolio.tabDividends")}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="holdings" className="mt-6 space-y-6 sm:space-y-8">
+      <TabsContent value="holdings" className="space-y-6 sm:space-y-8">
       {t212AuthFailure && t212AuthIssueDisplay ? (
         <div
           id="portfolio-page-error"
@@ -1310,7 +1309,7 @@ export function PortfolioClient() {
       </Card>
         </TabsContent>
 
-        <TabsContent value="dividends" className="mt-6">
+        <TabsContent value="dividends">
           <PortfolioDividendsView
             reloadToken={dividendsReloadToken}
             liveRefreshToken={dividendsLiveRefreshToken}
@@ -1318,7 +1317,6 @@ export function PortfolioClient() {
             onDismissTrading212={() => void onDismissTrading212()}
           />
         </TabsContent>
-      </Tabs>
-    </div>
+    </Tabs>
   );
 }
