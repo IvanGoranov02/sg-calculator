@@ -291,9 +291,9 @@ function SectorAllocationCard({
         <CardTitle className="text-base">{t("portfolioAnalytics.sectorTitle")}</CardTitle>
       </CardHeader>
       <CardContent>
-        {/* Below md the card is narrow, so the donut stacks above the bars. */}
-        <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:gap-4">
-          <div className="w-full max-w-[19.5rem] shrink-0 md:w-[min(19.5rem,42%)]">
+        {/* Row from md, stack at lg beside holdings, row again from 1440px. The ! wins over lg because Tailwind emits min-[1440px] first. */}
+        <div className="flex flex-col items-center gap-4 md:flex-row md:items-center lg:flex-col min-[1440px]:flex-row!">
+          <div className="w-full max-w-[19.5rem] shrink-0 md:w-[19.5rem] lg:w-full lg:shrink min-[1440px]:w-auto! min-[1440px]:max-w-[19.5rem]! min-[1440px]:min-w-0! min-[1440px]:shrink! min-[1440px]:basis-[19.5rem]!">
             <SectorAllocationDonut
               slices={slices}
               activeName={activeName}
@@ -305,7 +305,7 @@ function SectorAllocationCard({
               onToggle={togglePinned}
             />
           </div>
-          <div className="w-full min-w-0 flex-1 space-y-2" aria-hidden="true">
+          <div className="w-full min-w-0 flex-1 space-y-2 min-[1440px]:min-w-[15rem]!" aria-hidden="true">
             {sectors.map((s, i) => {
               const pct = allocationPercentOfTotal(totalValue, s.value);
               const hot = activeName === s.name;
@@ -352,7 +352,7 @@ function BarRow({
   pct: number;
   value: string;
   color: string;
-  /** Narrower label and percent so the row fits beside the sector donut. */
+  /** Keep the sector label and percent at their base widths so the bar track fits in the half-width card. */
   compact?: boolean;
   hot?: boolean;
   dimmed?: boolean;
@@ -387,7 +387,7 @@ function BarRow({
       <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-foreground/10">
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </div>
-      <span className={cn("w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground", compact ? "sm:w-12" : "sm:w-20")}>{value}</span>
+      <span className={cn("w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground", !compact && "sm:w-20")}>{value}</span>
     </div>
   );
 }
