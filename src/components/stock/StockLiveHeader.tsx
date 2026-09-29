@@ -37,9 +37,17 @@ function extendedChangeText(
 type StockLiveHeaderProps = {
   quote: StockQuote;
   eurPerUsd?: number | null;
+  /** Signed-in refresh. Omitted for guests so the header stays title + quote only. */
+  onForceRefresh?: () => void;
+  refreshing?: boolean;
 };
 
-export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
+export function StockLiveHeader({
+  quote,
+  eurPerUsd,
+  onForceRefresh,
+  refreshing = false,
+}: StockLiveHeaderProps) {
   const { t } = useI18n();
   const { displayCurrency: ccy, setDisplayCurrency: persistCcy } = usePreferences();
 
@@ -94,14 +102,28 @@ export function StockLiveHeader({ quote, eurPerUsd }: StockLiveHeaderProps) {
     <div className="rounded-xl border border-border bg-card px-4 py-2.5 shadow-lg shadow-sm sm:px-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <CompanyIdentity
               symbol={quote.symbol}
               name={quote.name}
               size="lg"
               primaryLabel="name"
             />
-            <WatchlistToggle symbol={quote.symbol} />
+            <div className="flex flex-wrap items-center gap-2">
+              <WatchlistToggle symbol={quote.symbol} />
+              {onForceRefresh ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 text-xs"
+                  onClick={onForceRefresh}
+                  disabled={refreshing}
+                >
+                  {refreshing ? t("stock.refreshing") : t("stock.refreshData")}
+                </Button>
+              ) : null}
+            </div>
           </div>
           {quote.earningsDate ? (
             <p className="mt-1 text-xs text-muted-foreground">
