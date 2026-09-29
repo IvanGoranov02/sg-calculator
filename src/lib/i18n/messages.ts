@@ -613,9 +613,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Sum of per-position estimates (~next 12 months from trailing figures). Multiple currencies are shown separately. Not tax or broker advice.",
       dividendNoData:
         "No dividend rate/yield for your symbols yet — try Refresh data or check tickers.",
-      dividendPerYearLabel: "per year",
-      dividendPerMonthLabel: "per month",
-      dividendPerDayLabel: "per day",
+      dividendPerYearLabel: "Yearly income:",
+      dividendPerMonthLabel: "Monthly income:",
+      dividendPerDayLabel: "Daily income:",
       t212Title: "Trading 212 (optional)",
       t212Desc:
         "Optional: sync open positions from your broker. API keys are encrypted on the server. Use demo for paper trading. See Help Centre for generating keys.",
@@ -1602,9 +1602,9 @@ export const messages: Record<AppLocale, MessageDict> = {
         "Сума от редовете (~следващи 12 месеца по trailing данни). Различни валути — отделно. Не е данъчен или брокерски съвет.",
       dividendNoData:
         "Няма дивидент rate/yield за тези символи — опитай „Опресни данните“ или провери тикерите.",
-      dividendPerYearLabel: "годишно",
-      dividendPerMonthLabel: "на месец",
-      dividendPerDayLabel: "на ден",
+      dividendPerYearLabel: "Годишен доход:",
+      dividendPerMonthLabel: "Месечен доход:",
+      dividendPerDayLabel: "Дневен доход:",
       t212Title: "Trading 212 (по избор)",
       t212Desc:
         "По избор: синхронизирай отворени позиции от брокера. API ключовете се криптират на сървъра. За демо — paper акаунт. Виж Help Centre за създаване на ключ.",
