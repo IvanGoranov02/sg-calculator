@@ -83,6 +83,73 @@ export function computeGrowthPills(values: (number | null)[], periodsPerYear: nu
   return { oneYear, twoYear, threeYear };
 }
 
+export type PriceHorizonCagr = {
+  fiveYear: number | null;
+  tenYear: number | null;
+};
+
+const EMPTY_HORIZONS: PriceHorizonCagr = {
+  fiveYear: null,
+  tenYear: null,
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/**
+ * Anniversary can land on a weekend or holiday. History that reaches within this
+ * window still counts as covering that horizon.
+ */
+const COVERAGE_SLACK_DAYS = 14;
+
+type DatedClose = { date: string; close: number };
+
+function utcNoonMs(iso: string): number {
+  return Date.parse(`${iso.slice(0, 10)}T12:00:00Z`);
+}
+
+function shiftYears(ms: number, years: number): number {
+  const d = new Date(ms);
+  d.setUTCFullYear(d.getUTCFullYear() + years);
+  return d.getTime();
+}
+
+/**
+ * Annualized 5Y / 10Y price change (CAGR), same reading as the 2Y / 3Y growth pills.
+ * A horizon is null when daily history does not reach about that many years back,
+ * or when no close sits near that anniversary. Callers should omit null horizons.
+ */
+export function computePriceHorizonCagr(bars: DatedClose[]): PriceHorizonCagr {
+  const points = bars
+    .map((bar) => ({ ms: utcNoonMs(bar.date), close: bar.close }))
+    .filter((bar) => Number.isFinite(bar.ms) && Number.isFinite(bar.close) && bar.close > 0)
+    .sort((a, b) => a.ms - b.ms);
+  if (points.length < 2) return EMPTY_HORIZONS;
+
+  const end = points[points.length - 1]!;
+  const slack = COVERAGE_SLACK_DAYS * MS_PER_DAY;
+
+  function horizon(years: number): number | null {
+    const target = shiftYears(end.ms, -years);
+    if (points[0]!.ms > target + slack) return null;
+
+    let onOrBefore: { ms: number; close: number } | null = null;
+    let after: { ms: number; close: number } | null = null;
+    for (const point of points) {
+      if (point.ms <= target) {
+        if (target - point.ms <= slack) onOrBefore = point;
+        continue;
+      }
+      if (point.ms - target <= slack) after = point;
+      break;
+    }
+
+    const start = onOrBefore ?? after;
+    if (!start) return null;
+    return cagr(start.close, end.close, years);
+  }
+
+  return { fiveYear: horizon(5), tenYear: horizon(10) };
+}
+
 export function extractSeriesValues(
   rows: Record<string, unknown>[],
   key: string,
