@@ -53,9 +53,24 @@ export type HoldingDividendMonthRow = {
   currency: string;
 };
 
+/** How many upcoming dividends the portfolio dividends card shows, left to right. */
+export const UPCOMING_DIVIDENDS_LIMIT = 5;
+
+export type UpcomingPortfolioDividend = {
+  symbol: string;
+  name: string | null;
+  /** Pay date when Yahoo has one, otherwise the ex-dividend date. ISO yyyy-mm-dd. */
+  date: string;
+  amount: number;
+  currency: string;
+  /** True when the next cash amount is not published and the previous dividend is shown. */
+  estimated: boolean;
+};
+
 export type PortfolioDividendsPayload = {
   positions: PortfolioDividendPosition[];
   payments: PortfolioDividendPayment[];
+  upcomingDividends: UpcomingPortfolioDividend[];
   monthlyIncome: PortfolioDividendMonth[];
   chartSeries: PortfolioDividendChartPoint[];
   fx: PortfolioFxRates;
@@ -152,6 +167,177 @@ export function buildHoldingMonthlyTimeline(
     amount: monthAmounts.get(month) ?? null,
     currency: monthCurrencies.get(month) ?? "USD",
   }));
+}
+
+type UpcomingDividendQuote = {
+  currency?: string | null;
+  exDividendDate?: string | null;
+  dividendPayDate?: string | null;
+  lastDividendPerShare?: number | null;
+  lastDividendDate?: string | null;
+};
+
+function isoDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return normalizeIsoDateString(value);
+}
+
+/** Prefer the pay date; fall back to ex-dividend when that is the only future date. */
+function upcomingDividendDate(quote: UpcomingDividendQuote, today: string): string | null {
+  const pay = isoDay(quote.dividendPayDate);
+  const ex = isoDay(quote.exDividendDate);
+  if (pay && pay >= today) return pay;
+  if (ex && ex >= today) return ex;
+  return null;
+}
+
+/**
+ * Yahoo publishes the upcoming cash amount once `lastDividendDate` is the
+ * announced ex/pay date (or still in the future). An older date means the
+ * next amount is not out yet.
+ */
+function nextDividendAmountKnown(quote: UpcomingDividendQuote, today: string): boolean {
+  const declared = isoDay(quote.lastDividendDate);
+  const perShare = quote.lastDividendPerShare;
+  if (!declared || perShare == null || !(perShare > 0)) return false;
+  const ex = isoDay(quote.exDividendDate);
+  const pay = isoDay(quote.dividendPayDate);
+  if (ex && declared === ex) return true;
+  if (pay && declared === pay) return true;
+  return declared >= today;
+}
+
+function latestPreviousPayment(
+  payments: PortfolioDividendPayment[],
+  symbol: string,
+  today: string,
+): PortfolioDividendPayment | null {
+  let latest: PortfolioDividendPayment | null = null;
+  let latestDay = "";
+  for (const p of payments) {
+    if (!paymentMatchesSymbol(p, symbol) || !(p.amount > 0) || !Number.isFinite(p.amount)) continue;
+    const paidOn = isoDay(p.paidOn);
+    if (!paidOn || paidOn > today) continue;
+    if (!latest || paidOn > latestDay) {
+      latest = p;
+      latestDay = paidOn;
+    }
+  }
+  return latest;
+}
+
+function cashFromPerShare(
+  perShare: number,
+  quantity: number,
+  quoteCurrency: string,
+  holdingCurrency: string,
+  fx: PortfolioFxRates,
+): { amount: number; currency: string } | null {
+  if (!(perShare > 0) || !(quantity > 0)) return null;
+  const gross = perShare * quantity;
+  if (!Number.isFinite(gross) || gross <= 0) return null;
+  const from = normalizePortfolioCurrency(quoteCurrency);
+  const to = normalizePortfolioCurrency(holdingCurrency);
+  const converted = convertPortfolioMoney(gross, from, to, fx);
+  if (converted == null || !(converted > 0)) return { amount: gross, currency: from };
+  return { amount: converted, currency: to };
+}
+
+/** Next portfolio dividends, soonest first, capped for the left-to-right card. */
+export function buildUpcomingPortfolioDividends(input: {
+  positions: Array<Pick<PortfolioDividendPosition, "symbol" | "name" | "quantity" | "currency">>;
+  payments: PortfolioDividendPayment[];
+  quotes: Record<string, UpcomingDividendQuote | null | undefined>;
+  fx: PortfolioFxRates;
+  today?: string;
+  limit?: number;
+}): UpcomingPortfolioDividend[] {
+  const today = input.today ?? new Date().toISOString().slice(0, 10);
+  const limit = input.limit ?? UPCOMING_DIVIDENDS_LIMIT;
+  const grouped = new Map<
+    string,
+    { symbol: string; name: string | null; quantity: number; currency: string }
+  >();
+
+  for (const p of input.positions) {
+    const symbol = p.symbol.trim();
+    const key = symbol.toUpperCase();
+    if (!key) continue;
+    const qty = Number(p.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const existing = grouped.get(key);
+    if (!existing) {
+      grouped.set(key, { symbol, name: p.name, quantity: qty, currency: p.currency });
+    } else {
+      existing.quantity += qty;
+      if (!existing.name && p.name) existing.name = p.name;
+    }
+  }
+
+  const out: UpcomingPortfolioDividend[] = [];
+  for (const [key, pos] of grouped) {
+    const quote = input.quotes[pos.symbol] ?? input.quotes[key];
+    if (!quote) continue;
+    const date = upcomingDividendDate(quote, today);
+    if (!date) continue;
+
+    if (nextDividendAmountKnown(quote, today) && quote.lastDividendPerShare != null) {
+      const cash = cashFromPerShare(
+        quote.lastDividendPerShare,
+        pos.quantity,
+        quote.currency ?? pos.currency,
+        pos.currency,
+        input.fx,
+      );
+      if (cash) {
+        out.push({
+          symbol: pos.symbol,
+          name: pos.name,
+          date,
+          amount: cash.amount,
+          currency: cash.currency,
+          estimated: false,
+        });
+        continue;
+      }
+    }
+
+    const previous = latestPreviousPayment(input.payments, pos.symbol, today);
+    if (previous) {
+      out.push({
+        symbol: pos.symbol,
+        name: pos.name,
+        date,
+        amount: previous.amount,
+        currency: normalizePortfolioCurrency(previous.currency),
+        estimated: true,
+      });
+      continue;
+    }
+
+    if (quote.lastDividendPerShare != null && quote.lastDividendPerShare > 0) {
+      const cash = cashFromPerShare(
+        quote.lastDividendPerShare,
+        pos.quantity,
+        quote.currency ?? pos.currency,
+        pos.currency,
+        input.fx,
+      );
+      if (cash) {
+        out.push({
+          symbol: pos.symbol,
+          name: pos.name,
+          date,
+          amount: cash.amount,
+          currency: cash.currency,
+          estimated: true,
+        });
+      }
+    }
+  }
+
+  out.sort((a, b) => a.date.localeCompare(b.date) || a.symbol.localeCompare(b.symbol));
+  return out.slice(0, Math.max(0, limit));
 }
 
 /** Inclusive yyyy-mm range with every calendar month. */
@@ -585,6 +771,18 @@ export function buildPortfolioDividendsPayload(input: {
     .filter((p) => p.paidOn && p.amount > 0)
     .sort((a, b) => b.paidOn.localeCompare(a.paidOn));
 
+  const upcomingDividends = buildUpcomingPortfolioDividends({
+    positions: metrics.map((m) => ({
+      symbol: m.symbol,
+      name: m.name,
+      quantity: m.quantity,
+      currency: m.currency,
+    })),
+    payments,
+    quotes: input.quotes,
+    fx: input.fx,
+  });
+
   const monthlyIncome = buildMonthlyIncome(payments);
   const chartSeries = buildMonthlyChartSeries(monthlyIncome, baseCurrency, input.fx);
 
@@ -595,6 +793,7 @@ export function buildPortfolioDividendsPayload(input: {
   return {
     positions,
     payments,
+    upcomingDividends,
     monthlyIncome,
     chartSeries,
     fx: input.fx,

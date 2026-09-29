@@ -2,6 +2,7 @@
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, Trash2 } from "lucide-react";
+import Link from "next/link";
 import {
   Bar,
   BarChart,
@@ -25,6 +26,7 @@ import {
   formatDividendYieldPercent,
   formatLocaleDate,
   formatMonthKeyLabel,
+  type DateFormat,
 } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -35,12 +37,71 @@ import {
   incomeGrowthPillsFromMonthly,
   mergeEstAnnualIncome,
   type PortfolioDividendsPayload,
+  type UpcomingPortfolioDividend,
 } from "@/lib/portfolioDividends";
 import { cn } from "@/lib/utils";
 import { isTrading212AuthFailure, normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
 const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 const RECENT_DIVIDENDS_LIMIT = 5;
+
+function UpcomingDividendsCard({ items }: { items: UpcomingPortfolioDividend[] }) {
+  const { t, locale } = useI18n();
+  const { dateFormat } = usePreferences();
+
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="space-y-1 pb-2">
+        <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.upcomingTitle")}</CardTitle>
+      </CardHeader>
+      {items.length === 0 ? (
+        <p className="px-4 pb-2 text-sm text-muted-foreground sm:px-6">
+          {t("portfolioDividends.upcomingEmpty")}
+        </p>
+      ) : (
+        <ul className="flex gap-2 overflow-x-auto px-4 pb-2 sm:px-6">
+          {items.map((item) => (
+            <li key={`${item.symbol}-${item.date}`} className="shrink-0">
+              <UpcomingDividendBox item={item} locale={locale} dateFormat={dateFormat} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function UpcomingDividendBox({
+  item,
+  locale,
+  dateFormat,
+}: {
+  item: UpcomingPortfolioDividend;
+  locale: string;
+  dateFormat: DateFormat;
+}) {
+  const { t } = useI18n();
+  return (
+    <Link
+      href={`/stock/${encodeURIComponent(item.symbol)}`}
+      className="flex w-[8rem] flex-col items-center rounded-lg border border-border bg-muted/40 px-2 py-2 text-center transition-colors hover:bg-muted/70"
+      title={item.name ?? item.symbol}
+    >
+      <span className="w-full truncate text-xs font-medium text-foreground">{item.symbol}</span>
+      <span className="mt-1 text-[11px] font-medium text-muted-foreground">
+        {formatLocaleDate(item.date, locale, dateFormat)}
+      </span>
+      <span className="mt-0.5 text-sm font-semibold tabular-nums text-emerald-400">
+        {fmtMoney(item.amount, item.currency)}
+      </span>
+      {item.estimated ? (
+        <span className="mt-0.5 text-[10px] leading-none text-muted-foreground">
+          {t("portfolioDividends.upcomingEstimated")}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
 function fmtMoney(n: number, currency: string) {
   try {
@@ -520,6 +581,8 @@ export function PortfolioDividendsView({
           </div>
         )}
       </Card>
+
+      <UpcomingDividendsCard items={data.upcomingDividends ?? []} />
 
       {hasPayments ? (
         <Card className="border-border bg-card">

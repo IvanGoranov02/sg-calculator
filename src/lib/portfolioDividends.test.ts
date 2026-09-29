@@ -8,6 +8,7 @@ import {
   buildMonthlyChartSeries,
   buildMonthlyIncome,
   buildPortfolioDividendsPayload,
+  buildUpcomingPortfolioDividends,
   calendarMonthsBetween,
   dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
@@ -15,6 +16,7 @@ import {
   mergeEstAnnualIncome,
   paymentMatchesSymbol,
   rollingTtmMonthly,
+  UPCOMING_DIVIDENDS_LIMIT,
   type PortfolioDividendPayment,
   type PortfolioDividendPosition,
 } from "@/lib/portfolioDividends";
@@ -701,5 +703,234 @@ describe("buildHoldingMonthlyTimeline", () => {
       trading212: { connected: true },
     });
     assert.equal(payload.payments[0]?.name, "Apple Inc.");
+  });
+});
+
+describe("buildUpcomingPortfolioDividends", () => {
+  const fx = { eurPerUsd: null, gbpPerUsd: null };
+  const today = "2026-09-29";
+
+  function position(
+    symbol: string,
+    quantity = 10,
+  ): Pick<PortfolioDividendPosition, "symbol" | "name" | "quantity" | "currency"> {
+    return { symbol, name: symbol, quantity, currency: "USD" };
+  }
+
+  function payment(symbol: string, amount: number, paidOn: string): PortfolioDividendPayment {
+    return {
+      id: `${symbol}-${paidOn}`,
+      source: "manual",
+      ticker: symbol,
+      symbolYahoo: symbol,
+      name: symbol,
+      amount,
+      currency: "USD",
+      paidOn,
+    };
+  }
+
+  it("shows the next five upcoming dividends soonest-first", () => {
+    const symbols = ["A", "B", "C", "D", "E", "F"];
+    const dates = ["2026-10-06", "2026-10-01", "2026-10-03", "2026-10-02", "2026-10-05", "2026-10-04"];
+    const quotes: Record<
+      string,
+      {
+        currency: string;
+        dividendPayDate: string;
+        lastDividendPerShare: number;
+        lastDividendDate: string;
+      }
+    > = {};
+    for (let i = 0; i < symbols.length; i++) {
+      quotes[symbols[i]!] = {
+        currency: "USD",
+        dividendPayDate: dates[i]!,
+        lastDividendPerShare: 1,
+        lastDividendDate: "2026-01-01",
+      };
+    }
+
+    const rows = buildUpcomingPortfolioDividends({
+      positions: symbols.map((s) => position(s)),
+      payments: symbols.map((s) => payment(s, 3, "2026-07-01")),
+      quotes,
+      fx,
+      today,
+    });
+
+    assert.equal(UPCOMING_DIVIDENDS_LIMIT, 5);
+    assert.deepEqual(
+      rows.map((r) => r.symbol),
+      ["B", "D", "C", "F", "E"],
+    );
+    assert.equal(
+      rows.every((r) => r.estimated && r.amount === 3 && r.currency === "USD"),
+      true,
+    );
+  });
+
+  it("uses the declared per-share amount when it belongs to the upcoming date", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [position("AAPL", 10)],
+      payments: [payment("AAPL", 2, "2026-07-01")],
+      quotes: {
+        AAPL: {
+          currency: "USD",
+          dividendPayDate: "2026-11-15",
+          exDividendDate: "2026-11-01",
+          lastDividendPerShare: 0.25,
+          lastDividendDate: "2026-11-01",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.estimated, false);
+    assert.equal(rows[0]!.amount, 2.5);
+    assert.equal(rows[0]!.date, "2026-11-15");
+    assert.equal(rows[0]!.currency, "USD");
+  });
+
+  it("falls back to the previous payment when the next amount is not announced", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [position("MSFT", 4)],
+      payments: [payment("MSFT", 1.5, "2026-03-01"), payment("MSFT", 2.25, "2026-06-01")],
+      quotes: {
+        MSFT: {
+          currency: "USD",
+          dividendPayDate: "2026-12-10",
+          exDividendDate: "2026-11-20",
+          lastDividendPerShare: 0.75,
+          lastDividendDate: "2026-08-15",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.equal(rows[0]!.estimated, true);
+    assert.equal(rows[0]!.amount, 2.25);
+    assert.equal(rows[0]!.date, "2026-12-10");
+  });
+
+  it("uses the previous per-share dividend when there is no portfolio payment", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [position("KO", 8)],
+      payments: [],
+      quotes: {
+        KO: {
+          currency: "USD",
+          exDividendDate: "2026-10-20",
+          dividendPayDate: null,
+          lastDividendPerShare: 0.5,
+          lastDividendDate: "2026-07-20",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.equal(rows[0]!.date, "2026-10-20");
+    assert.equal(rows[0]!.estimated, true);
+    assert.equal(rows[0]!.amount, 4);
+  });
+
+  it("skips dividend dates that have already passed", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [position("IBM")],
+      payments: [payment("IBM", 5, "2026-01-01")],
+      quotes: {
+        IBM: {
+          currency: "USD",
+          dividendPayDate: "2026-09-01",
+          exDividendDate: "2026-08-15",
+          lastDividendPerShare: 1,
+          lastDividendDate: "2026-08-15",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.deepEqual(rows, []);
+  });
+
+  it("treats a future last-dividend date as a known upcoming amount", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [position("JNJ", 10)],
+      payments: [payment("JNJ", 1, "2026-06-01")],
+      quotes: {
+        JNJ: {
+          currency: "USD",
+          exDividendDate: "2026-10-01",
+          dividendPayDate: "2026-10-15",
+          lastDividendPerShare: 0.4,
+          lastDividendDate: "2026-10-02",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.equal(rows[0]!.estimated, false);
+    assert.equal(rows[0]!.amount, 4);
+    assert.equal(rows[0]!.date, "2026-10-15");
+  });
+
+  it("attaches upcoming dividends to the portfolio payload", () => {
+    const payload = buildPortfolioDividendsPayload({
+      holdings: [
+        {
+          symbolYahoo: "AAPL",
+          symbolT212: null,
+          quantity: 10 as unknown as import("@prisma/client").PortfolioHolding["quantity"],
+          avgPrice: 100 as unknown as import("@prisma/client").PortfolioHolding["avgPrice"],
+          currency: "USD",
+        },
+      ],
+      quotes: {
+        AAPL: {
+          symbol: "AAPL",
+          name: "Apple Inc.",
+          price: 150,
+          currency: "USD",
+          dividendYield: 0.005,
+          dividendRate: 1,
+          changePercent: 0,
+          twoHundredDayAverage: null,
+          dipVsSma200Pct: null,
+          nextEarnings: null,
+          sector: null,
+          dividendPayDate: "2027-02-15",
+          exDividendDate: "2027-02-01",
+          lastDividendPerShare: 0.25,
+          lastDividendDate: "2026-05-01",
+        },
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null },
+      t212Items: [],
+      manualRows: [
+        {
+          id: "m1",
+          symbolYahoo: "AAPL",
+          ticker: "AAPL",
+          amount: { toString: () => "2.4" },
+          currency: "USD",
+          paidOn: new Date("2026-08-15T12:00:00Z"),
+          note: null,
+        },
+      ],
+      cacheBySymbol: {},
+      trading212: { connected: false },
+    });
+
+    assert.equal(payload.upcomingDividends.length, 1);
+    assert.equal(payload.upcomingDividends[0]!.symbol, "AAPL");
+    assert.equal(payload.upcomingDividends[0]!.date, "2027-02-15");
+    assert.equal(payload.upcomingDividends[0]!.estimated, true);
+    assert.equal(payload.upcomingDividends[0]!.amount, 2.4);
   });
 });
