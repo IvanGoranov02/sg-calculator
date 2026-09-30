@@ -67,11 +67,11 @@ export function parsePortfolioDividendsDayCache<T>(raw: string | null): Portfoli
   }
 }
 
-function freshRecord<T>(
-  record: PortfolioDividendsDayCacheRecord<T> | null,
+function freshRecord<TRecord extends PortfolioDividendsDayCacheRecord<unknown>>(
+  record: TRecord | null,
   userId: string,
   today: string,
-): PortfolioDividendsDayCacheRecord<T> | null {
+): TRecord | null {
   if (!record || record.userId !== userId || record.localDate !== today) return null;
   return record;
 }
