@@ -70,7 +70,7 @@ export function DipFinderPanel({ quotes, history, compact = false }: DipFinderPa
           ))}
         </div>
       </div>
-      <WatchlistDipChart rows={rows} range={dipRange} compact={compact} />
+      <WatchlistDipChart rows={rows} compact={compact} />
     </div>
   );
 }

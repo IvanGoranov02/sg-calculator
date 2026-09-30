@@ -12,16 +12,10 @@ import {
   YAxis,
 } from "recharts";
 
-import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { tickCoord } from "@/lib/chartSeriesUtils";
-import {
-  dipChartYDomain,
-  dipChartYTicks,
-  formatDipAxisPct,
-  type DipRange,
-} from "@/lib/dipFinder";
+import { dipChartYDomain, dipChartYTicks, formatDipAxisPct } from "@/lib/dipFinder";
 import { cn } from "@/lib/utils";
 
 export type DipChartDatum = {
@@ -37,7 +31,6 @@ export type DipChartDatum = {
 
 type WatchlistDipChartProps = {
   rows: DipChartDatum[];
-  range: DipRange;
   compact?: boolean;
 };
 
@@ -109,9 +102,14 @@ function AngledXTick({ x, y, payload, label, title }: AngledXTickProps) {
   );
 }
 
-export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDipChartProps) {
+function dipHoverPctClass(pct: number): string {
+  if (pct < 0) return "text-red-400";
+  if (pct > 0) return "text-emerald-400";
+  return "text-foreground";
+}
+
+export function WatchlistDipChart({ rows, compact = false }: WatchlistDipChartProps) {
   const { t } = useI18n();
-  const rangeLabel = t(`watchlist.dipRange_${range}`);
 
   const sorted = [...rows]
     .filter((q) => Number.isFinite(q.dipPct))
@@ -182,26 +180,15 @@ export function WatchlistDipChart({ rows, range, compact = false }: WatchlistDip
                   if (!active || !payload?.length) return null;
                   const p = payload[0].payload as (typeof sorted)[0];
                   return (
-                    <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
-                      <CompanyIdentity symbol={p.symbol} name={p.name} size="sm" primaryLabel="name" />
-                      <p className="mt-2 text-muted-foreground">
-                        {t("watchlist.dipVsWindowSma", { range: rangeLabel })}: {formatPercent(p.dipPct)}
+                    <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3.5 py-2.5 shadow-lg backdrop-blur">
+                      <p
+                        className={cn(
+                          "text-2xl font-semibold tabular-nums leading-none tracking-tight",
+                          dipHoverPctClass(p.dipPct),
+                        )}
+                      >
+                        {formatPercent(p.dipPct)}
                       </p>
-                      {p.lookbackChangePct != null ? (
-                        <p className="text-muted-foreground">
-                          {t("watchlist.dipLookback")}: {formatPercent(p.lookbackChangePct)}
-                        </p>
-                      ) : null}
-                      {p.dipVsSma200Pct != null ? (
-                        <p className="text-muted-foreground">
-                          {t("watchlist.dipVsSma")}: {formatPercent(p.dipVsSma200Pct)}
-                        </p>
-                      ) : null}
-                      {p.sma200 != null ? (
-                        <p className="text-muted-foreground">
-                          {t("watchlist.sma200")}: {p.sma200.toFixed(2)}
-                        </p>
-                      ) : null}
                     </div>
                   );
                 }}
