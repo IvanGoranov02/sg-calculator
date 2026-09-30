@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   Bar,
   BarChart,
@@ -39,6 +40,13 @@ import {
   type PortfolioDividendsPayload,
   type UpcomingPortfolioDividend,
 } from "@/lib/portfolioDividends";
+import {
+  commitPortfolioDividendsDayCache,
+  decidePortfolioDividendsLoad,
+  readPortfolioDividendsSessionMemory,
+  readStoredPortfolioDividendsDayCache,
+  writePortfolioDividendsSessionMemory,
+} from "@/lib/portfolioDividendsDayCache";
 import { cn } from "@/lib/utils";
 import { isTrading212AuthFailure, normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
@@ -122,6 +130,35 @@ type PortfolioDividendsViewProps = {
   onDismissTrading212?: () => void;
 };
 
+function dividendsDayStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function initialDividendsViewState(userId: string, reloadToken: number, liveRefreshToken: number): {
+  data: PortfolioDividendsPayload | null;
+  loading: boolean;
+} {
+  if (!userId || typeof window === "undefined") {
+    return { data: null, loading: true };
+  }
+  const decision = decidePortfolioDividendsLoad<PortfolioDividendsPayload>({
+    userId,
+    reloadToken,
+    liveRefreshToken,
+    memory: readPortfolioDividendsSessionMemory<PortfolioDividendsPayload>(),
+    stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(dividendsDayStorage(), userId),
+  });
+  if (decision.action === "reuse" && decision.payload) {
+    return { data: decision.payload, loading: false };
+  }
+  return { data: decision.payload, loading: true };
+}
+
 export function PortfolioDividendsView({
   reloadToken = 0,
   liveRefreshToken = 0,
@@ -129,12 +166,18 @@ export function PortfolioDividendsView({
   onDismissTrading212,
 }: PortfolioDividendsViewProps) {
   const { t, locale } = useI18n();
+  const { data: session, status: sessionStatus } = useSession();
+  const userId = session?.user?.id ?? "";
   const { dateFormat, displayCurrency } = usePreferences();
   const preferredCurrency = displayCurrencyToPortfolioCode(displayCurrency);
-  const [data, setData] = useState<PortfolioDividendsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [cacheSeed] = useState(() => initialDividendsViewState(userId, reloadToken, liveRefreshToken));
+  const [data, setData] = useState<PortfolioDividendsPayload | null>(cacheSeed.data);
+  const [loading, setLoading] = useState(cacheSeed.loading);
   const [error, setError] = useState<string | null>(null);
-  const initialLoadDone = useRef(false);
+  const reloadTokenRef = useRef(reloadToken);
+  const liveRefreshTokenRef = useRef(liveRefreshToken);
+  reloadTokenRef.current = reloadToken;
+  liveRefreshTokenRef.current = liveRefreshToken;
 
   const [ticker, setTicker] = useState("");
   const [amount, setAmount] = useState("");
@@ -148,47 +191,84 @@ export function PortfolioDividendsView({
   const [paymentsExpanded, setPaymentsExpanded] = useState(false);
 
   const load = useCallback(
-    async (forceRefresh: boolean) => {
-      setLoading(true);
-      setError(null);
+    async (forceRefresh: boolean, isCancelled?: () => boolean) => {
+      const cancelled = () => isCancelled?.() ?? false;
+      if (!cancelled()) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         const url = forceRefresh ? "/api/portfolio/dividends?refresh=1" : "/api/portfolio/dividends";
         const res = await fetch(url);
+        if (cancelled()) return;
         if (res.status === 401) {
           setData(null);
           return;
         }
         const json = (await res.json()) as PortfolioDividendsPayload & { error?: string };
+        if (cancelled()) return;
         if (!res.ok) {
           setError(json.error ?? t("portfolioDividends.errorLoad"));
           setData(null);
           return;
         }
         setData(json);
+        if (userId) {
+          commitPortfolioDividendsDayCache({
+            storage: dividendsDayStorage(),
+            userId,
+            payload: json,
+            reloadToken: reloadTokenRef.current,
+            liveRefreshToken: liveRefreshTokenRef.current,
+          });
+        }
       } catch {
+        if (cancelled()) return;
         setError(t("portfolioDividends.errorLoad"));
         setData(null);
       } finally {
-        setLoading(false);
+        if (!cancelled()) setLoading(false);
       }
     },
-    [t],
+    [t, userId],
   );
 
-  useEffect(() => {
-    void load(false);
-    initialLoadDone.current = true;
-  }, [load]);
+  // Same user-local day: show the cached payload and skip the network.
+  // Explicit Refresh (live token) and sync/holding edits (reload token) still fetch.
+  useLayoutEffect(() => {
+    if (!userId) {
+      if (sessionStatus === "loading") return;
+      let cancelled = false;
+      void load(liveRefreshToken > 0, () => cancelled);
+      return () => {
+        cancelled = true;
+      };
+    }
 
-  useEffect(() => {
-    if (!initialLoadDone.current || reloadToken === 0) return;
-    void load(false);
-  }, [reloadToken, load]);
-
-  useEffect(() => {
-    if (!initialLoadDone.current || liveRefreshToken === 0) return;
-    void load(true);
-  }, [liveRefreshToken, load]);
+    let cancelled = false;
+    const decision = decidePortfolioDividendsLoad<PortfolioDividendsPayload>({
+      userId,
+      reloadToken,
+      liveRefreshToken,
+      memory: readPortfolioDividendsSessionMemory<PortfolioDividendsPayload>(),
+      stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(dividendsDayStorage(), userId),
+    });
+    if (decision.adoptMemory) {
+      writePortfolioDividendsSessionMemory(decision.adoptMemory);
+    }
+    if (decision.payload) {
+      setData(decision.payload);
+      setError(null);
+    }
+    if (decision.action === "reuse") {
+      setLoading(false);
+      return;
+    }
+    void load(decision.action === "force", () => cancelled);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, sessionStatus, reloadToken, liveRefreshToken, load]);
 
   const pillLabels = useMemo(
     () => ({

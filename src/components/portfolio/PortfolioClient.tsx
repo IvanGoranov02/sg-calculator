@@ -562,6 +562,7 @@ export function PortfolioClient() {
       setAvg("");
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
       if (data.replacedBrokerRow) {
         setPortfolioInfo(t("portfolio.manualReplacedBroker"));
       }
@@ -582,6 +583,7 @@ export function PortfolioClient() {
       }
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     }
@@ -616,6 +618,7 @@ export function PortfolioClient() {
       setEditingId(null);
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
