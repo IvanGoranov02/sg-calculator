@@ -27,7 +27,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { seriesCoverage } from "@/lib/chartSeriesUtils";
+import {
+  categoryAxisWidth,
+  categoryTicksUseShortYear,
+  categoryYearKey,
+  selectCategoryTickIndexes,
+  seriesCoverage,
+} from "@/lib/chartSeriesUtils";
 import { GrowthPillsGroup } from "@/components/stock/GrowthPillsRow";
 import type { GrowthPillsEntry } from "@/lib/growthPills";
 import { cn } from "@/lib/utils";
@@ -59,6 +65,34 @@ type FundamentalChartCardProps = {
   /** Quote currency for per-share amounts (USD when omitted). */
   currency?: string;
 };
+
+/** Inline cards sit in a 3-column grid; the expand dialog is much wider. */
+const CARD_PLOT_PX = 300;
+const MODAL_PLOT_PX = 900;
+
+type TickPlan = {
+  categories: string[];
+  visible: Set<string>;
+  yearOnly: boolean;
+};
+
+function tickPlanFor(
+  data: Record<string, unknown>[],
+  xKey: string,
+  plotWidth: number,
+): TickPlan {
+  const categories = data.map((row) => {
+    const v = row[xKey];
+    return v == null ? "" : String(v);
+  });
+  const axisWidth = categoryAxisWidth(plotWidth);
+  const indexes = selectCategoryTickIndexes(categories, axisWidth);
+  return {
+    categories,
+    visible: new Set(indexes.map((i) => categories[i]!)),
+    yearOnly: categoryTicksUseShortYear(categories.length, indexes, axisWidth),
+  };
+}
 
 function formatTooltipValue(fmt: ValueFormat, v: number, currency?: string): string {
   if (!Number.isFinite(v)) return "—";
@@ -165,21 +199,44 @@ export function FundamentalChartCard({
     return xLabelFormatter ? xLabelFormatter(s) : s;
   };
 
-  const renderChart = (maxLabels: number) => (
+  const cardPlan = useMemo(
+    () => tickPlanFor(data, xKey, CARD_PLOT_PX),
+    [data, xKey],
+  );
+  const modalPlan = useMemo(
+    () => tickPlanFor(data, xKey, MODAL_PLOT_PX),
+    [data, xKey],
+  );
+
+  const formatTick = (value: unknown, yearOnly: boolean): string => {
+    if (yearOnly) {
+      const year = categoryYearKey(value == null ? "" : String(value));
+      if (year) return year;
+    }
+    return formatCategoryLabel(value);
+  };
+
+  const renderChart = (plan: TickPlan) => (
     <ResponsiveContainer width="100%" height="100%">
       {resolvedType === "bar" ? (
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+        <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
-            tick={(props) => (
-              <CategoryAxisTick
-                {...props}
-                total={data.length}
-                maxLabels={maxLabels}
-                formatValue={xLabelFormatter ? (v) => formatCategoryLabel(v) : undefined}
-              />
-            )}
+            tick={(props) => {
+              const raw = props?.payload?.value;
+              const key = raw == null ? "" : String(raw);
+              const index = plan.categories.indexOf(key);
+              return (
+                <CategoryAxisTick
+                  {...props}
+                  index={index >= 0 ? index : props?.index}
+                  total={data.length}
+                  show={plan.visible.has(key)}
+                  formatValue={(v) => formatTick(v, plan.yearOnly)}
+                />
+              );
+            }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
             interval={0}
@@ -217,18 +274,24 @@ export function FundamentalChartCard({
           ))}
         </BarChart>
       ) : (
-        <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+        <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
-            tick={(props) => (
-              <CategoryAxisTick
-                {...props}
-                total={data.length}
-                maxLabels={maxLabels}
-                formatValue={xLabelFormatter ? (v) => formatCategoryLabel(v) : undefined}
-              />
-            )}
+            tick={(props) => {
+              const raw = props?.payload?.value;
+              const key = raw == null ? "" : String(raw);
+              const index = plan.categories.indexOf(key);
+              return (
+                <CategoryAxisTick
+                  {...props}
+                  index={index >= 0 ? index : props?.index}
+                  total={data.length}
+                  show={plan.visible.has(key)}
+                  formatValue={(v) => formatTick(v, plan.yearOnly)}
+                />
+              );
+            }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
             interval={0}
@@ -334,7 +397,9 @@ export function FundamentalChartCard({
             </div>
           ) : (
             <div className="relative h-[220px] min-h-0 min-w-0 w-full">
-              <div className="absolute inset-0 min-h-0 min-w-0">{renderChart(8)}</div>
+              <div className="absolute inset-0 min-h-0 min-w-0">
+                {renderChart(cardPlan)}
+              </div>
             </div>
           )}
           {coverageNote ? (
@@ -360,7 +425,9 @@ export function FundamentalChartCard({
           ) : null}
         </div>
         <div className="flex min-h-0 flex-col gap-4">
-          <div className="h-[42vh] min-h-[240px] w-full shrink-0">{renderChart(16)}</div>
+          <div className="h-[42vh] min-h-[240px] w-full shrink-0">
+            {renderChart(modalPlan)}
+          </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
             <table className="w-full min-w-[18rem] text-sm">
               <thead className="sticky top-0 bg-popover text-xs text-muted-foreground">

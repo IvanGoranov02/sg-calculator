@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { axisTickVisible, seriesCoverage, seriesHasAnyPoint, seriesHasPartialGaps, tickCoord } from "@/lib/chartSeriesUtils";
+import {
+  categoryAxisWidth,
+  categoryTicksUseShortYear,
+  categoryYearKey,
+  selectCategoryTickIndexes,
+  seriesCoverage,
+  seriesHasAnyPoint,
+  seriesHasPartialGaps,
+  tickCoord,
+} from "@/lib/chartSeriesUtils";
 
 const rows = [
   { label: "Q1", a: null, b: null },
@@ -56,43 +65,73 @@ describe("seriesCoverage", () => {
   });
 });
 
-describe("axisTickVisible", () => {
-  it("shows every tick when the range is short", () => {
-    for (let i = 0; i < 8; i++) {
-      assert.equal(axisTickVisible(i, 8, 8), true);
-    }
+/** Quarter-end ISO dates, one every 3 months, matching a 5y AAPL/META window. */
+function quarterlyIsoDates(startIso: string, count: number): string[] {
+  const start = new Date(`${startIso}T12:00:00Z`);
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(start);
+    d.setUTCMonth(d.getUTCMonth() + i * 3);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+function yearsOf(categories: string[], indexes: number[]): string[] {
+  return [...new Set(indexes.map((i) => categoryYearKey(categories[i]!)!))].sort();
+}
+
+describe("categoryYearKey", () => {
+  it("reads ISO period ends, fiscal-year labels, and month labels", () => {
+    assert.equal(categoryYearKey("2024-09-28"), "2024");
+    assert.equal(categoryYearKey("FY 2024"), "2024");
+    assert.equal(categoryYearKey("Sep 24"), "2024");
+    assert.equal(categoryYearKey("Apr 26, 26"), "2026");
+    assert.equal(categoryYearKey("ФГ 2023"), "2023");
+  });
+});
+
+describe("selectCategoryTickIndexes", () => {
+  const cardAxis = categoryAxisWidth(300);
+
+  it("labels every quarter when the series is short", () => {
+    const dates = quarterlyIsoDates("2025-09-27", 4);
+    assert.deepEqual(selectCategoryTickIndexes(dates, cardAxis), [0, 1, 2, 3]);
   });
 
-  it("keeps first/last and penultimate on a 15-quarter axis", () => {
-    const shown = [...Array(15).keys()].filter((i) => axisTickVisible(i, 15, 8));
-    assert.deepEqual(shown, [0, 2, 4, 6, 8, 10, 12, 13, 14]);
+  it("keeps a newly listed name's only quarters", () => {
+    const dates = ["2026-03-28", "2026-06-27"];
+    assert.deepEqual(selectCategoryTickIndexes(dates, cardAxis), [0, 1]);
   });
 
-  it("keeps first/last and still labels 2024 on a 5y quarterly axis", () => {
-    // 20 quarters ending Jun 2026, same window as AAPL 5Y.
-    const labels: string[] = [];
-    const start = new Date("2021-09-25T12:00:00Z");
-    for (let i = 0; i < 20; i++) {
-      const d = new Date(start);
-      d.setUTCMonth(d.getUTCMonth() + i * 3);
-      labels.push(
-        d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }),
-      );
+  it("labels every year on a 5y quarterly axis without adjacent ticks", () => {
+    // 20 quarters, Sep 2021–Jun 2026 — the AAPL / META 5Y window.
+    const dates = quarterlyIsoDates("2021-09-25", 20);
+    const shown = selectCategoryTickIndexes(dates, cardAxis);
+    assert.deepEqual(yearsOf(dates, shown), ["2021", "2022", "2023", "2024", "2025", "2026"]);
+    for (let k = 1; k < shown.length; k++) {
+      assert.ok(shown[k]! - shown[k - 1]! >= 2, `adjacent ticks ${shown.join(",")}`);
     }
-    const shown = labels.filter((_, i) => axisTickVisible(i, labels.length, 8));
-    assert.equal(axisTickVisible(0, 20, 8), true);
-    assert.equal(axisTickVisible(19, 20, 8), true);
-    assert.ok(
-      shown.some((l) => l.endsWith("24")),
-      `2024 missing from ${shown.join(", ")}`,
-    );
-    // Stride ticks must not sit on the neighboring bar of the last label.
-    const lastShown = [...Array(20).keys()].filter((i) => axisTickVisible(i, 20, 8));
-    for (let k = 1; k < lastShown.length; k++) {
-      const gap = lastShown[k]! - lastShown[k - 1]!;
-      if (lastShown[k] === 19 && gap === 1) continue;
-      assert.ok(gap >= 2);
-    }
+    assert.equal(categoryTicksUseShortYear(dates.length, shown, cardAxis), false);
+  });
+
+  it("shows every quarter in the expanded chart", () => {
+    const dates = quarterlyIsoDates("2021-09-25", 20);
+    const shown = selectCategoryTickIndexes(dates, categoryAxisWidth(900));
+    assert.equal(shown.length, 20);
+  });
+
+  it("does not invent labels for years with no points", () => {
+    const dates = ["2022-03-31", "2024-06-30", "2026-06-30"];
+    const shown = selectCategoryTickIndexes(dates, cardAxis);
+    assert.deepEqual(yearsOf(dates, shown), ["2022", "2024", "2026"]);
+    assert.ok(!yearsOf(dates, shown).includes("2023"));
+    assert.ok(!yearsOf(dates, shown).includes("2025"));
+  });
+
+  it("shows every annual fiscal year", () => {
+    const labels = ["FY 2021", "FY 2022", "FY 2023", "FY 2024", "FY 2025"];
+    assert.deepEqual(selectCategoryTickIndexes(labels, cardAxis), [0, 1, 2, 3, 4]);
   });
 });
 
