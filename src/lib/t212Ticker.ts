@@ -198,6 +198,40 @@ export function usPrimarySymbolForLogo(
 const EUR_LISTING_SUFFIX =
   /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM|MU|BE|MC|LS|IC|WA|CO|IR|AT|HA|HE)$/i;
 
+const OTHER_NON_US_LISTING_SUFFIX = /\.(TO|HK|AX|T|KS|TW|SI|NZ|SA|MX)$/i;
+
+/**
+ * True when dividends on this symbol are US-source: a bare US ticker (including
+ * share classes such as BRK.B), or an EU/UK line of a US issuer (MSF.DE, MSFT.DE).
+ * Local European issuers (SAP.DE) stay false.
+ */
+export function isUsSourceDividendSymbol(symbol: string): boolean {
+  const raw = symbol.trim();
+  if (!raw) return false;
+  const upper = raw.toUpperCase();
+
+  // Keep the original ticker: T212's exchange letter is lowercase (SAPd_EQ).
+  if (/_EQ$/i.test(raw)) {
+    const parsed = parseT212Ticker(raw);
+    if (!parsed.base) return false;
+    if (!parsed.isNonUsListing) return true;
+    const german = parsed.yahooSuffix === ".DE" || parsed.yahooSuffix === ".F";
+    const primary = usPrimarySymbolForLogo(parsed.base, { germanVenue: german, euVenue: true });
+    return primary !== parsed.base || CROSS_LISTED_US_TICKERS.has(parsed.base);
+  }
+
+  const dot = upper.lastIndexOf(".");
+  if (dot <= 0) return true;
+
+  const german = /\.(DE|F|DU|HM|MU|BE|HA|XC|XD)$/i.test(upper);
+  const eu = german || EUR_LISTING_SUFFIX.test(upper) || /\.L$/i.test(upper);
+  if (!eu) return !OTHER_NON_US_LISTING_SUFFIX.test(upper);
+
+  const base = upper.slice(0, dot);
+  const primary = usPrimarySymbolForLogo(base, { germanVenue: german, euVenue: true });
+  return primary !== base || CROSS_LISTED_US_TICKERS.has(base);
+}
+
 const VENUE_LABEL: Record<string, string> = {
   ".DE": "Xetra",
   ".F": "Frankfurt",

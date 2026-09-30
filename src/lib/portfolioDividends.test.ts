@@ -16,10 +16,20 @@ import {
   mergeEstAnnualIncome,
   paymentMatchesSymbol,
   rollingTtmMonthly,
+  BG_DIVIDEND_TAX_RATE,
+  US_DIVIDEND_WITHHOLDING_RATE,
   UPCOMING_DIVIDENDS_LIMIT,
   type PortfolioDividendPayment,
   type PortfolioDividendPosition,
 } from "@/lib/portfolioDividends";
+
+function closeTo(actual: number, expected: number, eps = 1e-9) {
+  assert.ok(Math.abs(actual - expected) < eps, `${actual} != ${expected}`);
+}
+
+function usNet(gross: number): number {
+  return gross * (1 - US_DIVIDEND_WITHHOLDING_RATE) * (1 - BG_DIVIDEND_TAX_RATE);
+}
 
 describe("calendarMonthsBetween", () => {
   it("fills every month inclusively", () => {
@@ -789,7 +799,7 @@ describe("buildUpcomingPortfolioDividends", () => {
 
     assert.equal(rows.length, 1);
     assert.equal(rows[0]!.estimated, false);
-    assert.equal(rows[0]!.amount, 2.5);
+    closeTo(rows[0]!.amount, usNet(2.5));
     assert.equal(rows[0]!.date, "2026-11-15");
     assert.equal(rows[0]!.currency, "USD");
   });
@@ -835,7 +845,7 @@ describe("buildUpcomingPortfolioDividends", () => {
 
     assert.equal(rows[0]!.date, "2026-10-20");
     assert.equal(rows[0]!.estimated, true);
-    assert.equal(rows[0]!.amount, 4);
+    closeTo(rows[0]!.amount, usNet(4));
   });
 
   it("skips dividend dates that have already passed", () => {
@@ -876,7 +886,7 @@ describe("buildUpcomingPortfolioDividends", () => {
     });
 
     assert.equal(rows[0]!.estimated, false);
-    assert.equal(rows[0]!.amount, 4);
+    closeTo(rows[0]!.amount, usNet(4));
     assert.equal(rows[0]!.date, "2026-10-15");
   });
 
@@ -932,5 +942,126 @@ describe("buildUpcomingPortfolioDividends", () => {
     assert.equal(payload.upcomingDividends[0]!.date, "2027-02-15");
     assert.equal(payload.upcomingDividends[0]!.estimated, true);
     assert.equal(payload.upcomingDividends[0]!.amount, 2.4);
+    assert.equal(payload.positions[0]!.estAnnualIncome, 10);
+  });
+
+  it("converts an EU-listed US dividend from USD and shows it after tax", () => {
+    const shares = 0.708416;
+    const perShare = 0.98;
+    const eurPerUsd = 0.85;
+    for (const symbol of ["MSF.DE", "MSFT.DE"]) {
+      const rows = buildUpcomingPortfolioDividends({
+        positions: [{ symbol, name: "Microsoft", quantity: shares, currency: "EUR" }],
+        payments: [],
+        quotes: {
+          [symbol]: {
+            currency: "EUR",
+            price: 447.2,
+            dividendYield: 0.0076,
+            dividendRate: 3.4,
+            dividendPayDate: "2026-12-10",
+            exDividendDate: "2026-11-19",
+            lastDividendPerShare: perShare,
+            lastDividendDate: "2026-11-19",
+          },
+        },
+        fx: { eurPerUsd, gbpPerUsd: null },
+        today,
+      });
+
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]!.estimated, false);
+      assert.equal(rows[0]!.currency, "EUR");
+      assert.equal(rows[0]!.date, "2026-12-10");
+      closeTo(rows[0]!.amount, usNet(perShare * shares) * eurPerUsd);
+      assert.ok(Math.abs(rows[0]!.amount - 0.5) < 0.01);
+    }
+  });
+
+  it("keeps a listing-currency dividend that is already converted", () => {
+    const shares = 0.708416;
+    const perShareEur = 0.8628;
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [{ symbol: "MSFT.DE", name: "Microsoft", quantity: shares, currency: "EUR" }],
+      payments: [],
+      quotes: {
+        "MSFT.DE": {
+          currency: "EUR",
+          price: 447.2,
+          dividendYield: 0.0076,
+          dividendRate: 3.4,
+          dividendPayDate: "2026-12-10",
+          exDividendDate: "2026-11-19",
+          lastDividendPerShare: perShareEur,
+          lastDividendDate: "2026-11-19",
+        },
+      },
+      fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+      today,
+    });
+
+    assert.equal(rows[0]!.currency, "EUR");
+    closeTo(rows[0]!.amount, usNet(perShareEur * shares));
+  });
+
+  it("does not tax a previous portfolio payment again", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [{ symbol: "MSF.DE", name: "Microsoft", quantity: 0.708416, currency: "EUR" }],
+      payments: [
+        {
+          id: "t212",
+          source: "t212",
+          ticker: "MSFTd_EQ",
+          symbolYahoo: "MSF.DE",
+          name: "Microsoft",
+          amount: 0.48,
+          currency: "EUR",
+          paidOn: "2026-08-20",
+        },
+      ],
+      quotes: {
+        "MSF.DE": {
+          currency: "EUR",
+          price: 447.2,
+          dividendYield: 0.0076,
+          dividendRate: 3.4,
+          dividendPayDate: "2026-12-10",
+          exDividendDate: "2026-11-19",
+          lastDividendPerShare: 0.98,
+          lastDividendDate: "2026-08-20",
+        },
+      },
+      fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+      today,
+    });
+
+    assert.equal(rows[0]!.estimated, true);
+    assert.equal(rows[0]!.amount, 0.48);
+    assert.equal(rows[0]!.currency, "EUR");
+  });
+
+  it("applies only Bulgarian dividend tax to a local European issuer", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [{ symbol: "SAP.DE", name: "SAP", quantity: 2, currency: "EUR" }],
+      payments: [],
+      quotes: {
+        "SAP.DE": {
+          currency: "EUR",
+          price: 183.5,
+          dividendYield: 0.0135,
+          dividendRate: 2.5,
+          exDividendDate: "2026-10-20",
+          dividendPayDate: "2026-10-22",
+          lastDividendPerShare: 2.5,
+          lastDividendDate: "2026-10-20",
+        },
+      },
+      fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+      today,
+    });
+
+    assert.equal(rows[0]!.currency, "EUR");
+    assert.equal(rows[0]!.estimated, false);
+    closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
   });
 });

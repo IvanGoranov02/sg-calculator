@@ -7,7 +7,7 @@ import { computeGrowthPills, type GrowthPills } from "@/lib/growthPills";
 import { convertPortfolioMoney, normalizePortfolioCurrency, type PortfolioFxRates } from "@/lib/portfolioFx";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import { mapT212DividendItem, sortT212DividendsRecent } from "@/lib/t212Dividends";
-import { t212TickerToYahooCandidates } from "@/lib/t212Ticker";
+import { isUsSourceDividendSymbol, t212TickerToYahooCandidates } from "@/lib/t212Ticker";
 import type { T212HistoryDividendItem } from "@/lib/trading212Client";
 import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
@@ -61,6 +61,7 @@ export type UpcomingPortfolioDividend = {
   name: string | null;
   /** Pay date when Yahoo has one, otherwise the ex-dividend date. ISO yyyy-mm-dd. */
   date: string;
+  /** After-tax cash in `currency` (holding currency when FX allows). */
   amount: number;
   currency: string;
   /** True when the next cash amount is not published and the previous dividend is shown. */
@@ -171,11 +172,42 @@ export function buildHoldingMonthlyTimeline(
 
 type UpcomingDividendQuote = {
   currency?: string | null;
+  price?: number | null;
+  dividendYield?: number | null;
+  dividendRate?: number | null;
   exDividendDate?: string | null;
   dividendPayDate?: string | null;
   lastDividendPerShare?: number | null;
   lastDividendDate?: string | null;
 };
+
+/**
+ * Upcoming per-share estimates are gross Yahoo cash. A Bulgarian resident
+ * individual is shown the amount after tax:
+ *
+ * - US-source dividends (Nasdaq, or an EU listing of a US issuer such as
+ *   MSF.DE): 10% US withholding under the Bulgaria–US income tax treaty,
+ *   Article 10(2)(b). Trading 212 withholds this rate for Bulgarian residents.
+ *   Then 5% Bulgarian final dividend tax on the remainder (ЗДДФЛ чл. 38, ал. 1).
+ * - Other issuers: only that 5% Bulgarian tax. Foreign withholding outside the
+ *   US is not modeled.
+ *
+ * Recorded portfolio payments are cash already received, so they are not taxed
+ * again. Worked example at 0.85 EUR per USD: 0.98 USD × 0.708416 shares ×
+ * 0.90 × 0.95 × 0.85 ≈ €0.50.
+ */
+export const US_DIVIDEND_WITHHOLDING_RATE = 0.1;
+export const BG_DIVIDEND_TAX_RATE = 0.05;
+
+const PAYMENTS_PER_YEAR = [1, 2, 4, 12] as const;
+/** USD interpretation must beat the listing currency by more than this gap. */
+const DIVIDEND_CURRENCY_GAP = 0.02;
+
+export function upcomingDividendNetFactor(symbol: string): number {
+  const afterBg = 1 - BG_DIVIDEND_TAX_RATE;
+  if (isUsSourceDividendSymbol(symbol)) return (1 - US_DIVIDEND_WITHHOLDING_RATE) * afterBg;
+  return afterBg;
+}
 
 function isoDay(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -226,21 +258,90 @@ function latestPreviousPayment(
   return latest;
 }
 
+function bestPaymentGap(amount: number, annual: number): number {
+  if (!(amount > 0) || !(annual > 0)) return Infinity;
+  let best = Infinity;
+  for (const freq of PAYMENTS_PER_YEAR) {
+    const expected = annual / freq;
+    best = Math.min(best, Math.abs(amount - expected) / expected);
+  }
+  return best;
+}
+
+/** Annual dividend in the listing currency: price × yield, else Yahoo dividendRate. */
+function quoteAnnualDividend(quote: UpcomingDividendQuote): number | null {
+  const price = quote.price;
+  const yieldDec = quote.dividendYield;
+  if (price != null && price > 0 && yieldDec != null && yieldDec > 0) {
+    const fromYield = price * yieldDec;
+    if (Number.isFinite(fromYield) && fromYield > 0) return fromYield;
+  }
+  const rate = quote.dividendRate;
+  if (rate != null && rate > 0 && Number.isFinite(rate)) return rate;
+  return null;
+}
+
+/**
+ * Currency of Yahoo's latest per-share cash.
+ * On EU listings of US issuers the quote is EUR/GBP but `lastDividendValue` is
+ * often still the USD amount (MSF.DE 0.98 vs a ~€3.40 annual rate). Use USD when
+ * that reading, converted, matches the listing-currency annual dividend; keep
+ * the listing currency when the cash is already converted.
+ */
+export function resolveUpcomingDividendCurrency(
+  symbol: string,
+  perShare: number,
+  quote: UpcomingDividendQuote,
+  fx: PortfolioFxRates,
+): string {
+  const quoteCcy = normalizePortfolioCurrency(quote.currency);
+  if (!isUsSourceDividendSymbol(symbol) || quoteCcy === "USD" || !(perShare > 0)) return quoteCcy;
+
+  const annual = quoteAnnualDividend(quote);
+  if (annual == null) return "USD";
+
+  const asQuote = bestPaymentGap(perShare, annual);
+  const inQuote = convertPortfolioMoney(perShare, "USD", quoteCcy, fx);
+  if (inQuote == null) return asQuote > 0.08 ? "USD" : quoteCcy;
+  const asUsd = bestPaymentGap(inQuote, annual);
+  if (asUsd + DIVIDEND_CURRENCY_GAP < asQuote) return "USD";
+  return quoteCcy;
+}
+
 function cashFromPerShare(
   perShare: number,
   quantity: number,
-  quoteCurrency: string,
+  dividendCurrency: string,
   holdingCurrency: string,
   fx: PortfolioFxRates,
 ): { amount: number; currency: string } | null {
   if (!(perShare > 0) || !(quantity > 0)) return null;
   const gross = perShare * quantity;
   if (!Number.isFinite(gross) || gross <= 0) return null;
-  const from = normalizePortfolioCurrency(quoteCurrency);
+  const from = normalizePortfolioCurrency(dividendCurrency);
   const to = normalizePortfolioCurrency(holdingCurrency);
   const converted = convertPortfolioMoney(gross, from, to, fx);
   if (converted == null || !(converted > 0)) return { amount: gross, currency: from };
   return { amount: converted, currency: to };
+}
+
+/** Gross Yahoo cash × shares, after tax, in the holding currency. */
+function upcomingCashFromQuote(
+  symbol: string,
+  perShare: number,
+  quantity: number,
+  holdingCurrency: string,
+  quote: UpcomingDividendQuote,
+  fx: PortfolioFxRates,
+): { amount: number; currency: string } | null {
+  const dividendCurrency = resolveUpcomingDividendCurrency(symbol, perShare, quote, fx);
+  return cashFromPerShare(
+    perShare * upcomingDividendNetFactor(symbol),
+    quantity,
+    dividendCurrency,
+    holdingCurrency,
+    fx,
+  );
 }
 
 /** Next portfolio dividends, soonest first, capped for the left-to-right card. */
@@ -282,11 +383,12 @@ export function buildUpcomingPortfolioDividends(input: {
     if (!date) continue;
 
     if (nextDividendAmountKnown(quote, today) && quote.lastDividendPerShare != null) {
-      const cash = cashFromPerShare(
+      const cash = upcomingCashFromQuote(
+        pos.symbol,
         quote.lastDividendPerShare,
         pos.quantity,
-        quote.currency ?? pos.currency,
         pos.currency,
+        quote,
         input.fx,
       );
       if (cash) {
@@ -316,11 +418,12 @@ export function buildUpcomingPortfolioDividends(input: {
     }
 
     if (quote.lastDividendPerShare != null && quote.lastDividendPerShare > 0) {
-      const cash = cashFromPerShare(
+      const cash = upcomingCashFromQuote(
+        pos.symbol,
         quote.lastDividendPerShare,
         pos.quantity,
-        quote.currency ?? pos.currency,
         pos.currency,
+        quote,
         input.fx,
       );
       if (cash) {
