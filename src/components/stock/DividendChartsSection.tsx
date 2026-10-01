@@ -58,6 +58,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     const sorted = sortQuarterlyByDateAsc(filtered);
     const hasDps = sorted.some((p) => p.dividendPerShare != null && p.dividendPerShare > 0);
     const rows = sorted.map((p) => ({
+      periodEnd: p.date.slice(0, 10),
       label: formatPeriod(p.date),
       qDps: p.dividendPerShare,
     }));
@@ -199,6 +200,8 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
         <FundamentalChartCard
           title={t("chartsFund.dividendQtrChartTitle")}
           description={t("chartsFund.dividendQtrChartDesc")}
+          xKey="periodEnd"
+          xLabelFormatter={formatPeriod}
           data={pack.rows}
           series={qDpsSeries}
           chartType="bar"
