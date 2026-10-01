@@ -3,7 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY,
+  beginPortfolioDividendsLoad,
   decidePortfolioDividendsLoad,
+  invalidatePortfolioDividendsDayCache,
+  isPortfolioDividendsLoadCurrent,
+  isUsableDividendsPayload,
   parsePortfolioDividendsDayCache,
   readStoredPortfolioDividendsDayCache,
   userLocalCalendarDay,
@@ -11,13 +15,31 @@ import {
   type PortfolioDividendsDayMemory,
 } from "@/lib/portfolioDividendsDayCache";
 
-type Payload = { ok: true };
+type Payload = {
+  positions: [];
+  payments: [];
+  monthlyIncome: [];
+  fx: { eurPerUsd: null };
+  summary: { portfolioYieldOnValue: null };
+  trading212: { connected: false };
+};
+
+function payload(): Payload {
+  return {
+    positions: [],
+    payments: [],
+    monthlyIncome: [],
+    fx: { eurPerUsd: null },
+    summary: { portfolioYieldOnValue: null },
+    trading212: { connected: false },
+  };
+}
 
 function memory(overrides: Partial<PortfolioDividendsDayMemory<Payload>> = {}): PortfolioDividendsDayMemory<Payload> {
   return {
     userId: "user-1",
     localDate: "2026-09-30",
-    payload: { ok: true },
+    payload: payload(),
     reloadToken: 0,
     liveRefreshToken: 0,
     ...overrides,
@@ -45,7 +67,7 @@ describe("decidePortfolioDividendsLoad", () => {
       stored: memory(),
     });
     assert.equal(decision.action, "reuse");
-    assert.deepEqual(decision.payload, { ok: true });
+    assert.deepEqual(decision.payload, payload());
     assert.equal(decision.adoptMemory?.localDate, "2026-09-30");
   });
 
@@ -85,7 +107,7 @@ describe("decidePortfolioDividendsLoad", () => {
       stored: memory(),
     });
     assert.equal(decision.action, "force");
-    assert.deepEqual(decision.payload, { ok: true });
+    assert.deepEqual(decision.payload, payload());
   });
 
   it("refetches without force when holdings or sync invalidate the cache", () => {
@@ -143,10 +165,68 @@ describe("portfolio dividends day storage", () => {
     assert.deepEqual(readStoredPortfolioDividendsDayCache<Payload>(storage, "user-1"), {
       userId: "user-1",
       localDate: "2026-09-30",
-      payload: { ok: true },
+      payload: payload(),
     });
     assert.equal(readStoredPortfolioDividendsDayCache(storage, "user-2"), null);
     assert.equal(items.has(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY), false);
     assert.equal(parsePortfolioDividendsDayCache("{"), null);
   });
+
+  it("drops a corrupt payload and clears the key", () => {
+    const items = new Map<string, string>();
+    const storage = mapStorage(items);
+    items.set(
+      PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY,
+      JSON.stringify({ userId: "user-1", localDate: "2026-09-30", payload: {} }),
+    );
+    assert.equal(isUsableDividendsPayload({}), false);
+    assert.equal(parsePortfolioDividendsDayCache(items.get(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY) ?? null), null);
+    assert.equal(readStoredPortfolioDividendsDayCache(storage, "user-1"), null);
+    assert.equal(items.has(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY), false);
+  });
+
+  it("fetches after invalidation when tokens reset and memory is null", () => {
+    const items = new Map<string, string>();
+    const storage = mapStorage(items);
+    const now = new Date(2026, 8, 30, 15, 0, 0);
+    writeStoredPortfolioDividendsDayCache(storage, memory());
+    invalidatePortfolioDividendsDayCache(storage);
+    const stored = readStoredPortfolioDividendsDayCache<Payload>(storage, "user-1");
+    assert.equal(stored, null);
+    const decision = decidePortfolioDividendsLoad({
+      userId: "user-1",
+      reloadToken: 0,
+      liveRefreshToken: 0,
+      now,
+      memory: null,
+      stored,
+    });
+    assert.equal(decision.action, "fetch");
+    assert.equal(decision.payload, null);
+  });
 });
+
+describe("portfolio dividends load generation", () => {
+  it("commits only the latest generation, including after invalidation", () => {
+    const first = beginPortfolioDividendsLoad();
+    const second = beginPortfolioDividendsLoad();
+    assert.equal(isPortfolioDividendsLoadCurrent(first), false);
+    assert.equal(isPortfolioDividendsLoadCurrent(second), true);
+    invalidatePortfolioDividendsDayCache(null);
+    assert.equal(isPortfolioDividendsLoadCurrent(second), false);
+    const third = beginPortfolioDividendsLoad();
+    assert.equal(isPortfolioDividendsLoadCurrent(third), true);
+  });
+});
+
+function mapStorage(items: Map<string, string>) {
+  return {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      items.set(key, value);
+    },
+    removeItem: (key: string) => {
+      items.delete(key);
+    },
+  };
+}

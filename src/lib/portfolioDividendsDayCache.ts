@@ -3,8 +3,12 @@
  *
  * A successful payload is reused for the rest of the user-local calendar day
  * (browser timezone, YYYY-MM-DD — not UTC). Opening Dividends again that day
- * does not refetch. The next local calendar day may fetch. Explicit refresh
- * and holdings/sync invalidation still refetch immediately.
+ * does not refetch. The next local calendar day may fetch.
+ *
+ * Sync, Refresh, disconnect, and holding edits call
+ * `invalidatePortfolioDividendsDayCache`, which drops session memory and
+ * localStorage immediately. A reload after that misses the cache and fetches.
+ * Only the latest in-flight GET may write the cache back.
  */
 
 export const PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY = "sg-portfolio-dividends-day-v1";
@@ -48,19 +52,35 @@ function isLocalDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Shape the Dividends view reads without optional chaining. Anything else is a cache miss. */
+export function isUsableDividendsPayload(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    Array.isArray(value.positions) &&
+    Array.isArray(value.payments) &&
+    Array.isArray(value.monthlyIncome) &&
+    isRecord(value.fx) &&
+    isRecord(value.summary) &&
+    isRecord(value.trading212)
+  );
+}
+
 export function parsePortfolioDividendsDayCache<T>(raw: string | null): PortfolioDividendsDayCacheRecord<T> | null {
   if (!raw) return null;
   try {
     const data = JSON.parse(raw) as unknown;
-    if (!data || typeof data !== "object") return null;
-    const o = data as Record<string, unknown>;
-    if (typeof o.userId !== "string" || !o.userId) return null;
-    if (!isLocalDate(o.localDate)) return null;
-    if (!o.payload || typeof o.payload !== "object") return null;
+    if (!isRecord(data)) return null;
+    if (typeof data.userId !== "string" || !data.userId) return null;
+    if (!isLocalDate(data.localDate)) return null;
+    if (!isUsableDividendsPayload(data.payload)) return null;
     return {
-      userId: o.userId,
-      localDate: o.localDate,
-      payload: o.payload as T,
+      userId: data.userId,
+      localDate: data.localDate,
+      payload: data.payload as T,
     };
   } catch {
     return null;
@@ -129,8 +149,41 @@ export function decidePortfolioDividendsLoad<T>(input: {
   };
 }
 
-/** Last successful load in this browser tab. Ignored during SSR. */
+/** Last successful load in this browser tab. Ignored during SSR reads. */
 let sessionMemory: PortfolioDividendsDayMemory<unknown> | null = null;
+
+/** Bumped on every GET and on durable invalidation. Older responses must not commit. */
+let loadGeneration = 0;
+
+export function beginPortfolioDividendsLoad(): number {
+  loadGeneration += 1;
+  return loadGeneration;
+}
+
+export function isPortfolioDividendsLoadCurrent(generation: number): boolean {
+  return generation === loadGeneration;
+}
+
+export function browserDividendsDayStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Drop session memory and localStorage so the next open, including after reload, fetches. */
+export function invalidatePortfolioDividendsDayCache(storage: KeyValueStorage | null): void {
+  loadGeneration += 1;
+  sessionMemory = null;
+  if (!storage) return;
+  try {
+    storage.removeItem?.(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY);
+  } catch {
+    // Ignore private-mode storage failures.
+  }
+}
 
 export function readPortfolioDividendsSessionMemory<T>(): PortfolioDividendsDayMemory<T> | null {
   if (typeof window === "undefined") return null;
@@ -154,7 +207,16 @@ export function readStoredPortfolioDividendsDayCache<T>(
     return null;
   }
   const parsed = parsePortfolioDividendsDayCache<T>(raw);
-  if (!parsed) return null;
+  if (!parsed) {
+    if (raw) {
+      try {
+        storage.removeItem?.(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY);
+      } catch {
+        // Ignore private-mode storage failures.
+      }
+    }
+    return null;
+  }
   if (parsed.userId !== userId) {
     try {
       storage.removeItem?.(PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY);

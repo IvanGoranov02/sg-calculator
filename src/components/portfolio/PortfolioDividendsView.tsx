@@ -41,8 +41,11 @@ import {
   type UpcomingPortfolioDividend,
 } from "@/lib/portfolioDividends";
 import {
+  beginPortfolioDividendsLoad,
+  browserDividendsDayStorage,
   commitPortfolioDividendsDayCache,
   decidePortfolioDividendsLoad,
+  isPortfolioDividendsLoadCurrent,
   readPortfolioDividendsSessionMemory,
   readStoredPortfolioDividendsDayCache,
   writePortfolioDividendsSessionMemory,
@@ -130,15 +133,6 @@ type PortfolioDividendsViewProps = {
   onDismissTrading212?: () => void;
 };
 
-function dividendsDayStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 function initialDividendsViewState(userId: string, reloadToken: number, liveRefreshToken: number): {
   data: PortfolioDividendsPayload | null;
   loading: boolean;
@@ -151,7 +145,7 @@ function initialDividendsViewState(userId: string, reloadToken: number, liveRefr
     reloadToken,
     liveRefreshToken,
     memory: readPortfolioDividendsSessionMemory<PortfolioDividendsPayload>(),
-    stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(dividendsDayStorage(), userId),
+    stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(browserDividendsDayStorage(), userId),
   });
   if (decision.action === "reuse" && decision.payload) {
     return { data: decision.payload, loading: false };
@@ -192,21 +186,22 @@ export function PortfolioDividendsView({
 
   const load = useCallback(
     async (forceRefresh: boolean, isCancelled?: () => boolean) => {
-      const cancelled = () => isCancelled?.() ?? false;
-      if (!cancelled()) {
+      const generation = beginPortfolioDividendsLoad();
+      const stale = () => isCancelled?.() === true || !isPortfolioDividendsLoadCurrent(generation);
+      if (!stale()) {
         setLoading(true);
         setError(null);
       }
       try {
         const url = forceRefresh ? "/api/portfolio/dividends?refresh=1" : "/api/portfolio/dividends";
         const res = await fetch(url);
-        if (cancelled()) return;
+        if (stale()) return;
         if (res.status === 401) {
           setData(null);
           return;
         }
         const json = (await res.json()) as PortfolioDividendsPayload & { error?: string };
-        if (cancelled()) return;
+        if (stale()) return;
         if (!res.ok) {
           setError(json.error ?? t("portfolioDividends.errorLoad"));
           setData(null);
@@ -215,7 +210,7 @@ export function PortfolioDividendsView({
         setData(json);
         if (userId) {
           commitPortfolioDividendsDayCache({
-            storage: dividendsDayStorage(),
+            storage: browserDividendsDayStorage(),
             userId,
             payload: json,
             reloadToken: reloadTokenRef.current,
@@ -223,11 +218,11 @@ export function PortfolioDividendsView({
           });
         }
       } catch {
-        if (cancelled()) return;
+        if (stale()) return;
         setError(t("portfolioDividends.errorLoad"));
         setData(null);
       } finally {
-        if (!cancelled()) setLoading(false);
+        if (!stale()) setLoading(false);
       }
     },
     [t, userId],
@@ -251,7 +246,7 @@ export function PortfolioDividendsView({
       reloadToken,
       liveRefreshToken,
       memory: readPortfolioDividendsSessionMemory<PortfolioDividendsPayload>(),
-      stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(dividendsDayStorage(), userId),
+      stored: readStoredPortfolioDividendsDayCache<PortfolioDividendsPayload>(browserDividendsDayStorage(), userId),
     });
     if (decision.adoptMemory) {
       writePortfolioDividendsSessionMemory(decision.adoptMemory);
