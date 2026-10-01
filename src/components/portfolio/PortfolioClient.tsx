@@ -22,6 +22,10 @@ import {
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
+import {
+  browserDividendsDayStorage,
+  invalidatePortfolioDividendsDayCache,
+} from "@/lib/portfolioDividendsDayCache";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import {
   convertPortfolioMoney,
@@ -339,6 +343,9 @@ export function PortfolioClient() {
   useEffect(() => () => clearHistoryPoll(), [clearHistoryPoll]);
 
   const reloadDividendsFromCache = useCallback(() => {
+    // Drop localStorage now. The React token dies on reload, so a later open would
+    // otherwise reuse today's payload until local midnight.
+    invalidatePortfolioDividendsDayCache(browserDividendsDayStorage());
     setDividendsReloadToken((n) => n + 1);
   }, []);
 
@@ -388,6 +395,7 @@ export function PortfolioClient() {
     }
     await load();
     await loadValueHistory({ refresh: true });
+    invalidatePortfolioDividendsDayCache(browserDividendsDayStorage());
     setDividendsLiveRefreshToken((n) => n + 1);
   }, [load, loadValueHistory, runSync, trading212?.connected, trading212?.encryptionConfigured]);
 
@@ -562,6 +570,7 @@ export function PortfolioClient() {
       setAvg("");
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
       if (data.replacedBrokerRow) {
         setPortfolioInfo(t("portfolio.manualReplacedBroker"));
       }
@@ -582,6 +591,7 @@ export function PortfolioClient() {
       }
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     }
@@ -616,6 +626,7 @@ export function PortfolioClient() {
       setEditingId(null);
       await load();
       await loadValueHistory();
+      reloadDividendsFromCache();
     } catch {
       setError(t("portfolio.saveNetworkError"));
     } finally {
