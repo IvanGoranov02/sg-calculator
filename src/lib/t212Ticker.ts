@@ -198,6 +198,87 @@ export function usPrimarySymbolForLogo(
 const EUR_LISTING_SUFFIX =
   /\.(DE|PA|AS|MI|F|BR|VI|ST|OL|SW|XC|XD|DU|HM|MU|BE|MC|LS|IC|WA|CO|IR|AT|HA|HE)$/i;
 
+const OTHER_NON_US_LISTING_SUFFIX = /\.(TO|HK|AX|T|KS|TW|SI|NZ|SA|MX)$/i;
+
+/**
+ * US composite ticker when this base is an explicit EU cross-listing of a US issuer.
+ * Matching the letters of a US ticker is not enough: ALV.DE is Allianz, while ALV
+ * in the US-ticker set is Autoliv. MSFT.DE qualifies because the Xetra mnemonic MSF
+ * maps back to MSFT.
+ */
+function usPrimaryForEuListing(base: string, german: boolean): string | null {
+  const fromIsin = ISIN_TO_US_LOGO[base];
+  if (fromIsin) return fromIsin;
+
+  if (/^[A-Z0-9]{3}D$/.test(base) && !LOGO_DO_NOT_STUB.has(base)) {
+    const prefix = base.slice(0, -1);
+    const prefixAllowed = german || BARE_XETRA_LETTER_ALIAS.has(prefix);
+    if (prefixAllowed && !(GERMAN_ONLY_EU_LOGO.has(prefix) && !german)) {
+      const fromLocal =
+        EU_LISTING_TO_US_LOGO[prefix] || (german ? AMBIGUOUS_GERMAN_TO_US_LOGO[prefix] : undefined);
+      if (fromLocal) return fromLocal;
+    }
+  }
+
+  const direct = EU_LISTING_TO_US_LOGO[base];
+  if (direct && !(GERMAN_ONLY_EU_LOGO.has(base) && !german)) return direct;
+
+  if (german) {
+    const alias = AMBIGUOUS_GERMAN_TO_US_LOGO[base];
+    if (alias) return alias;
+  }
+
+  // US ticker on its own EU line (MSFT.DE). Only when a known local mnemonic maps
+  // back to this ticker — not when a European name happens to reuse the letters.
+  if (german) {
+    const override = GERMAN_YAHOO_SYMBOL_OVERRIDES[base];
+    const local = override?.[0]?.split(".")[0];
+    if (local) {
+      const mapped = EU_LISTING_TO_US_LOGO[local] || AMBIGUOUS_GERMAN_TO_US_LOGO[local];
+      if (mapped === base) return base;
+    }
+  }
+  if (base.length > 3 && !/[0-9]/.test(base)) {
+    const short = base.slice(0, 3);
+    if (!(GERMAN_ONLY_EU_LOGO.has(short) && !german)) {
+      if (EU_LISTING_TO_US_LOGO[short] === base) return base;
+    }
+    if (german && AMBIGUOUS_GERMAN_TO_US_LOGO[short] === base) return base;
+  }
+
+  return null;
+}
+
+/**
+ * True when dividends on this symbol are US-source: a bare US ticker (including
+ * share classes such as BRK.B), or an EU/UK line that the cross-listing map
+ * identifies as a US issuer (MSF.DE, MSFT.DE). Local names that only share a
+ * US ticker's letters (ALV.DE, MRK.DE, MC.PA) stay false.
+ */
+export function isUsSourceDividendSymbol(symbol: string): boolean {
+  const raw = symbol.trim();
+  if (!raw) return false;
+  const upper = raw.toUpperCase();
+
+  // Keep the original ticker: T212's exchange letter is lowercase (SAPd_EQ).
+  if (/_EQ$/i.test(raw)) {
+    const parsed = parseT212Ticker(raw);
+    if (!parsed.base) return false;
+    if (!parsed.isNonUsListing) return true;
+    const german = parsed.yahooSuffix === ".DE" || parsed.yahooSuffix === ".F";
+    return usPrimaryForEuListing(parsed.base, german) != null;
+  }
+
+  const dot = upper.lastIndexOf(".");
+  if (dot <= 0) return true;
+
+  const german = /\.(DE|F|DU|HM|MU|BE|HA|XC|XD)$/i.test(upper);
+  const eu = german || EUR_LISTING_SUFFIX.test(upper) || /\.L$/i.test(upper);
+  if (!eu) return !OTHER_NON_US_LISTING_SUFFIX.test(upper);
+
+  return usPrimaryForEuListing(upper.slice(0, dot), german) != null;
+}
+
 const VENUE_LABEL: Record<string, string> = {
   ".DE": "Xetra",
   ".F": "Frankfurt",

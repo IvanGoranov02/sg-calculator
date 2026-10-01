@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   germanListingYahooSymbols,
+  isUsSourceDividendSymbol,
   parseT212Ticker,
   t212ListingVenueLabel,
   t212QuoteCurrency,
@@ -346,5 +347,29 @@ describe("usPrimarySymbolForLogo", () => {
     assert.equal(usPrimarySymbolForLogo("GIS"), "GIS");
     assert.equal(usPrimarySymbolForLogo("GIS", { germanVenue: true }), "GILD");
     assert.equal(usPrimarySymbolForLogo("US0378331005"), "AAPL");
+  });
+});
+
+describe("isUsSourceDividendSymbol", () => {
+  it("treats EU listings of US issuers as US-source and leaves local issuers", () => {
+    assert.equal(isUsSourceDividendSymbol("AAPL"), true);
+    assert.equal(isUsSourceDividendSymbol("BRK.B"), true);
+    assert.equal(isUsSourceDividendSymbol("MSF.DE"), true);
+    assert.equal(isUsSourceDividendSymbol("MSFT.DE"), true);
+    assert.equal(isUsSourceDividendSymbol("FB2A.DE"), true);
+    assert.equal(isUsSourceDividendSymbol("MSFTd_EQ"), true);
+    assert.equal(isUsSourceDividendSymbol("SAP.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("ASML.AS"), false);
+    assert.equal(isUsSourceDividendSymbol("SAPd_EQ"), false);
+    assert.equal(isUsSourceDividendSymbol("7203.T"), false);
+    assert.equal(isUsSourceDividendSymbol("ALV.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("DTE.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("MC.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("EL.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("DG.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("MRK.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("WDP.AS"), false);
+    assert.equal(isUsSourceDividendSymbol("WDP.DE"), true);
+    assert.equal(isUsSourceDividendSymbol("GIS.DE"), true);
   });
 });
