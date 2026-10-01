@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -29,9 +29,10 @@ import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolum
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import {
   categoryAxisWidth,
-  categoryTicksUseShortYear,
   categoryYearKey,
-  selectCategoryTickIndexes,
+  CHART_PLOT_RIGHT_MARGIN_PX,
+  CHART_Y_AXIS_PX,
+  planCategoryTicks,
   seriesCoverage,
 } from "@/lib/chartSeriesUtils";
 import { GrowthPillsGroup } from "@/components/stock/GrowthPillsRow";
@@ -66,31 +67,65 @@ type FundamentalChartCardProps = {
   currency?: string;
 };
 
-/** Inline cards sit in a 3-column grid; the expand dialog is much wider. */
-const CARD_PLOT_PX = 300;
-const MODAL_PLOT_PX = 900;
-
 type TickPlan = {
   categories: string[];
   visible: Set<string>;
   yearOnly: boolean;
+  labelWidths: number[];
+  axisWidth: number;
 };
+
+/** Plot-box width. State is a number only — the observer lives in the callback, not in render. */
+function usePlotWidth(): [number, (node: HTMLDivElement | null) => void] {
+  const [width, setWidth] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+
+  const setNode = useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!node) return;
+    const publish = (next: number) => {
+      if (!Number.isFinite(next) || next <= 0) return;
+      setWidth((prev) => (Math.abs(prev - next) < 1 ? prev : next));
+    };
+    publish(node.getBoundingClientRect().width);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const measured = entries[0]?.contentRect.width;
+      publish(typeof measured === "number" && measured > 0 ? measured : node.getBoundingClientRect().width);
+    });
+    ro.observe(node);
+    observer.current = ro;
+  }, []);
+
+  useEffect(() => () => observer.current?.disconnect(), []);
+
+  return [width, setNode];
+}
 
 function tickPlanFor(
   data: Record<string, unknown>[],
   xKey: string,
   plotWidth: number,
+  periodDisplayLabels: Map<string, string> | null,
+  xLabelFormatter?: (value: string) => string,
 ): TickPlan {
   const categories = data.map((row) => {
     const v = row[xKey];
     return v == null ? "" : String(v);
   });
-  const axisWidth = categoryAxisWidth(plotWidth);
-  const indexes = selectCategoryTickIndexes(categories, axisWidth);
+  const displayLabels = categories.map((category) => {
+    const mapped = periodDisplayLabels?.get(category);
+    if (mapped) return mapped;
+    return xLabelFormatter ? xLabelFormatter(category) : category;
+  });
+  const planned = planCategoryTicks(categories, categoryAxisWidth(plotWidth), displayLabels);
   return {
     categories,
-    visible: new Set(indexes.map((i) => categories[i]!)),
-    yearOnly: categoryTicksUseShortYear(categories.length, indexes, axisWidth),
+    visible: new Set(planned.indexes.map((i) => categories[i]!)),
+    yearOnly: planned.yearOnly,
+    labelWidths: planned.labelWidths,
+    axisWidth: planned.axisWidth,
   };
 }
 
@@ -199,13 +234,15 @@ export function FundamentalChartCard({
     return xLabelFormatter ? xLabelFormatter(s) : s;
   };
 
+  const [cardPlotWidth, setCardPlotNode] = usePlotWidth();
+  const [modalPlotWidth, setModalPlotNode] = usePlotWidth();
   const cardPlan = useMemo(
-    () => tickPlanFor(data, xKey, CARD_PLOT_PX),
-    [data, xKey],
+    () => tickPlanFor(data, xKey, cardPlotWidth, periodDisplayLabels, xLabelFormatter),
+    [data, xKey, cardPlotWidth, periodDisplayLabels, xLabelFormatter],
   );
   const modalPlan = useMemo(
-    () => tickPlanFor(data, xKey, MODAL_PLOT_PX),
-    [data, xKey],
+    () => tickPlanFor(data, xKey, modalPlotWidth, periodDisplayLabels, xLabelFormatter),
+    [data, xKey, modalPlotWidth, periodDisplayLabels, xLabelFormatter],
   );
 
   const formatTick = (value: unknown, yearOnly: boolean): string => {
@@ -219,21 +256,24 @@ export function FundamentalChartCard({
   const renderChart = (plan: TickPlan) => (
     <ResponsiveContainer width="100%" height="100%">
       {resolvedType === "bar" ? (
-        <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+        <BarChart data={data} margin={{ top: 8, right: CHART_PLOT_RIGHT_MARGIN_PX, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
             tick={(props) => {
               const raw = props?.payload?.value;
               const key = raw == null ? "" : String(raw);
-              const index = plan.categories.indexOf(key);
+              const found = plan.categories.indexOf(key);
+              const index = found >= 0 ? found : (props?.index ?? 0);
               return (
                 <CategoryAxisTick
                   {...props}
-                  index={index >= 0 ? index : props?.index}
+                  index={index}
                   total={data.length}
                   show={plan.visible.has(key)}
                   formatValue={(v) => formatTick(v, plan.yearOnly)}
+                  axisWidth={plan.axisWidth}
+                  labelWidth={plan.labelWidths[index] ?? 0}
                 />
               );
             }}
@@ -247,7 +287,7 @@ export function FundamentalChartCard({
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            width={68}
+            width={CHART_Y_AXIS_PX}
             tickFormatter={(v: number) => axisTick(valueFormat, v, currency)}
           />
           <Tooltip
@@ -274,21 +314,24 @@ export function FundamentalChartCard({
           ))}
         </BarChart>
       ) : (
-        <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+        <LineChart data={data} margin={{ top: 8, right: CHART_PLOT_RIGHT_MARGIN_PX, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey={xKey}
             tick={(props) => {
               const raw = props?.payload?.value;
               const key = raw == null ? "" : String(raw);
-              const index = plan.categories.indexOf(key);
+              const found = plan.categories.indexOf(key);
+              const index = found >= 0 ? found : (props?.index ?? 0);
               return (
                 <CategoryAxisTick
                   {...props}
-                  index={index >= 0 ? index : props?.index}
+                  index={index}
                   total={data.length}
                   show={plan.visible.has(key)}
                   formatValue={(v) => formatTick(v, plan.yearOnly)}
+                  axisWidth={plan.axisWidth}
+                  labelWidth={plan.labelWidths[index] ?? 0}
                 />
               );
             }}
@@ -302,7 +345,7 @@ export function FundamentalChartCard({
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
             tickLine={false}
             axisLine={false}
-            width={68}
+            width={CHART_Y_AXIS_PX}
             tickFormatter={(v: number) => axisTick(valueFormat, v, currency)}
           />
           <Tooltip
@@ -396,7 +439,7 @@ export function FundamentalChartCard({
               <p className="text-sm font-medium text-muted-foreground">{t("chartsFund.chartNoDataTitle")}</p>
             </div>
           ) : (
-            <div className="relative h-[220px] min-h-0 min-w-0 w-full">
+            <div ref={setCardPlotNode} className="relative h-[220px] min-h-0 min-w-0 w-full">
               <div className="absolute inset-0 min-h-0 min-w-0">
                 {renderChart(cardPlan)}
               </div>
@@ -425,7 +468,7 @@ export function FundamentalChartCard({
           ) : null}
         </div>
         <div className="flex min-h-0 flex-col gap-4">
-          <div className="h-[42vh] min-h-[240px] w-full shrink-0">
+          <div ref={setModalPlotNode} className="h-[42vh] min-h-[240px] w-full shrink-0">
             {renderChart(modalPlan)}
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">

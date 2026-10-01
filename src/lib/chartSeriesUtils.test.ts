@@ -3,8 +3,14 @@ import { describe, it } from "node:test";
 
 import {
   categoryAxisWidth,
+  categoryBandCenter,
+  categoryLabelSpan,
+  categoryTickAnchor,
+  categoryTicksOverlap,
   categoryTicksUseShortYear,
   categoryYearKey,
+  estimateCategoryLabelPx,
+  planCategoryTicks,
   selectCategoryTickIndexes,
   seriesCoverage,
   seriesHasAnyPoint,
@@ -91,34 +97,130 @@ describe("categoryYearKey", () => {
   });
 });
 
+function assertBoxesClear(
+  indexes: number[],
+  total: number,
+  axisWidth: number,
+  labelWidths: readonly number[],
+) {
+  const spans = indexes
+    .map((i) => categoryLabelSpan(i, total, axisWidth, labelWidths[i]!))
+    .sort((a, b) => a.left - b.left);
+  for (let k = 1; k < spans.length; k++) {
+    const gap = spans[k]!.left - spans[k - 1]!.right;
+    assert.ok(gap >= 1.5, `label boxes overlap by ${(-gap).toFixed(1)}px at indexes ${indexes.join(",")}`);
+  }
+}
+
+describe("estimateCategoryLabelPx", () => {
+  it("matches measured 10px glyphs", () => {
+    assert.ok(estimateCategoryLabelPx("2024") >= 25);
+    assert.equal(estimateCategoryLabelPx("Sep 24"), 33);
+    assert.equal(estimateCategoryLabelPx("Mar 26"), 33);
+  });
+});
+
+describe("category axis geometry", () => {
+  it("steps category centers by width / n", () => {
+    const total = 20;
+    const axis = 180;
+    assert.equal(categoryBandCenter(0, total, axis), 4.5);
+    assert.equal(categoryBandCenter(1, total, axis) - categoryBandCenter(0, total, axis), axis / total);
+    assert.notEqual(axis / total, axis / (total - 1));
+  });
+
+  it("derives the category axis from the chart box", () => {
+    // lg 3-column chart box is ~260px; Y axis 68 + right margin 12 leaves ~180.
+    assert.equal(categoryAxisWidth(260), 180);
+    assert.equal(categoryAxisWidth(0), 0);
+  });
+});
+
 describe("selectCategoryTickIndexes", () => {
-  const cardAxis = categoryAxisWidth(300);
+  /** lg 3-column Stock Analysis card: chart box ~260px, category axis ~180px. */
+  const cardAxis = categoryAxisWidth(260);
+  const fiveYear = quarterlyIsoDates("2021-09-25", 20);
 
   it("labels every quarter when the series is short", () => {
     const dates = quarterlyIsoDates("2025-09-27", 4);
-    assert.deepEqual(selectCategoryTickIndexes(dates, cardAxis), [0, 1, 2, 3]);
+    const plan = planCategoryTicks(dates, cardAxis);
+    assert.deepEqual(plan.indexes, [0, 1, 2, 3]);
+    assert.equal(plan.yearOnly, false);
+    assertBoxesClear(plan.indexes, dates.length, cardAxis, plan.labelWidths);
   });
 
   it("keeps a newly listed name's only quarters", () => {
     const dates = ["2026-03-28", "2026-06-27"];
-    assert.deepEqual(selectCategoryTickIndexes(dates, cardAxis), [0, 1]);
+    const plan = planCategoryTicks(dates, cardAxis);
+    assert.deepEqual(plan.indexes, [0, 1]);
+    assertBoxesClear(plan.indexes, dates.length, cardAxis, plan.labelWidths);
   });
 
-  it("labels every year on a 5y quarterly axis without adjacent ticks", () => {
-    // 20 quarters, Sep 2021–Jun 2026 — the AAPL / META 5Y window.
-    const dates = quarterlyIsoDates("2021-09-25", 20);
-    const shown = selectCategoryTickIndexes(dates, cardAxis);
-    assert.deepEqual(yearsOf(dates, shown), ["2021", "2022", "2023", "2024", "2025", "2026"]);
-    for (let k = 1; k < shown.length; k++) {
-      assert.ok(shown[k]! - shown[k - 1]! >= 2, `adjacent ticks ${shown.join(",")}`);
-    }
-    assert.equal(categoryTicksUseShortYear(dates.length, shown, cardAxis), false);
+  it("prints every year on a narrow 5y card without overlapping glyphs", () => {
+    assert.equal(cardAxis, 180);
+    const plan = planCategoryTicks(fiveYear, cardAxis);
+    assert.equal(plan.yearOnly, true);
+    assert.deepEqual(yearsOf(fiveYear, plan.indexes), ["2021", "2022", "2023", "2024", "2025", "2026"]);
+    assertBoxesClear(plan.indexes, fiveYear.length, cardAxis, plan.labelWidths);
+    assert.equal(categoryTicksUseShortYear(fiveYear.length, plan.indexes, cardAxis), true);
+    // Start anchor extends a full "2024" toward the next tick.
+    assert.equal(categoryTickAnchor(0, fiveYear.length, cardAxis, plan.labelWidths[0]!), "start");
+    assert.equal(
+      categoryTickAnchor(fiveYear.length - 1, fiveYear.length, cardAxis, plan.labelWidths.at(-1)!),
+      "end",
+    );
   });
 
-  it("shows every quarter in the expanded chart", () => {
-    const dates = quarterlyIsoDates("2021-09-25", 20);
-    const shown = selectCategoryTickIndexes(dates, categoryAxisWidth(900));
-    assert.equal(shown.length, 20);
+  it("keeps 2023 and 2024 on a still narrower axis", () => {
+    const axis = categoryAxisWidth(200);
+    const plan = planCategoryTicks(fiveYear, axis);
+    const years = yearsOf(fiveYear, plan.indexes);
+    assert.ok(years.includes("2023"));
+    assert.ok(years.includes("2024"));
+    assertBoxesClear(plan.indexes, fiveYear.length, axis, plan.labelWidths);
+  });
+
+  it("does not collide the last two quarters when the expanded axis is only moderately wide", () => {
+    const axis = 340;
+    const month = estimateCategoryLabelPx("Mar 26");
+    const widths = Array.from({ length: fiveYear.length }, () => month);
+    assert.equal(categoryTickAnchor(fiveYear.length - 1, fiveYear.length, axis, month), "end");
+    assert.equal(categoryTicksOverlap([18, 19], fiveYear.length, axis, widths), true);
+    const plan = planCategoryTicks(fiveYear, axis);
+    assert.ok(!(plan.indexes.includes(18) && plan.indexes.includes(19)));
+    assertBoxesClear(plan.indexes, fiveYear.length, axis, plan.labelWidths);
+    assert.ok(yearsOf(fiveYear, plan.indexes).includes("2026"));
+  });
+
+  it("labels every quarter on a wide axis once centered labels clear the band", () => {
+    // Desktop dialog content ~856px → category axis ~776px.
+    const axis = categoryAxisWidth(856);
+    const plan = planCategoryTicks(fiveYear, axis);
+    assert.equal(plan.indexes.length, 20);
+    assert.equal(plan.yearOnly, false);
+    assert.equal(categoryTickAnchor(0, 20, axis, plan.labelWidths[0]!), "middle");
+    assert.equal(categoryTickAnchor(19, 20, axis, plan.labelWidths[19]!), "middle");
+    assertBoxesClear(plan.indexes, fiveYear.length, axis, plan.labelWidths);
+  });
+
+  it("does not show all 20 labels on a phone dialog", () => {
+    // min(56rem, 94vw) at 390px, minus dialog padding, minus the Y axis.
+    const phonePlot = Math.min(56 * 16, 390 * 0.94) - 40;
+    const axis = categoryAxisWidth(phonePlot);
+    const plan = planCategoryTicks(fiveYear, axis);
+    assert.ok(plan.indexes.length < 20);
+    assert.deepEqual(yearsOf(fiveYear, plan.indexes), ["2021", "2022", "2023", "2024", "2025", "2026"]);
+    assertBoxesClear(plan.indexes, fiveYear.length, axis, plan.labelWidths);
+  });
+
+  it("does not treat a point-scale step as enough room", () => {
+    // width / (n - 1) is ~34px here, so the old gap math labeled every quarter.
+    // The band step is ~32px, narrower than "Sep 24".
+    const axis = 34 * 19;
+    const shown = selectCategoryTickIndexes(fiveYear, axis);
+    assert.ok(shown.length < 20);
+    const plan = planCategoryTicks(fiveYear, axis);
+    assertBoxesClear(plan.indexes, fiveYear.length, axis, plan.labelWidths);
   });
 
   it("does not invent labels for years with no points", () => {
@@ -131,7 +233,9 @@ describe("selectCategoryTickIndexes", () => {
 
   it("shows every annual fiscal year", () => {
     const labels = ["FY 2021", "FY 2022", "FY 2023", "FY 2024", "FY 2025"];
-    assert.deepEqual(selectCategoryTickIndexes(labels, cardAxis), [0, 1, 2, 3, 4]);
+    const plan = planCategoryTicks(labels, cardAxis);
+    assert.deepEqual(plan.indexes, [0, 1, 2, 3, 4]);
+    assertBoxesClear(plan.indexes, labels.length, cardAxis, plan.labelWidths);
   });
 });
 

@@ -80,12 +80,33 @@ export function tickCoord(value: string | number | undefined): number {
   return 0;
 }
 
-/** "Sep 24" / "FY 2024" at 10px. Wider than this and neighboring ticks collide. */
-const FULL_LABEL_PX = 34;
-/** "2024" at 10px — used when month labels would overlap. */
-const YEAR_LABEL_PX = 22;
-/** Y-axis width plus chart margins, subtracted from the card's plot box. */
-const AXIS_CHROME_PX = 76;
+/**
+ * 10px axis font, matched to measured glyphs: "2024" ≈ 25px, "Sep 24" ≈ 33px.
+ * Digits are wider than letters in the UI font.
+ */
+const DIGIT_PX = 6.25;
+const LETTER_PX = 5.5;
+const SPACE_PX = 3.5;
+/** Breathing room between neighboring glyph boxes. */
+const LABEL_GAP_PX = 2;
+/** Y axis plus the chart's right margin. The category axis is the plot box minus this. */
+export const CHART_Y_AXIS_PX = 68;
+export const CHART_PLOT_RIGHT_MARGIN_PX = 12;
+/** Used until the chart container has been measured, so the first paint stays sparse. */
+const UNMEASURED_AXIS_PX = 160;
+
+const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Pixel width of a 10px axis label. "2024" → 25, "Sep 24" → 33. */
+export function estimateCategoryLabelPx(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    if (ch >= "0" && ch <= "9") width += DIGIT_PX;
+    else if (ch === " " || ch === "\u00a0") width += SPACE_PX;
+    else width += LETTER_PX;
+  }
+  return Math.max(1, Math.round(width));
+}
 
 /**
  * Calendar year for an axis category: ISO period end, "FY 2024", "Sep 24", or "Apr 26, 26".
@@ -103,10 +124,76 @@ export function categoryYearKey(category: string): string | null {
   return String(2000 + n);
 }
 
-/** Category-axis width inside a chart box that also draws the Y axis. */
+/**
+ * Category-axis width inside a chart box that also draws the Y axis.
+ * Returns 0 when the box has not been measured yet.
+ */
 export function categoryAxisWidth(plotWidth: number): number {
-  if (!Number.isFinite(plotWidth) || plotWidth <= 0) return 220;
-  return Math.max(FULL_LABEL_PX * 2, plotWidth - AXIS_CHROME_PX);
+  if (!Number.isFinite(plotWidth) || plotWidth <= 0) return 0;
+  return Math.max(0, plotWidth - CHART_Y_AXIS_PX - CHART_PLOT_RIGHT_MARGIN_PX);
+}
+
+function resolveAxisWidth(axisWidth: number): number {
+  if (!Number.isFinite(axisWidth) || axisWidth <= 0) return UNMEASURED_AXIS_PX;
+  return axisWidth;
+}
+
+/** Band-scale center. Bar and category axes step by `width / n`, not `width / (n - 1)`. */
+export function categoryBandCenter(index: number, total: number, axisWidth: number): number {
+  if (total <= 0) return 0;
+  return (axisWidth / total) * (index + 0.5);
+}
+
+export type CategoryTickAnchor = "start" | "middle" | "end";
+
+/**
+ * Edge labels use an inward anchor only when a centered label would leave the axis.
+ * A centered label fits when it is no wider than one band (`width / n`).
+ */
+export function categoryTickAnchor(
+  index: number,
+  total: number,
+  axisWidth: number,
+  labelWidth: number,
+): CategoryTickAnchor {
+  if (total <= 1 || !(axisWidth > 0)) return "middle";
+  const band = axisWidth / total;
+  if (!(labelWidth > band)) return "middle";
+  if (index <= 0) return "start";
+  if (index >= total - 1) return "end";
+  return "middle";
+}
+
+/** Glyph box for one category label, in the same coordinate space as the axis. */
+export function categoryLabelSpan(
+  index: number,
+  total: number,
+  axisWidth: number,
+  labelWidth: number,
+): { left: number; right: number } {
+  const center = categoryBandCenter(index, total, axisWidth);
+  const anchor = categoryTickAnchor(index, total, axisWidth, labelWidth);
+  if (anchor === "start") return { left: center, right: center + labelWidth };
+  if (anchor === "end") return { left: center - labelWidth, right: center };
+  const half = labelWidth / 2;
+  return { left: center - half, right: center + half };
+}
+
+/** True when any two shown labels' glyph boxes are closer than {@link LABEL_GAP_PX}. */
+export function categoryTicksOverlap(
+  indexes: number[],
+  total: number,
+  axisWidth: number,
+  labelWidths: readonly number[],
+): boolean {
+  if (indexes.length <= 1 || total <= 0 || !(axisWidth > 0)) return false;
+  const spans = indexes
+    .map((i) => categoryLabelSpan(i, total, axisWidth, labelWidths[i] ?? 0))
+    .sort((a, b) => a.left - b.left || a.right - b.right);
+  for (let k = 1; k < spans.length; k++) {
+    if (spans[k]!.left < spans[k - 1]!.right + LABEL_GAP_PX - 0.05) return true;
+  }
+  return false;
 }
 
 type YearGroup = { indexes: number[] };
@@ -127,77 +214,207 @@ function yearGroups(categories: string[]): YearGroup[] {
   return groups;
 }
 
-/**
- * One index per year, spread across the axis. Each pick stays inside that year's
- * real categories — nothing is invented for a year the series does not contain.
- */
-function spaceYearAnchors(groups: YearGroup[]): number[] {
-  const m = groups.length;
-  if (m === 0) return [];
-  const first = groups[0]!.indexes[0]!;
-  const last = groups[m - 1]!.indexes[groups[m - 1]!.indexes.length - 1]!;
-  const chosen: number[] = [];
-  for (let g = 0; g < m; g++) {
-    const ideal = first + (g * (last - first)) / Math.max(1, m - 1);
-    let best: number | null = null;
-    let bestDist = Infinity;
-    for (const i of groups[g]!.indexes) {
-      if (chosen.length > 0 && i <= chosen[chosen.length - 1]!) continue;
-      let laterOk = true;
-      for (let k = 0; k < m - g - 1; k++) {
-        const later = groups[g + 1 + k]!.indexes;
-        if (!later.some((x) => x >= i + (k + 1))) {
-          laterOk = false;
-          break;
-        }
-      }
-      if (!laterOk) continue;
-      const dist = Math.abs(i - ideal);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    }
-    if (best == null) continue;
-    chosen.push(best);
-  }
-  return chosen;
+function defaultDisplayLabel(category: string): string {
+  const iso = /^(\d{4})-(\d{2})-\d{2}/.exec(category);
+  if (!iso) return category;
+  const month = MONTHS_EN[Number(iso[2]) - 1];
+  if (!month) return category;
+  return `${month} ${iso[1]!.slice(2)}`;
 }
 
-function thinToMinGap(indexes: number[], minGap: number): number[] {
-  if (minGap <= 1 || indexes.length <= 2) return indexes;
-  const last = indexes[indexes.length - 1]!;
-  const kept: number[] = [indexes[0]!];
-  for (let i = 1; i < indexes.length - 1; i++) {
-    const idx = indexes[i]!;
-    if (idx - kept[kept.length - 1]! >= minGap && last - idx >= minGap) kept.push(idx);
+function labelText(
+  category: string,
+  index: number,
+  displayLabels: readonly string[] | undefined,
+  yearOnly: boolean,
+): string {
+  if (yearOnly) return categoryYearKey(category) ?? defaultDisplayLabel(category);
+  const given = displayLabels?.[index];
+  if (given && given.trim()) return given;
+  return defaultDisplayLabel(category);
+}
+
+function labelWidthsFor(
+  categories: string[],
+  displayLabels: readonly string[] | undefined,
+  yearOnly: boolean,
+): number[] {
+  return categories.map((category, index) =>
+    estimateCategoryLabelPx(labelText(category, index, displayLabels, yearOnly)),
+  );
+}
+
+function spansClear(
+  i: number,
+  j: number,
+  total: number,
+  axisWidth: number,
+  widths: readonly number[],
+): boolean {
+  if (j <= i) return false;
+  const a = categoryLabelSpan(i, total, axisWidth, widths[i] ?? 0);
+  const b = categoryLabelSpan(j, total, axisWidth, widths[j] ?? 0);
+  return b.left >= a.right + LABEL_GAP_PX - 0.05;
+}
+
+/**
+ * One real index per year group. Edge groups stay on category 0 / n-1 when those
+ * labels use an inward anchor, so the penultimate tick is not forced against the last.
+ * Returns null when the groups cannot be placed without overlapping.
+ */
+function packYearGroups(
+  groups: YearGroup[],
+  total: number,
+  axisWidth: number,
+  widths: readonly number[],
+  lockEdges: boolean,
+): number[] | null {
+  const m = groups.length;
+  if (m === 0) return [];
+  const picks = new Array<number>(m);
+  const firstEdge = groups[0]!.indexes[0]!;
+  const lastEdge = groups[m - 1]!.indexes[groups[m - 1]!.indexes.length - 1]!;
+
+  function candidates(g: number): number[] {
+    const indexes = groups[g]!.indexes;
+    if (lockEdges && g === 0) return [firstEdge];
+    if (lockEdges && g === m - 1) return [lastEdge];
+    return indexes;
   }
-  if (kept[kept.length - 1] !== last) kept.push(last);
-  return kept;
+
+  function earliest(g: number, prev: number): number | null {
+    for (const i of candidates(g)) {
+      if (prev < 0 || spansClear(prev, i, total, axisWidth, widths)) return i;
+    }
+    return null;
+  }
+
+  function canFinish(g: number, prev: number): boolean {
+    let cursor = prev;
+    for (let k = g; k < m; k++) {
+      const next = earliest(k, cursor);
+      if (next == null) return false;
+      cursor = next;
+    }
+    return true;
+  }
+
+  function dfs(g: number, prev: number): boolean {
+    const ideal =
+      m === 1 ? firstEdge : firstEdge + (g * (lastEdge - firstEdge)) / (m - 1);
+    const options = candidates(g)
+      .filter((i) => prev < 0 || spansClear(prev, i, total, axisWidth, widths))
+      .sort((a, b) => Math.abs(a - ideal) - Math.abs(b - ideal) || a - b);
+    for (const i of options) {
+      if (g < m - 1 && !canFinish(g + 1, i)) continue;
+      picks[g] = i;
+      if (g === m - 1 || dfs(g + 1, i)) return true;
+    }
+    return false;
+  }
+
+  if (!dfs(0, -1)) return null;
+  return picks;
+}
+
+function addFittingIndexes(
+  kept: number[],
+  total: number,
+  axisWidth: number,
+  widths: readonly number[],
+): number[] {
+  const chosen = new Set(kept);
+  for (let i = 0; i < total; i++) {
+    if (chosen.has(i)) continue;
+    if (!categoryTicksOverlap([...chosen, i], total, axisWidth, widths)) chosen.add(i);
+  }
+  return [...chosen].sort((a, b) => a - b);
+}
+
+/** Drop an interior year, alternating the start side and the end side, so the middle years stay. */
+function dropOuterInterior(groups: YearGroup[], fromEnd: boolean): YearGroup[] {
+  if (groups.length <= 2) return groups;
+  const at = fromEnd ? groups.length - 2 : 1;
+  return groups.filter((_, index) => index !== at);
+}
+
+function selectForWidths(
+  groups: YearGroup[],
+  total: number,
+  axisWidth: number,
+  widths: readonly number[],
+  allowExtras: boolean,
+): number[] {
+  const band = axisWidth / total;
+  const lockEdges = (widths[0] ?? 0) > band || (widths[total - 1] ?? 0) > band;
+  let active = groups;
+  let fromEnd = false;
+  while (active.length >= 2) {
+    const packed = packYearGroups(active, total, axisWidth, widths, lockEdges);
+    if (packed && !categoryTicksOverlap(packed, total, axisWidth, widths)) {
+      return allowExtras ? addFittingIndexes(packed, total, axisWidth, widths) : packed;
+    }
+    if (active.length === 2) break;
+    active = dropOuterInterior(active, fromEnd);
+    fromEnd = !fromEnd;
+  }
+  const ends = [0, total - 1];
+  if (!categoryTicksOverlap(ends, total, axisWidth, widths)) return ends;
+  return [total - 1];
+}
+
+function coversEveryGroup(groups: YearGroup[], indexes: number[]): boolean {
+  const shown = new Set(indexes);
+  return groups.every((group) => group.indexes.some((i) => shown.has(i)));
+}
+
+export type CategoryTickPlan = {
+  indexes: number[];
+  /** Month labels would collide, so ticks print the calendar year alone. */
+  yearOnly: boolean;
+  /** Reserved glyph width for every category, including hidden ones. */
+  labelWidths: number[];
+  axisWidth: number;
+};
+
+/**
+ * Which category indexes get a label, and whether that label is the year alone.
+ * Density follows the band scale (`width / n`) and the inward extent of start/end anchors.
+ * Years with no real point are never added.
+ */
+export function planCategoryTicks(
+  categories: string[],
+  axisWidth: number,
+  displayLabels?: readonly string[],
+): CategoryTickPlan {
+  const total = categories.length;
+  const width = resolveAxisWidth(axisWidth);
+  if (total === 0) {
+    return { indexes: [], yearOnly: false, labelWidths: [], axisWidth: width };
+  }
+  const groups = yearGroups(categories);
+  const monthWidths = labelWidthsFor(categories, displayLabels, false);
+  if (total === 1) {
+    return { indexes: [0], yearOnly: false, labelWidths: monthWidths, axisWidth: width };
+  }
+  const monthIndexes = selectForWidths(groups, total, width, monthWidths, true);
+  if (
+    coversEveryGroup(groups, monthIndexes) &&
+    !categoryTicksOverlap(monthIndexes, total, width, monthWidths)
+  ) {
+    return { indexes: monthIndexes, yearOnly: false, labelWidths: monthWidths, axisWidth: width };
+  }
+  const yearWidths = labelWidthsFor(categories, displayLabels, true);
+  const yearIndexes = selectForWidths(groups, total, width, yearWidths, false);
+  return { indexes: yearIndexes, yearOnly: true, labelWidths: yearWidths, axisWidth: width };
 }
 
 /**
  * Category indexes that get a label.
- * Quarterly history keeps every calendar year that actually has a point, spaced so
- * "Sep 24" labels do not stack. A wide chart (the expand dialog) labels every quarter.
- * Sparse, annual-only, and newly listed series are labeled as-is — no placeholder quarters.
+ * Keeps every calendar year that fits, and never invents a quarter the series does not contain.
  */
 export function selectCategoryTickIndexes(categories: string[], axisWidth: number): number[] {
-  const n = categories.length;
-  if (n === 0) return [];
-  if (n === 1) return [0];
-  const width = Number.isFinite(axisWidth) && axisWidth > 0 ? axisWidth : 220;
-  const slotPx = width / (n - 1);
-  const fullGap = Math.max(1, Math.ceil(FULL_LABEL_PX / slotPx));
-  if (fullGap <= 1) return Array.from({ length: n }, (_, i) => i);
-
-  const yearGap = Math.max(1, Math.ceil(YEAR_LABEL_PX / slotPx));
-  const anchors = thinToMinGap(spaceYearAnchors(yearGroups(categories)), yearGap);
-  const chosen = new Set(anchors);
-  for (let i = 0; i < n; i++) {
-    if ([...chosen].every((c) => Math.abs(c - i) >= fullGap)) chosen.add(i);
-  }
-  return [...chosen].sort((a, b) => a - b);
+  return planCategoryTicks(categories, axisWidth).indexes;
 }
 
 /** True when month+year text would collide and the axis should print the year alone. */
@@ -207,12 +424,9 @@ export function categoryTicksUseShortYear(
   axisWidth: number,
 ): boolean {
   if (indexes.length <= 1 || total <= 1) return false;
-  const sorted = [...indexes].sort((a, b) => a - b);
-  let minGap = Infinity;
-  for (let i = 1; i < sorted.length; i++) {
-    minGap = Math.min(minGap, sorted[i]! - sorted[i - 1]!);
-  }
-  const width = Number.isFinite(axisWidth) && axisWidth > 0 ? axisWidth : 220;
-  return (minGap / (total - 1)) * width < FULL_LABEL_PX;
+  const width = resolveAxisWidth(axisWidth);
+  const month = estimateCategoryLabelPx("Sep 24");
+  const widths = Array.from({ length: total }, () => month);
+  return categoryTicksOverlap(indexes, total, width, widths);
 }
 
