@@ -185,28 +185,34 @@ type UpcomingDividendQuote = {
  * Upcoming per-share estimates are gross Yahoo cash. A Bulgarian resident
  * individual is shown the amount after tax:
  *
- * - US-source dividends (Nasdaq, or an EU listing of a US issuer such as
+ * - US-source dividends (Nasdaq, or a mapped EU listing of a US issuer such as
  *   MSF.DE): 10% US withholding under the Bulgaria–US income tax treaty,
  *   Article 10(2)(b). Trading 212 withholds this rate for Bulgarian residents.
- *   Then 5% Bulgarian final dividend tax on the remainder (ЗДДФЛ чл. 38, ал. 1).
- * - Other issuers: only that 5% Bulgarian tax. Foreign withholding outside the
- *   US is not modeled.
+ *   The 5% Bulgarian final dividend tax (ЗДДФЛ чл. 38, ал. 1, charged on the
+ *   gross under чл. 46, ал. 3) is wiped out by the foreign tax credit once US
+ *   withholding is already 10%, so the cash factor is 0.90 only.
+ * - Other issuers: only that 5% Bulgarian tax. No US withholding is invented
+ *   for local European names.
  *
  * Recorded portfolio payments are cash already received, so they are not taxed
- * again. Worked example at 0.85 EUR per USD: 0.98 USD × 0.708416 shares ×
- * 0.90 × 0.95 × 0.85 ≈ €0.50.
+ * again. At 0.85 EUR per USD: 0.98 USD × 0.708416 shares × 0.90 × 0.85 ≈ €0.53.
  */
 export const US_DIVIDEND_WITHHOLDING_RATE = 0.1;
 export const BG_DIVIDEND_TAX_RATE = 0.05;
 
 const PAYMENTS_PER_YEAR = [1, 2, 4, 12] as const;
-/** USD interpretation must beat the listing currency by more than this gap. */
-const DIVIDEND_CURRENCY_GAP = 0.02;
+/**
+ * Per-share cash within this relative gap of annual/frequency is already in the
+ * listing currency. Wider than that, a US issuer's cash is still USD.
+ */
+const LISTING_CURRENCY_MATCH_GAP = 0.08;
+/** Plausible quote-currency units per 1 USD (EUR, GBP, CHF). */
+const IMPLIED_FX_MIN = 0.5;
+const IMPLIED_FX_MAX = 1.25;
 
 export function upcomingDividendNetFactor(symbol: string): number {
-  const afterBg = 1 - BG_DIVIDEND_TAX_RATE;
-  if (isUsSourceDividendSymbol(symbol)) return (1 - US_DIVIDEND_WITHHOLDING_RATE) * afterBg;
-  return afterBg;
+  if (isUsSourceDividendSymbol(symbol)) return 1 - US_DIVIDEND_WITHHOLDING_RATE;
+  return 1 - BG_DIVIDEND_TAX_RATE;
 }
 
 function isoDay(value: string | null | undefined): string | null {
@@ -258,14 +264,20 @@ function latestPreviousPayment(
   return latest;
 }
 
-function bestPaymentGap(amount: number, annual: number): number {
-  if (!(amount > 0) || !(annual > 0)) return Infinity;
-  let best = Infinity;
+/** Closest annual/frequency payment, and how far `perShare` sits from it. */
+function listingDividendMatch(perShare: number, annual: number): { gap: number; expected: number } {
+  let gap = Infinity;
+  let expected = 0;
+  if (!(perShare > 0) || !(annual > 0)) return { gap, expected };
   for (const freq of PAYMENTS_PER_YEAR) {
-    const expected = annual / freq;
-    best = Math.min(best, Math.abs(amount - expected) / expected);
+    const payment = annual / freq;
+    const rel = Math.abs(perShare - payment) / payment;
+    if (rel < gap) {
+      gap = rel;
+      expected = payment;
+    }
   }
-  return best;
+  return { gap, expected };
 }
 
 /** Annual dividend in the listing currency: price × yield, else Yahoo dividendRate. */
@@ -283,29 +295,32 @@ function quoteAnnualDividend(quote: UpcomingDividendQuote): number | null {
 
 /**
  * Currency of Yahoo's latest per-share cash.
- * On EU listings of US issuers the quote is EUR/GBP but `lastDividendValue` is
- * often still the USD amount (MSF.DE 0.98 vs a ~€3.40 annual rate). Use USD when
- * that reading, converted, matches the listing-currency annual dividend; keep
- * the listing currency when the cash is already converted.
+ * On a mapped EU listing of a US issuer the quote is EUR/GBP but
+ * `lastDividendValue` is often still the USD amount (MSF.DE 0.98 vs a ~€3.40
+ * annual rate). If that cash already matches the listing-currency annual
+ * dividend, keep the listing currency — including when yield and dividendRate
+ * are both missing, so an EUR figure is not converted again. A wide gap means
+ * the cash is still USD; the portfolio FX rate is not used to make that call,
+ * because a rate of 1 or 0.70 would otherwise lose to the unconverted reading.
  */
 export function resolveUpcomingDividendCurrency(
   symbol: string,
   perShare: number,
   quote: UpcomingDividendQuote,
-  fx: PortfolioFxRates,
+  _fx: PortfolioFxRates,
 ): string {
   const quoteCcy = normalizePortfolioCurrency(quote.currency);
   if (!isUsSourceDividendSymbol(symbol) || quoteCcy === "USD" || !(perShare > 0)) return quoteCcy;
 
   const annual = quoteAnnualDividend(quote);
-  if (annual == null) return "USD";
+  if (annual == null) return quoteCcy;
 
-  const asQuote = bestPaymentGap(perShare, annual);
-  const inQuote = convertPortfolioMoney(perShare, "USD", quoteCcy, fx);
-  if (inQuote == null) return asQuote > 0.08 ? "USD" : quoteCcy;
-  const asUsd = bestPaymentGap(inQuote, annual);
-  if (asUsd + DIVIDEND_CURRENCY_GAP < asQuote) return "USD";
-  return quoteCcy;
+  const { gap, expected } = listingDividendMatch(perShare, annual);
+  if (gap <= LISTING_CURRENCY_MATCH_GAP) return quoteCcy;
+
+  const impliedQuotePerUsd = expected / perShare;
+  if (impliedQuotePerUsd < IMPLIED_FX_MIN || impliedQuotePerUsd > IMPLIED_FX_MAX) return quoteCcy;
+  return "USD";
 }
 
 function cashFromPerShare(

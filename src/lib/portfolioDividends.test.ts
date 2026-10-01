@@ -10,6 +10,7 @@ import {
   buildPortfolioDividendsPayload,
   buildUpcomingPortfolioDividends,
   calendarMonthsBetween,
+  resolveUpcomingDividendCurrency,
   dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
   incomeGrowthPillsFromMonthly,
@@ -28,7 +29,7 @@ function closeTo(actual: number, expected: number, eps = 1e-9) {
 }
 
 function usNet(gross: number): number {
-  return gross * (1 - US_DIVIDEND_WITHHOLDING_RATE) * (1 - BG_DIVIDEND_TAX_RATE);
+  return gross * (1 - US_DIVIDEND_WITHHOLDING_RATE);
 }
 
 describe("calendarMonthsBetween", () => {
@@ -974,7 +975,7 @@ describe("buildUpcomingPortfolioDividends", () => {
       assert.equal(rows[0]!.currency, "EUR");
       assert.equal(rows[0]!.date, "2026-12-10");
       closeTo(rows[0]!.amount, usNet(perShare * shares) * eurPerUsd);
-      assert.ok(Math.abs(rows[0]!.amount - 0.5) < 0.01);
+      assert.ok(Math.abs(rows[0]!.amount - 0.53) < 0.01);
     }
   });
 
@@ -1063,5 +1064,71 @@ describe("buildUpcomingPortfolioDividends", () => {
     assert.equal(rows[0]!.currency, "EUR");
     assert.equal(rows[0]!.estimated, false);
     closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
+  });
+
+  it("does not convert an EUR cash dividend again when annual data is missing", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [{ symbol: "FB2A.DE", name: "Meta", quantity: 2, currency: "EUR" }],
+      payments: [],
+      quotes: {
+        "FB2A.DE": {
+          currency: "EUR",
+          dividendPayDate: "2026-12-15",
+          exDividendDate: "2026-12-01",
+          lastDividendPerShare: 0.46,
+          lastDividendDate: "2026-12-01",
+        },
+      },
+      fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+      today,
+    });
+
+    assert.equal(rows[0]!.currency, "EUR");
+    assert.equal(rows[0]!.estimated, false);
+    closeTo(rows[0]!.amount, 0.46 * 2 * (1 - US_DIVIDEND_WITHHOLDING_RATE));
+  });
+
+  it("keeps a USD dividend when the portfolio FX rate cannot confirm it", () => {
+    const quote = {
+      currency: "EUR",
+      price: 447.2,
+      dividendYield: 0.0076,
+      dividendRate: 3.4,
+    };
+    for (const eurPerUsd of [1, 0.7]) {
+      assert.equal(
+        resolveUpcomingDividendCurrency("MSFT.DE", 0.98, quote, { eurPerUsd, gbpPerUsd: null }),
+        "USD",
+      );
+      assert.equal(
+        resolveUpcomingDividendCurrency("MSF.DE", 0.98, quote, { eurPerUsd, gbpPerUsd: null }),
+        "USD",
+      );
+    }
+  });
+
+  it("charges only Bulgarian dividend tax on local European names", () => {
+    for (const symbol of ["ALV.DE", "DTE.DE", "MC.PA", "EL.PA", "DG.PA", "MRK.DE"]) {
+      const rows = buildUpcomingPortfolioDividends({
+        positions: [{ symbol, name: symbol, quantity: 1, currency: "EUR" }],
+        payments: [],
+        quotes: {
+          [symbol]: {
+            currency: "EUR",
+            price: 100,
+            dividendYield: 0.04,
+            dividendRate: 4,
+            dividendPayDate: "2026-11-15",
+            exDividendDate: "2026-11-01",
+            lastDividendPerShare: 1,
+            lastDividendDate: "2026-11-01",
+          },
+        },
+        fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+        today,
+      });
+      assert.equal(rows[0]!.currency, "EUR");
+      closeTo(rows[0]!.amount, 1 * (1 - BG_DIVIDEND_TAX_RATE));
+    }
   });
 });

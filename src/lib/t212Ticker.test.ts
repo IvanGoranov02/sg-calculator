@@ -362,5 +362,14 @@ describe("isUsSourceDividendSymbol", () => {
     assert.equal(isUsSourceDividendSymbol("ASML.AS"), false);
     assert.equal(isUsSourceDividendSymbol("SAPd_EQ"), false);
     assert.equal(isUsSourceDividendSymbol("7203.T"), false);
+    assert.equal(isUsSourceDividendSymbol("ALV.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("DTE.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("MC.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("EL.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("DG.PA"), false);
+    assert.equal(isUsSourceDividendSymbol("MRK.DE"), false);
+    assert.equal(isUsSourceDividendSymbol("WDP.AS"), false);
+    assert.equal(isUsSourceDividendSymbol("WDP.DE"), true);
+    assert.equal(isUsSourceDividendSymbol("GIS.DE"), true);
   });
 });
