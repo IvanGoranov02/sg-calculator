@@ -182,7 +182,8 @@ export function WatchlistDipChart({ rows, compact = false }: WatchlistDipChartPr
                   const p = payload[0].payload as (typeof sorted)[0];
                   return (
                     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-zinc-950/95 px-2.5 py-2 shadow-lg backdrop-blur">
-                      <CompanyLogo symbol={p.symbol} size="xs" />
+                      {/* Remount per symbol so the previous logo, or its load failure, cannot stick. */}
+                      <CompanyLogo key={p.symbol} symbol={p.symbol} size="xs" />
                       <p
                         className={cn(
                           "text-xl font-semibold tabular-nums leading-none tracking-tight",
