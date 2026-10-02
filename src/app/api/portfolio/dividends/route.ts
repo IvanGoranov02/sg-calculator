@@ -1,9 +1,9 @@
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
-import { buildPortfolioDividendsPayload } from "@/lib/portfolioDividends";
+import { buildPortfolioDividendsPayload, symbolsNeedingExDividendHistory } from "@/lib/portfolioDividends";
 import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
-import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
+import { fetchExDividendDateHistory, fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
 import { isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
 import { prisma } from "@/lib/prisma";
 import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
@@ -111,6 +111,11 @@ export async function GET(request: Request) {
       };
     }
 
+    const today = new Date().toISOString().slice(0, 10);
+    const historySymbols = symbolsNeedingExDividendHistory(quotes, today);
+    const exDividendHistory =
+      historySymbols.length > 0 ? await fetchExDividendDateHistory(historySymbols) : {};
+
     const payload = buildPortfolioDividendsPayload({
       holdings,
       quotes,
@@ -119,6 +124,8 @@ export async function GET(request: Request) {
       manualRows,
       cacheBySymbol,
       trading212: t212Meta,
+      exDividendHistory,
+      today,
     });
 
     return Response.json(payload);

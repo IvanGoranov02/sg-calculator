@@ -10,6 +10,8 @@ import {
   buildPortfolioDividendsPayload,
   buildUpcomingPortfolioDividends,
   calendarMonthsBetween,
+  exDividendDatesFromYahooChart,
+  projectNextExDividendDate,
   resolveUpcomingDividendCurrency,
   dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
@@ -1130,5 +1132,169 @@ describe("buildUpcomingPortfolioDividends", () => {
       assert.equal(rows[0]!.currency, "EUR");
       closeTo(rows[0]!.amount, 1 * (1 - BG_DIVIDEND_TAX_RATE));
     }
+  });
+
+  it("projects the next ex-date from a European issuer's payment history", () => {
+    assert.equal(
+      projectNextExDividendDate(
+        [
+          "2024-10-29",
+          "2025-02-10",
+          "2025-04-25",
+          "2025-07-28",
+          "2025-10-28",
+          "2026-02-09",
+          "2026-04-24",
+          "2026-07-27",
+        ],
+        "2026-10-02",
+      ),
+      "2026-10-27",
+    );
+    assert.equal(
+      projectNextExDividendDate(["2024-05-16", "2025-05-14", "2026-05-06"], "2026-10-02"),
+      "2027-05-06",
+    );
+    assert.equal(
+      projectNextExDividendDate(
+        [
+          "2025-02-10",
+          "2025-05-12",
+          "2025-08-11",
+          "2025-11-10",
+          "2026-02-09",
+          "2026-05-11",
+          "2026-08-10",
+        ],
+        "2026-10-02",
+      ),
+      "2026-11-09",
+    );
+    assert.equal(projectNextExDividendDate(["2026-05-01", "2026-11-20"], "2026-10-02"), "2026-11-20");
+    assert.equal(projectNextExDividendDate(["2024-01-15", "2024-04-15"], "2026-10-02"), null);
+  });
+
+  it("reads ex-dates from a Yahoo chart dividend payload", () => {
+    const dates = exDividendDatesFromYahooChart({
+      events: {
+        dividends: {
+          1: { date: new Date("2026-07-27T00:00:00.000Z"), amount: 1.88 },
+          2: { date: new Date("2026-04-24T00:00:00.000Z"), amount: 2.7 },
+          3: { date: new Date("2026-02-09T00:00:00.000Z"), amount: 0 },
+        },
+      },
+    });
+    assert.deepEqual(dates, ["2026-04-24", "2026-07-27"]);
+  });
+
+  it("shows EU-on-EU, US-on-EU, and US-on-US upcoming dividends soonest first", () => {
+    const shares = 0.708416;
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [
+        { symbol: "ASML.AS", name: "ASML", quantity: 2, currency: "EUR" },
+        { symbol: "MSF.DE", name: "Microsoft", quantity: shares, currency: "EUR" },
+        { symbol: "AAPL", name: "Apple", quantity: 10, currency: "USD" },
+      ],
+      payments: [],
+      quotes: {
+        "ASML.AS": {
+          currency: "EUR",
+          dividendRate: 7.78,
+          exDividendDate: "2026-07-27",
+          dividendPayDate: null,
+          lastDividendPerShare: 1.88,
+          lastDividendDate: "2026-07-27",
+        },
+        "MSF.DE": {
+          currency: "EUR",
+          price: 447.2,
+          dividendYield: 0.0076,
+          dividendRate: 3.4,
+          dividendPayDate: "2026-12-10",
+          exDividendDate: "2026-11-19",
+          lastDividendPerShare: 0.98,
+          lastDividendDate: "2026-11-19",
+          resolvedYahooSymbol: "MSF.DE",
+        },
+        AAPL: {
+          currency: "USD",
+          dividendRate: 1.08,
+          exDividendDate: "2026-08-10",
+          dividendPayDate: "2026-08-13",
+          lastDividendPerShare: 0.27,
+          lastDividendDate: "2026-08-10",
+        },
+      },
+      exDividendHistory: {
+        "ASML.AS": [
+          "2024-10-29",
+          "2025-02-10",
+          "2025-04-25",
+          "2025-07-28",
+          "2025-10-28",
+          "2026-02-09",
+          "2026-04-24",
+          "2026-07-27",
+        ],
+        // Past US-listing history must not replace a published future ex-date.
+        "MSF.DE": ["2026-02-19", "2026-05-21", "2026-08-20"],
+        AAPL: [
+          "2025-02-10",
+          "2025-05-12",
+          "2025-08-11",
+          "2025-11-10",
+          "2026-02-09",
+          "2026-05-11",
+          "2026-08-10",
+        ],
+      },
+      fx: { eurPerUsd: 0.85, gbpPerUsd: null },
+      today,
+    });
+
+    assert.deepEqual(
+      rows.map((r) => r.symbol),
+      ["ASML.AS", "AAPL", "MSF.DE"],
+    );
+
+    assert.equal(rows[0]!.date, "2026-10-27");
+    assert.equal(rows[0]!.estimated, true);
+    assert.equal(rows[0]!.currency, "EUR");
+    closeTo(rows[0]!.amount, 1.88 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
+
+    assert.equal(rows[1]!.date, "2026-11-09");
+    assert.equal(rows[1]!.estimated, true);
+    assert.equal(rows[1]!.currency, "USD");
+    closeTo(rows[1]!.amount, usNet(0.27 * 10));
+
+    assert.equal(rows[2]!.date, "2026-12-10");
+    assert.equal(rows[2]!.estimated, false);
+    assert.equal(rows[2]!.currency, "EUR");
+    closeTo(rows[2]!.amount, usNet(0.98 * shares) * 0.85);
+  });
+
+  it("still estimates an EU listing when ex-date history is missing", () => {
+    const rows = buildUpcomingPortfolioDividends({
+      positions: [{ symbol: "SAP.DE", name: "SAP", quantity: 2, currency: "EUR" }],
+      payments: [],
+      quotes: {
+        "SAP.DE": {
+          currency: "EUR",
+          dividendRate: 2.5,
+          exDividendDate: "2026-05-06",
+          dividendPayDate: null,
+          lastDividendPerShare: 2.5,
+          lastDividendDate: "2026-05-06",
+        },
+      },
+      fx,
+      today,
+    });
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.date, "2027-05-06");
+    assert.equal(rows[0]!.estimated, true);
+    assert.equal(rows[0]!.currency, "EUR");
+    closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
   });
 });

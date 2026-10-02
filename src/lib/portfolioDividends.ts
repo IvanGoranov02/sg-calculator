@@ -179,6 +179,7 @@ type UpcomingDividendQuote = {
   dividendPayDate?: string | null;
   lastDividendPerShare?: number | null;
   lastDividendDate?: string | null;
+  resolvedYahooSymbol?: string | null;
 };
 
 /**
@@ -226,6 +227,252 @@ function upcomingDividendDate(quote: UpcomingDividendQuote, today: string): stri
   const ex = isoDay(quote.exDividendDate);
   if (pay && pay >= today) return pay;
   if (ex && ex >= today) return ex;
+  return null;
+}
+
+const DAY_MS = 86_400_000;
+/** How far a year-ago ex-date may sit from the same slot and still be a match. */
+const SEASONAL_SLOT_DAYS = 45;
+/** Year-over-year gap that still looks like the same dividend slot. */
+const YOY_SHIFT_MIN_DAYS = 300;
+const YOY_SHIFT_MAX_DAYS = 430;
+/** Ignore a last payment older than this; the series is too stale to project. */
+const STALE_DIVIDEND_DAYS = 450;
+/** Do not invent a date more than this far ahead. */
+const MAX_PROJECTED_DAYS = 400;
+/** Annual DPS vs last cash must sit this close to 1/2/4/12 to infer a cadence. */
+const FREQUENCY_MATCH_GAP = 0.2;
+
+function parseIsoUtc(iso: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return Date.UTC(year, month - 1, day);
+}
+
+function formatIsoUtc(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function addCalendarYears(ms: number, years: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear() + years, d.getUTCMonth(), d.getUTCDate());
+}
+
+function normalizeExDates(dates: string[]): string[] {
+  const unique = new Set<string>();
+  for (const raw of dates) {
+    const iso = isoDay(raw);
+    if (iso) unique.add(iso);
+  }
+  return [...unique].sort();
+}
+
+function quoteStillPaysDividends(quote: UpcomingDividendQuote): boolean {
+  return (
+    (quote.dividendYield != null && quote.dividendYield > 0) ||
+    (quote.dividendRate != null && quote.dividendRate > 0)
+  );
+}
+
+/**
+ * Yahoo's calendar ex-date is the next one for most US listings, but for a
+ * European issuer it usually stays on the previous payment until the next
+ * ex-date is very close. Project the next slot from ex-date history instead.
+ *
+ * The next date is the dividend that followed last year's counterpart of the
+ * latest payment, shifted by that year-over-year gap. Annual names fall back
+ * to the same calendar day next year. A regular gap is the last resort.
+ */
+export function projectNextExDividendDate(dates: string[], today: string): string | null {
+  const unique = normalizeExDates(dates);
+  if (unique.length === 0) return null;
+  const todayMs = parseIsoUtc(today);
+  if (todayMs == null) return null;
+
+  const upcoming = unique.find((d) => d >= today);
+  if (upcoming) return upcoming;
+
+  if (unique.length < 2) return null;
+  const last = unique[unique.length - 1]!;
+  const lastMs = parseIsoUtc(last);
+  if (lastMs == null || lastMs < todayMs - STALE_DIVIDEND_DAYS * DAY_MS) return null;
+
+  return projectSeasonalExDate(unique, lastMs, todayMs) ?? projectExDateByMedianGap(unique, lastMs, todayMs);
+}
+
+function projectSeasonalExDate(dates: string[], lastMs: number, todayMs: number): string | null {
+  const last = formatIsoUtc(lastMs);
+  let counterpartMs: number | null = null;
+  let bestDelta = Infinity;
+  for (const d of dates) {
+    if (d === last) continue;
+    const ms = parseIsoUtc(d);
+    if (ms == null) continue;
+    const delta = Math.abs(ms - (lastMs - 365 * DAY_MS));
+    if (delta <= SEASONAL_SLOT_DAYS * DAY_MS && delta < bestDelta) {
+      bestDelta = delta;
+      counterpartMs = ms;
+    }
+  }
+  if (counterpartMs == null) return null;
+  const shift = lastMs - counterpartMs;
+  const shiftDays = shift / DAY_MS;
+  if (shiftDays < YOY_SHIFT_MIN_DAYS || shiftDays > YOY_SHIFT_MAX_DAYS) return null;
+
+  const candidates: number[] = [];
+  for (const d of dates) {
+    const ms = parseIsoUtc(d);
+    if (ms == null || ms <= counterpartMs || ms >= lastMs) continue;
+    const shifted = ms + shift;
+    if (shifted > lastMs) candidates.push(shifted);
+  }
+  candidates.push(addCalendarYears(lastMs, 1));
+  candidates.sort((a, b) => a - b);
+
+  for (let extraYears = 0; extraYears < 2; extraYears++) {
+    for (const ms of candidates) {
+      const bumped = extraYears === 0 ? ms : addCalendarYears(ms, extraYears);
+      if (bumped >= todayMs && bumped <= todayMs + MAX_PROJECTED_DAYS * DAY_MS) {
+        return formatIsoUtc(bumped);
+      }
+    }
+  }
+  return null;
+}
+
+function projectExDateByMedianGap(dates: string[], lastMs: number, todayMs: number): string | null {
+  const gaps: number[] = [];
+  for (let i = 1; i < dates.length; i++) {
+    const prev = parseIsoUtc(dates[i - 1]!);
+    const curr = parseIsoUtc(dates[i]!);
+    if (prev == null || curr == null) continue;
+    const gap = Math.round((curr - prev) / DAY_MS);
+    if (gap >= 25 && gap <= 420) gaps.push(gap);
+  }
+  if (gaps.length === 0) return null;
+  const recent = gaps.slice(-8).sort((a, b) => a - b);
+  const median = recent[Math.floor((recent.length - 1) / 2)]!;
+  return stepExDate(lastMs, median, todayMs);
+}
+
+function inferDividendIntervalDays(perShare: number, annual: number): number | null {
+  const { gap, expected } = listingDividendMatch(perShare, annual);
+  if (!Number.isFinite(gap) || gap > FREQUENCY_MATCH_GAP || !(expected > 0)) return null;
+  const freq = Math.round(annual / expected);
+  if (freq !== 1 && freq !== 2 && freq !== 4 && freq !== 12) return null;
+  return Math.round(365 / freq);
+}
+
+/** When ex-date history is missing, step the last ex-date by 1/2/4/12. */
+function projectExDividendFromCadence(quote: UpcomingDividendQuote, today: string): string | null {
+  const todayMs = parseIsoUtc(today);
+  if (todayMs == null) return null;
+  const anchor = isoDay(quote.exDividendDate) ?? isoDay(quote.lastDividendDate);
+  if (!anchor || anchor >= today) return null;
+  const anchorMs = parseIsoUtc(anchor);
+  if (anchorMs == null || anchorMs < todayMs - STALE_DIVIDEND_DAYS * DAY_MS) return null;
+  const perShare = quote.lastDividendPerShare;
+  const annual = quoteAnnualDividend(quote);
+  if (perShare == null || !(perShare > 0) || annual == null) return null;
+  const interval = inferDividendIntervalDays(perShare, annual);
+  if (interval == null) return null;
+  return stepExDate(anchorMs, interval, todayMs);
+}
+
+function stepExDate(lastMs: number, gapDays: number, todayMs: number): string | null {
+  if (gapDays < 25 || gapDays > 420) return null;
+  let next = lastMs + gapDays * DAY_MS;
+  let steps = 0;
+  while (next < todayMs && steps < 8) {
+    next += gapDays * DAY_MS;
+    steps += 1;
+  }
+  if (next < todayMs || next > todayMs + MAX_PROJECTED_DAYS * DAY_MS) return null;
+  return formatIsoUtc(next);
+}
+
+function lookupExDividendHistory(
+  history: Record<string, string[]> | undefined,
+  keys: Array<string | null | undefined>,
+): string[] {
+  if (!history) return [];
+  for (const key of keys) {
+    if (!key) continue;
+    const hit = history[key] ?? history[key.toUpperCase()];
+    if (hit && hit.length > 0) return hit;
+  }
+  return [];
+}
+
+/**
+ * Keep a Yahoo ex/pay date that is still ahead. Otherwise fill the next
+ * ex-date from chart history, then from the annual-vs-last-cash cadence.
+ * `lastDividendDate` stays the previous payment, so the cash stays estimated.
+ */
+export function quoteWithProjectedExDividend<T extends UpcomingDividendQuote>(
+  quote: T,
+  historyExDates: string[],
+  today: string,
+): T {
+  if (upcomingDividendDate(quote, today)) return quote;
+  if (!quoteStillPaysDividends(quote)) return quote;
+  const dates = normalizeExDates([
+    ...historyExDates,
+    quote.exDividendDate ?? "",
+    quote.lastDividendDate ?? "",
+  ]);
+  const projected =
+    (dates.length >= 2 ? projectNextExDividendDate(dates, today) : null) ??
+    projectExDividendFromCadence(quote, today);
+  if (!projected) return quote;
+  return { ...quote, exDividendDate: projected };
+}
+
+/** Yahoo symbols whose calendar date is already in the past but that still pay. */
+export function symbolsNeedingExDividendHistory(
+  quotes: Record<string, UpcomingDividendQuote | null | undefined>,
+  today: string,
+): string[] {
+  const out: string[] = [];
+  for (const [key, quote] of Object.entries(quotes)) {
+    if (!quote || upcomingDividendDate(quote, today) || !quoteStillPaysDividends(quote)) continue;
+    const sym = (quote.resolvedYahooSymbol || key).trim().toUpperCase();
+    if (sym && !out.includes(sym)) out.push(sym);
+  }
+  return out;
+}
+
+/** Ex-dates from a Yahoo chart `events.dividends` payload (array or timestamp map). */
+export function exDividendDatesFromYahooChart(chartResult: unknown): string[] {
+  if (!chartResult || typeof chartResult !== "object") return [];
+  const ev = (chartResult as { events?: { dividends?: unknown } }).events?.dividends;
+  if (ev == null) return [];
+  const raw = Array.isArray(ev) ? ev : Object.values(ev as Record<string, unknown>);
+  const dates: string[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { date?: unknown; amount?: unknown };
+    const amount = typeof row.amount === "number" ? row.amount : Number(row.amount);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const iso = chartEventIsoDate(row.date);
+    if (iso) dates.push(iso);
+  }
+  return normalizeExDates(dates);
+}
+
+function chartEventIsoDate(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "string") return isoDay(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const d = new Date(ms);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+  }
   return null;
 }
 
@@ -365,6 +612,8 @@ export function buildUpcomingPortfolioDividends(input: {
   payments: PortfolioDividendPayment[];
   quotes: Record<string, UpcomingDividendQuote | null | undefined>;
   fx: PortfolioFxRates;
+  /** Past ex-dates keyed by portfolio symbol or resolved Yahoo symbol. */
+  exDividendHistory?: Record<string, string[]>;
   today?: string;
   limit?: number;
 }): UpcomingPortfolioDividend[] {
@@ -392,8 +641,14 @@ export function buildUpcomingPortfolioDividends(input: {
 
   const out: UpcomingPortfolioDividend[] = [];
   for (const [key, pos] of grouped) {
-    const quote = input.quotes[pos.symbol] ?? input.quotes[key];
-    if (!quote) continue;
+    const rawQuote = input.quotes[pos.symbol] ?? input.quotes[key];
+    if (!rawQuote) continue;
+    const history = lookupExDividendHistory(input.exDividendHistory, [
+      pos.symbol,
+      key,
+      rawQuote.resolvedYahooSymbol,
+    ]);
+    const quote = quoteWithProjectedExDividend(rawQuote, history, today);
     const date = upcomingDividendDate(quote, today);
     if (!date) continue;
 
@@ -818,6 +1073,9 @@ export function buildPortfolioDividendsPayload(input: {
     cachedAt?: string | null;
     partial?: boolean;
   };
+  /** Past ex-dates for listings whose Yahoo calendar date has already passed. */
+  exDividendHistory?: Record<string, string[]>;
+  today?: string;
 }): PortfolioDividendsPayload {
   const metrics = input.holdings.map((h) => computeHoldingMetrics(h, input.quotes, input.fx));
   const baseCurrency = pickBaseCurrency(input.holdings);
@@ -899,6 +1157,8 @@ export function buildPortfolioDividendsPayload(input: {
     payments,
     quotes: input.quotes,
     fx: input.fx,
+    exDividendHistory: input.exDividendHistory,
+    today: input.today,
   });
 
   const monthlyIncome = buildMonthlyIncome(payments);
