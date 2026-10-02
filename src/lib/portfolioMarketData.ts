@@ -18,6 +18,7 @@ import {
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
 import { extractDividendPayDate, extractExDividendDate } from "@/lib/calendarEvents";
+import { exDividendDatesFromYahooChart } from "@/lib/portfolioDividends";
 import {
   parseT212Ticker,
   t212QuoteCurrency,
@@ -486,6 +487,36 @@ export async function fetchPortfolioQuotesForHoldings(
   );
 
   return out;
+}
+
+/** Past ex-dividend dates (Yahoo chart events) keyed by symbol. Empty when Yahoo has none. */
+export async function fetchExDividendDateHistory(symbols: string[]): Promise<Record<string, string[]>> {
+  const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  const out: Record<string, string[]> = {};
+  await Promise.all(
+    unique.map(async (sym) => {
+      out[sym] = await loadExDividendDates(sym);
+    }),
+  );
+  return out;
+}
+
+async function loadExDividendDates(symbol: string): Promise<string[]> {
+  const period2 = new Date();
+  const period1 = new Date(period2);
+  period1.setUTCFullYear(period1.getUTCFullYear() - 4);
+  try {
+    const chart = await yahooFinance.chart(symbol, {
+      period1,
+      period2,
+      interval: "1d",
+      return: "array",
+      events: "div",
+    });
+    return exDividendDatesFromYahooChart(chart);
+  } catch {
+    return [];
+  }
 }
 
 /** @deprecated Prefer {@link fetchPortfolioQuotesForHoldings} so T212 tickers can refine Yahoo resolution. */
