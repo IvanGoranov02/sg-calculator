@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CompanyLogo } from "@/components/company/CompanyIdentity";
 import { formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { tickCoord } from "@/lib/chartSeriesUtils";
@@ -180,10 +181,12 @@ export function WatchlistDipChart({ rows, compact = false }: WatchlistDipChartPr
                   if (!active || !payload?.length) return null;
                   const p = payload[0].payload as (typeof sorted)[0];
                   return (
-                    <div className="rounded-lg border border-white/10 bg-zinc-950/95 px-3.5 py-2.5 shadow-lg backdrop-blur">
+                    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-zinc-950/95 px-2.5 py-2 shadow-lg backdrop-blur">
+                      {/* Remount per symbol so the previous logo, or its load failure, cannot stick. */}
+                      <CompanyLogo key={p.symbol} symbol={p.symbol} size="xs" />
                       <p
                         className={cn(
-                          "text-2xl font-semibold tabular-nums leading-none tracking-tight",
+                          "text-xl font-semibold tabular-nums leading-none tracking-tight",
                           dipHoverPctClass(p.dipPct),
                         )}
                       >
