@@ -22,10 +22,13 @@ type CompanyIdentityProps = {
 };
 
 const logoSizes = {
+  xs: { box: "size-6 text-[9px]", px: 24 },
   sm: { box: "size-8 text-[10px]", px: 32 },
   md: { box: "size-10 text-xs", px: 40 },
   lg: { box: "size-14 text-sm sm:size-16", px: 64 },
 } as const;
+
+type LogoSize = keyof typeof logoSizes;
 
 const textSizes = {
   sm: { main: "text-sm", sub: "text-[10px]" },
@@ -33,12 +36,12 @@ const textSizes = {
   lg: { main: "text-xl sm:text-2xl", sub: "text-sm" },
 } as const;
 
-function CompanyLogo({
+export function CompanyLogo({
   symbol,
   size,
 }: {
   symbol: string;
-  size: "sm" | "md" | "lg";
+  size: LogoSize;
 }) {
   const [failed, setFailed] = useState(false);
   const dims = logoSizes[size];
