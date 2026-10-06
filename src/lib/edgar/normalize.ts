@@ -111,12 +111,12 @@ const CONCEPTS: Record<string, string[]> = {
   longTermDebtNoncurrent: ["LongTermDebtNoncurrent"],
   longTermDebtCurrent: ["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"],
   shortTermBorrowings: ["ShortTermBorrowings", "CommercialPaper", "DebtCurrent"],
-  // Capital / finance / operating lease liabilities (grouped column chart when present).
-  capitalLeaseObligations: [
-    "CapitalLeaseObligations",
-    "FinanceLeaseLiability",
-    "OperatingLeaseLiability",
-    "LesseeOperatingLeaseLiability",
+  // Capital / finance lease liabilities only (omit operating-lease tags — wrong label).
+  capitalLeaseObligations: ["CapitalLeaseObligations", "FinanceLeaseLiability"],
+  capitalLeaseCurrent: ["FinanceLeaseLiabilityCurrent", "CapitalLeaseObligationsCurrent"],
+  capitalLeaseNoncurrent: [
+    "FinanceLeaseLiabilityNoncurrent",
+    "CapitalLeaseObligationsNoncurrent",
   ],
 };
 
@@ -439,6 +439,8 @@ export function bundleFromCompanyFacts(
     "longTermDebtCurrent",
     "shortTermBorrowings",
     "capitalLeaseObligations",
+    "capitalLeaseCurrent",
+    "capitalLeaseNoncurrent",
   ]) {
     instant[key] = buildInstantSeries(conceptPoints(facts, CONCEPTS[key]));
   }
@@ -539,7 +541,14 @@ export function bundleFromCompanyFacts(
       accountsReceivable: instant.accountsReceivable[map].get(end) ?? null,
       goodwill: instant.goodwill[map].get(end) ?? null,
       longTermDebt: instant.longTermDebt[map].get(end) ?? null,
-      capitalLeaseObligations: instant.capitalLeaseObligations[map].get(end) ?? null,
+      capitalLeaseObligations: (() => {
+        const allIn = instant.capitalLeaseObligations[map].get(end) ?? null;
+        if (allIn != null) return allIn;
+        const cur = instant.capitalLeaseCurrent[map].get(end) ?? null;
+        const non = instant.capitalLeaseNoncurrent[map].get(end) ?? null;
+        if (cur == null && non == null) return null;
+        return (cur ?? 0) + (non ?? 0);
+      })(),
     };
   };
 

@@ -258,10 +258,10 @@ Today (UTC): ${today}.${extra}
 Return JSON only with these keys (arrays may be partial — include only rows you are filling):
 - income (annual, fiscalYear + revenue, grossProfit, operatingExpenses, netIncome, operatingIncome, ebitda, dilutedEps, dilutedShares)
 - cashFlow (annual, fiscalYear + freeCashFlow, operatingCashFlow, capitalExpenditure)
-- balanceSheet (annual, fiscalYear + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory)
+- balanceSheet (annual, fiscalYear + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory, capitalLeaseObligations)
 - incomeQuarterly (date YYYY-MM-DD + revenue, grossProfit, operatingExpenses, netIncome, dilutedEps, dilutedShares)
 - cashFlowQuarterly (date + operatingCashFlow, capitalExpenditure, freeCashFlow)
-- balanceSheetQuarterly (date + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory)
+- balanceSheetQuarterly (date + totalAssets, totalDebt, stockholdersEquity, totalCurrentAssets, totalCurrentLiabilities, inventory, capitalLeaseObligations)
 - dividendQuarterly (date + dividendPerShare)
 
 Use filing-accurate consolidated figures. Do NOT change fields that already have real non-zero values.

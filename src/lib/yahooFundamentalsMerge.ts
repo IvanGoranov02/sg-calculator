@@ -57,6 +57,8 @@ export type Bs = {
   goodwill?: number;
   longTermDebt?: number;
   capitalLeaseObligations?: number;
+  currentCapitalLeaseObligation?: number;
+  longTermCapitalLeaseObligation?: number;
 };
 
 export type YahooFundamentalsPayload = {
@@ -80,6 +82,16 @@ import {
   mergeScalarPreferYahoo,
   pickNum,
 } from "@/lib/yahooMergePolicy";
+
+/** Prefer Yahoo aggregate; else sum current + long-term capital lease pieces. */
+function yahooCapitalLease(bs: Bs): number | null {
+  const total = pickNum(bs.capitalLeaseObligations);
+  if (total != null) return total;
+  const cur = pickNum(bs.currentCapitalLeaseObligation);
+  const ltd = pickNum(bs.longTermCapitalLeaseObligation);
+  if (cur == null && ltd == null) return null;
+  return (cur ?? 0) + (ltd ?? 0);
+}
 
 /**
  * "prefer-yahoo": Yahoo overrides existing values (Gemini-sourced bundles).
@@ -256,7 +268,7 @@ export function applyYahooFundamentalsToBundle(
       accountsReceivable: mergeNullable(row.accountsReceivable, bs.accountsReceivable),
       goodwill: mergeNullable(row.goodwill, bs.goodwill),
       longTermDebt: mergeNullable(row.longTermDebt, bs.longTermDebt),
-      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, bs.capitalLeaseObligations),
+      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, yahooCapitalLease(bs)),
     };
   });
 
@@ -364,7 +376,7 @@ export function applyYahooFundamentalsToBundle(
       accountsReceivable: mergeNullable(row.accountsReceivable, bs.accountsReceivable),
       goodwill: mergeNullable(row.goodwill, bs.goodwill),
       longTermDebt: mergeNullable(row.longTermDebt, bs.longTermDebt),
-      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, bs.capitalLeaseObligations),
+      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, yahooCapitalLease(bs)),
     };
   });
 
