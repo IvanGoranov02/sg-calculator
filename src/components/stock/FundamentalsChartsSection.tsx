@@ -45,6 +45,7 @@ const C = {
   equity: "#4ade80",
   cash: "#2dd4bf",
   netDebt: "#fb7185",
+  capitalLease: "#fbbf24",
   ebitda: "#e879f9",
   div: "#f472b6",
   buyback: "#94a3b8",
@@ -68,6 +69,16 @@ function chartGrowthPillsMulti(
   freq: "annual" | "quarterly",
 ) {
   return growthPillsEntries(rows, keys, freq);
+}
+
+/** Keep only series that have at least one finite value in the visible rows. */
+function seriesWithData(rows: Record<string, unknown>[], series: FundamentalSeries[]): FundamentalSeries[] {
+  return series.filter((s) =>
+    rows.some((r) => {
+      const v = r[s.dataKey];
+      return v != null && Number.isFinite(typeof v === "number" ? v : Number(v));
+    }),
+  );
 }
 
 type FundamentalsChartsSectionProps = {
@@ -326,9 +337,10 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         { dataKey: "totalDebt", color: C.debt, label: t("annual.totalDebt") },
         { dataKey: "equity", color: C.equity, label: t("annual.equity") },
       ] satisfies FundamentalSeries[],
-      cashDebt: [
+      cashDebtLease: [
         { dataKey: "cash", color: C.cash, label: t("annual.cash") },
-        { dataKey: "netDebt", color: C.netDebt, label: t("annual.netDebt") },
+        { dataKey: "totalDebt", color: C.debt, label: t("annual.totalDebt") },
+        { dataKey: "capitalLease", color: C.capitalLease, label: t("annual.capitalLease") },
       ] satisfies FundamentalSeries[],
       roeRoa: [
         { dataKey: "roe", color: C.netIncome, label: t("annual.roe") },
@@ -599,7 +611,8 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             {...chartAxisProps}
             title={t("chartsFund.chartBalance")}
             data={chartRows}
-            series={series.balance3}
+            series={seriesWithData(chartRows, series.balance3)}
+            chartType="bar"
             valueFormat="currency"
             growthPills={chartGrowthPillsMulti(
               growthPillRows,
@@ -615,14 +628,15 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             {...chartAxisProps}
             title={t("chartsFund.chartCashNetDebt")}
             data={chartRows}
-            series={series.cashDebt}
+            series={seriesWithData(chartRows, series.cashDebtLease)}
+            chartType="bar"
             valueFormat="currency"
             growthPills={chartGrowthPillsMulti(
               growthPillRows,
-              [
-                { key: "cash", label: t("annual.cash") },
-                { key: "netDebt", label: t("annual.netDebt") },
-              ],
+              seriesWithData(growthPillRows, series.cashDebtLease).map((s) => ({
+                key: s.dataKey,
+                label: s.label,
+              })),
               freq,
             )}
           />

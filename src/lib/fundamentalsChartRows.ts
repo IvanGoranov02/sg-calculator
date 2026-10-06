@@ -101,6 +101,7 @@ export function buildAnnualChartRows(
       equity: bs?.stockholdersEquity ?? null,
       cash: bs?.cashAndCashEquivalents ?? null,
       netDebt: bs?.netDebt ?? null,
+      capitalLease: bs?.capitalLeaseObligations ?? null,
       currentRatio: safeRatio(bs?.totalCurrentAssets ?? null, bs?.totalCurrentLiabilities ?? null),
       quickRatio: safeRatio(
         bs?.totalCurrentAssets != null && bs?.inventory != null
@@ -182,6 +183,7 @@ export function buildQuarterlyChartRows(
       equity: bs?.stockholdersEquity ?? null,
       cash: bs?.cashAndCashEquivalents ?? null,
       netDebt: bs?.netDebt ?? null,
+      capitalLease: bs?.capitalLeaseObligations ?? null,
       currentRatio: safeRatio(bs?.totalCurrentAssets ?? null, bs?.totalCurrentLiabilities ?? null),
       quickRatio: safeRatio(
         bs?.totalCurrentAssets != null && bs?.inventory != null
