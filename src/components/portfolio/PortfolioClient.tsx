@@ -22,10 +22,22 @@ import {
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
+import { invalidatePortfolioRelatedClientCaches } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import {
   browserDividendsDayStorage,
   invalidatePortfolioDividendsDayCache,
 } from "@/lib/portfolioDividendsDayCache";
+import {
+  beginPortfolioHoldingsLoad,
+  browserHoldingsTtlStorage,
+  commitPortfolioHoldingsTtlCache,
+  decidePortfolioHoldingsLoad,
+  isPortfolioHoldingsLoadCurrent,
+  readPortfolioHoldingsSessionMemory,
+  readStoredPortfolioHoldingsTtlCache,
+  writePortfolioHoldingsSessionMemory,
+  type PortfolioHoldingsCachePayload,
+} from "@/lib/portfolioHoldingsTtlCache";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 import {
   convertPortfolioMoney,
@@ -111,11 +123,53 @@ function portfolioViewHref(view: PortfolioView, search: string): string {
   return q ? `/portfolio?${q}` : "/portfolio";
 }
 
+function applyHoldingsCachePayload(
+  payload: PortfolioHoldingsCachePayload,
+  setters: {
+    setHoldings: (h: HoldingApi[]) => void;
+    setQuotes: (q: Record<string, PortfolioQuoteRow | null>) => void;
+    setFx: (fx: PortfolioFxRates) => void;
+    setTrading212: (t: Trading212Api | null) => void;
+    setT212Env: (env: "demo" | "live") => void;
+  },
+) {
+  setters.setHoldings(payload.holdings);
+  setters.setQuotes(payload.quotes);
+  setters.setFx(payload.fx);
+  if (payload.trading212) {
+    setters.setTrading212(payload.trading212);
+    if (payload.trading212.environment) setters.setT212Env(payload.trading212.environment);
+  } else {
+    setters.setTrading212(null);
+  }
+}
+
+function initialHoldingsFromCache(userId: string): {
+  payload: PortfolioHoldingsCachePayload | null;
+  loading: boolean;
+} {
+  if (!userId || typeof window === "undefined") {
+    return { payload: null, loading: true };
+  }
+  const decision = decidePortfolioHoldingsLoad({
+    userId,
+    reloadToken: 0,
+    liveRefreshToken: 0,
+    memory: readPortfolioHoldingsSessionMemory(),
+    stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
+  });
+  if (decision.action === "reuse" && decision.payload) {
+    return { payload: decision.payload, loading: false };
+  }
+  return { payload: decision.payload, loading: true };
+}
+
 export function PortfolioClient() {
   const { t, locale } = useI18n();
   const { displayCurrency, dateFormat } = usePreferences();
   const preferredPortfolioCurrency = displayCurrencyToPortfolioCode(displayCurrency);
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  const userId = session?.user?.id ?? "";
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlView: PortfolioView = searchParams.get("view") === "dividends" ? "dividends" : "holdings";
@@ -142,11 +196,20 @@ export function PortfolioClient() {
     if (urlView === desiredView.current) return;
     router.replace(portfolioViewHref(desiredView.current, window.location.search), { scroll: false });
   }, [router, urlView]);
-  const [holdings, setHoldings] = useState<HoldingApi[]>([]);
-  const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
-  const [trading212, setTrading212] = useState<Trading212Api | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [holdingsSeed] = useState(() => initialHoldingsFromCache(userId));
+  const [holdings, setHoldings] = useState<HoldingApi[]>(() => holdingsSeed.payload?.holdings ?? []);
+  const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>(
+    () => holdingsSeed.payload?.quotes ?? {},
+  );
+  const [trading212, setTrading212] = useState<Trading212Api | null>(
+    () => holdingsSeed.payload?.trading212 ?? null,
+  );
+  const [loading, setLoading] = useState(() => holdingsSeed.loading);
   const [error, setError] = useState<string | null>(null);
+  const [holdingsReloadToken, setHoldingsReloadToken] = useState(0);
+  const holdingsReloadTokenRef = useRef(0);
+  holdingsReloadTokenRef.current = holdingsReloadToken;
+  const prevCurrencyRef = useRef(preferredPortfolioCurrency);
 
   const [t212Env, setT212Env] = useState<"demo" | "live">("demo");
   const [apiKey, setApiKey] = useState("");
@@ -161,7 +224,9 @@ export function PortfolioClient() {
   const [manualCurrency, setManualCurrency] = useState<string>(preferredPortfolioCurrency);
   const [adding, setAdding] = useState(false);
 
-  const [fx, setFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
+  const [fx, setFx] = useState<PortfolioFxRates>(
+    () => holdingsSeed.payload?.fx ?? { eurPerUsd: null, gbpPerUsd: null },
+  );
   const [dipHistory, setDipHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -189,16 +254,28 @@ export function PortfolioClient() {
     setManualCurrency(preferredPortfolioCurrency);
   }, [preferredPortfolioCurrency]);
 
-  const load = useCallback(async (opts?: { clearPageError?: boolean }) => {
+  // Base currency change invalidates holdings + events caches (per product request).
+  useEffect(() => {
+    if (prevCurrencyRef.current === preferredPortfolioCurrency) return;
+    prevCurrencyRef.current = preferredPortfolioCurrency;
+    invalidatePortfolioRelatedClientCaches();
+    setHoldingsReloadToken((n) => n + 1);
+  }, [preferredPortfolioCurrency]);
+
+  const load = useCallback(async (opts?: { clearPageError?: boolean; force?: boolean }) => {
+    const generation = beginPortfolioHoldingsLoad();
+    const stale = () => !isPortfolioHoldingsLoadCurrent(generation);
     setLoading(true);
     if (opts?.clearPageError !== false) {
       setError(null);
     }
     try {
+      const portfolioUrl = opts?.force ? "/api/portfolio?refresh=1" : "/api/portfolio";
       const [portfolioRes, settingsRes] = await Promise.all([
-        fetch("/api/portfolio"),
-        fetch("/api/trading212/settings"),
+        fetch(portfolioUrl, { cache: opts?.force ? "no-store" : "default" }),
+        fetch("/api/trading212/settings", { cache: opts?.force ? "no-store" : "default" }),
       ]);
+      if (stale()) return;
 
       // Settings load even when /api/portfolio fails (e.g. Yahoo/DB), so Save isn't wrongly disabled.
       if (settingsRes.ok) {
@@ -209,6 +286,7 @@ export function PortfolioClient() {
           lastSyncAt?: string | null;
           lastError?: string | null;
         };
+        if (stale()) return;
         if (typeof s.encryptionConfigured === "boolean") {
           setTrading212({
             encryptionConfigured: s.encryptionConfigured,
@@ -236,6 +314,7 @@ export function PortfolioClient() {
         trading212?: Trading212Api;
         error?: string;
       };
+      if (stale()) return;
       if (data.fx) setFx(data.fx);
 
       if (!portfolioRes.ok) {
@@ -245,18 +324,36 @@ export function PortfolioClient() {
         return;
       }
 
-      setHoldings(data.holdings ?? []);
-      setQuotes(data.quotes ?? {});
+      const nextHoldings = data.holdings ?? [];
+      const nextQuotes = data.quotes ?? {};
+      const nextFx = data.fx ?? { eurPerUsd: null, gbpPerUsd: null };
+      setHoldings(nextHoldings);
+      setQuotes(nextQuotes);
       if (data.trading212) {
         setTrading212(data.trading212);
         if (data.trading212.environment) setT212Env(data.trading212.environment);
       }
+      if (userId) {
+        commitPortfolioHoldingsTtlCache({
+          storage: browserHoldingsTtlStorage(),
+          userId,
+          payload: {
+            holdings: nextHoldings,
+            quotes: nextQuotes,
+            fx: nextFx,
+            trading212: data.trading212 ?? null,
+          },
+          reloadToken: holdingsReloadTokenRef.current,
+          liveRefreshToken: 0,
+        });
+      }
     } catch {
+      if (stale()) return;
       setError(t("portfolio.errorLoad"));
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
-  }, [t]);
+  }, [t, userId]);
 
   const loadValueHistoryRef = useRef<(opts?: { poll?: boolean; refresh?: boolean }) => Promise<void>>(
     async () => {},
@@ -353,6 +450,7 @@ export function PortfolioClient() {
     setSyncing(true);
     setError(null);
     setPortfolioInfo(null);
+    invalidatePortfolioRelatedClientCaches();
     try {
       const res = await fetch("/api/trading212/sync", { method: "POST" });
       const data = (await res.json()) as {
@@ -366,12 +464,12 @@ export function PortfolioClient() {
           typeof data.trading212Status === "number" ? data.trading212Status : null,
         );
         setError(msg);
-        await load({ clearPageError: false });
+        await load({ clearPageError: false, force: true });
         if (opts?.refreshHistory) await loadValueHistory({ refresh: true });
         return false;
       }
       setLastSyncT212Status(null);
-      await load();
+      await load({ force: true });
       await loadValueHistory(opts?.refreshHistory ? { refresh: true } : undefined);
       reloadDividendsFromCache();
       if (Array.isArray(data.skippedDueToManual) && data.skippedDueToManual.length > 0) {
@@ -380,7 +478,7 @@ export function PortfolioClient() {
       return true;
     } catch {
       setError(t("portfolio.syncNetworkError"));
-      await load({ clearPageError: false });
+      await load({ clearPageError: false, force: true });
       if (opts?.refreshHistory) await loadValueHistory({ refresh: true });
       return false;
     } finally {
@@ -389,29 +487,63 @@ export function PortfolioClient() {
   }, [load, loadValueHistory, reloadDividendsFromCache, t]);
 
   const refreshPortfolioData = useCallback(async () => {
+    // Force holdings fetch + reset TTL; value-history still uses refresh=1 rebuild path.
+    invalidatePortfolioRelatedClientCaches();
     if (trading212?.connected && trading212.encryptionConfigured) {
       await runSync({ refreshHistory: true });
       return;
     }
-    await load();
+    await load({ force: true });
     await loadValueHistory({ refresh: true });
     invalidatePortfolioDividendsDayCache(browserDividendsDayStorage());
     setDividendsLiveRefreshToken((n) => n + 1);
   }, [load, loadValueHistory, runSync, trading212?.connected, trading212?.encryptionConfigured]);
 
+  // Holdings: reuse 1h TTL cache when remounting / revisiting; otherwise fetch.
   useEffect(() => {
-    if (status === "authenticated") {
-      void load();
-      void loadValueHistory();
-    }
-    else if (status === "unauthenticated") {
+    if (status === "unauthenticated") {
       setHoldings([]);
       setQuotes({});
       setTrading212(null);
       setError(null);
       setLoading(false);
+      return;
     }
-  }, [status, load, loadValueHistory]);
+    if (status !== "authenticated" || !userId) return;
+
+    const decision = decidePortfolioHoldingsLoad({
+      userId,
+      reloadToken: holdingsReloadToken,
+      liveRefreshToken: 0,
+      memory: readPortfolioHoldingsSessionMemory(),
+      stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
+    });
+    if (decision.adoptMemory) {
+      writePortfolioHoldingsSessionMemory(decision.adoptMemory);
+    }
+    if (decision.payload) {
+      applyHoldingsCachePayload(decision.payload, {
+        setHoldings,
+        setQuotes,
+        setFx,
+        setTrading212,
+        setT212Env,
+      });
+      setError(null);
+    }
+    if (decision.action === "reuse") {
+      setLoading(false);
+      return;
+    }
+    void load({ force: decision.action === "force" });
+  }, [status, userId, holdingsReloadToken, load]);
+
+  // Value-history is independent of the holdings TTL cache (rebuild logic from #91/#95/#101/#103).
+  useEffect(() => {
+    if (status === "authenticated") {
+      void loadValueHistory();
+    }
+  }, [status, loadValueHistory]);
 
   const signedIn = status === "authenticated";
 
@@ -446,7 +578,8 @@ export function PortfolioClient() {
       }
       setApiKey("");
       setApiSecret("");
-      await load();
+      invalidatePortfolioRelatedClientCaches();
+      await load({ force: true });
       await runSync();
     } catch {
       setError(t("portfolio.saveNetworkError"));
@@ -469,7 +602,8 @@ export function PortfolioClient() {
       }
       setApiKey("");
       setApiSecret("");
-      await load();
+      invalidatePortfolioRelatedClientCaches();
+      await load({ force: true });
       await loadValueHistory();
       reloadDividendsFromCache();
       setDividendsLiveRefreshToken((n) => n + 1);
@@ -568,7 +702,8 @@ export function PortfolioClient() {
       setSym("");
       setQty("");
       setAvg("");
-      await load();
+      invalidatePortfolioRelatedClientCaches();
+      await load({ force: true });
       await loadValueHistory();
       reloadDividendsFromCache();
       if (data.replacedBrokerRow) {
@@ -589,7 +724,8 @@ export function PortfolioClient() {
         setError(data.error ?? "Delete failed");
         return;
       }
-      await load();
+      invalidatePortfolioRelatedClientCaches();
+      await load({ force: true });
       await loadValueHistory();
       reloadDividendsFromCache();
     } catch {
@@ -624,7 +760,8 @@ export function PortfolioClient() {
         return;
       }
       setEditingId(null);
-      await load();
+      invalidatePortfolioRelatedClientCaches();
+      await load({ force: true });
       await loadValueHistory();
       reloadDividendsFromCache();
     } catch {

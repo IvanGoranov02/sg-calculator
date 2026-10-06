@@ -1,4 +1,9 @@
 import { auth } from "@/auth";
+import {
+  PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC,
+  privateTtlCacheControl,
+  requestWantsRefresh,
+} from "@/lib/apiCacheHeaders";
 import { prisma } from "@/lib/prisma";
 import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
@@ -33,12 +38,14 @@ function serializeHolding(h: {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const refresh = requestWantsRefresh(request.url);
 
   try {
     const [holdings, t212] = await Promise.all([
@@ -70,18 +77,25 @@ export async function GET() {
       logApiException("GET /api/portfolio quotes", e, { userId, holdingCount: holdings.length });
     }
 
-    return Response.json({
-      holdings: holdings.map(serializeHolding),
-      quotes,
-      fx,
-      trading212: {
-        encryptionConfigured: isPortfolioEncryptionConfigured(),
-        connected: !!t212,
-        environment: t212?.environment ?? null,
-        lastSyncAt: t212?.lastSyncAt?.toISOString() ?? null,
-        lastError: normalizeTrading212ErrorMessage(t212?.lastError ?? null),
+    return Response.json(
+      {
+        holdings: holdings.map(serializeHolding),
+        quotes,
+        fx,
+        trading212: {
+          encryptionConfigured: isPortfolioEncryptionConfigured(),
+          connected: !!t212,
+          environment: t212?.environment ?? null,
+          lastSyncAt: t212?.lastSyncAt?.toISOString() ?? null,
+          lastError: normalizeTrading212ErrorMessage(t212?.lastError ?? null),
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control": privateTtlCacheControl(PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC, refresh),
+        },
+      },
+    );
   } catch (e) {
     const { status, error } = prismaErrorToHttp(e);
     return Response.json({ error }, { status });

@@ -1,7 +1,13 @@
 import YahooFinance from "yahoo-finance2";
+import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { extractSymbolEventRow, type SymbolEventRow } from "@/lib/calendarEvents";
+import {
+  EVENTS_SERVER_MAX_AGE_SEC,
+  privateTtlCacheControl,
+  requestWantsRefresh,
+} from "@/lib/apiCacheHeaders";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -23,11 +29,19 @@ async function fetchOne(symbol: string): Promise<SymbolEventRow | null> {
   }
 }
 
+/** Shared Yahoo calendar row per symbol — 24h across users. */
+const fetchOneCached = unstable_cache(
+  async (symbol: string) => fetchOne(symbol),
+  ["events-calendar-symbol"],
+  { revalidate: EVENTS_SERVER_MAX_AGE_SEC },
+);
+
 export async function GET(request: Request) {
   const key = clientKeyFromRequest(request);
   const limited = checkRateLimit("events", key, 30, 60_000);
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
 
+  const refresh = requestWantsRefresh(request.url);
   const { searchParams } = new URL(request.url);
   const symbols = Array.from(
     new Set(
@@ -38,11 +52,18 @@ export async function GET(request: Request) {
     ),
   ).slice(0, MAX_SYMBOLS);
 
-  if (symbols.length === 0) return NextResponse.json({ rows: [] satisfies SymbolEventRow[] });
+  const cacheHeaders = {
+    "Cache-Control": privateTtlCacheControl(EVENTS_SERVER_MAX_AGE_SEC, refresh),
+  };
 
-  const settled = await Promise.all(symbols.map(fetchOne));
+  if (symbols.length === 0) {
+    return NextResponse.json({ rows: [] satisfies SymbolEventRow[] }, { headers: cacheHeaders });
+  }
+
+  const load = refresh ? fetchOne : fetchOneCached;
+  const settled = await Promise.all(symbols.map((symbol) => load(symbol)));
   const rows = settled.filter((r): r is SymbolEventRow => r !== null);
-  return NextResponse.json({ rows });
+  return NextResponse.json({ rows }, { headers: cacheHeaders });
 }
 
 export type { SymbolEventRow };
