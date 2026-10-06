@@ -1,17 +1,37 @@
 "use client";
 
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Button } from "@/components/ui/button";
+import { resolveNextEarningsOrEstimate } from "@/lib/calendarEvents";
 import { formatCurrency, formatCurrencyEur, formatLocaleDate, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import type { DisplayCurrency } from "@/lib/preferences/preferences";
 import type { StockQuote } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
+
+type EarningsDisplay = { date: string | null; estimated: boolean };
+
+/** Re-check against the viewer's local today; keep server `estimated` when still upcoming. */
+function displayNextEarnings(
+  earningsDate: string | null | undefined,
+  earningsDateEstimated: boolean | undefined,
+): EarningsDisplay {
+  if (!earningsDate) return { date: null, estimated: false };
+  const resolved = resolveNextEarningsOrEstimate([earningsDate]);
+  if (!resolved.date) return { date: null, estimated: false };
+  if (resolved.estimated) return resolved;
+  return { date: resolved.date, estimated: Boolean(earningsDateEstimated) };
+}
+
+/** No-op store: client snapshot differs from server only for local-today sanitization. */
+function subscribeNoop(): () => void {
+  return () => {};
+}
 
 function fmtLive(
   usd: number,
@@ -50,6 +70,19 @@ export function StockLiveHeader({
 }: StockLiveHeaderProps) {
   const { t, locale } = useI18n();
   const { displayCurrency: ccy, setDisplayCurrency: persistCcy, dateFormat } = usePreferences();
+  // Server snapshot keeps the API value; client snapshot re-checks local today (hydration-safe).
+  const serverEarnings = useMemo<EarningsDisplay>(
+    () => ({
+      date: quote.earningsDate ?? null,
+      estimated: Boolean(quote.earningsDateEstimated),
+    }),
+    [quote.earningsDate, quote.earningsDateEstimated],
+  );
+  const clientEarnings = useMemo(
+    () => displayNextEarnings(quote.earningsDate, quote.earningsDateEstimated),
+    [quote.earningsDate, quote.earningsDateEstimated],
+  );
+  const nextEarnings = useSyncExternalStore(subscribeNoop, () => clientEarnings, () => serverEarnings);
 
   const canEur = eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0;
 
@@ -127,9 +160,9 @@ export function StockLiveHeader({
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             <span className="font-medium text-foreground/90">{t("stock.nextEarnings")}</span>{" "}
-            {quote.earningsDate
-              ? `${formatLocaleDate(quote.earningsDate, locale, dateFormat)}${
-                  quote.earningsDateEstimated ? ` (${t("stock.earningsEstimated")})` : ""
+            {nextEarnings.date
+              ? `${formatLocaleDate(nextEarnings.date, locale, dateFormat)}${
+                  nextEarnings.estimated ? ` (${t("stock.earningsEstimated")})` : ""
                 }`
               : "—"}
           </p>

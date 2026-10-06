@@ -27,7 +27,7 @@ function localNoon(year: number, month: number, day: number): number {
 
 describe("resolveNextEarningsOrEstimate", () => {
   it("picks the nearest upcoming earnings date", () => {
-    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const now = localNoon(2026, 10, 6);
     const got = resolveNextEarningsOrEstimate(
       ["2026-07-22", "2026-10-28", "2026-11-15"],
       now,
@@ -36,7 +36,7 @@ describe("resolveNextEarningsOrEstimate", () => {
   });
 
   it("never returns a past date — projects +91d from the latest past report", () => {
-    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const now = localNoon(2026, 10, 6);
     // GOOGL-style stale Yahoo calendar: only 2026-07-22
     const got = resolveNextEarningsOrEstimate(["2026-07-22"], now);
     assert.equal(got.estimated, true);
@@ -47,8 +47,23 @@ describe("resolveNextEarningsOrEstimate", () => {
   });
 
   it("keeps projecting until the estimate is on/after today", () => {
-    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const now = localNoon(2026, 10, 6);
     const got = resolveNextEarningsOrEstimate(["2026-01-01"], now);
+    assert.equal(got.estimated, true);
+    assert.ok(got.date != null && got.date >= "2026-10-06");
+  });
+
+  it("keeps today's earnings (local calendar boundary)", () => {
+    const now = localNoon(2026, 10, 6);
+    assert.deepEqual(resolveNextEarningsOrEstimate(["2026-10-06"], now), {
+      date: "2026-10-06",
+      estimated: false,
+    });
+  });
+
+  it("treats yesterday as past even late in the local evening", () => {
+    const now = new Date(2026, 9, 6, 23, 30, 0).getTime();
+    const got = resolveNextEarningsOrEstimate(["2026-10-05"], now);
     assert.equal(got.estimated, true);
     assert.ok(got.date != null && got.date >= "2026-10-06");
   });

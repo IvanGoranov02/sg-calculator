@@ -47,8 +47,9 @@ export type ResolvedEarningsDate = {
   estimated: boolean;
 };
 
-function todayIso(nowMs: number): string {
-  return new Date(nowMs).toISOString().slice(0, 10);
+/** Local calendar yyyy-mm-dd for `nowMs` (matches Events tab today-boundary). */
+function todayIsoLocal(nowMs: number): string {
+  return toIsoLocal(new Date(nowMs));
 }
 
 function addUtcDaysIso(iso: string, days: number): string {
@@ -57,9 +58,20 @@ function addUtcDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Normalize Yahoo/Date/ISO inputs to yyyy-mm-dd without UTC day-shift on bare ISO dates. */
+function toEarningsIso(value: Date | string): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const bare = trimmed.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(bare)) return bare;
+  }
+  const d = parseDate(value);
+  return d ? toIsoDate(d) : null;
+}
+
 /**
- * First earnings date on/after today. If the source only has past dates, project
- * forward in ~91-day steps from the latest past date (marked estimated).
+ * First earnings date on/after today (local calendar day). If the source only has
+ * past dates, project forward in ~91-day steps from the latest past date (estimated).
  */
 export function resolveNextEarningsOrEstimate(
   rawDates: Array<Date | string | null | undefined>,
@@ -68,14 +80,13 @@ export function resolveNextEarningsOrEstimate(
   const parsed = rawDates
     .map((value) => {
       if (value == null || value === "") return null;
-      return parseDate(value);
+      return toEarningsIso(value);
     })
-    .filter((d): d is Date => d !== null)
-    .map(toIsoDate)
+    .filter((iso): iso is string => iso != null)
     .sort();
   if (parsed.length === 0) return { date: null, estimated: false };
 
-  const today = todayIso(nowMs);
+  const today = todayIsoLocal(nowMs);
   const upcoming = parsed.filter((iso) => iso >= today);
   if (upcoming.length > 0) return { date: upcoming[0]!, estimated: false };
 
