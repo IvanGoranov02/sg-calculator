@@ -3,7 +3,6 @@
 import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentalsSection";
 import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
-import { IncomeStatementTable } from "@/components/stock/IncomeStatementTable";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
@@ -137,7 +136,6 @@ export function StockAnalysisView({
         <ValuationVerdictSection data={bundle} />
 
         <AnnualFundamentalsSection data={bundle} />
-        <IncomeStatementTable bundle={bundle} />
         <InvestorMetricsSection data={bundle.investor} />
         <StockNewsSection symbol={symbol} name={bundle.quote.name} />
       </div>
