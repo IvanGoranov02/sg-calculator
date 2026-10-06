@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { CompanyIdentity } from "@/components/company/CompanyIdentity";
+import { CompanyIdentity, CompanyLogo } from "@/components/company/CompanyIdentity";
 import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -92,13 +92,26 @@ function UpcomingDividendBox({
   dateFormat: DateFormat;
 }) {
   const { t } = useI18n();
+  const companyName = item.name?.trim() || null;
   return (
     <Link
       href={`/stock/${encodeURIComponent(item.symbol)}`}
-      className="flex w-[8rem] flex-col items-center rounded-lg border border-border bg-muted/40 px-2 py-2 text-center transition-colors hover:bg-muted/70"
-      title={item.name ?? item.symbol}
+      className="flex w-[9.5rem] flex-col items-center rounded-lg border border-border bg-muted/40 px-2 py-2 text-center transition-colors hover:bg-muted/70 sm:w-[10.5rem]"
+      title={companyName ?? item.symbol}
     >
-      <span className="w-full truncate text-xs font-medium text-foreground">{item.symbol}</span>
+      {/* Remount per symbol so a missing or previous logo cannot stick. */}
+      <CompanyLogo key={item.symbol} symbol={item.symbol} size="sm" />
+      <span
+        className="mt-1.5 w-full truncate text-sm font-semibold leading-tight text-foreground"
+        title={companyName ?? item.symbol}
+      >
+        {companyName ?? item.symbol}
+      </span>
+      {companyName ? (
+        <span className="w-full truncate font-mono text-[10px] font-medium tracking-tight text-muted-foreground">
+          {item.symbol}
+        </span>
+      ) : null}
       <span className="mt-1 text-[11px] font-medium text-muted-foreground">
         {formatLocaleDate(item.date, locale, dateFormat)}
       </span>
