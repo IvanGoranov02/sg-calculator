@@ -239,8 +239,6 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     annual: {
       sectionTitle: "Annual fundamentals (tables)",
-      sectionSubtitle:
-        "Year-over-year growth, margins, balance sheet, cash flow, and ratios — same fiscal years as the income statement above.",
       perShareTitle: "Per share & dilution",
       perShareSubtitle: "Diluted EPS and weighted average diluted shares when reported.",
       incomeExtraTitle: "Income — operating income & EBITDA",
@@ -280,7 +278,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividends: "Dividends paid",
       buyback: "Stock repurchase",
       currentRatio: "Current ratio",
-      debtToEquity: "Debt / equity",
       roe: "ROE (net income / equity)",
       roa: "ROA (net income / assets)",
       geminiStripBody:
@@ -1189,8 +1186,6 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     annual: {
       sectionTitle: "Годишни фундаменти (таблици)",
-      sectionSubtitle:
-        "Ръст г/г, маржове, баланс, паричен поток и съотношения — същите фискални години като отчета за приходите.",
       perShareTitle: "На акция и разводняване",
       perShareSubtitle: "Разводнен EPS и среднопретеглени разводнени акции, когато са налични.",
       incomeExtraTitle: "Приходи — оперативна печалба и EBITDA",
@@ -1230,7 +1225,6 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividends: "Изплатени дивиденти",
       buyback: "Изкупуване на акции",
       currentRatio: "Коефициент на текуща ликвидност",
-      debtToEquity: "Дълг / собствен капитал",
       roe: "ROE (нетна печалба / капитал)",
       roa: "ROA (нетна печалба / активи)",
       geminiStripBody:

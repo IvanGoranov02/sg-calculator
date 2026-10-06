@@ -197,27 +197,6 @@ export type StockAnalysisBundle = {
   dividendQuarterly: DividendQuarterlyPoint[];
 };
 
-export type IncomeMetricKey = "revenue" | "grossProfit" | "operatingExpenses" | "netIncome";
-
-export const incomeStatementMetricKeys: IncomeMetricKey[] = [
-  "revenue",
-  "grossProfit",
-  "operatingExpenses",
-  "netIncome",
-];
-
-export type IncomeTableRow = {
-  label: string;
-  key: IncomeMetricKey;
-};
-
-export const incomeTableRows: IncomeTableRow[] = [
-  { label: "Revenue", key: "revenue" },
-  { label: "Gross profit", key: "grossProfit" },
-  { label: "Operating expenses", key: "operatingExpenses" },
-  { label: "Net income", key: "netIncome" },
-];
-
 /**
  * True when income statement core lines are all zero / unusable — omit from UI (charts & tables).
  * Negative values count as real data.

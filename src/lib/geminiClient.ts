@@ -1,5 +1,5 @@
 /**
- * Shared Google Gemini REST calls (same env as /api/dividend-insight).
+ * Shared Google Gemini REST calls (GEMINI_API_KEY / GEMINI_MODEL).
  */
 
 export function getGeminiApiKey(): string | null {
