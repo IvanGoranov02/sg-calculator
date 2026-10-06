@@ -13,8 +13,10 @@ export type StockQuote = {
   preMarketPrice?: number | null;
   preMarketChange?: number | null;
   preMarketChangePercent?: number | null;
-  /** Next earnings date (Yahoo; may be approximate). */
+  /** Next earnings date (Yahoo; may be approximate). Never a past date when set. */
   earningsDate?: string | null;
+  /** True when earningsDate was projected (~91d) because Yahoo only had past dates. */
+  earningsDateEstimated?: boolean;
 };
 
 export type IncomeStatementAnnual = {
