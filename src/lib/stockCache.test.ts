@@ -231,4 +231,13 @@ describe("earningsReportDue", () => {
     payload.__lastFullFetchAt = iso(now - 40 * day);
     assert.equal(earningsReportDue(payload, now), false);
   });
+
+  it("is due when the cached next-earnings is already past at last fetch (stale)", () => {
+    // GOOGL-style: cached 2026-07-22, last fetch after that date, today 2026-10-06
+    const now = Date.parse("2026-10-06T00:00:00.000Z");
+    const payload = makeBundle() as CachePayload;
+    payload.quote.earningsDate = "2026-07-22";
+    payload.__lastFullFetchAt = iso(now - 40 * day);
+    assert.equal(earningsReportDue(payload, now), true);
+  });
 });

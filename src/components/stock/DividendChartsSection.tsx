@@ -1,15 +1,19 @@
 "use client";
 
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useTransition } from "react";
 
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
 import { buildAnnualChartRows, buildQuarterlyChartRows } from "@/lib/fundamentalsChartRows";
 import { growthPillsForKey } from "@/lib/growthPills";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { computePayoutRatioPercent, sumQuarterlyDpsForFiscalYear } from "@/lib/payoutRatio";
+import {
+  computePayoutRatioPercent,
+  computeTrailingPayoutRatios,
+  sumQuarterlyDpsForFiscalYear,
+} from "@/lib/payoutRatio";
 import {
   filterAnnualRowsByPeriod,
   filterDividendQuarterlyByPeriod,
@@ -24,6 +28,10 @@ import { cn } from "@/lib/utils";
 type DividendChartsSectionProps = {
   data: StockAnalysisBundle;
 };
+
+function numOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
 
 export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
@@ -97,9 +105,9 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
         return {
           payoutRatio: computePayoutRatioPercent({
             dps,
-            eps: typeof r.dilutedEps === "number" ? r.dilutedEps : null,
-            dividendsPaid: typeof r.dividendsPaid === "number" ? r.dividendsPaid : null,
-            netIncome: typeof r.netIncome === "number" ? r.netIncome : null,
+            eps: numOrNull(r.dilutedEps),
+            dividendsPaid: numOrNull(r.dividendsPaid),
+            netIncome: numOrNull(r.netIncome),
           }),
         };
       });
@@ -112,9 +120,9 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
           periodEnd: typeof r.periodEnd === "string" ? r.periodEnd : undefined,
           payoutRatio: computePayoutRatioPercent({
             dps,
-            eps: typeof r.dilutedEps === "number" ? r.dilutedEps : null,
-            dividendsPaid: typeof r.dividendsPaid === "number" ? r.dividendsPaid : null,
-            netIncome: typeof r.netIncome === "number" ? r.netIncome : null,
+            eps: numOrNull(r.dilutedEps),
+            dividendsPaid: numOrNull(r.dividendsPaid),
+            netIncome: numOrNull(r.netIncome),
           }),
         };
       });
@@ -127,7 +135,11 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
 
     const baseRows = buildQuarterlyChartRows(data, formatPeriod, locale);
     if (!quarterBounds) {
-      return { rows: [] as Record<string, unknown>[], pills: growthPillsForKey([], "payoutRatio", "quarterly"), hasPoints: false };
+      return {
+        rows: [] as Record<string, unknown>[],
+        pills: growthPillsForKey([], "payoutRatio", "quarterly"),
+        hasPoints: false,
+      };
     }
     const filtered = filterQuarterlyChartRowsByPeriod(
       baseRows,
@@ -136,28 +148,31 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       customToYear,
       quarterBounds,
     );
-    const allPayout = baseRows.map((r) => {
+
+    // TTM payout: trailing 4Q DPS/EPS (or cash dividends / NI) so quarterly bars stay comparable.
+    const inputs = baseRows.map((r) => {
       const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
       return {
-        payoutRatio: computePayoutRatioPercent({
-          dps: pe ? (dpsByDate.get(pe) ?? null) : null,
-          eps: typeof r.dilutedEps === "number" ? r.dilutedEps : null,
-          dividendsPaid: typeof r.dividendsPaid === "number" ? r.dividendsPaid : null,
-          netIncome: typeof r.netIncome === "number" ? r.netIncome : null,
-        }),
+        dps: pe ? (dpsByDate.get(pe) ?? null) : null,
+        eps: numOrNull(r.dilutedEps),
+        dividendsPaid: numOrNull(r.dividendsPaid),
+        netIncome: numOrNull(r.netIncome),
       };
     });
+    const allTrailing = computeTrailingPayoutRatios(inputs, 4);
+    const peToPayout = new Map<string, number | null>();
+    baseRows.forEach((r, i) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      if (pe) peToPayout.set(pe, allTrailing[i] ?? null);
+    });
+
+    const allPayout = allTrailing.map((payoutRatio) => ({ payoutRatio }));
     const rows = filtered.map((r) => {
       const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
       return {
         periodEnd: pe,
         label: String(r.label ?? ""),
-        payoutRatio: computePayoutRatioPercent({
-          dps: pe ? (dpsByDate.get(pe) ?? null) : null,
-          eps: typeof r.dilutedEps === "number" ? r.dilutedEps : null,
-          dividendsPaid: typeof r.dividendsPaid === "number" ? r.dividendsPaid : null,
-          netIncome: typeof r.netIncome === "number" ? r.netIncome : null,
-        }),
+        payoutRatio: pe ? (peToPayout.get(pe) ?? null) : null,
       };
     });
     return {
@@ -208,64 +223,10 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     [freq, formatPeriod],
   );
 
-  const [aiNote, setAiNote] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiManualNonce, setAiManualNonce] = useState(0);
-
-  useEffect(() => {
-    if (data.dividendQuarterly.length === 0 || pack.hasDps) {
-      setAiNote(null);
-      setAiLoading(false);
-      return;
-    }
-    const ac = new AbortController();
-    setAiLoading(true);
-    setAiNote(null);
-    (async () => {
-      try {
-        const u = new URL("/api/dividend-insight", window.location.origin);
-        u.searchParams.set("ticker", data.quote.symbol);
-        u.searchParams.set("locale", locale);
-        u.searchParams.set("name", data.quote.name);
-        u.searchParams.set("_", String(Date.now()));
-        if (data.investor.dividendYield != null) {
-          u.searchParams.set("yield", String(data.investor.dividendYield));
-        }
-        if (data.investor.dividendRate != null) {
-          u.searchParams.set("rate", String(data.investor.dividendRate));
-        }
-        const res = await fetch(u.toString(), { signal: ac.signal, cache: "no-store" });
-        if (!res.ok) return;
-        const body = (await res.json()) as { ok?: boolean; text?: string };
-        if (body.ok && typeof body.text === "string" && body.text.trim()) {
-          setAiNote(body.text.trim());
-        }
-      } catch {
-        /* aborted or network */
-      } finally {
-        if (!ac.signal.aborted) setAiLoading(false);
-      }
-    })();
-    return () => ac.abort();
-  }, [
-    pack.hasDps,
-    data.dividendQuarterly.length,
-    data.quote.symbol,
-    data.quote.name,
-    data.investor.dividendYield,
-    data.investor.dividendRate,
-    locale,
-    aiManualNonce,
-  ]);
-
   const onReloadYahoo = () => {
     startRefresh(() => {
       router.refresh();
     });
-  };
-
-  const onReloadAi = () => {
-    setAiManualNonce((n) => n + 1);
   };
 
   if (data.dividendQuarterly.length === 0) {
@@ -290,37 +251,13 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
             <RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin")} />
             {t("chartsFund.dividendRefreshData")}
           </Button>
-          {!pack.hasDps ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={aiLoading}
-              onClick={onReloadAi}
-              className="border-border bg-card"
-            >
-              <Sparkles className="size-3.5" />
-              {t("chartsFund.dividendRefreshAi")}
-            </Button>
-          ) : null}
         </div>
       </div>
 
       {!pack.hasDps ? (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {showsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
-          </p>
-          {aiLoading ? (
-            <p className="text-xs text-muted-foreground">{t("chartsFund.dividendAiLoading")}</p>
-          ) : null}
-          {aiNote ? (
-            <div className="rounded-lg border border-border bg-card p-4">
-              <p className="text-xs font-medium text-muted-foreground">{t("chartsFund.dividendAiContextTitle")}</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{aiNote}</p>
-            </div>
-          ) : null}
-        </div>
+        <p className="text-base font-medium text-foreground sm:text-lg">
+          {showsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
+        </p>
       ) : (
         <div className="flex flex-col gap-6">
           <FundamentalChartCard

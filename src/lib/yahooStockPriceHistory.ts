@@ -10,6 +10,7 @@ import {
   dropStaleOpenWindowSum,
   overlayQuarterlyDividends,
 } from "@/lib/bundleCurrency";
+import { resolveNextEarningsOrEstimate } from "@/lib/calendarEvents";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { dividendRateToMajorUnits, isPenceQuoteCurrency, quoteCurrencyMajor } from "@/lib/portfolioFx";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
@@ -59,22 +60,45 @@ function toIsoDate(d: unknown): string | null {
   return dt.toISOString().slice(0, 10);
 }
 
-function pickNextEarningsFromCalendar(qs: Record<string, unknown> | null): string | null {
-  if (!qs) return null;
-  const ce = qs.calendarEvents as { earnings?: { earningsDate?: Date[] } } | undefined;
-  const dates = ce?.earnings?.earningsDate;
-  if (!Array.isArray(dates) || dates.length === 0) return null;
-  const parsed = dates
-    .map((x) => (x instanceof Date ? x : new Date(x as string)))
-    .filter((d) => !Number.isNaN(d.getTime()));
-  if (parsed.length === 0) return null;
-  const t0 = Date.now() - 86400000;
-  const upcoming = parsed.filter((d) => d.getTime() >= t0).sort((a, b) => a.getTime() - b.getTime());
-  const pick = upcoming[0] ?? parsed[parsed.length - 1];
-  return pick.toISOString().slice(0, 10);
+/** Rewrite a quote's earningsDate so it is never in the past (project +91d if needed). */
+export function sanitizeQuoteEarningsDate(quote: StockQuote, nowMs: number = Date.now()): void {
+  if (!quote.earningsDate) {
+    delete quote.earningsDateEstimated;
+    return;
+  }
+  const resolved = resolveNextEarningsOrEstimate([quote.earningsDate], nowMs);
+  quote.earningsDate = resolved.date;
+  if (resolved.estimated) quote.earningsDateEstimated = true;
+  else delete quote.earningsDateEstimated;
 }
 
-function mapQuote(resolvedSym: string, raw: Record<string, unknown>): StockQuote {
+/** Collect Yahoo quote + calendarEvents candidates; never return a past next-earnings. */
+function resolveQuoteEarnings(
+  raw: Record<string, unknown>,
+  qs: Record<string, unknown> | null,
+): { earningsDate: string | null; earningsDateEstimated: boolean } {
+  const candidates: Array<Date | string | null> = [];
+  const ce = qs?.calendarEvents as { earnings?: { earningsDate?: Array<Date | string> } } | undefined;
+  const cal = ce?.earnings?.earningsDate;
+  if (Array.isArray(cal)) candidates.push(...cal);
+  // Quote timestamps are often the *last* report — include them but never prefer past over future calendar.
+  candidates.push(
+    toIsoDate(raw.earningsTimestamp),
+    toIsoDate(raw.earningsTimestampStart),
+    toIsoDate(raw.earningsTimestampEnd),
+  );
+  const resolved = resolveNextEarningsOrEstimate(candidates);
+  return {
+    earningsDate: resolved.date,
+    earningsDateEstimated: resolved.estimated,
+  };
+}
+
+function mapQuote(
+  resolvedSym: string,
+  raw: Record<string, unknown>,
+  qs: Record<string, unknown> | null = null,
+): StockQuote {
   const q = raw;
   const price = Number(q.regularMarketPrice ?? 0);
   const change = Number(q.regularMarketChange ?? 0);
@@ -83,10 +107,7 @@ function mapQuote(resolvedSym: string, raw: Record<string, unknown>): StockQuote
     const prev = price - change;
     pct = prev !== 0 ? (change / prev) * 100 : 0;
   }
-  const earningsDate =
-    toIsoDate(q.earningsTimestamp) ??
-    toIsoDate(q.earningsTimestampStart) ??
-    null;
+  const { earningsDate, earningsDateEstimated } = resolveQuoteEarnings(q, qs);
 
   return {
     symbol: String((q.symbol ?? resolvedSym) as string).toUpperCase(),
@@ -102,6 +123,7 @@ function mapQuote(resolvedSym: string, raw: Record<string, unknown>): StockQuote
     preMarketChange: numField(q.preMarketChange),
     preMarketChangePercent: numField(q.preMarketChangePercent),
     earningsDate,
+    earningsDateEstimated: earningsDateEstimated || undefined,
   };
 }
 
@@ -308,6 +330,8 @@ async function mergeYahooExDividendsIntoQuarterly(
  */
 export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): Promise<void> {
   const inputSym = bundle.quote.symbol.trim().toUpperCase() || "AAPL";
+  // Ensure cached/Gemini past dates never surface even if Yahoo is unavailable.
+  sanitizeQuoteEarningsDate(bundle.quote);
 
   try {
     const resolved = await resolveYahooSymbol(inputSym);
@@ -361,6 +385,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     }
 
     if (!quoteValid) {
+      sanitizeQuoteEarningsDate(bundle.quote);
       return;
     }
 
@@ -370,13 +395,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
         ? (quoteSummaryResult as Record<string, unknown>)
         : null;
 
-    let quote = mapQuote(resolved, rawQuote);
-    if (!quote.earningsDate && qs) {
-      const fromCal = pickNextEarningsFromCalendar(qs);
-      if (fromCal) quote = { ...quote, earningsDate: fromCal };
-    }
-
-    bundle.quote = quote;
+    bundle.quote = mapQuote(resolved, rawQuote, qs);
     bundle.investor = mapInvestorMetrics(rawQuote, qs);
 
     // Reporting currency vs listing currency. GBp is pence of GBP, not a
@@ -422,8 +441,8 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       tagged.__dividendQuarterlyCurrency = quoteCcy.code;
     }
 
-    if ((bundle.historical?.length ?? 0) === 0 && quote.price > 0) {
-      bundle.historical = [{ date: period2Str, close: quote.price }];
+    if ((bundle.historical?.length ?? 0) === 0 && bundle.quote.price > 0) {
+      bundle.historical = [{ date: period2Str, close: bundle.quote.price }];
     }
 
     let intraday: HistoricalEodBar[] | undefined;

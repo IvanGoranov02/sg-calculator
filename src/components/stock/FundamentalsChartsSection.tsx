@@ -45,13 +45,10 @@ const C = {
   equity: "#4ade80",
   cash: "#2dd4bf",
   netDebt: "#fb7185",
+  capitalLease: "#fbbf24",
   ebitda: "#e879f9",
   div: "#f472b6",
   buyback: "#94a3b8",
-  ar: "#38bdf8",
-  inv: "#f59e0b",
-  gw: "#a78bfa",
-  ltDebt: "#f97316",
   revGrowth: "#22c55e",
   niGrowth: "#eab308",
   valuationPe: "#38bdf8",
@@ -72,6 +69,16 @@ function chartGrowthPillsMulti(
   freq: "annual" | "quarterly",
 ) {
   return growthPillsEntries(rows, keys, freq);
+}
+
+/** Keep only series that have at least one finite value in the visible rows. */
+function seriesWithData(rows: Record<string, unknown>[], series: FundamentalSeries[]): FundamentalSeries[] {
+  return series.filter((s) =>
+    rows.some((r) => {
+      const v = r[s.dataKey];
+      return v != null && Number.isFinite(typeof v === "number" ? v : Number(v));
+    }),
+  );
 }
 
 type FundamentalsChartsSectionProps = {
@@ -278,34 +285,12 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
       ),
     [rows],
   );
-  const hasNetDebtEbitda = useMemo(
-    () => rows.some((r) => r.netDebtToEbitda != null && Number.isFinite(r.netDebtToEbitda as number)),
-    [rows],
-  );
   const hasShareholderFlows = useMemo(
     () =>
       rows.some(
         (r) =>
           (r.dividendsPaid != null && Number.isFinite(r.dividendsPaid as number)) ||
           (r.stockRepurchase != null && Number.isFinite(r.stockRepurchase as number)),
-      ),
-    [rows],
-  );
-  const hasArInv = useMemo(
-    () =>
-      rows.some(
-        (r) =>
-          (r.ar != null && Number.isFinite(r.ar as number)) ||
-          (r.inventory != null && Number.isFinite(r.inventory as number)),
-      ),
-    [rows],
-  );
-  const hasGwLt = useMemo(
-    () =>
-      rows.some(
-        (r) =>
-          (r.goodwill != null && Number.isFinite(r.goodwill as number)) ||
-          (r.longTermDebt != null && Number.isFinite(r.longTermDebt as number)),
       ),
     [rows],
   );
@@ -352,9 +337,10 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         { dataKey: "totalDebt", color: C.debt, label: t("annual.totalDebt") },
         { dataKey: "equity", color: C.equity, label: t("annual.equity") },
       ] satisfies FundamentalSeries[],
-      cashDebt: [
+      cashDebtLease: [
         { dataKey: "cash", color: C.cash, label: t("annual.cash") },
-        { dataKey: "netDebt", color: C.netDebt, label: t("annual.netDebt") },
+        { dataKey: "totalDebt", color: C.debt, label: t("annual.totalDebt") },
+        { dataKey: "capitalLease", color: C.capitalLease, label: t("annual.capitalLease") },
       ] satisfies FundamentalSeries[],
       roeRoa: [
         { dataKey: "roe", color: C.netIncome, label: t("annual.roe") },
@@ -370,20 +356,11 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         { dataKey: "dividendsPaidPos", color: C.div, label: t("annual.dividends") },
         { dataKey: "stockRepurchasePos", color: C.buyback, label: t("annual.buyback") },
       ] satisfies FundamentalSeries[],
-      arInv: [
-        { dataKey: "ar", color: C.ar, label: t("annual.accountsReceivable") },
-        { dataKey: "inventory", color: C.inv, label: t("annual.inventory") },
-      ] satisfies FundamentalSeries[],
-      gwLt: [
-        { dataKey: "goodwill", color: C.gw, label: t("annual.goodwill") },
-        { dataKey: "longTermDebt", color: C.ltDebt, label: t("annual.longTermDebt") },
-      ] satisfies FundamentalSeries[],
       ebitdaOcfMargin: [
         { dataKey: "ebitdaMargin", color: C.ebitda, label: t("chartsFund.seriesEbitdaMargin") },
         { dataKey: "ocfMargin", color: C.ocf, label: t("chartsFund.seriesOcfMargin") },
       ] satisfies FundamentalSeries[],
       debtPctCapital: [{ dataKey: "debtPctCapital", color: C.debt, label: t("chartsFund.debtPctCapitalLabel") }] satisfies FundamentalSeries[],
-      netDebtEbitda: [{ dataKey: "netDebtToEbitda", color: C.netDebt, label: t("chartsFund.seriesNetDebtEbitda") }] satisfies FundamentalSeries[],
       quickRatio: [{ dataKey: "quickRatio", color: C.ocf, label: t("chartsFund.chartQuickRatio") }] satisfies FundamentalSeries[],
       capexIntensity: [{ dataKey: "capexIntensity", color: C.capex, label: t("chartsFund.seriesCapexIntensity") }] satisfies FundamentalSeries[],
     }),
@@ -495,7 +472,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartRevenue")}
-            description={t("chartsFund.chartRevenueDesc")}
             data={chartRows}
             series={series.revenue}
             valueFormat="currency"
@@ -504,7 +480,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartNetIncomeSolo")}
-            description={t("chartsFund.chartNetIncomeSoloDesc")}
             data={chartRows}
             series={series.netIncomeSolo}
             chartType="bar"
@@ -515,7 +490,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             <FundamentalChartCard
             {...chartAxisProps}
               title={t("chartsFund.chartDilutedEps")}
-              description={t("chartsFund.chartDilutedEpsDesc")}
               data={chartRows}
               series={series.dilutedEpsSolo}
               valueFormat="perShare"
@@ -526,7 +500,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             <FundamentalChartCard
             {...chartAxisProps}
               title={t("chartsFund.chartDilutedShares")}
-              description={t("chartsFund.chartDilutedSharesDesc")}
               data={chartRows}
               series={series.dilutedSharesSolo}
               valueFormat="compactCount"
@@ -536,7 +509,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartPeTtm")}
-            description={t("chartsFund.chartPeTtmDesc")}
             data={chartRows}
             series={series.peTtm}
             valueFormat="ratio"
@@ -545,7 +517,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartPsTtm")}
-            description={t("chartsFund.chartPsTtmDesc")}
             data={chartRows}
             series={series.psTtm}
             valueFormat="ratio"
@@ -555,7 +526,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             <FundamentalChartCard
             {...chartAxisProps}
               title={t("chartsFund.chartOperatingIncomeSolo")}
-              description={t("chartsFund.chartOperatingIncomeSoloDesc")}
               data={chartRows}
               series={series.operatingIncomeSolo}
               valueFormat="currency"
@@ -565,7 +535,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartOpexSolo")}
-            description={t("chartsFund.chartOpexSoloDesc")}
             data={chartRows}
             series={series.opexSolo}
             valueFormat="currency"
@@ -602,7 +571,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartOcfSolo")}
-            description={t("chartsFund.chartOcfSoloDesc")}
             data={chartRows}
             series={series.ocfSolo}
             valueFormat="currency"
@@ -611,7 +579,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartFcfSolo")}
-            description={t("chartsFund.chartFcfSoloDesc")}
             data={chartRows}
             series={series.fcfSolo}
             valueFormat="currency"
@@ -620,7 +587,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartCapexSolo")}
-            description={t("chartsFund.chartCapexSoloDesc")}
             data={chartRows}
             series={series.capexSolo}
             valueFormat="currency"
@@ -629,7 +595,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartInvestFinance")}
-            description={t("chartsFund.chartInvestFinanceDesc")}
             data={chartRows}
             series={series.investFinance}
             valueFormat="currency"
@@ -645,9 +610,9 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartBalance")}
-            description={t("chartsFund.chartBalanceDesc")}
             data={chartRows}
-            series={series.balance3}
+            series={seriesWithData(chartRows, series.balance3)}
+            chartType="bar"
             valueFormat="currency"
             growthPills={chartGrowthPillsMulti(
               growthPillRows,
@@ -662,16 +627,16 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartCashNetDebt")}
-            description={t("chartsFund.chartCashNetDebtDesc")}
             data={chartRows}
-            series={series.cashDebt}
+            series={seriesWithData(chartRows, series.cashDebtLease)}
+            chartType="bar"
             valueFormat="currency"
             growthPills={chartGrowthPillsMulti(
               growthPillRows,
-              [
-                { key: "cash", label: t("annual.cash") },
-                { key: "netDebt", label: t("annual.netDebt") },
-              ],
+              seriesWithData(growthPillRows, series.cashDebtLease).map((s) => ({
+                key: s.dataKey,
+                label: s.label,
+              })),
               freq,
             )}
           />
@@ -703,7 +668,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartFcfMargin")}
-            description={t("chartsFund.chartFcfMarginDesc")}
             data={chartRows}
             series={series.fcfMargin}
             valueFormat="percent"
@@ -729,7 +693,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
             <FundamentalChartCard
             {...chartAxisProps}
               title={t("chartsFund.chartShareholder")}
-              description={t("chartsFund.chartShareholderDesc")}
               data={chartRows}
               series={series.shareholder}
               valueFormat="currency"
@@ -738,42 +701,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
                 [
                   { key: "dividendsPaidPos", label: t("annual.dividends") },
                   { key: "stockRepurchasePos", label: t("annual.buyback") },
-                ],
-                freq,
-              )}
-            />
-          ) : null}
-          {hasArInv ? (
-            <FundamentalChartCard
-            {...chartAxisProps}
-              title={t("chartsFund.chartArInv")}
-              description={t("chartsFund.chartArInvDesc")}
-              data={chartRows}
-              series={series.arInv}
-              valueFormat="currency"
-              growthPills={chartGrowthPillsMulti(
-                growthPillRows,
-                [
-                  { key: "ar", label: t("annual.accountsReceivable") },
-                  { key: "inventory", label: t("annual.inventory") },
-                ],
-                freq,
-              )}
-            />
-          ) : null}
-          {hasGwLt ? (
-            <FundamentalChartCard
-            {...chartAxisProps}
-              title={t("chartsFund.chartGwLt")}
-              description={t("chartsFund.chartGwLtDesc")}
-              data={chartRows}
-              series={series.gwLt}
-              valueFormat="currency"
-              growthPills={chartGrowthPillsMulti(
-                growthPillRows,
-                [
-                  { key: "goodwill", label: t("annual.goodwill") },
-                  { key: "longTermDebt", label: t("annual.longTermDebt") },
                 ],
                 freq,
               )}
@@ -800,23 +727,11 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartDebtPctCapital")}
-            description={t("chartsFund.chartDebtPctCapitalDesc")}
             data={chartRows}
             series={series.debtPctCapital}
             valueFormat="percent"
             growthPills={chartGrowthPills(growthPillRows, "debtPctCapital", freq)}
           />
-          {hasNetDebtEbitda ? (
-            <FundamentalChartCard
-            {...chartAxisProps}
-              title={t("chartsFund.chartNetDebtEbitda")}
-              description={t("chartsFund.chartNetDebtEbitdaDesc")}
-              data={chartRows}
-              series={series.netDebtEbitda}
-              valueFormat="ratio"
-              growthPills={chartGrowthPills(growthPillRows, "netDebtToEbitda", freq)}
-            />
-          ) : null}
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartQuickRatio")}
@@ -829,7 +744,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
           <FundamentalChartCard
             {...chartAxisProps}
             title={t("chartsFund.chartCapexIntensity")}
-            description={t("chartsFund.chartCapexIntensityDesc")}
             data={chartRows}
             series={series.capexIntensity}
             valueFormat="percent"

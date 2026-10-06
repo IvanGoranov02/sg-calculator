@@ -37,7 +37,72 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Next upcoming earnings date from a quoteSummary calendarEvents block. */
+/** Typical quarterly earnings cadence used when Yahoo only has past dates. */
+export const EARNINGS_CYCLE_DAYS = 91;
+
+export type ResolvedEarningsDate = {
+  /** ISO yyyy-mm-dd, always >= today when non-null. */
+  date: string | null;
+  /** True when projected from a past report (+ ~91 days), not from Yahoo. */
+  estimated: boolean;
+};
+
+/** Local calendar yyyy-mm-dd for `nowMs` (matches Events tab today-boundary). */
+function todayIsoLocal(nowMs: number): string {
+  return toIsoLocal(new Date(nowMs));
+}
+
+function addUtcDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Normalize Yahoo/Date/ISO inputs to yyyy-mm-dd without UTC day-shift on bare ISO dates. */
+function toEarningsIso(value: Date | string): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const bare = trimmed.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(bare)) return bare;
+  }
+  const d = parseDate(value);
+  return d ? toIsoDate(d) : null;
+}
+
+/**
+ * First earnings date on/after today (local calendar day). If the source only has
+ * past dates, project forward in ~91-day steps from the latest past date (estimated).
+ */
+export function resolveNextEarningsOrEstimate(
+  rawDates: Array<Date | string | null | undefined>,
+  nowMs: number = Date.now(),
+): ResolvedEarningsDate {
+  const parsed = rawDates
+    .map((value) => {
+      if (value == null || value === "") return null;
+      return toEarningsIso(value);
+    })
+    .filter((iso): iso is string => iso != null)
+    .sort();
+  if (parsed.length === 0) return { date: null, estimated: false };
+
+  const today = todayIsoLocal(nowMs);
+  const upcoming = parsed.filter((iso) => iso >= today);
+  if (upcoming.length > 0) return { date: upcoming[0]!, estimated: false };
+
+  let projected = parsed[parsed.length - 1]!;
+  // Advance by quarterly cadence until we land on/after today.
+  while (projected < today) {
+    projected = addUtcDaysIso(projected, EARNINGS_CYCLE_DAYS);
+  }
+  return { date: projected, estimated: true };
+}
+
+/**
+ * Next upcoming (or most recent) earnings date from a quoteSummary calendarEvents
+ * block. Used by the Events calendar — may return a recent past date within a
+ * 1-day grace window. Stock analysis uses {@link resolveNextEarningsOrEstimate}.
+ */
 export function nextEarningsDate(qs: unknown): string | null {
   const ce = (qs as { calendarEvents?: YahooCalendarEvents })?.calendarEvents;
   const raw = ce?.earnings?.earningsDate;

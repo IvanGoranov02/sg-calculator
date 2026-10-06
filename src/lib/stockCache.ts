@@ -131,9 +131,9 @@ export function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
 }
 
 /**
- * True when a company's known next-earnings date has passed since our last full
- * fetch — i.e. a new report is out and we should re-fetch. Throttled so we re-fetch
- * at most once per EARNINGS_REFRESH_MIN_INTERVAL_MS even if detection is borderline.
+ * True when the stored next-earnings date is already in the past — i.e. a new
+ * report is out (or the cached "next" date is stale) and we should re-fetch.
+ * Throttled so we re-fetch at most once per EARNINGS_REFRESH_MIN_INTERVAL_MS.
  */
 export function earningsReportDue(
   payload: CachePayload | null | undefined,
@@ -145,13 +145,12 @@ export function earningsReportDue(
   const e = Date.parse(earnings);
   if (!Number.isFinite(e)) return false;
 
+  // Still upcoming — keep serving cache.
+  if (e > nowMs) return false;
+
   const anchorStr = payload.__lastFullFetchAt ?? payload.__adminEditedAt;
   const anchor = anchorStr ? Date.parse(anchorStr) : NaN;
-  const lastFetch = Number.isFinite(anchor) ? anchor : 0;
-
-  // The known earnings date has passed and it post-dates our last full fetch.
-  if (!(e <= nowMs && e > lastFetch)) return false;
-  // Don't hammer source APIs around the earnings date.
+  // Don't hammer source APIs around the earnings date / while Yahoo is stale.
   if (Number.isFinite(anchor) && nowMs - anchor < EARNINGS_REFRESH_MIN_INTERVAL_MS) return false;
   return true;
 }

@@ -1,7 +1,8 @@
 /**
  * Payout ratio as percent of earnings for one fiscal period.
  * Prefers DPS / EPS; falls back to |dividends paid| / net income.
- * Non-payers and negative/zero earnings yield null (skip the bar).
+ * Non-payers and non-positive earnings yield null (skip the bar).
+ * Never returns Infinity/NaN.
  */
 export function computePayoutRatioPercent(input: {
   dps?: number | null;
@@ -19,7 +20,8 @@ export function computePayoutRatioPercent(input: {
     Number.isFinite(eps) &&
     eps > 0
   ) {
-    return (dps / eps) * 100;
+    const pct = (dps / eps) * 100;
+    return Number.isFinite(pct) ? pct : null;
   }
 
   const paid = input.dividendsPaid;
@@ -31,10 +33,75 @@ export function computePayoutRatioPercent(input: {
     Number.isFinite(ni) &&
     ni > 0
   ) {
-    return (Math.abs(paid) / ni) * 100;
+    const pct = (Math.abs(paid) / ni) * 100;
+    return Number.isFinite(pct) ? pct : null;
   }
 
   return null;
+}
+
+export type PayoutInputs = {
+  dps?: number | null;
+  eps?: number | null;
+  dividendsPaid?: number | null;
+  netIncome?: number | null;
+};
+
+/**
+ * Trailing-window payout ratios for quarterly series (default 4Q = TTM).
+ * At each index i, sums DPS/EPS (or cash dividends / NI) over [i-window+1, i].
+ * Returns null until a full window is available, or when trailing earnings ≤ 0.
+ */
+export function computeTrailingPayoutRatios(
+  points: ReadonlyArray<PayoutInputs>,
+  window = 4,
+): (number | null)[] {
+  if (!Number.isFinite(window) || window <= 0) {
+    return points.map(() => null);
+  }
+  return points.map((_, i) => {
+    if (i + 1 < window) return null;
+    const slice = points.slice(i - window + 1, i + 1);
+
+    let dpsSum = 0;
+    let epsSum = 0;
+    let hasDps = false;
+    let hasEps = false;
+    for (const p of slice) {
+      if (p.dps != null && Number.isFinite(p.dps) && p.dps >= 0) {
+        dpsSum += p.dps;
+        hasDps = true;
+      }
+      if (p.eps != null && Number.isFinite(p.eps)) {
+        epsSum += p.eps;
+        hasEps = true;
+      }
+    }
+    if (hasDps && hasEps && epsSum > 0) {
+      const pct = (dpsSum / epsSum) * 100;
+      return Number.isFinite(pct) ? pct : null;
+    }
+
+    let paidSum = 0;
+    let niSum = 0;
+    let hasPaid = false;
+    let hasNi = false;
+    for (const p of slice) {
+      if (p.dividendsPaid != null && Number.isFinite(p.dividendsPaid)) {
+        paidSum += Math.abs(p.dividendsPaid);
+        hasPaid = true;
+      }
+      if (p.netIncome != null && Number.isFinite(p.netIncome)) {
+        niSum += p.netIncome;
+        hasNi = true;
+      }
+    }
+    if (hasPaid && hasNi && niSum > 0) {
+      const pct = (paidSum / niSum) * 100;
+      return Number.isFinite(pct) ? pct : null;
+    }
+    return null;
+  });
 }
 
 /** Sum quarterly DPS whose calendar year matches a fiscal year label. */

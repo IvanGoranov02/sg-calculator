@@ -343,6 +343,7 @@ export function convertBundleFundamentals(
       accountsReceivable: s(r.accountsReceivable, rate),
       goodwill: s(r.goodwill, rate),
       longTermDebt: s(r.longTermDebt, rate),
+      capitalLeaseObligations: s(r.capitalLeaseObligations ?? null, rate),
     }) as T;
 
   bundle.income = bundle.income.map(income);
