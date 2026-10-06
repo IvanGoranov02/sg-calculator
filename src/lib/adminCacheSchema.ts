@@ -18,6 +18,7 @@ export const adminQuoteSchema = z.object({
   preMarketChange: nullableNum.optional(),
   preMarketChangePercent: nullableNum.optional(),
   earningsDate: z.string().nullable().optional(),
+  earningsDateEstimated: z.boolean().optional(),
 });
 
 export const adminIncomeAnnualSchema = z.object({

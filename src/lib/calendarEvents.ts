@@ -37,7 +37,61 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Next upcoming earnings date from a quoteSummary calendarEvents block. */
+/** Typical quarterly earnings cadence used when Yahoo only has past dates. */
+export const EARNINGS_CYCLE_DAYS = 91;
+
+export type ResolvedEarningsDate = {
+  /** ISO yyyy-mm-dd, always >= today when non-null. */
+  date: string | null;
+  /** True when projected from a past report (+ ~91 days), not from Yahoo. */
+  estimated: boolean;
+};
+
+function todayIso(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
+}
+
+function addUtcDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * First earnings date on/after today. If the source only has past dates, project
+ * forward in ~91-day steps from the latest past date (marked estimated).
+ */
+export function resolveNextEarningsOrEstimate(
+  rawDates: Array<Date | string | null | undefined>,
+  nowMs: number = Date.now(),
+): ResolvedEarningsDate {
+  const parsed = rawDates
+    .map((value) => {
+      if (value == null || value === "") return null;
+      return parseDate(value);
+    })
+    .filter((d): d is Date => d !== null)
+    .map(toIsoDate)
+    .sort();
+  if (parsed.length === 0) return { date: null, estimated: false };
+
+  const today = todayIso(nowMs);
+  const upcoming = parsed.filter((iso) => iso >= today);
+  if (upcoming.length > 0) return { date: upcoming[0]!, estimated: false };
+
+  let projected = parsed[parsed.length - 1]!;
+  // Advance by quarterly cadence until we land on/after today.
+  while (projected < today) {
+    projected = addUtcDaysIso(projected, EARNINGS_CYCLE_DAYS);
+  }
+  return { date: projected, estimated: true };
+}
+
+/**
+ * Next upcoming (or most recent) earnings date from a quoteSummary calendarEvents
+ * block. Used by the Events calendar — may return a recent past date within a
+ * 1-day grace window. Stock analysis uses {@link resolveNextEarningsOrEstimate}.
+ */
 export function nextEarningsDate(qs: unknown): string | null {
   const ce = (qs as { calendarEvents?: YahooCalendarEvents })?.calendarEvents;
   const raw = ce?.earnings?.earningsDate;

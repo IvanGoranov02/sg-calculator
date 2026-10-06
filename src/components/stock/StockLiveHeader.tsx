@@ -6,7 +6,7 @@ import { useCallback, useMemo } from "react";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatCurrencyEur, formatPercent } from "@/lib/format";
+import { formatCurrency, formatCurrencyEur, formatLocaleDate, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import type { DisplayCurrency } from "@/lib/preferences/preferences";
@@ -48,8 +48,8 @@ export function StockLiveHeader({
   onForceRefresh,
   refreshing = false,
 }: StockLiveHeaderProps) {
-  const { t } = useI18n();
-  const { displayCurrency: ccy, setDisplayCurrency: persistCcy } = usePreferences();
+  const { t, locale } = useI18n();
+  const { displayCurrency: ccy, setDisplayCurrency: persistCcy, dateFormat } = usePreferences();
 
   const canEur = eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0;
 
@@ -125,12 +125,14 @@ export function StockLiveHeader({
               ) : null}
             </div>
           </div>
-          {quote.earningsDate ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground/90">{t("stock.nextEarnings")}</span>{" "}
-              {quote.earningsDate}
-            </p>
-          ) : null}
+          <p className="mt-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground/90">{t("stock.nextEarnings")}</span>{" "}
+            {quote.earningsDate
+              ? `${formatLocaleDate(quote.earningsDate, locale, dateFormat)}${
+                  quote.earningsDateEstimated ? ` (${t("stock.earningsEstimated")})` : ""
+                }`
+              : "—"}
+          </p>
         </div>
 
         <div className="flex min-w-0 flex-col items-end gap-1 self-end sm:self-auto">

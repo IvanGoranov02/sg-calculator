@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   daysUntil,
+  EARNINGS_CYCLE_DAYS,
   extractDividendPayDate,
   extractExDividendDate,
   extractSymbolEventRow,
@@ -13,6 +14,7 @@ import {
   groupEventsByWeek,
   mondayOfWeek,
   nextEarningsDate,
+  resolveNextEarningsOrEstimate,
   unionEventSymbols,
 } from "@/lib/calendarEvents";
 
@@ -22,6 +24,42 @@ const DAY = 86_400_000;
 function localNoon(year: number, month: number, day: number): number {
   return new Date(year, month - 1, day, 12, 0, 0).getTime();
 }
+
+describe("resolveNextEarningsOrEstimate", () => {
+  it("picks the nearest upcoming earnings date", () => {
+    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const got = resolveNextEarningsOrEstimate(
+      ["2026-07-22", "2026-10-28", "2026-11-15"],
+      now,
+    );
+    assert.deepEqual(got, { date: "2026-10-28", estimated: false });
+  });
+
+  it("never returns a past date — projects +91d from the latest past report", () => {
+    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    // GOOGL-style stale Yahoo calendar: only 2026-07-22
+    const got = resolveNextEarningsOrEstimate(["2026-07-22"], now);
+    assert.equal(got.estimated, true);
+    assert.ok(got.date != null && got.date >= "2026-10-06");
+    // 2026-07-22 + 91d = 2026-10-21
+    assert.equal(got.date, "2026-10-21");
+    assert.equal(EARNINGS_CYCLE_DAYS, 91);
+  });
+
+  it("keeps projecting until the estimate is on/after today", () => {
+    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const got = resolveNextEarningsOrEstimate(["2026-01-01"], now);
+    assert.equal(got.estimated, true);
+    assert.ok(got.date != null && got.date >= "2026-10-06");
+  });
+
+  it("returns null when there are no parseable dates", () => {
+    assert.deepEqual(resolveNextEarningsOrEstimate([], Date.now()), {
+      date: null,
+      estimated: false,
+    });
+  });
+});
 
 describe("nextEarningsDate", () => {
   it("picks the nearest upcoming earnings date", () => {
