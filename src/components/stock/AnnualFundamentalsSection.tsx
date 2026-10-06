@@ -3,7 +3,7 @@
 import { useCallback, useMemo } from "react";
 
 import { FiscalMetricTable, type FiscalMetricRowDef } from "@/components/stock/FiscalMetricTable";
-import { safePct, safeRatio, yoyPercentNullableSeries } from "@/lib/annualTables";
+import { yoyPercentNullableSeries } from "@/lib/annualTables";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { annualDisplayFiscalYears, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
@@ -79,46 +79,6 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
       { label: t("annual.fcfYoy"), values: yoyPercentNullableSeries(fcfSeries), format: "yoy" },
     ];
 
-    const margins: FiscalMetricRowDef[] = [
-      {
-        label: t("annual.grossMargin"),
-        values: years.map((y) => {
-          const r = incMap.get(y);
-          if (!r) return null;
-          return safePct(r.grossProfit, r.revenue);
-        }),
-        format: "margin",
-      },
-      {
-        label: t("annual.operatingMargin"),
-        values: years.map((y) => {
-          const r = incMap.get(y);
-          if (!r || r.operatingIncome == null) return null;
-          return safePct(r.operatingIncome, r.revenue);
-        }),
-        format: "margin",
-      },
-      {
-        label: t("annual.netMargin"),
-        values: years.map((y) => {
-          const r = incMap.get(y);
-          if (!r) return null;
-          return safePct(r.netIncome, r.revenue);
-        }),
-        format: "margin",
-      },
-      {
-        label: t("annual.fcfMargin"),
-        values: years.map((y) => {
-          const c = cfMap.get(y);
-          const r = incMap.get(y);
-          if (c == null || r == null || r.revenue === 0) return null;
-          return safePct(c.freeCashFlow, r.revenue);
-        }),
-        format: "margin",
-      },
-    ];
-
     const balanceRows: FiscalMetricRowDef[] = [
       { label: t("annual.totalAssets"), values: years.map((y) => bsMap.get(y)?.totalAssets ?? null), format: "currency" },
       { label: t("annual.cash"), values: years.map((y) => bsMap.get(y)?.cashAndCashEquivalents ?? null), format: "currency" },
@@ -145,86 +105,7 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
       { label: t("annual.equity"), values: years.map((y) => bsMap.get(y)?.stockholdersEquity ?? null), format: "currency" },
     ];
 
-    const cfRows: FiscalMetricRowDef[] = [
-      {
-        label: t("annual.ocf"),
-        values: years.map((y) => cfMap.get(y)?.operatingCashFlow ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.capex"),
-        values: years.map((y) => cfMap.get(y)?.capitalExpenditure ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.fcf"),
-        values: years.map((y) => cfMap.get(y)?.freeCashFlow ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.investingCf"),
-        values: years.map((y) => cfMap.get(y)?.investingCashFlow ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.financingCf"),
-        values: years.map((y) => cfMap.get(y)?.financingCashFlow ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.dividends"),
-        values: years.map((y) => cfMap.get(y)?.dividendsPaid ?? null),
-        format: "currency",
-      },
-      {
-        label: t("annual.buyback"),
-        values: years.map((y) => cfMap.get(y)?.stockRepurchase ?? null),
-        format: "currency",
-      },
-    ];
-
-    const ratioRows: FiscalMetricRowDef[] = [
-      {
-        label: t("annual.currentRatio"),
-        values: years.map((y) => {
-          const b = bsMap.get(y);
-          return safeRatio(b?.totalCurrentAssets ?? null, b?.totalCurrentLiabilities ?? null);
-        }),
-        format: "ratio",
-      },
-      {
-        label: t("annual.debtToEquity"),
-        values: years.map((y) => {
-          const b = bsMap.get(y);
-          return safeRatio(b?.totalDebt ?? null, b?.stockholdersEquity ?? null);
-        }),
-        format: "ratio",
-      },
-      {
-        label: t("annual.roe"),
-        values: years.map((y) => {
-          const r = incMap.get(y);
-          const b = bsMap.get(y);
-          const eq = b?.stockholdersEquity;
-          if (!r || eq == null || eq === 0) return null;
-          return safePct(r.netIncome, eq);
-        }),
-        format: "margin",
-      },
-      {
-        label: t("annual.roa"),
-        values: years.map((y) => {
-          const r = incMap.get(y);
-          const b = bsMap.get(y);
-          const ta = b?.totalAssets;
-          if (!r || ta == null || ta === 0) return null;
-          return safePct(r.netIncome, ta);
-        }),
-        format: "margin",
-      },
-    ];
-
-    return { years, perShare, incomeExtra, yoyRows, margins, balanceRows, cfRows, ratioRows };
+    return { years, perShare, incomeExtra, yoyRows, balanceRows };
   }, [data, t, timeRange, customFromYear, customToYear]);
 
   const metricCol = t("income.metricCol");
@@ -260,35 +141,11 @@ export function AnnualFundamentalsSection({ data }: AnnualFundamentalsSectionPro
         yearLabel={formatFy}
       />
       <FiscalMetricTable
-        title={t("annual.marginsTitle")}
-        subtitle={t("annual.marginsSubtitle")}
-        metricCol={metricCol}
-        years={pack.years}
-        rows={pack.margins}
-        yearLabel={formatFy}
-      />
-      <FiscalMetricTable
         title={t("annual.balanceTitle")}
         subtitle={t("annual.balanceSubtitle")}
         metricCol={metricCol}
         years={pack.years}
         rows={pack.balanceRows}
-        yearLabel={formatFy}
-      />
-      <FiscalMetricTable
-        title={t("annual.cashFlowTitle")}
-        subtitle={t("annual.cashFlowSubtitle")}
-        metricCol={metricCol}
-        years={pack.years}
-        rows={pack.cfRows}
-        yearLabel={formatFy}
-      />
-      <FiscalMetricTable
-        title={t("annual.ratiosTitle")}
-        subtitle={t("annual.ratiosSubtitle")}
-        metricCol={metricCol}
-        years={pack.years}
-        rows={pack.ratioRows}
         yearLabel={formatFy}
       />
     </div>

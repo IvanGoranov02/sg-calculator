@@ -111,6 +111,7 @@ function mapBalance(r: Rec): Omit<BalanceSheetQuarter, "date" | "symbol"> {
     accountsReceivable: num(r, "netReceivables", "accountsReceivables"),
     goodwill: num(r, "goodwill"),
     longTermDebt: num(r, "longTermDebt"),
+    capitalLeaseObligations: num(r, "capitalLeaseObligations", "capitalLeaseObligationsTotal"),
   };
 }
 

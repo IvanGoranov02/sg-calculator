@@ -13,8 +13,10 @@ export type StockQuote = {
   preMarketPrice?: number | null;
   preMarketChange?: number | null;
   preMarketChangePercent?: number | null;
-  /** Next earnings date (Yahoo; may be approximate). */
+  /** Next earnings date (Yahoo; may be approximate). Never a past date when set. */
   earningsDate?: string | null;
+  /** True when earningsDate was projected (~91d) because Yahoo only had past dates. */
+  earningsDateEstimated?: boolean;
 };
 
 export type IncomeStatementAnnual = {
@@ -49,6 +51,8 @@ export type BalanceSheetAnnual = {
   accountsReceivable: number | null;
   goodwill: number | null;
   longTermDebt: number | null;
+  /** Capital / finance lease obligations when reported (FMP, Yahoo, EDGAR, Gemini). */
+  capitalLeaseObligations?: number | null;
 };
 
 export type CashFlowAnnual = {
@@ -92,6 +96,8 @@ export type BalanceSheetQuarter = {
   accountsReceivable: number | null;
   goodwill: number | null;
   longTermDebt: number | null;
+  /** Capital / finance lease obligations when reported (FMP, Yahoo, EDGAR, Gemini). */
+  capitalLeaseObligations?: number | null;
 };
 
 export type CashFlowQuarter = {
@@ -196,27 +202,6 @@ export type StockAnalysisBundle = {
   /** Same quarter order as `incomeQuarterly` (aligned by date). */
   dividendQuarterly: DividendQuarterlyPoint[];
 };
-
-export type IncomeMetricKey = "revenue" | "grossProfit" | "operatingExpenses" | "netIncome";
-
-export const incomeStatementMetricKeys: IncomeMetricKey[] = [
-  "revenue",
-  "grossProfit",
-  "operatingExpenses",
-  "netIncome",
-];
-
-export type IncomeTableRow = {
-  label: string;
-  key: IncomeMetricKey;
-};
-
-export const incomeTableRows: IncomeTableRow[] = [
-  { label: "Revenue", key: "revenue" },
-  { label: "Gross profit", key: "grossProfit" },
-  { label: "Operating expenses", key: "operatingExpenses" },
-  { label: "Net income", key: "netIncome" },
-];
 
 /**
  * True when income statement core lines are all zero / unusable — omit from UI (charts & tables).

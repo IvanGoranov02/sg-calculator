@@ -65,6 +65,7 @@ function v3Statements(): FmpStatements {
         netReceivables: 3_400_000_000,
         goodwill: 8_400_000_000,
         longTermDebt: 9_500_000_000,
+        capitalLeaseObligations: 1_200_000_000,
       },
     ],
     balanceQuarter: [],
@@ -109,6 +110,7 @@ describe("bundleFromFmpStatements (v3 field names)", () => {
     assert.equal(bs?.totalDebt, 11_000_000_000);
     assert.equal(bs?.netDebt, 4_000_000_000);
     assert.equal(bs?.accountsReceivable, 3_400_000_000);
+    assert.equal(bs?.capitalLeaseObligations, 1_200_000_000);
   });
 
   it("maps quarterly income rows", () => {

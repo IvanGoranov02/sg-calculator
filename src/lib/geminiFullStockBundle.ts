@@ -298,6 +298,9 @@ function normalizeBalanceAnnual(sym: string, raw: unknown): BalanceSheetAnnual |
     accountsReceivable: numOrNull(pick(o, "accountsReceivable", "accounts_receivable", "receivables")),
     goodwill: numOrNull(pick(o, "goodwill")),
     longTermDebt: numOrNull(pick(o, "longTermDebt", "long_term_debt", "longTermBorrowings")),
+    capitalLeaseObligations: numOrNull(
+      pick(o, "capitalLeaseObligations", "capital_lease_obligations", "capitalLease", "financeLeaseLiability"),
+    ),
   };
 }
 
@@ -357,6 +360,9 @@ function normalizeBalanceQuarter(sym: string, raw: unknown): BalanceSheetQuarter
     accountsReceivable: numOrNull(pick(o, "accountsReceivable", "accounts_receivable", "receivables")),
     goodwill: numOrNull(pick(o, "goodwill")),
     longTermDebt: numOrNull(pick(o, "longTermDebt", "long_term_debt", "longTermBorrowings")),
+    capitalLeaseObligations: numOrNull(
+      pick(o, "capitalLeaseObligations", "capital_lease_obligations", "capitalLease", "financeLeaseLiability"),
+    ),
   };
 }
 
@@ -603,7 +609,8 @@ Provide data for the last ${MAX_HISTORY_YEARS} fiscal years, oldest first.
     { "date": "YYYY-MM-DD", "symbol": "${sym}", "fiscalYear": "YYYY",
       "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,
       "cashAndCashEquivalents": N, "totalCurrentAssets": N, "totalCurrentLiabilities": N,
-      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N }
+      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N,
+      "capitalLeaseObligations": N }
   ]
 }
 
@@ -666,7 +673,8 @@ function buildQuarterlyBsDivPrompt(sym: string): string {
     `    { "date": "YYYY-MM-DD", "symbol": "${sym}",`,
     '      "totalAssets": N, "totalDebt": N, "netDebt": N, "stockholdersEquity": N,',
     '      "cashAndCashEquivalents": N, "totalCurrentAssets": N, "totalCurrentLiabilities": N,',
-    '      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N }',
+    '      "inventory": N, "accountsReceivable": N, "goodwill": N, "longTermDebt": N,',
+    '      "capitalLeaseObligations": N }',
     "  ],",
     "",
     '  "dividendQuarterly": [',
