@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
@@ -33,7 +34,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               variant="outline"
               size="sm"
               className="border-white/15 bg-zinc-900/60"
-              onClick={() => void signOut({ callbackUrl: "/dashboard" })}
+              onClick={() => {
+                clearPortfolioRelatedClientCachesOnSignOut();
+                void signOut({ callbackUrl: "/dashboard" });
+              }}
             >
               {t("header.signOut")}
             </Button>

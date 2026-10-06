@@ -3,7 +3,7 @@
 import { BarChart3, CalendarClock, Coins, Loader2, TrendingDown } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { SymbolEventRow } from "@/lib/calendarEvents";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
@@ -24,6 +24,21 @@ import {
   type EventDividendEstimate,
   type SymbolEventDividendEstimates,
 } from "@/lib/dividendEstimate";
+import {
+  beginEventsTabLoad,
+  browserEventsTtlStorage,
+  commitEventsTabTtlCache,
+  EVENTS_TAB_TTL_MS,
+  eventsSymbolsKey,
+  invalidateEventsTabTtlCache,
+  isEventsTabLoadCurrent,
+  readEventsTabSessionMemory,
+  readStoredEventsTabTtlCache,
+  writeEventsTabSessionMemory,
+  type EventsTabCachePayload,
+} from "@/lib/eventsTabTtlCache";
+import { isFreshTtlRecord } from "@/lib/clientTtlCache";
+import { clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { initialPortfolioReady } from "@/lib/eventsSession";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -72,124 +87,309 @@ const KIND_META: Record<
   },
 };
 
+const GUEST_CACHE_USER = "guest";
+
+function applyEventsPayload(
+  payload: EventsTabCachePayload,
+  setters: {
+    setPortfolioSymbols: (s: string[]) => void;
+    setPortfolioHoldings: (h: PortfolioHoldingApi[]) => void;
+    setPortfolioQuotes: (q: Record<string, PortfolioQuoteRow | null>) => void;
+    setPortfolioFx: (fx: PortfolioFxRates) => void;
+    setDividendPayments: (p: PortfolioDividendPayment[]) => void;
+    setRows: (r: SymbolEventRow[]) => void;
+  },
+) {
+  setters.setPortfolioSymbols(payload.portfolioSymbols);
+  setters.setPortfolioHoldings(payload.portfolioHoldings);
+  setters.setPortfolioQuotes(payload.portfolioQuotes);
+  setters.setPortfolioFx(payload.portfolioFx);
+  setters.setDividendPayments(payload.dividendPayments);
+  setters.setRows(payload.rows);
+}
+
+function initialEventsFromCache(
+  cacheUserId: string,
+  watchlistSymbols: string[],
+): { payload: EventsTabCachePayload | null; loading: boolean; portfolioReady: boolean } {
+  if (!cacheUserId || typeof window === "undefined") {
+    return { payload: null, loading: true, portfolioReady: false };
+  }
+  const stored = readStoredEventsTabTtlCache(browserEventsTtlStorage(), cacheUserId);
+  const memory = readEventsTabSessionMemory();
+  const candidate =
+    memory && memory.userId === cacheUserId
+      ? memory
+      : stored && stored.userId === cacheUserId
+        ? stored
+        : null;
+  if (!candidate || !isFreshTtlRecord(candidate, cacheUserId, EVENTS_TAB_TTL_MS, Date.now())) {
+    return { payload: null, loading: true, portfolioReady: false };
+  }
+  const hydratedKey = eventsSymbolsKey(
+    unionEventSymbols(watchlistSymbols, candidate.payload.portfolioSymbols),
+  );
+  if (hydratedKey !== (candidate.scopeKey ?? candidate.payload.symbolsKey)) {
+    // Watchlist changed since the payload was stored — treat as a miss (no stale paint).
+    return { payload: null, loading: true, portfolioReady: false };
+  }
+  return { payload: candidate.payload, loading: false, portfolioReady: true };
+}
+
 export function EventsClient() {
   const { t, locale } = useI18n();
   const { displayCurrency } = usePreferences();
   const preferredCurrency = displayCurrencyToPortfolioCode(displayCurrency);
   const { symbols: watchlistSymbols } = useWatchlist();
-  const { status: sessionStatus } = useSession();
-  const [portfolioSymbols, setPortfolioSymbols] = useState<string[]>([]);
-  const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingApi[]>([]);
-  const [portfolioQuotes, setPortfolioQuotes] = useState<Record<string, PortfolioQuoteRow | null>>({});
-  const [portfolioFx, setPortfolioFx] = useState<PortfolioFxRates>({ eurPerUsd: null, gbpPerUsd: null });
-  const [dividendPayments, setDividendPayments] = useState<PortfolioDividendPayment[]>([]);
-  const [portfolioReady, setPortfolioReady] = useState(() => initialPortfolioReady(sessionStatus));
-  const [rows, setRows] = useState<SymbolEventRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: session, status: sessionStatus } = useSession();
+  const authUserId = session?.user?.id ?? "";
+  const cacheUserId =
+    sessionStatus === "authenticated" && authUserId
+      ? authUserId
+      : sessionStatus === "unauthenticated"
+        ? GUEST_CACHE_USER
+        : "";
 
-  const symbols = useMemo(
-    () => unionEventSymbols(watchlistSymbols, portfolioSymbols),
-    [watchlistSymbols, portfolioSymbols],
+  const [cacheSeed] = useState(() =>
+    initialEventsFromCache(
+      typeof window !== "undefined" && sessionStatus === "unauthenticated" ? GUEST_CACHE_USER : authUserId,
+      watchlistSymbols,
+    ),
   );
 
+  const [portfolioSymbols, setPortfolioSymbols] = useState<string[]>(
+    () => cacheSeed.payload?.portfolioSymbols ?? [],
+  );
+  const [portfolioHoldings, setPortfolioHoldings] = useState<PortfolioHoldingApi[]>(
+    () => cacheSeed.payload?.portfolioHoldings ?? [],
+  );
+  const [portfolioQuotes, setPortfolioQuotes] = useState<Record<string, PortfolioQuoteRow | null>>(
+    () => cacheSeed.payload?.portfolioQuotes ?? {},
+  );
+  const [portfolioFx, setPortfolioFx] = useState<PortfolioFxRates>(
+    () => cacheSeed.payload?.portfolioFx ?? { eurPerUsd: null, gbpPerUsd: null },
+  );
+  const [dividendPayments, setDividendPayments] = useState<PortfolioDividendPayment[]>(
+    () => cacheSeed.payload?.dividendPayments ?? [],
+  );
+  const [portfolioReady, setPortfolioReady] = useState(
+    () => cacheSeed.portfolioReady || initialPortfolioReady(sessionStatus),
+  );
+  const [rows, setRows] = useState<SymbolEventRow[]>(() => cacheSeed.payload?.rows ?? []);
+  const [loading, setLoading] = useState(() => cacheSeed.loading);
+  const [error, setError] = useState<string | null>(null);
+  const prevCurrencyRef = useRef(preferredCurrency);
+  const forceCurrencyRefreshRef = useRef(false);
+  const [currencyEpoch, setCurrencyEpoch] = useState(0);
+  const prevSessionStatusRef = useRef(sessionStatus);
+
+  // Leaving an authenticated session must drop TTL caches (shared-browser / sign-out).
   useEffect(() => {
-    if (sessionStatus === "loading") return;
-    if (sessionStatus !== "authenticated") {
+    const prev = prevSessionStatusRef.current;
+    prevSessionStatusRef.current = sessionStatus;
+    if (prev === "authenticated" && sessionStatus === "unauthenticated") {
+      clearPortfolioRelatedClientCachesOnSignOut();
       setPortfolioSymbols([]);
       setPortfolioHoldings([]);
       setPortfolioQuotes({});
       setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
       setDividendPayments([]);
+      setRows([]);
       setPortfolioReady(true);
-      return;
+      setLoading(false);
+      setError(null);
     }
+  }, [sessionStatus]);
+
+  const watchlistKey = useMemo(() => eventsSymbolsKey(watchlistSymbols), [watchlistSymbols]);
+
+  // Display-currency change drops the Events cache so the next open refetches.
+  useEffect(() => {
+    if (prevCurrencyRef.current === preferredCurrency) return;
+    prevCurrencyRef.current = preferredCurrency;
+    invalidateEventsTabTtlCache(browserEventsTtlStorage());
+    forceCurrencyRefreshRef.current = true;
+    setCurrencyEpoch((n) => n + 1);
+  }, [preferredCurrency]);
+
+  const commitPayload = useCallback(
+    (payload: EventsTabCachePayload) => {
+      if (!cacheUserId) return;
+      commitEventsTabTtlCache({
+        storage: browserEventsTtlStorage(),
+        userId: cacheUserId,
+        payload,
+      });
+    },
+    [cacheUserId],
+  );
+
+  const loadAll = useCallback(
+    async (opts?: { force?: boolean; isCancelled?: () => boolean }) => {
+      if (!cacheUserId) return;
+      const generation = beginEventsTabLoad();
+      const stale = () =>
+        opts?.isCancelled?.() === true || !isEventsTabLoadCurrent(generation);
+
+      setLoading(true);
+      setError(null);
+
+      let nextPortfolioSymbols: string[] = [];
+      let nextHoldings: PortfolioHoldingApi[] = [];
+      let nextQuotes: Record<string, PortfolioQuoteRow | null> = {};
+      let nextFx: PortfolioFxRates = { eurPerUsd: null, gbpPerUsd: null };
+      let nextPayments: PortfolioDividendPayment[] = [];
+
+      try {
+        if (sessionStatus === "authenticated") {
+          const portfolioUrl = opts?.force ? "/api/portfolio?refresh=1" : "/api/portfolio";
+          const portfolioRes = await fetch(portfolioUrl, {
+            cache: opts?.force ? "no-store" : "default",
+          });
+          if (stale()) return;
+          if (portfolioRes.ok) {
+            const data = (await portfolioRes.json()) as {
+              holdings?: PortfolioHoldingApi[];
+              quotes?: Record<string, PortfolioQuoteRow | null>;
+              fx?: PortfolioFxRates;
+            };
+            nextHoldings = data.holdings ?? [];
+            nextQuotes = data.quotes ?? {};
+            nextFx = data.fx ?? { eurPerUsd: null, gbpPerUsd: null };
+            nextPortfolioSymbols = nextHoldings.map((h) => h.symbolYahoo);
+          }
+
+          try {
+            const dividendsRes = await fetch("/api/portfolio/dividends", {
+              cache: opts?.force ? "no-store" : "default",
+            });
+            if (stale()) return;
+            if (dividendsRes.ok) {
+              const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
+              nextPayments = divData.payments ?? [];
+            }
+          } catch {
+            nextPayments = [];
+          }
+          if (stale()) return;
+        }
+
+        const mergedSymbols = unionEventSymbols(
+          watchlistSymbols,
+          sessionStatus === "authenticated" ? nextPortfolioSymbols : [],
+        );
+        const nextSymbolsKey = eventsSymbolsKey(mergedSymbols);
+
+        let nextRows: SymbolEventRow[] = [];
+        if (mergedSymbols.length > 0) {
+          const eventsUrl = `/api/events?symbols=${encodeURIComponent(mergedSymbols.join(","))}${
+            opts?.force ? "&refresh=1" : ""
+          }`;
+          const res = await fetch(eventsUrl, { cache: opts?.force ? "no-store" : "default" });
+          if (stale()) return;
+          const data = (await res.json()) as { rows?: SymbolEventRow[]; error?: string };
+          if (!res.ok) {
+            setError(data.error ?? t("events.error"));
+            setPortfolioSymbols(nextPortfolioSymbols);
+            setPortfolioHoldings(nextHoldings);
+            setPortfolioQuotes(nextQuotes);
+            setPortfolioFx(nextFx);
+            setDividendPayments(nextPayments);
+            setPortfolioReady(true);
+            setRows([]);
+            return;
+          }
+          nextRows = data.rows ?? [];
+        }
+
+        if (stale()) return;
+        setPortfolioSymbols(nextPortfolioSymbols);
+        setPortfolioHoldings(nextHoldings);
+        setPortfolioQuotes(nextQuotes);
+        setPortfolioFx(nextFx);
+        setDividendPayments(nextPayments);
+        setPortfolioReady(true);
+        setRows(nextRows);
+        commitPayload({
+          portfolioSymbols: nextPortfolioSymbols,
+          portfolioHoldings: nextHoldings,
+          portfolioQuotes: nextQuotes,
+          portfolioFx: nextFx,
+          dividendPayments: nextPayments,
+          symbolsKey: nextSymbolsKey,
+          rows: nextRows,
+        });
+      } catch {
+        if (stale()) return;
+        setError(t("events.error"));
+        setPortfolioReady(true);
+        setRows([]);
+      } finally {
+        if (!stale()) setLoading(false);
+      }
+    },
+    [cacheUserId, commitPayload, sessionStatus, t, watchlistSymbols],
+  );
+
+  useLayoutEffect(() => {
+    if (sessionStatus === "loading" || !cacheUserId) return;
 
     let cancelled = false;
-    setPortfolioReady(false);
 
-    void (async () => {
-      try {
-        const portfolioRes = await fetch("/api/portfolio", { cache: "no-store" });
-        if (cancelled) return;
-        if (portfolioRes.ok) {
-          const data = (await portfolioRes.json()) as {
-            holdings?: PortfolioHoldingApi[];
-            quotes?: Record<string, PortfolioQuoteRow | null>;
-            fx?: PortfolioFxRates;
-          };
-          const holdings = data.holdings ?? [];
-          setPortfolioHoldings(holdings);
-          setPortfolioQuotes(data.quotes ?? {});
-          setPortfolioFx(data.fx ?? { eurPerUsd: null, gbpPerUsd: null });
-          setPortfolioSymbols(holdings.map((h) => h.symbolYahoo));
-        } else {
-          setPortfolioHoldings([]);
-          setPortfolioQuotes({});
-          setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
-          setPortfolioSymbols([]);
+    if (forceCurrencyRefreshRef.current) {
+      forceCurrencyRefreshRef.current = false;
+      void loadAll({ force: true, isCancelled: () => cancelled });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const memory = readEventsTabSessionMemory();
+    const stored = readStoredEventsTabTtlCache(browserEventsTtlStorage(), cacheUserId);
+    const candidate =
+      memory && memory.userId === cacheUserId
+        ? memory
+        : stored && stored.userId === cacheUserId
+          ? stored
+          : null;
+
+    if (candidate && isFreshTtlRecord(candidate, cacheUserId, EVENTS_TAB_TTL_MS, Date.now())) {
+      const hydratedKey = eventsSymbolsKey(
+        unionEventSymbols(watchlistSymbols, candidate.payload.portfolioSymbols),
+      );
+      if (hydratedKey === (candidate.scopeKey ?? candidate.payload.symbolsKey)) {
+        if (!memory || memory.userId !== cacheUserId) {
+          writeEventsTabSessionMemory({
+            userId: candidate.userId,
+            fetchedAt: candidate.fetchedAt,
+            scopeKey: candidate.scopeKey ?? candidate.payload.symbolsKey,
+            payload: candidate.payload,
+            reloadToken: 0,
+            liveRefreshToken: 0,
+          });
         }
-      } catch {
-        if (!cancelled) {
-          setPortfolioHoldings([]);
-          setPortfolioQuotes({});
-          setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
-          setPortfolioSymbols([]);
-        }
-      } finally {
-        if (!cancelled) setPortfolioReady(true);
+        applyEventsPayload(candidate.payload, {
+          setPortfolioSymbols,
+          setPortfolioHoldings,
+          setPortfolioQuotes,
+          setPortfolioFx,
+          setDividendPayments,
+          setRows,
+        });
+        setPortfolioReady(true);
+        setLoading(false);
+        setError(null);
+        return;
       }
-    })();
+    }
 
-    void (async () => {
-      try {
-        const dividendsRes = await fetch("/api/portfolio/dividends", { cache: "no-store" });
-        if (cancelled) return;
-        if (dividendsRes.ok) {
-          const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
-          setDividendPayments(divData.payments ?? []);
-        } else if (!cancelled) {
-          setDividendPayments([]);
-        }
-      } catch {
-        if (!cancelled) setDividendPayments([]);
-      }
-    })();
-
+    // Scope mismatch or expired: do not paint stale rows; show loading until fetch completes.
+    void loadAll({ isCancelled: () => cancelled });
     return () => {
       cancelled = true;
     };
-  }, [sessionStatus]);
-
-  const load = useCallback(async () => {
-    if (symbols.length === 0) {
-      setRows([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/events?symbols=${encodeURIComponent(symbols.join(","))}`, {
-        cache: "no-store",
-      });
-      const data = (await res.json()) as { rows?: SymbolEventRow[]; error?: string };
-      if (!res.ok) {
-        setError(data.error ?? t("events.error"));
-        setRows([]);
-        return;
-      }
-      setRows(data.rows ?? []);
-    } catch {
-      setError(t("events.error"));
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [symbols, t]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    // watchlistKey is a stable string fingerprint of watchlistSymbols.
+  }, [cacheUserId, sessionStatus, currencyEpoch, loadAll, watchlistKey, watchlistSymbols]);
 
   const { upcoming, undated } = useMemo(() => flattenUpcomingEvents(rows), [rows]);
   const weekGroups = useMemo(() => groupEventsByWeek(upcoming), [upcoming]);
