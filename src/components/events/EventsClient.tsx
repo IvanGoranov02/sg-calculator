@@ -38,6 +38,7 @@ import {
   type EventsTabCachePayload,
 } from "@/lib/eventsTabTtlCache";
 import { isFreshTtlRecord } from "@/lib/clientTtlCache";
+import { clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { initialPortfolioReady } from "@/lib/eventsSession";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -129,8 +130,8 @@ function initialEventsFromCache(
     unionEventSymbols(watchlistSymbols, candidate.payload.portfolioSymbols),
   );
   if (hydratedKey !== (candidate.scopeKey ?? candidate.payload.symbolsKey)) {
-    // Watchlist changed since the payload was stored — treat as a miss.
-    return { payload: candidate.payload, loading: true, portfolioReady: true };
+    // Watchlist changed since the payload was stored — treat as a miss (no stale paint).
+    return { payload: null, loading: true, portfolioReady: false };
   }
   return { payload: candidate.payload, loading: false, portfolioReady: true };
 }
@@ -180,6 +181,25 @@ export function EventsClient() {
   const prevCurrencyRef = useRef(preferredCurrency);
   const forceCurrencyRefreshRef = useRef(false);
   const [currencyEpoch, setCurrencyEpoch] = useState(0);
+  const prevSessionStatusRef = useRef(sessionStatus);
+
+  // Leaving an authenticated session must drop TTL caches (shared-browser / sign-out).
+  useEffect(() => {
+    const prev = prevSessionStatusRef.current;
+    prevSessionStatusRef.current = sessionStatus;
+    if (prev === "authenticated" && sessionStatus === "unauthenticated") {
+      clearPortfolioRelatedClientCachesOnSignOut();
+      setPortfolioSymbols([]);
+      setPortfolioHoldings([]);
+      setPortfolioQuotes({});
+      setPortfolioFx({ eurPerUsd: null, gbpPerUsd: null });
+      setDividendPayments([]);
+      setRows([]);
+      setPortfolioReady(true);
+      setLoading(false);
+      setError(null);
+    }
+  }, [sessionStatus]);
 
   const watchlistKey = useMemo(() => eventsSymbolsKey(watchlistSymbols), [watchlistSymbols]);
 
@@ -363,18 +383,7 @@ export function EventsClient() {
       }
     }
 
-    if (candidate?.payload) {
-      applyEventsPayload(candidate.payload, {
-        setPortfolioSymbols,
-        setPortfolioHoldings,
-        setPortfolioQuotes,
-        setPortfolioFx,
-        setDividendPayments,
-        setRows,
-      });
-      setPortfolioReady(true);
-    }
-
+    // Scope mismatch or expired: do not paint stale rows; show loading until fetch completes.
     void loadAll({ isCancelled: () => cancelled });
     return () => {
       cancelled = true;

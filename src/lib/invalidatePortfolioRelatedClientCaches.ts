@@ -9,3 +9,8 @@ export function invalidatePortfolioRelatedClientCaches(): void {
   invalidatePortfolioHoldingsTtlCache(browserHoldingsTtlStorage());
   invalidateEventsTabTtlCache(browserEventsTtlStorage());
 }
+
+/** Drop per-user TTL caches on sign-out so a shared browser cannot reuse the prior session. */
+export function clearPortfolioRelatedClientCachesOnSignOut(): void {
+  invalidatePortfolioRelatedClientCaches();
+}

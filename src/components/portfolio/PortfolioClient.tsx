@@ -22,7 +22,7 @@ import {
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
-import { invalidatePortfolioRelatedClientCaches } from "@/lib/invalidatePortfolioRelatedClientCaches";
+import { invalidatePortfolioRelatedClientCaches, clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import {
   browserDividendsDayStorage,
   invalidatePortfolioDividendsDayCache,
@@ -502,8 +502,10 @@ export function PortfolioClient() {
   // Holdings: reuse 1h TTL cache when remounting / revisiting; otherwise fetch.
   useEffect(() => {
     if (status === "unauthenticated") {
+      clearPortfolioRelatedClientCachesOnSignOut();
       setHoldings([]);
       setQuotes({});
+      setFx({ eurPerUsd: null, gbpPerUsd: null });
       setTrading212(null);
       setError(null);
       setLoading(false);
@@ -521,7 +523,7 @@ export function PortfolioClient() {
     if (decision.adoptMemory) {
       writePortfolioHoldingsSessionMemory(decision.adoptMemory);
     }
-    if (decision.payload) {
+    if (decision.action === "reuse" && decision.payload) {
       applyHoldingsCachePayload(decision.payload, {
         setHoldings,
         setQuotes,
@@ -530,11 +532,10 @@ export function PortfolioClient() {
         setT212Env,
       });
       setError(null);
-    }
-    if (decision.action === "reuse") {
       setLoading(false);
       return;
     }
+    // Do not hydrate a non-reuse payload (force/fetch) — avoids a stale flash before refetch.
     void load({ force: decision.action === "force" });
   }, [status, userId, holdingsReloadToken, load]);
 

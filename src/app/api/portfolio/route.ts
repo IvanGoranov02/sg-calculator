@@ -93,6 +93,8 @@ export async function GET(request: Request) {
       {
         headers: {
           "Cache-Control": privateTtlCacheControl(PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC, refresh),
+          // Authed payload — keep browser HTTP cache from mixing users on the same URL.
+          Vary: "Cookie",
         },
       },
     );

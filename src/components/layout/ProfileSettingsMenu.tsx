@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import type { AppTheme, DateFormat, DisplayCurrency } from "@/lib/preferences/preferences";
 import { cn } from "@/lib/utils";
@@ -143,7 +144,10 @@ function ProfileSettingsPanel() {
             variant="outline"
             size="sm"
             className="w-full justify-start"
-            onClick={() => void signOut({ callbackUrl: "/dashboard" })}
+            onClick={() => {
+              clearPortfolioRelatedClientCachesOnSignOut();
+              void signOut({ callbackUrl: "/dashboard" });
+            }}
           >
             {t("header.signOut")}
           </Button>

@@ -5,18 +5,23 @@ import {
   decideClientTtlLoad,
   isFreshTtlRecord,
   parseClientTtlCacheRecord,
+  writeStoredClientTtlCache,
   type ClientTtlMemory,
 } from "@/lib/clientTtlCache";
 import {
   PORTFOLIO_HOLDINGS_TTL_MS,
+  PORTFOLIO_HOLDINGS_TTL_CACHE_KEY,
   decidePortfolioHoldingsLoad,
+  invalidatePortfolioHoldingsTtlCache,
   isUsablePortfolioHoldingsPayload,
   type PortfolioHoldingsCachePayload,
 } from "@/lib/portfolioHoldingsTtlCache";
 import {
   EVENTS_TAB_TTL_MS,
+  EVENTS_TAB_TTL_CACHE_KEY,
   decideEventsTabLoad,
   eventsSymbolsKey,
+  invalidateEventsTabTtlCache,
   isUsableEventsTabPayload,
   type EventsTabCachePayload,
 } from "@/lib/eventsTabTtlCache";
@@ -254,5 +259,45 @@ describe("decideClientTtlLoad edge", () => {
       stored: memory(),
     });
     assert.equal(decision.action, "force");
+  });
+});
+
+describe("sign-out and cross-user cache isolation", () => {
+  it("drops stored holdings and events records on invalidate (sign-out path)", () => {
+    const items = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        items.set(key, value);
+      },
+      removeItem: (key: string) => {
+        items.delete(key);
+      },
+    };
+
+    writeStoredClientTtlCache(storage, PORTFOLIO_HOLDINGS_TTL_CACHE_KEY, {
+      userId: "user-1",
+      fetchedAt: Date.now(),
+      payload: holdingsPayload(),
+    });
+    writeStoredClientTtlCache(storage, EVENTS_TAB_TTL_CACHE_KEY, {
+      userId: "user-1",
+      fetchedAt: Date.now(),
+      scopeKey: "AAPL",
+      payload: eventsPayload("AAPL"),
+    });
+    assert.equal(items.has(PORTFOLIO_HOLDINGS_TTL_CACHE_KEY), true);
+    assert.equal(items.has(EVENTS_TAB_TTL_CACHE_KEY), true);
+
+    invalidatePortfolioHoldingsTtlCache(storage);
+    invalidateEventsTabTtlCache(storage);
+    assert.equal(items.has(PORTFOLIO_HOLDINGS_TTL_CACHE_KEY), false);
+    assert.equal(items.has(EVENTS_TAB_TTL_CACHE_KEY), false);
+  });
+
+  it("never emits public Cache-Control for TTL responses", () => {
+    const header = privateTtlCacheControl(PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC, false);
+    assert.match(header, /^private/);
+    assert.equal(header.includes("public"), false);
   });
 });

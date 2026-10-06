@@ -30,11 +30,13 @@ async function fetchOne(symbol: string): Promise<SymbolEventRow | null> {
 }
 
 /** Shared Yahoo calendar row per symbol — 24h across users. */
-const fetchOneCached = unstable_cache(
-  async (symbol: string) => fetchOne(symbol),
-  ["events-calendar-symbol"],
-  { revalidate: EVENTS_SERVER_MAX_AGE_SEC },
-);
+async function fetchOneCached(symbol: string): Promise<SymbolEventRow | null> {
+  return unstable_cache(
+    async () => fetchOne(symbol),
+    ["events-calendar-symbol", symbol],
+    { revalidate: EVENTS_SERVER_MAX_AGE_SEC },
+  )();
+}
 
 export async function GET(request: Request) {
   const key = clientKeyFromRequest(request);
