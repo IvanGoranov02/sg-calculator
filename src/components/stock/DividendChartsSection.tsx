@@ -6,21 +6,37 @@ import { useCallback, useMemo, useTransition } from "react";
 
 import { FundamentalChartCard, type FundamentalSeries } from "@/components/stock/FundamentalChartCard";
 import { Button } from "@/components/ui/button";
+import { buildAnnualChartRows, buildQuarterlyChartRows } from "@/lib/fundamentalsChartRows";
 import { growthPillsForKey } from "@/lib/growthPills";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
-import { filterDividendQuarterlyByPeriod, quarterlyFilterYearBounds, useStockAnalysisPeriod } from "@/lib/stockAnalysisPeriod";
+import {
+  computePayoutRatioPercent,
+  computeTrailingPayoutRatios,
+  sumQuarterlyDpsForFiscalYear,
+} from "@/lib/payoutRatio";
+import {
+  filterAnnualRowsByPeriod,
+  filterDividendQuarterlyByPeriod,
+  filterQuarterlyChartRowsByPeriod,
+  quarterlyFilterYearBounds,
+  useStockAnalysisPeriod,
+} from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
-import { sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
+import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
 type DividendChartsSectionProps = {
   data: StockAnalysisBundle;
 };
 
+function numOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
   const dividendCurrency = data.investor.currency || "USD";
-  const { timeRange, customFromYear, customToYear } = useStockAnalysisPeriod();
+  const { timeRange, freq, customFromYear, customToYear } = useStockAnalysisPeriod();
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
   const formatPeriod = useCallback(
@@ -33,6 +49,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     },
     [locale],
   );
+  const formatYear = useCallback((fy: string) => t("chart.fyYear", { y: fy }), [t]);
 
   const quarterBounds = useMemo(
     () =>
@@ -65,6 +82,116 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     return { rows, hasDps, qDpsPills };
   }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
+  const payoutPack = useMemo(() => {
+    const dpsByDate = new Map(
+      data.dividendQuarterly.map((p) => [p.date.slice(0, 10), p.dividendPerShare] as const),
+    );
+
+    if (freq === "annual") {
+      const baseRows = buildAnnualChartRows(data, formatYear);
+      const incFiltered = filterAnnualRowsByPeriod(
+        sortIncomeByYearAsc(data.income),
+        timeRange,
+        customFromYear,
+        customToYear,
+      );
+      const allowed = new Set(incFiltered.map((r) => r.fiscalYear));
+      const filtered = baseRows.filter(
+        (r) => typeof r.fiscalYear === "string" && allowed.has(r.fiscalYear),
+      );
+      const allPayout = baseRows.map((r) => {
+        const fy = typeof r.fiscalYear === "string" ? r.fiscalYear : "";
+        const dps = fy ? sumQuarterlyDpsForFiscalYear(fy, data.dividendQuarterly) : null;
+        return {
+          payoutRatio: computePayoutRatioPercent({
+            dps,
+            eps: numOrNull(r.dilutedEps),
+            dividendsPaid: numOrNull(r.dividendsPaid),
+            netIncome: numOrNull(r.netIncome),
+          }),
+        };
+      });
+      const rows = filtered.map((r) => {
+        const fy = typeof r.fiscalYear === "string" ? r.fiscalYear : "";
+        const dps = fy ? sumQuarterlyDpsForFiscalYear(fy, data.dividendQuarterly) : null;
+        return {
+          label: String(r.label ?? fy),
+          fiscalYear: fy,
+          periodEnd: typeof r.periodEnd === "string" ? r.periodEnd : undefined,
+          payoutRatio: computePayoutRatioPercent({
+            dps,
+            eps: numOrNull(r.dilutedEps),
+            dividendsPaid: numOrNull(r.dividendsPaid),
+            netIncome: numOrNull(r.netIncome),
+          }),
+        };
+      });
+      return {
+        rows,
+        pills: growthPillsForKey(allPayout, "payoutRatio", "annual"),
+        hasPoints: rows.some((r) => r.payoutRatio != null),
+      };
+    }
+
+    const baseRows = buildQuarterlyChartRows(data, formatPeriod, locale);
+    if (!quarterBounds) {
+      return {
+        rows: [] as Record<string, unknown>[],
+        pills: growthPillsForKey([], "payoutRatio", "quarterly"),
+        hasPoints: false,
+      };
+    }
+    const filtered = filterQuarterlyChartRowsByPeriod(
+      baseRows,
+      timeRange,
+      customFromYear,
+      customToYear,
+      quarterBounds,
+    );
+
+    // TTM payout: trailing 4Q DPS/EPS (or cash dividends / NI) so quarterly bars stay comparable.
+    const inputs = baseRows.map((r) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      return {
+        dps: pe ? (dpsByDate.get(pe) ?? null) : null,
+        eps: numOrNull(r.dilutedEps),
+        dividendsPaid: numOrNull(r.dividendsPaid),
+        netIncome: numOrNull(r.netIncome),
+      };
+    });
+    const allTrailing = computeTrailingPayoutRatios(inputs, 4);
+    const peToPayout = new Map<string, number | null>();
+    baseRows.forEach((r, i) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      if (pe) peToPayout.set(pe, allTrailing[i] ?? null);
+    });
+
+    const allPayout = allTrailing.map((payoutRatio) => ({ payoutRatio }));
+    const rows = filtered.map((r) => {
+      const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
+      return {
+        periodEnd: pe,
+        label: String(r.label ?? ""),
+        payoutRatio: pe ? (peToPayout.get(pe) ?? null) : null,
+      };
+    });
+    return {
+      rows,
+      pills: growthPillsForKey(allPayout, "payoutRatio", "quarterly"),
+      hasPoints: rows.some((r) => r.payoutRatio != null),
+    };
+  }, [
+    data,
+    freq,
+    formatYear,
+    formatPeriod,
+    locale,
+    timeRange,
+    customFromYear,
+    customToYear,
+    quarterBounds,
+  ]);
+
   const showsDividend = useMemo(() => {
     const inv = data.investor;
     if (inv.dividendRate != null && inv.dividendRate > 0) return true;
@@ -81,6 +208,19 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const qDpsSeries: FundamentalSeries[] = useMemo(
     () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
     [t],
+  );
+
+  const payoutSeries: FundamentalSeries[] = useMemo(
+    () => [{ dataKey: "payoutRatio", color: "#34d399", label: t("chartsFund.payoutRatioSeries") }],
+    [t],
+  );
+
+  const payoutAxisProps = useMemo(
+    () =>
+      freq === "quarterly"
+        ? { xKey: "periodEnd" as const, xLabelFormatter: formatPeriod }
+        : {},
+    [freq, formatPeriod],
   );
 
   const onReloadYahoo = () => {
@@ -119,18 +259,38 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
           {showsDividend ? t("chartsFund.dividendDataIncomplete") : t("chartsFund.dividendNonPayer")}
         </p>
       ) : (
-        <FundamentalChartCard
-          title={t("chartsFund.dividendQtrChartTitle")}
-          description={t("chartsFund.dividendQtrChartDesc")}
-          xKey="periodEnd"
-          xLabelFormatter={formatPeriod}
-          data={pack.rows}
-          series={qDpsSeries}
-          chartType="bar"
-          valueFormat="perShare"
-          currency={dividendCurrency}
-          growthPills={[{ pills: pack.qDpsPills }]}
-        />
+        <div className="flex flex-col gap-6">
+          <FundamentalChartCard
+            title={t("chartsFund.dividendQtrChartTitle")}
+            xKey="periodEnd"
+            xLabelFormatter={formatPeriod}
+            data={pack.rows}
+            series={qDpsSeries}
+            chartType="bar"
+            valueFormat="perShare"
+            currency={dividendCurrency}
+            growthPills={[{ pills: pack.qDpsPills }]}
+            hideCoverageNote
+          />
+          {payoutPack.hasPoints ? (
+            <FundamentalChartCard
+              {...payoutAxisProps}
+              title={t("chartsFund.payoutRatioChartTitle")}
+              data={payoutPack.rows}
+              series={payoutSeries}
+              chartType="bar"
+              valueFormat="percent"
+              growthPills={[{ pills: payoutPack.pills }]}
+              hideCoverageNote
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+              <p className="text-sm font-medium text-muted-foreground">
+                {t("chartsFund.payoutRatioEmpty")}
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

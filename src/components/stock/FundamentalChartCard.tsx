@@ -65,6 +65,8 @@ type FundamentalChartCardProps = {
   growthPills?: GrowthPillsEntry[] | null;
   /** Quote currency for per-share amounts (USD when omitted). */
   currency?: string;
+  /** Hide the sparse "Data from …" caption under the plot (default: show when sparse). */
+  hideCoverageNote?: boolean;
 };
 
 type TickPlan = {
@@ -178,6 +180,7 @@ export function FundamentalChartCard({
   growthNote,
   growthPills,
   currency,
+  hideCoverageNote = false,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
   const pillLabels = useMemo(
@@ -379,7 +382,7 @@ export function FundamentalChartCard({
   );
 
   const coverageNote =
-    hasPoints && isSparse
+    !hideCoverageNote && hasPoints && isSparse
       ? coverage.pointCount === 1
         ? t("chartsFund.chartSinglePoint")
         : coverage.firstLabel
