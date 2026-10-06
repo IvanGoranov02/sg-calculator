@@ -49,6 +49,8 @@ export type BalanceSheetAnnual = {
   accountsReceivable: number | null;
   goodwill: number | null;
   longTermDebt: number | null;
+  /** Capital / finance lease obligations when reported (FMP, Yahoo, EDGAR, Gemini). */
+  capitalLeaseObligations?: number | null;
 };
 
 export type CashFlowAnnual = {
@@ -92,6 +94,8 @@ export type BalanceSheetQuarter = {
   accountsReceivable: number | null;
   goodwill: number | null;
   longTermDebt: number | null;
+  /** Capital / finance lease obligations when reported (FMP, Yahoo, EDGAR, Gemini). */
+  capitalLeaseObligations?: number | null;
 };
 
 export type CashFlowQuarter = {

@@ -111,6 +111,13 @@ const CONCEPTS: Record<string, string[]> = {
   longTermDebtNoncurrent: ["LongTermDebtNoncurrent"],
   longTermDebtCurrent: ["LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"],
   shortTermBorrowings: ["ShortTermBorrowings", "CommercialPaper", "DebtCurrent"],
+  // Capital / finance / operating lease liabilities (grouped column chart when present).
+  capitalLeaseObligations: [
+    "CapitalLeaseObligations",
+    "FinanceLeaseLiability",
+    "OperatingLeaseLiability",
+    "LesseeOperatingLeaseLiability",
+  ],
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -431,6 +438,7 @@ export function bundleFromCompanyFacts(
     "longTermDebtNoncurrent",
     "longTermDebtCurrent",
     "shortTermBorrowings",
+    "capitalLeaseObligations",
   ]) {
     instant[key] = buildInstantSeries(conceptPoints(facts, CONCEPTS[key]));
   }
@@ -531,6 +539,7 @@ export function bundleFromCompanyFacts(
       accountsReceivable: instant.accountsReceivable[map].get(end) ?? null,
       goodwill: instant.goodwill[map].get(end) ?? null,
       longTermDebt: instant.longTermDebt[map].get(end) ?? null,
+      capitalLeaseObligations: instant.capitalLeaseObligations[map].get(end) ?? null,
     };
   };
 

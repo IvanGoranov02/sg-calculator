@@ -72,6 +72,7 @@ function quarterBsToAnnual(bs: BalanceSheetQuarter, sym: string, fy: string): Ba
     accountsReceivable: bs.accountsReceivable,
     goodwill: bs.goodwill,
     longTermDebt: bs.longTermDebt,
+    capitalLeaseObligations: bs.capitalLeaseObligations ?? null,
   };
 }
 

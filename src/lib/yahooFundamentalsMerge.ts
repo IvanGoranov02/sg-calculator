@@ -56,6 +56,7 @@ export type Bs = {
   accountsReceivable?: number;
   goodwill?: number;
   longTermDebt?: number;
+  capitalLeaseObligations?: number;
 };
 
 export type YahooFundamentalsPayload = {
@@ -255,6 +256,7 @@ export function applyYahooFundamentalsToBundle(
       accountsReceivable: mergeNullable(row.accountsReceivable, bs.accountsReceivable),
       goodwill: mergeNullable(row.goodwill, bs.goodwill),
       longTermDebt: mergeNullable(row.longTermDebt, bs.longTermDebt),
+      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, bs.capitalLeaseObligations),
     };
   });
 
@@ -362,6 +364,7 @@ export function applyYahooFundamentalsToBundle(
       accountsReceivable: mergeNullable(row.accountsReceivable, bs.accountsReceivable),
       goodwill: mergeNullable(row.goodwill, bs.goodwill),
       longTermDebt: mergeNullable(row.longTermDebt, bs.longTermDebt),
+      capitalLeaseObligations: mergeNullable(row.capitalLeaseObligations ?? null, bs.capitalLeaseObligations),
     };
   });
 

@@ -131,6 +131,10 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
         g.totalCurrentLiabilities ?? g.currentLiabilities,
       ),
       inventory: mergeGapNullable(row.inventory, g.inventory),
+      capitalLeaseObligations: mergeGapNullable(
+        row.capitalLeaseObligations ?? null,
+        g.capitalLeaseObligations ?? g.capitalLease,
+      ),
     };
   });
 
@@ -211,6 +215,10 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
         g.totalCurrentLiabilities ?? g.currentLiabilities,
       ),
       inventory: mergeGapNullable(row.inventory, g.inventory),
+      capitalLeaseObligations: mergeGapNullable(
+        row.capitalLeaseObligations ?? null,
+        g.capitalLeaseObligations ?? g.capitalLease,
+      ),
     };
   });
 

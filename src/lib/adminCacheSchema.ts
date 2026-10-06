@@ -49,6 +49,7 @@ export const adminBalanceAnnualSchema = z.object({
   accountsReceivable: nullableNum,
   goodwill: nullableNum,
   longTermDebt: nullableNum,
+  capitalLeaseObligations: nullableNum.optional(),
 });
 
 export const adminCashFlowAnnualSchema = z.object({
@@ -91,6 +92,7 @@ export const adminBalanceQuarterSchema = z.object({
   accountsReceivable: nullableNum,
   goodwill: nullableNum,
   longTermDebt: nullableNum,
+  capitalLeaseObligations: nullableNum.optional(),
 });
 
 export const adminCashFlowQuarterSchema = z.object({
