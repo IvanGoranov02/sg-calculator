@@ -102,10 +102,6 @@ export function buildAnnualChartRows(
       cash: bs?.cashAndCashEquivalents ?? null,
       netDebt: bs?.netDebt ?? null,
       capitalLease: bs?.capitalLeaseObligations ?? null,
-      ar: bs?.accountsReceivable ?? null,
-      inventory: bs?.inventory ?? null,
-      goodwill: bs?.goodwill ?? null,
-      longTermDebt: bs?.longTermDebt ?? null,
       currentRatio: safeRatio(bs?.totalCurrentAssets ?? null, bs?.totalCurrentLiabilities ?? null),
       quickRatio: safeRatio(
         bs?.totalCurrentAssets != null && bs?.inventory != null
@@ -113,7 +109,6 @@ export function buildAnnualChartRows(
           : null,
         bs?.totalCurrentLiabilities ?? null,
       ),
-      debtToEquity: safeRatio(bs?.totalDebt ?? null, bs?.stockholdersEquity ?? null),
       debtPctCapital:
         bs?.totalDebt != null && bs?.stockholdersEquity != null
           ? (() => {
@@ -122,10 +117,6 @@ export function buildAnnualChartRows(
               const cap = td + eq;
               return cap !== 0 && Number.isFinite(cap) ? safePct(td, cap) : null;
             })()
-          : null,
-      netDebtToEbitda:
-        ebitda != null && bs?.netDebt != null && ebitda > 0
-          ? safeRatio(bs.netDebt, ebitda)
           : null,
       capexIntensity:
         cf?.capitalExpenditure != null && rev !== 0
@@ -193,10 +184,6 @@ export function buildQuarterlyChartRows(
       cash: bs?.cashAndCashEquivalents ?? null,
       netDebt: bs?.netDebt ?? null,
       capitalLease: bs?.capitalLeaseObligations ?? null,
-      ar: bs?.accountsReceivable ?? null,
-      inventory: bs?.inventory ?? null,
-      goodwill: bs?.goodwill ?? null,
-      longTermDebt: bs?.longTermDebt ?? null,
       currentRatio: safeRatio(bs?.totalCurrentAssets ?? null, bs?.totalCurrentLiabilities ?? null),
       quickRatio: safeRatio(
         bs?.totalCurrentAssets != null && bs?.inventory != null
@@ -204,7 +191,6 @@ export function buildQuarterlyChartRows(
           : null,
         bs?.totalCurrentLiabilities ?? null,
       ),
-      debtToEquity: safeRatio(bs?.totalDebt ?? null, bs?.stockholdersEquity ?? null),
       debtPctCapital:
         bs?.totalDebt != null && bs?.stockholdersEquity != null
           ? (() => {
@@ -213,10 +199,6 @@ export function buildQuarterlyChartRows(
               const cap = td + eq;
               return cap !== 0 && Number.isFinite(cap) ? safePct(td, cap) : null;
             })()
-          : null,
-      netDebtToEbitda:
-        ebitda != null && bs?.netDebt != null && ebitda > 0
-          ? safeRatio(bs.netDebt, ebitda)
           : null,
       capexIntensity:
         cf?.capitalExpenditure != null && rev !== 0
