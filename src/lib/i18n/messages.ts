@@ -490,8 +490,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartDebtPctCapital: "Debt as % of capital",
       chartDebtPctCapitalDesc: "Total debt ÷ (total debt + stockholders’ equity) — capital structure, not raw debt/equity ratio.",
       debtPctCapitalLabel: "Debt % of (debt + equity)",
-      dividendSectionTitle: "Dividends (quarterly)",
-      dividendSectionSubtitle: "Dividend per share for each fiscal quarter as reported.",
+      dividendSectionTitle: "Dividends",
+      dividendSectionSubtitle: "Dividend per share as reported.",
       dividendNoData: "No dividend per share is reported for this symbol in the loaded series (e.g. many growth stocks).",
       dividendNonPayer:
         "This company does not pay a regular cash dividend on common stock — reinvestment / growth profile (e.g. AMZN). Dividend metrics in “Key investor metrics” may still show 0.",
@@ -504,9 +504,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividendRefreshAi: "New AI summary",
       dividendRefreshHint:
         "Refresh reloads prices and fundamentals from the server. AI only regenerates the explanatory text — it does not replace the numbers.",
-      dividendQtrChartTitle: "Dividend per share (quarterly)",
-      dividendQtrChartDesc: "Per-share dividend for each fiscal quarter as reported.",
+      dividendQtrChartTitle: "Dividend per share",
+      dividendQtrChartDesc: "Per-share dividend as reported.",
       dividendQtrPerShare: "Dividend / share",
+      payoutRatioChartTitle: "Payout ratio",
+      payoutRatioSeries: "Payout ratio",
+      payoutRatioEmpty:
+        "No payout ratio to plot for this range (no dividends against positive earnings, or earnings were negative).",
       pill1Y: "1Y",
       pill2Y: "2Y",
       pill3Y: "3Y",
@@ -1483,8 +1487,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       chartDebtPctCapitalDesc:
         "Общ дълг ÷ (дълг + собствен капитал) — структура на капитала, не сурово съотношение дълг/капитал.",
       debtPctCapitalLabel: "Дълг % от (дълг + капитал)",
-      dividendSectionTitle: "Дивиденти (тримесечни)",
-      dividendSectionSubtitle: "Дивидент на акция за всяко фискално тримесечие според отчета.",
+      dividendSectionTitle: "Дивиденти",
+      dividendSectionSubtitle: "Дивидент на акция според отчета.",
       dividendNoData: "Няма отчетен дивидент на акция в заредената серия (напр. при много растежни компании).",
       dividendNonPayer:
         "Компанията не изплаща редовен паричен дивидент по обикновените акции — често реинвестиране / растеж (напр. AMZN). В „Ключови метрики“ доходността може да е 0.",
@@ -1498,9 +1502,13 @@ export const messages: Record<AppLocale, MessageDict> = {
       dividendRefreshAi: "Нов AI текст",
       dividendRefreshHint:
         "Обновяването зарежда наново котировки и фундаментали от сървъра. AI само прегенерира обяснителния текст — не подменя числата.",
-      dividendQtrChartTitle: "Дивидент на акция (тримесечие)",
-      dividendQtrChartDesc: "Дивидент на акция за всяко тримесечие според отчета.",
+      dividendQtrChartTitle: "Дивидент на акция",
+      dividendQtrChartDesc: "Дивидент на акция според отчета.",
       dividendQtrPerShare: "Дивидент / акция",
+      payoutRatioChartTitle: "Коефициент на изплащане",
+      payoutRatioSeries: "Коефициент на изплащане",
+      payoutRatioEmpty:
+        "Няма коефициент на изплащане за този период (няма дивиденти спрямо положителна печалба, или печалбата е отрицателна).",
       pill1Y: "1 г.",
       pill2Y: "2 г.",
       pill3Y: "3 г.",
