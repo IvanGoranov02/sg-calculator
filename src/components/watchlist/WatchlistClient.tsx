@@ -2,12 +2,12 @@
 
 import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { StockLandingSearch } from "@/components/stock/StockLandingSearch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
@@ -23,8 +23,7 @@ const QUOTES_REFRESH_MS = 60_000;
 
 export function WatchlistClient() {
   const { t } = useI18n();
-  const { symbols, add, remove, storageMode } = useWatchlist();
-  const [input, setInput] = useState("");
+  const { symbols, add, remove } = useWatchlist();
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,64 +103,25 @@ export function WatchlistClient() {
     [quotes],
   );
 
-  const missingCount = useMemo(
-    () => symbols.filter((s) => !quoteMap.has(s)).length,
-    [symbols, quoteMap],
-  );
-
-  async function onAdd(e: FormEvent) {
-    e.preventDefault();
-    const t = input.trim().toUpperCase();
-    if (!t) return;
-    if (symbols.length >= WATCHLIST_MAX) return;
-    await Promise.resolve(add(t));
-    setInput("");
-  }
-
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-4">
       <div>
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("watchlist.title")}</h1>
-        <p className="mt-2 text-muted-foreground">
-          {t(
-            storageMode === "cloud" ? "watchlist.introCloud" : "watchlist.intro",
-            { max: WATCHLIST_MAX },
-          )}
-        </p>
       </div>
-
-      <form onSubmit={onAdd} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label htmlFor="wl-add" className="mb-1 block text-xs font-medium text-muted-foreground">
-            {t("watchlist.addLabel")}
-          </label>
-          <Input
-            id="wl-add"
-            value={input}
-            onChange={(e) => setInput(e.target.value.toUpperCase())}
-            placeholder={t("watchlist.placeholder")}
-            maxLength={32}
-            autoComplete="off"
-            spellCheck={false}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <StockLandingSearch
+            onSelectSymbol={(symbol) => void add(symbol)}
+            placeholder=""
+            submitLabel={t("watchlist.addLabel")}
+            disabled={symbols.length >= WATCHLIST_MAX}
           />
         </div>
-        <Button type="submit" disabled={symbols.length >= WATCHLIST_MAX || !input.trim()}>
-          {t("watchlist.addButton")}
+        <Button type="button" variant="outline" onClick={() => void loadQuotes()} disabled={loading || symbols.length === 0}>
+          {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+          {t("watchlist.refresh")}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void loadQuotes()}
-          disabled={loading || symbols.length === 0}
-        >
-          {loading ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <RefreshCw className="size-4" aria-hidden />
-          )}
-          <span className="ml-2">{t("watchlist.refresh")}</span>
-        </Button>
-      </form>
+      </div>
 
       {error && (
         <p className="text-sm text-red-400" role="alert">
@@ -184,15 +144,6 @@ export function WatchlistClient() {
         </Card>
       ) : (
         <Card className="border-white/10 bg-zinc-900/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t("watchlist.yourSymbols")}</CardTitle>
-            <CardDescription>
-              {t("watchlist.savedLine", { count: symbols.length })}
-              {missingCount > 0
-                ? t("watchlist.delayedInvalid", { n: missingCount })
-                : t("watchlist.allQuoted")}
-            </CardDescription>
-          </CardHeader>
           <Table>
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
@@ -216,6 +167,7 @@ export function WatchlistClient() {
                         {loading ? t("watchlist.loading") : t("watchlist.quoteUnavailable")}
                       </TableCell>
                       <TableCell className="text-right">
+                        <Link href={`/dcf-calculator?ticker=${encodeURIComponent(sym)}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>DCF</Link>
                         <Button
                           type="button"
                           size="icon"
@@ -275,6 +227,7 @@ export function WatchlistClient() {
                         >
                           {t("watchlist.analyze")}
                         </Link>
+                        <Link href={`/dcf-calculator?ticker=${encodeURIComponent(sym)}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>DCF</Link>
                         <Button
                           type="button"
                           size="icon"
