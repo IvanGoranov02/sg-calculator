@@ -18,6 +18,7 @@ import {
   incomeGrowthPillsFromMonthly,
   mergeEstAnnualIncome,
   paymentMatchesSymbol,
+  holdingDividendPayments,
   rollingTtmMonthly,
   BG_DIVIDEND_TAX_RATE,
   US_DIVIDEND_WITHHOLDING_RATE,
@@ -1296,5 +1297,18 @@ describe("buildUpcomingPortfolioDividends", () => {
     assert.equal(rows[0]!.estimated, true);
     assert.equal(rows[0]!.currency, "EUR");
     closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
+  });
+});
+
+
+describe("holdingDividendPayments", () => {
+  it("keeps actual broker and manual dates and separate payments in the same month", () => {
+    const payment = (id: string, paidOn: string, source: "manual" | "t212", symbol = "AAPL"): PortfolioDividendPayment => ({
+      id, paidOn, source, ticker: symbol, symbolYahoo: symbol, name: null, amount: 12, currency: "USD",
+    });
+    const rows = [payment("manual", "2026-02-18", "manual"), payment("broker", "2026-02-06", "t212"), payment("other", "2026-02-01", "t212", "MSFT"), payment("invalid", "bad", "manual")];
+    const actual = holdingDividendPayments(rows, "aapl");
+    assert.deepEqual(actual.map(({ id, paidOn }) => ({ id, paidOn })), [{ id: "broker", paidOn: "2026-02-06" }, { id: "manual", paidOn: "2026-02-18" }]);
+    assert.equal(rows[0].id, "manual");
   });
 });

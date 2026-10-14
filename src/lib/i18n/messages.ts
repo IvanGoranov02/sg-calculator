@@ -498,7 +498,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Saved locally in this browser (up to {max} symbols). Quotes refresh automatically.",
       introCloud:
         "Synced to your account (up to {max} symbols). Quotes refresh automatically. Sign out to use local-only list again.",
-      addLabel: "Add symbol",
+      addLabel: "Add company",
       placeholder: "e.g. NVDA",
       addButton: "Add to watchlist",
       refresh: "Refresh",
@@ -1452,7 +1452,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Запазено локално в този браузър (до {max} символа). Котировките се опресняват автоматично.",
       introCloud:
         "Синхронизирано с акаунта ви (до {max} символа). Котировките се опресняват автоматично. При изход отново е локален списък.",
-      addLabel: "Добави символ",
+      addLabel: "Добави компания",
       placeholder: "напр. NVDA",
       addButton: "Добави в списъка",
       refresh: "Опресни",
