@@ -32,6 +32,7 @@ import {
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
+import { browserEventsTtlStorage, invalidateEventsTabTtlCache } from "@/lib/eventsTabTtlCache";
 import {
   holdingDividendPayments,
   dividendPaymentDisplayCurrency,
@@ -54,7 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 import { isTrading212AuthFailure, normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
 
-const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
+const MANUAL_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "CAD", "SEK", "NOK", "DKK", "PLN", "ISK", "AUD", "NZD", "HKD", "JPY", "CZK", "HUF"] as const;
 const RECENT_DIVIDENDS_LIMIT = 5;
 
 function UpcomingDividendsCard({ items }: { items: UpcomingPortfolioDividend[] }) {
@@ -324,6 +325,7 @@ export function PortfolioDividendsView({
         setError(body.error ?? t("portfolioDividends.deleteFailed"));
         return;
       }
+      invalidateEventsTabTtlCache(browserEventsTtlStorage());
       await load(false);
     } catch {
       setError(t("portfolio.saveNetworkError"));
@@ -360,6 +362,7 @@ export function PortfolioDividendsView({
       setAmount("");
       setPaidOn("");
       setNote("");
+      invalidateEventsTabTtlCache(browserEventsTtlStorage());
       await load(false);
     } catch {
       setAddError(t("portfolio.saveNetworkError"));

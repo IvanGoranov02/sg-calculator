@@ -498,6 +498,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Saved locally in this browser (up to {max} symbols). Quotes refresh automatically.",
       introCloud:
         "Synced to your account (up to {max} symbols). Quotes refresh automatically. Sign out to use local-only list again.",
+      errLoad: "Could not load your watchlist. Refresh to try again.",
+      errSave: "Could not save your watchlist. Please try again.",
       addLabel: "Add company",
       placeholder: "e.g. NVDA",
       addButton: "Add to watchlist",
@@ -1452,6 +1454,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Запазено локално в този браузър (до {max} символа). Котировките се опресняват автоматично.",
       introCloud:
         "Синхронизирано с акаунта ви (до {max} символа). Котировките се опресняват автоматично. При изход отново е локален списък.",
+      errLoad: "Списъкът не можа да се зареди. Обнови, за да опиташ отново.",
+      errSave: "Списъкът не можа да се запази. Опитай отново.",
       addLabel: "Добави компания",
       placeholder: "напр. NVDA",
       addButton: "Добави в списъка",

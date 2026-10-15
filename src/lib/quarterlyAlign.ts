@@ -72,7 +72,7 @@ export function alignAnnualToIncome(
         date: inc.date,
         symbol: sym,
         fiscalYear: fy,
-        freeCashFlow: 0,
+        freeCashFlow: null,
         operatingCashFlow: null,
         capitalExpenditure: null,
         investingCashFlow: null,
@@ -104,13 +104,11 @@ export function alignAnnualToIncome(
   return { cashFlow, balanceSheet };
 }
 
-export function stubCashFlowQuarter(sym: string, dateIso: string, netIncome: number): CashFlowQuarter {
-  const ni = Number(netIncome);
-  const fcf = Number.isFinite(ni) ? Math.max(0, ni * 0.85) : 0;
+export function stubCashFlowQuarter(sym: string, dateIso: string): CashFlowQuarter {
   return {
     date: dateIso,
     symbol: sym,
-    freeCashFlow: fcf,
+    freeCashFlow: null,
     operatingCashFlow: null,
     capitalExpenditure: null,
     investingCashFlow: null,
@@ -162,7 +160,7 @@ export function alignQuarterlyToIncome(
     const d = inc.date.slice(0, 10);
     const cf = exactOrNearestSideRow(d, cfBy, cfRaw);
     cashFlowQuarterly.push(
-      cf ? withIncomePeriodEnd(cf, d) : stubCashFlowQuarter(sym, d, inc.netIncome),
+      cf ? withIncomePeriodEnd(cf, d) : stubCashFlowQuarter(sym, d),
     );
     const bs = exactOrNearestSideRow(d, bsBy, bsRaw);
     balanceSheetQuarterly.push(bs ? withIncomePeriodEnd(bs, d) : stubBalanceQuarter(sym, d));

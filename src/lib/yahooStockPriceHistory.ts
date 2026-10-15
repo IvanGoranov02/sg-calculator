@@ -14,6 +14,7 @@ import { resolveNextEarningsOrEstimate } from "@/lib/calendarEvents";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { dividendRateToMajorUnits, isPenceQuoteCurrency, quoteCurrencyMajor } from "@/lib/portfolioFx";
 import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/stockAnalysisTypes";
+import { normalizeStockQuoteUnits } from "@/lib/stockMoney";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 const DAILY_HISTORY_START = "1990-01-01";
@@ -257,6 +258,7 @@ function needsYahooDpsBackfill(bundle: StockAnalysisBundle): boolean {
 
 type DividendQuarterlyCurrencyBundle = StockAnalysisBundle & {
   __financialCurrency?: string;
+  __displayFundamentalsCurrency?: string;
   /** Set when every positive DPS row is listing/quote currency. */
   __dividendQuarterlyCurrency?: string;
   /** Quarter-end dates whose DPS is listing cash (major units), not reporting currency. */
@@ -329,6 +331,8 @@ async function mergeYahooExDividendsIntoQuarterly(
  * from Yahoo ex-dividend history when Gemini left gaps. No-op if Yahoo fails (keeps Gemini/cache values).
  */
 export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): Promise<void> {
+  const reportingCurrency = quoteCurrencyMajor((bundle as DividendQuarterlyCurrencyBundle).__financialCurrency ?? bundle.investor.currency).code;
+  const previousPriceCurrency = bundle.quote.currency;
   const inputSym = bundle.quote.symbol.trim().toUpperCase() || "AAPL";
   // Ensure cached/Gemini past dates never surface even if Yahoo is unavailable.
   sanitizeQuoteEarningsDate(bundle.quote);
@@ -374,6 +378,11 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
     const quoteValid = q && (q as { quoteType?: string }).quoteType !== "NONE";
 
+    if (!quoteValid) {
+      sanitizeQuoteEarningsDate(bundle.quote);
+      return;
+    }
+
     if (dailyBars.length > 0) {
       bundle.historical = dailyBars;
     } else if (existingHistLen <= 1 && quoteValid) {
@@ -382,11 +391,6 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       if (px > 0) {
         bundle.historical = [{ date: period2Str, close: px }];
       }
-    }
-
-    if (!quoteValid) {
-      sanitizeQuoteEarningsDate(bundle.quote);
-      return;
     }
 
     const rawQuote = q as Record<string, unknown>;
@@ -401,12 +405,17 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     // Reporting currency vs listing currency. GBp is pence of GBP, not a
     // separate currency (ASML reports EUR / quotes USD; FB2A.DE quotes EUR /
     // Meta reports USD; VOD.L quotes GBp / reports EUR).
-    const finRaw = typeof rawQuote.financialCurrency === "string" ? rawQuote.financialCurrency : "";
+    const financialData = qs?.financialData as Record<string, unknown> | undefined;
+    const finRaw = typeof rawQuote.financialCurrency === "string" ? rawQuote.financialCurrency
+      : typeof financialData?.financialCurrency === "string" ? financialData.financialCurrency : "";
     const quoteRaw = bundle.investor?.currency ?? "";
     const finCcy = quoteCurrencyMajor(finRaw);
     const quoteCcy = quoteCurrencyMajor(quoteRaw);
     const tagged = bundle as DividendQuarterlyCurrencyBundle;
-    if (finCcy.code) tagged.__financialCurrency = finCcy.code;
+    tagged.__financialCurrency = finCcy.code || reportingCurrency || quoteCcy.code;
+    tagged.__displayFundamentalsCurrency = tagged.__financialCurrency;
+    (bundle.investor as typeof bundle.investor & { financialCurrency?: string; dividendCurrency?: string }).financialCurrency = tagged.__financialCurrency;
+    (bundle.investor as typeof bundle.investor & { dividendCurrency?: string }).dividendCurrency = quoteCcy.code;
 
     const writtenNow = new Set(gapFillDividends.writtenDates.map((d) => d.slice(0, 10)));
     if (finCcy.code && quoteCcy.code && finCcy.code !== quoteCcy.code) {
@@ -469,6 +478,17 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       }
     }
     bundle.eurPerUsd = eurPerUsd;
+    normalizeStockQuoteUnits(bundle, quoteRaw, {
+      historyIsRaw: dailyBars.length > 0 || existingHistLen <= 1 || !previousPriceCurrency || isPenceQuoteCurrency(previousPriceCurrency),
+    });
+    if (bundle.quote.currency === "USD") bundle.quote.usdPerUnit = 1;
+    else if (bundle.quote.currency === "EUR" && eurPerUsd != null) bundle.quote.usdPerUnit = 1 / eurPerUsd;
+    else if (bundle.quote.currency) {
+      const conversion = await yahooFinance.quote(`${bundle.quote.currency}USD=X`).catch(() => null);
+      const fx = Array.isArray(conversion) ? conversion[0] : conversion;
+      const rate = Number(fx?.regularMarketPrice);
+      bundle.quote.usdPerUnit = Number.isFinite(rate) && rate > 0 ? rate : null;
+    }
   } catch {
     // Keep Gemini/cache OHLCV and quote if Yahoo is unavailable.
   }
@@ -484,7 +504,8 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
 export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle): Promise<void> {
   const tagged = bundle as DividendQuarterlyCurrencyBundle;
   const fin = quoteCurrencyMajor(tagged.__financialCurrency);
-  const quote = quoteCurrencyMajor(bundle.investor?.currency);
+  const quote = quoteCurrencyMajor(bundle.quote.currency ?? bundle.investor?.currency);
+  tagged.__displayFundamentalsCurrency = fin.code || quote.code;
   if (!fin.code || !quote.code || fin.code === quote.code) return;
   try {
     const fx = await yahooFinance.quote(`${fin.code}${quote.code}=X`);
@@ -509,7 +530,15 @@ export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle)
         rate,
       );
     }
-    bundle.investor = { ...bundle.investor, currency: quote.code };
+    const investor = bundle.investor as typeof bundle.investor & { financialCurrency?: string };
+    // Enterprise value and market cap are listing-currency market values.
+    for (const key of ["trailingEps", "forwardEps", "bookValue", "revenuePerShare", "totalCash", "totalDebt"] as const) {
+      const value = investor[key];
+      if (value != null && Number.isFinite(value)) investor[key] = value * rate;
+    }
+    investor.currency = quote.code;
+    investor.financialCurrency = quote.code;
+    tagged.__displayFundamentalsCurrency = quote.code;
   } catch {
     /* keep native-currency fundamentals if the FX fetch fails */
   }

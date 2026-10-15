@@ -68,6 +68,8 @@ model Trading212Connection {
   environment  Trading212Environment   @default(demo)
   apiKeyEnc    String                  @db.Text
   apiSecretEnc String                  @db.Text
+  /** Broker account identity, scoped to the demo/live environment. */
+  accountId    String?
   lastSyncAt   DateTime?
   lastError    String?                 @db.Text
   /** Cached T212 dividend history JSON (refreshed on broker sync or explicit refresh). */

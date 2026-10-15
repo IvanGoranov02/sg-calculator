@@ -10,6 +10,7 @@ export type T212DividendsCacheFields = {
 
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/portfolioEncryption";
+import { trading212CredentialsWhere, type Trading212StateDatabase } from "@/lib/trading212ConnectionState";
 import {
   fetchT212HistoryDividends,
   type T212HistoryDividendItem,
@@ -117,47 +118,55 @@ export function readT212DividendsCache(conn: T212DividendsCacheFields | null): T
 
 export async function refreshT212DividendsCache(input: {
   userId: string;
+  connectionId: string;
   environment: Trading212Environment;
   apiKeyEnc: string;
   apiSecretEnc: string;
   maxPages?: number;
-}): Promise<T212PaginatedFetchResult<T212HistoryDividendItem>> {
+  timeBudgetMs?: number;
+}, db: Trading212StateDatabase = prisma): Promise<T212PaginatedFetchResult<T212HistoryDividendItem>> {
   const apiKey = decryptSecret(input.apiKeyEnc);
   const apiSecret = decryptSecret(input.apiSecretEnc);
   const result = await fetchT212HistoryDividends(input.environment, apiKey, apiSecret, {
     maxPages: input.maxPages ?? 6,
+    timeBudgetMs: input.timeBudgetMs,
   });
 
-  const prev = await prisma.trading212Connection.findUnique({
-    where: { userId: input.userId },
-    select: {
-      dividendsCache: true,
-      dividendsCachedAt: true,
-      dividendsCachePartial: true,
-      dividendsCacheError: true,
-    },
+  return db.$transaction(async (tx) => {
+    // Lock the verified credentials generation before reading the cache to merge.
+    // Concurrent refreshes for this same account then keep each other's payments.
+    const claimed = await tx.trading212Connection.updateMany({
+      where: trading212CredentialsWhere(input.userId, { ...input, id: input.connectionId }),
+      data: { apiKeyEnc: input.apiKeyEnc },
+    });
+    const prev = await tx.trading212Connection.findUnique({
+      where: { userId: input.userId },
+      select: {
+        dividendsCache: true,
+        dividendsCachedAt: true,
+        dividendsCachePartial: true,
+        dividendsCacheError: true,
+      },
+    });
+    if (claimed.count === 0) {
+      const current = readT212DividendsCache(prev);
+      return { items: current.items, partial: current.partial, error: current.error ?? undefined };
+    }
+    const prevItems = parseCachedItems(prev?.dividendsCache);
+    const decision = decideT212DividendsCacheWrite(prevItems, result);
+    const shouldTouchCachedAt =
+      decision.replaced || prevItems.length === 0 || decision.items.length > prevItems.length;
+    await tx.trading212Connection.update({
+      where: { id: input.connectionId },
+      data: {
+        dividendsCache: decision.items,
+        dividendsCachedAt: shouldTouchCachedAt ? new Date() : (prev?.dividendsCachedAt ?? new Date()),
+        dividendsCachePartial: decision.partial,
+        dividendsCacheError: decision.error,
+      },
+    });
+    return { items: decision.items, partial: decision.partial, error: decision.error ?? undefined };
   });
-  const prevItems = parseCachedItems(prev?.dividendsCache);
-  const decision = decideT212DividendsCacheWrite(prevItems, result);
-
-  const shouldTouchCachedAt =
-    decision.replaced || prevItems.length === 0 || decision.items.length > prevItems.length;
-
-  await prisma.trading212Connection.update({
-    where: { userId: input.userId },
-    data: {
-      dividendsCache: decision.items,
-      dividendsCachedAt: shouldTouchCachedAt ? new Date() : (prev?.dividendsCachedAt ?? new Date()),
-      dividendsCachePartial: decision.partial,
-      dividendsCacheError: decision.error,
-    },
-  });
-
-  return {
-    items: decision.items,
-    partial: decision.partial,
-    error: decision.error ?? undefined,
-  };
 }
 
 export async function loadT212DividendsForUser(
@@ -171,8 +180,9 @@ export async function loadT212DividendsForUser(
 
   if (opts.refresh) {
     try {
-      const result = await refreshT212DividendsCache({
+      await refreshT212DividendsCache({
         userId,
+        connectionId: conn.id,
         environment: conn.environment,
         apiKeyEnc: conn.apiKeyEnc,
         apiSecretEnc: conn.apiSecretEnc,
@@ -186,15 +196,10 @@ export async function loadT212DividendsForUser(
           dividendsCacheError: true,
         },
       });
-      const read = readT212DividendsCache(updated);
-      return {
-        items: result.items,
-        cachedAt: read.cachedAt,
-        partial: result.partial,
-        error: result.error ?? read.error,
-      };
+      return readT212DividendsCache(updated);
     } catch (e) {
-      const cached = readT212DividendsCache(conn);
+      const current = await prisma.trading212Connection.findUnique({ where: { userId } });
+      const cached = readT212DividendsCache(current);
       const msg = e instanceof Error ? e.message.slice(0, 500) : "Could not refresh Trading 212 dividends";
       if (cached.items.length > 0) {
         return { ...cached, fetchError: msg };

@@ -32,10 +32,10 @@ function MetricTable({ title, rows }: { title: string; rows: Row[] }) {
   );
 }
 
-function fmtMoney(n: number | null): string {
+function fmtMoney(n: number | null, currency: string): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  if (Math.abs(n) >= 1e6) return formatCurrencyCompact(n);
-  return formatCurrency(n);
+  if (Math.abs(n) >= 1e6) return formatCurrencyCompact(n, currency);
+  return formatCurrency(n, currency);
 }
 
 function fmtYield(n: number | null): string {
@@ -60,15 +60,18 @@ type InvestorMetricsSectionProps = {
 export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
   const { t } = useI18n();
   const m = data;
+  const currency = m.currency;
+  const financialCurrency = (m as InvestorMetrics & { financialCurrency?: string }).financialCurrency ?? currency;
+  const dividendCurrency = (m as InvestorMetrics & { dividendCurrency?: string }).dividendCurrency ?? currency;
 
   const weekRange =
     m.fiftyTwoWeekLow != null && m.fiftyTwoWeekHigh != null
-      ? `${formatCurrency(m.fiftyTwoWeekLow)} – ${formatCurrency(m.fiftyTwoWeekHigh)}`
+      ? `${formatCurrency(m.fiftyTwoWeekLow, currency)} – ${formatCurrency(m.fiftyTwoWeekHigh, currency)}`
       : "—";
 
   const valuationRows: Row[] = [
-    { label: t("investor.marketCap"), value: fmtMoney(m.marketCap) },
-    { label: t("investor.enterpriseValue"), value: fmtMoney(m.enterpriseValue) },
+    { label: t("investor.marketCap"), value: fmtMoney(m.marketCap, currency) },
+    { label: t("investor.enterpriseValue"), value: fmtMoney(m.enterpriseValue, currency) },
     { label: t("investor.trailingPE"), value: formatRatio(m.trailingPE) },
     { label: t("investor.forwardPE"), value: formatRatio(m.forwardPE) },
     { label: t("investor.pegRatio"), value: formatRatio(m.pegRatio) },
@@ -77,8 +80,8 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
     { label: t("investor.evToRevenue"), value: formatRatio(m.enterpriseToRevenue) },
     { label: t("investor.evToEbitda"), value: formatRatio(m.enterpriseToEbitda) },
     { label: t("investor.beta"), value: formatRatio(m.beta) },
-    { label: t("investor.ma50"), value: m.fiftyDayAverage != null ? formatCurrency(m.fiftyDayAverage) : "—" },
-    { label: t("investor.ma200"), value: m.twoHundredDayAverage != null ? formatCurrency(m.twoHundredDayAverage) : "—" },
+    { label: t("investor.ma50"), value: m.fiftyDayAverage != null ? formatCurrency(m.fiftyDayAverage, currency) : "—" },
+    { label: t("investor.ma200"), value: m.twoHundredDayAverage != null ? formatCurrency(m.twoHundredDayAverage, currency) : "—" },
     { label: t("investor.weekRange52"), value: weekRange },
     { label: t("investor.volume"), value: m.regularMarketVolume != null ? formatVolume(m.regularMarketVolume) : "—" },
     {
@@ -101,24 +104,24 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
     { label: t("investor.debtToEquity"), value: formatRatio(m.debtToEquity) },
     { label: t("investor.currentRatio"), value: formatRatio(m.currentRatio) },
     { label: t("investor.quickRatio"), value: formatRatio(m.quickRatio) },
-    { label: t("investor.totalCash"), value: fmtMoney(m.totalCash) },
-    { label: t("investor.totalDebt"), value: fmtMoney(m.totalDebt) },
+    { label: t("investor.totalCash"), value: fmtMoney(m.totalCash, financialCurrency) },
+    { label: t("investor.totalDebt"), value: fmtMoney(m.totalDebt, financialCurrency) },
   ];
 
   const divRows: Row[] = [
     {
       label: t("investor.dividendRate"),
-      value: m.dividendRate != null ? formatCurrency(m.dividendRate, m.currency) : "—",
+      value: m.dividendRate != null ? formatCurrency(m.dividendRate, dividendCurrency) : "—",
     },
     { label: t("investor.dividendYield"), value: fmtYield(m.dividendYield) },
     { label: t("investor.payoutRatio"), value: fmtPayout(m.payoutRatio) },
   ];
 
   const perShareRows: Row[] = [
-    { label: t("investor.epsTrailing"), value: m.trailingEps != null ? formatRatio(m.trailingEps, 2) : "—" },
-    { label: t("investor.epsForward"), value: m.forwardEps != null ? formatRatio(m.forwardEps, 2) : "—" },
-    { label: t("investor.bookValue"), value: m.bookValue != null ? formatRatio(m.bookValue, 2) : "—" },
-    { label: t("investor.revenuePerShare"), value: m.revenuePerShare != null ? formatRatio(m.revenuePerShare, 2) : "—" },
+    { label: t("investor.epsTrailing"), value: m.trailingEps != null ? formatCurrency(m.trailingEps, financialCurrency) : "—" },
+    { label: t("investor.epsForward"), value: m.forwardEps != null ? formatCurrency(m.forwardEps, financialCurrency) : "—" },
+    { label: t("investor.bookValue"), value: m.bookValue != null ? formatCurrency(m.bookValue, financialCurrency) : "—" },
+    { label: t("investor.revenuePerShare"), value: m.revenuePerShare != null ? formatCurrency(m.revenuePerShare, financialCurrency) : "—" },
   ];
 
   const ownRows: Row[] = [
@@ -130,8 +133,8 @@ export function InvestorMetricsSection({ data }: InvestorMetricsSectionProps) {
   ];
 
   const analystRows: Row[] = [
-    { label: t("investor.targetMean"), value: m.targetMeanPrice != null ? formatCurrency(m.targetMeanPrice) : "—" },
-    { label: t("investor.targetMedian"), value: m.targetMedianPrice != null ? formatCurrency(m.targetMedianPrice) : "—" },
+    { label: t("investor.targetMean"), value: m.targetMeanPrice != null ? formatCurrency(m.targetMeanPrice, currency) : "—" },
+    { label: t("investor.targetMedian"), value: m.targetMedianPrice != null ? formatCurrency(m.targetMedianPrice, currency) : "—" },
     { label: t("investor.recommendation"), value: fmtRec(m.recommendationKey) },
     {
       label: t("investor.numAnalysts"),

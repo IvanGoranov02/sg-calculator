@@ -142,6 +142,7 @@ const CHART_COLORS = {
 };
 
 export function DividendCalculator({ seed }: Props) {
+  const currency = seed?.currency ?? "USD";
   const { t } = useI18n();
 
   const defaultYieldPct =
@@ -323,32 +324,32 @@ export function DividendCalculator({ seed }: Props) {
                     {t("dividendCalc.estimatedReturn")}
                   </p>
                   <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-emerald-400">
-                    {formatCurrency(result.estimatedDividendReturn)}
+                    {formatCurrency(result.estimatedDividendReturn, currency)}
                   </p>
                 </div>
 
                 <div className="rounded-lg border border-border bg-muted/50 px-4 py-1">
                   <BreakdownRow
                     label={t("dividendCalc.breakdownDividends")}
-                    value={formatCurrency(result.breakdown.dividends)}
+                    value={formatCurrency(result.breakdown.dividends, currency)}
                     pct={`${Math.round(result.breakdown.dividendsPct)}%`}
                     accent={CHART_COLORS.dividends}
                   />
                   <BreakdownRow
                     label={t("dividendCalc.breakdownContributions")}
-                    value={formatCurrency(result.breakdown.contributions)}
+                    value={formatCurrency(result.breakdown.contributions, currency)}
                     pct={`${Math.round(result.breakdown.contributionsPct)}%`}
                     accent={CHART_COLORS.contributions}
                   />
                   <BreakdownRow
                     label={t("dividendCalc.breakdownGrowth")}
-                    value={formatCurrency(result.breakdown.growth)}
+                    value={formatCurrency(result.breakdown.growth, currency)}
                     pct={`${Math.round(result.breakdown.growthPct)}%`}
                     accent={CHART_COLORS.growth}
                   />
                   <BreakdownRow
                     label={t("dividendCalc.breakdownPrincipal")}
-                    value={formatCurrency(result.breakdown.principal)}
+                    value={formatCurrency(result.breakdown.principal, currency)}
                     pct={`${Math.round(result.breakdown.principalPct)}%`}
                     accent={CHART_COLORS.principal}
                   />
@@ -376,7 +377,7 @@ export function DividendCalculator({ seed }: Props) {
                                 {t("dividendCalc.yearLabel", { year: row.year })}
                               </TableCell>
                               <TableCell className="text-right font-mono tabular-nums">
-                                {formatCurrency(row.monthlyIncome)}
+                                {formatCurrency(row.monthlyIncome, currency)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -404,7 +405,7 @@ export function DividendCalculator({ seed }: Props) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
+                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v, currency)} width={52} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -413,7 +414,7 @@ export function DividendCalculator({ seed }: Props) {
                       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
-                          {t("dividendCalc.cumulativeDividends")}: {formatCurrency(p.cumulativeIncome)}
+                          {t("dividendCalc.cumulativeDividends")}: {formatCurrency(p.cumulativeIncome, currency)}
                         </p>
                       </div>
                     );
@@ -429,7 +430,7 @@ export function DividendCalculator({ seed }: Props) {
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
+                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v, currency)} width={52} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -438,7 +439,7 @@ export function DividendCalculator({ seed }: Props) {
                       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
-                          {t("dividendCalc.portfolioValue")}: {formatCurrency(p.portfolioValue)}
+                          {t("dividendCalc.portfolioValue")}: {formatCurrency(p.portfolioValue, currency)}
                         </p>
                       </div>
                     );
@@ -454,7 +455,7 @@ export function DividendCalculator({ seed }: Props) {
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
+                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v, currency)} width={52} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -463,7 +464,7 @@ export function DividendCalculator({ seed }: Props) {
                       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-emerald-400">
-                          {t("dividendCalc.annualIncome")}: {formatCurrency(p.annualIncome)}
+                          {t("dividendCalc.annualIncome")}: {formatCurrency(p.annualIncome, currency)}
                         </p>
                       </div>
                     );
@@ -479,7 +480,7 @@ export function DividendCalculator({ seed }: Props) {
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
+                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v, currency)} width={52} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -487,10 +488,10 @@ export function DividendCalculator({ seed }: Props) {
                     return (
                       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="mb-1 font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
-                        <p style={{ color: CHART_COLORS.principal }}>{t("dividendCalc.breakdownPrincipal")}: {formatCurrency(p.principal)}</p>
-                        <p style={{ color: CHART_COLORS.contributions }}>{t("dividendCalc.breakdownContributions")}: {formatCurrency(p.contributions)}</p>
-                        <p style={{ color: CHART_COLORS.dividends }}>{t("dividendCalc.breakdownDividends")}: {formatCurrency(p.dividends)}</p>
-                        <p style={{ color: CHART_COLORS.growth }}>{t("dividendCalc.breakdownGrowth")}: {formatCurrency(p.growth)}</p>
+                        <p style={{ color: CHART_COLORS.principal }}>{t("dividendCalc.breakdownPrincipal")}: {formatCurrency(p.principal, currency)}</p>
+                        <p style={{ color: CHART_COLORS.contributions }}>{t("dividendCalc.breakdownContributions")}: {formatCurrency(p.contributions, currency)}</p>
+                        <p style={{ color: CHART_COLORS.dividends }}>{t("dividendCalc.breakdownDividends")}: {formatCurrency(p.dividends, currency)}</p>
+                        <p style={{ color: CHART_COLORS.growth }}>{t("dividendCalc.breakdownGrowth")}: {formatCurrency(p.growth, currency)}</p>
                       </div>
                     );
                   }}
@@ -509,7 +510,7 @@ export function DividendCalculator({ seed }: Props) {
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: 4, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="year" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `Y${v}`} />
-                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v)} width={52} />
+                <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => formatCurrencyCompact(v, currency)} width={52} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
@@ -518,7 +519,7 @@ export function DividendCalculator({ seed }: Props) {
                       <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg backdrop-blur">
                         <p className="font-medium">{t("dividendCalc.yearLabel", { year: p.year })}</p>
                         <p className="text-sky-300">
-                          {t("dividendCalc.tableMonthly")}: {formatCurrency(p.monthlyIncome)}
+                          {t("dividendCalc.tableMonthly")}: {formatCurrency(p.monthlyIncome, currency)}
                         </p>
                       </div>
                     );

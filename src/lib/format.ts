@@ -23,8 +23,20 @@ export function formatCurrencyEur(n: number): string {
   return currencyEurFmt.format(n);
 }
 
-export function formatCurrencyCompact(n: number): string {
-  return compactFmt.format(n);
+export function formatCurrencyCompact(n: number, currency = "USD"): string {
+  const { amount, code } = amountForFormat(n, currency);
+  if (code === "USD") return compactFmt.format(amount);
+  const key = `compact:${code}`;
+  let fmt = moneyFmtCache.get(key);
+  if (!fmt) {
+    try {
+      fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: code, notation: "compact", maximumFractionDigits: 1 });
+    } catch {
+      return String(amount);
+    }
+    moneyFmtCache.set(key, fmt);
+  }
+  return fmt.format(amount);
 }
 
 export function formatPercent(n: number, fractionDigits = 2): string {

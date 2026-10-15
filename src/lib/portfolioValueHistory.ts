@@ -211,8 +211,9 @@ export function quantitiesByMonthFromEvents(events: QtyEvent[], months: string[]
   return out;
 }
 
-/** Absolute share tolerance when comparing reconstructed vs live quantities. */
-export const QTY_TIMELINE_SHARE_TOLERANCE = 0.2;
+/** Share rounding epsilon; fractional positions must not lose a material part of their history. */
+export const QTY_TIMELINE_SHARE_TOLERANCE = 1e-8;
+const QTY_TIMELINE_RELATIVE_TOLERANCE = 1e-6;
 
 /** True when reconstructed current-month qty matches live holdings (incomplete order history fails). */
 export function quantityTimelineMatchesHoldings(
@@ -233,16 +234,21 @@ export function quantityTimelineMatchesHoldings(
   }
   if (live.size === 0) return false;
 
+  const matchesQuantity = (reconstructed: number, liveQty: number) => {
+    const tolerance = Math.max(0, toleranceShares) + liveQty * QTY_TIMELINE_RELATIVE_TOLERANCE;
+    return Number.isFinite(reconstructed) && Math.abs(reconstructed - liveQty) <= tolerance;
+  };
+
   for (const [sym, reconstructed] of atMonth) {
     if (reconstructed <= 1e-8) continue;
     const liveQty = live.get(sym);
     if (liveQty == null) return false;
-    if (Math.abs(reconstructed - liveQty) > toleranceShares) return false;
+    if (!matchesQuantity(reconstructed, liveQty)) return false;
   }
 
   for (const [sym, liveQty] of live) {
     const reconstructed = atMonth.get(sym) ?? 0;
-    if (Math.abs(reconstructed - liveQty) > toleranceShares) return false;
+    if (!matchesQuantity(reconstructed, liveQty)) return false;
   }
 
   return true;
@@ -362,16 +368,14 @@ export function computeMonthlyValuesFromHoldings(
     for (const { sym, qty } of contributors) {
       const h = holdingBySymbol.get(sym);
       const bars = historyBarsIfFetched(historyBySymbol, sym, h?.symbolYahoo);
-      // A name that was requested and came back empty (some UCITS listings) must
-      // not wipe every month that includes it. A name missing from the fetched
-      // set was dropped by the Yahoo cap — blank the month so the total is not
-      // short. A name that has bars but no close this month, or that cannot be
-      // converted, still blanks the month.
-      if (bars == null) {
+      // Every contributing position needs a price. Empty responses and names
+      // dropped by the symbol cap both make the portfolio total unavailable.
+      // Otherwise a partial historical total compared with the complete live
+      // value invents a portfolio gain.
+      if (bars == null || bars.length === 0) {
         blocked = true;
         break;
       }
-      if (bars.length === 0) continue;
       const close = monthEndCloseFromBars(bars, month);
       if (close == null) {
         blocked = true;
@@ -565,6 +569,7 @@ export function classifyPortfolioHistory(input: {
   ordersPartial: boolean;
   usedQuantityTimeline: boolean;
   hasHoldings: boolean;
+  priceCoverageComplete?: boolean;
 }): { status: PortfolioHistoryStatus; reason: PortfolioHistoryReason } {
   if (!input.connected) return { status: "ready", reason: null };
   if (input.scopeDenied) return { status: "unavailable", reason: "missing_scope" };
@@ -572,5 +577,6 @@ export function classifyPortfolioHistory(input: {
   if (input.hasHoldings && !input.usedQuantityTimeline) {
     return { status: "unavailable", reason: "mismatch" };
   }
+  if (input.priceCoverageComplete === false) return { status: "partial", reason: "incomplete" };
   return { status: "ready", reason: null };
 }

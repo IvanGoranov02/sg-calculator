@@ -1,5 +1,6 @@
 import type { HistoricalEodBar, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
+import { stockFundamentalsCurrency } from "@/lib/stockMoney";
 
 /** YYYY-MM-DD only — avoids bad comparisons between "2024-06-30" and "2024-06-30T00:00:00.000Z". */
 function normBarDate(d: string): string {
@@ -36,6 +37,7 @@ export type PeriodValuation = { peTtm: number | null; psTtm: number | null };
  * Annual: FY diluted EPS and FY revenue.
  */
 export function computeValuationByPeriodEnd(bundle: StockAnalysisBundle, freq: "annual" | "quarterly"): Map<string, PeriodValuation> {
+  if (bundle.quote.currency && bundle.quote.currency !== stockFundamentalsCurrency(bundle)) return new Map();
   const hist = [...bundle.historical].sort((a, b) => normBarDate(a.date).localeCompare(normBarDate(b.date)));
   if (freq === "annual") return computeAnnualMap(bundle, hist);
   return computeQuarterlyMap(bundle, hist);

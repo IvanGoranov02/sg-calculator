@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,23 +25,33 @@ export function DashboardClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const quotesGeneration = useRef(0);
+  const quotesRequest = useRef<AbortController | null>(null);
 
   const loadQuotes = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true;
+      const generation = ++quotesGeneration.current;
+      quotesRequest.current?.abort();
+      quotesRequest.current = null;
       if (symbols.length === 0) {
         setQuotes([]);
+        setLoading(false);
         setError(null);
         setLastUpdatedAt(null);
         return;
       }
+      const controller = new AbortController();
+      quotesRequest.current = controller;
+      const stale = () => controller.signal.aborted || generation !== quotesGeneration.current;
       if (!silent) {
         setLoading(true);
         setError(null);
       }
       try {
-        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`, { signal: controller.signal });
         const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
+        if (stale()) return;
         if (!res.ok) {
           // Background refresh failures keep the last good quotes on screen.
           if (silent) return;
@@ -60,12 +70,16 @@ export function DashboardClient() {
         setError(null);
         setLastUpdatedAt(Date.now());
       } catch {
+        if (stale()) return;
         if (silent) return;
         setQuotes([]);
         setError(t("watchlist.errNetwork"));
         setLastUpdatedAt(null);
       } finally {
-        if (!silent) setLoading(false);
+        if (!stale()) {
+          quotesRequest.current = null;
+          setLoading(false);
+        }
       }
     },
     [symbols, t],
@@ -73,6 +87,11 @@ export function DashboardClient() {
 
   useEffect(() => {
     void loadQuotes();
+    return () => {
+      quotesGeneration.current += 1;
+      quotesRequest.current?.abort();
+      quotesRequest.current = null;
+    };
   }, [loadQuotes]);
 
   useVisibleInterval(() => void loadQuotes({ silent: true }), QUOTES_REFRESH_MS, symbols.length > 0);
@@ -161,7 +180,7 @@ export function DashboardClient() {
                         size="sm"
                       />
                     </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatCurrency(q.price)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatCurrency(q.price, q.currency)}</TableCell>
                     <TableCell
                       className={cn(
                         "text-right font-mono text-sm tabular-nums",

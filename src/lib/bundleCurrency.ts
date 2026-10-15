@@ -320,7 +320,7 @@ export function convertBundleFundamentals(
   const cf = <T extends CashFlowAnnual | CashFlowQuarter>(r: T): T =>
     ({
       ...r,
-      freeCashFlow: sReq(r.freeCashFlow, rate),
+      freeCashFlow: s(r.freeCashFlow, rate),
       operatingCashFlow: s(r.operatingCashFlow, rate),
       capitalExpenditure: s(r.capitalExpenditure, rate),
       investingCashFlow: s(r.investingCashFlow, rate),

@@ -3,6 +3,10 @@
 export type StockQuote = {
   symbol: string;
   name: string;
+  /** Currency of the normalized price (GBP rather than GBp for London listings). */
+  currency?: string;
+  /** USD per one normalized quote-currency unit, when a conversion is available. */
+  usdPerUnit?: number | null;
   price: number;
   change: number;
   changesPercentage: number;
@@ -59,7 +63,8 @@ export type CashFlowAnnual = {
   date: string;
   symbol: string;
   fiscalYear: string;
-  freeCashFlow: number;
+  /** Null when cash-flow data is missing; zero is a reported value. */
+  freeCashFlow: number | null;
   operatingCashFlow: number | null;
   capitalExpenditure: number | null;
   investingCashFlow: number | null;
@@ -103,7 +108,8 @@ export type BalanceSheetQuarter = {
 export type CashFlowQuarter = {
   date: string;
   symbol: string;
-  freeCashFlow: number;
+  /** Null when cash-flow data is missing; zero is a reported value. */
+  freeCashFlow: number | null;
   operatingCashFlow: number | null;
   capitalExpenditure: number | null;
   investingCashFlow: number | null;
@@ -135,6 +141,10 @@ export type ChartMetric = "price" | "revenue" | "netIncome" | "freeCashFlow" | "
 /** Yahoo quoteSummary–derived fields for investor-facing tables (mostly TTM / snapshot). */
 export type InvestorMetrics = {
   currency: string;
+  /** Currency of earnings and report-derived monetary fields. */
+  financialCurrency?: string;
+  /** Listing currency used by Yahoo dividend rates and listing cash events. */
+  dividendCurrency?: string;
   marketCap: number | null;
   enterpriseValue: number | null;
   trailingPE: number | null;

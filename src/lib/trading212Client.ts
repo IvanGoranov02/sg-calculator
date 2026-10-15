@@ -38,7 +38,7 @@ export type T212Position = {
 
 export type T212AccountSummary = {
   currency?: string;
-  id?: number;
+  id?: number | string;
   /** Account total. Trading 212 includes cash in this figure. */
   totalValue?: number;
   cash?: {
@@ -541,6 +541,12 @@ export async function fetchT212Positions(
       maxPages: 40,
       minRequestIntervalMs: T212_POSITIONS_MIN_INTERVAL_MS,
     });
+    if (rest.partial) {
+      throw Object.assign(
+        new Error(rest.error ?? "Trading 212 returned incomplete open positions. Try again later."),
+        { status: rest.status },
+      );
+    }
     out.push(...rest.items.map(normalizeT212Position));
   }
 
@@ -565,6 +571,7 @@ export async function fetchT212AccountSummary(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
+  options?: { timeoutMs?: number },
 ): Promise<T212AccountSummary | null> {
   try {
     const { data } = await t212FetchJson<T212AccountSummary>(
@@ -572,6 +579,7 @@ export async function fetchT212AccountSummary(
       apiKey,
       apiSecret,
       "/api/v0/equity/account/summary",
+      options,
     );
     return data;
   } catch {
@@ -624,7 +632,7 @@ export async function fetchT212HistoryDividends(
   environment: Trading212Environment,
   apiKey: string,
   apiSecret: string,
-  options?: { maxPages?: number; minRequestIntervalMs?: number },
+  options?: { maxPages?: number; minRequestIntervalMs?: number; timeBudgetMs?: number },
 ): Promise<T212PaginatedFetchResult<T212HistoryDividendItem>> {
   return fetchAllT212Paginated<T212HistoryDividendItem>(
     environment,
@@ -634,6 +642,7 @@ export async function fetchT212HistoryDividends(
     {
       maxPages: options?.maxPages ?? 6,
       minRequestIntervalMs: options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS,
+      timeBudgetMs: options?.timeBudgetMs,
     },
   );
 }
@@ -647,6 +656,8 @@ export async function fetchAllT212Paginated<T>(
   options?: {
     maxPages?: number;
     minRequestIntervalMs?: number;
+    /** Bound requests, page pacing, and 429 backoff together within this duration. */
+    timeBudgetMs?: number;
     /** Orders only. A next path without `cursor=` is an incomplete walk, not the end. */
     requireCursor?: boolean;
     /** Orders only. Dividends and positions must not retry an empty page at a smaller limit. */
@@ -678,6 +689,7 @@ export async function fetchAllT212Paginated<T>(
 ): Promise<T212PaginatedFetchResult<T>> {
   const maxPages = options?.maxPages ?? 200;
   const minRequestIntervalMs = options?.minRequestIntervalMs ?? T212_MIN_REQUEST_INTERVAL_MS;
+  const deadline = options?.timeBudgetMs == null ? Infinity : Date.now() + Math.max(0, options.timeBudgetMs);
   const out: T[] = [];
   let path: string | null = initialPath.includes("?")
     ? initialPath
@@ -706,11 +718,26 @@ export async function fetchAllT212Paginated<T>(
     return pathForNextPoll(ordersPathWithCursor(fromPath, oldest - 1));
   }
 
-  async function waitForSlot(): Promise<void> {
+  function remainingTimeMs(): number {
+    return Math.max(0, deadline - Date.now());
+  }
+
+  function stopForTimeBudget(fromPath: string): void {
+    partial = true;
+    error = "Trading 212 history refresh time budget reached.";
+    nextPagePath = pathForNextPoll(fromPath);
+    path = null;
+  }
+
+  async function waitForSlot(): Promise<boolean> {
+    if (remainingTimeMs() <= 0) return false;
     const elapsed = Date.now() - lastRequestAt;
     if (lastRequestAt > 0 && elapsed < minRequestIntervalMs) {
-      await sleep(minRequestIntervalMs - elapsed);
+      const waitMs = minRequestIntervalMs - elapsed;
+      if (waitMs >= remainingTimeMs()) return false;
+      await sleep(waitMs);
     }
+    return remainingTimeMs() > 0;
   }
 
   while (path && pages < maxPages) {
@@ -732,9 +759,14 @@ export async function fetchAllT212Paginated<T>(
     let retries429 = 0;
     for (;;) {
       try {
-        await waitForSlot();
+        if (!(await waitForSlot())) {
+          stopForTimeBudget(pagePath);
+          break;
+        }
         lastRequestAt = Date.now();
-        const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, pagePath);
+        const result = await t212FetchJson<T212Paginated<T>>(environment, apiKey, apiSecret, pagePath, {
+          timeoutMs: Math.min(25_000, remainingTimeMs()),
+        });
         const page: T212Paginated<T> = result.data;
         pages += 1;
         const pageItems = Array.isArray(page.items) ? page.items : [];
@@ -833,6 +865,10 @@ export async function fetchAllT212Paginated<T>(
         break;
       } catch (e) {
         const httpStatus = (e as T212RequestError).status;
+        if (remainingTimeMs() <= 0) {
+          stopForTimeBudget(pagePath);
+          break;
+        }
         if (httpStatus === 429 && retries429 < T212_MAX_429_RETRIES) {
           retries429 += 1;
           const reset = (e as T212RequestError).rateLimitReset;
@@ -840,6 +876,11 @@ export async function fetchAllT212Paginated<T>(
             reset != null && reset > Date.now()
               ? Math.min(reset - Date.now() + 250, 120_000)
               : T212_429_DEFAULT_BACKOFF_MS * retries429;
+          if (waitMs >= remainingTimeMs()) {
+            status = httpStatus;
+            stopForTimeBudget(pagePath);
+            break;
+          }
           await sleep(waitMs);
           continue;
         }

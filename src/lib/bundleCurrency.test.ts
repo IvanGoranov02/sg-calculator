@@ -78,6 +78,7 @@ describe("convertBundleFundamentals", () => {
     assert.ok(Math.abs(inc.netIncome - 33) < 1e-9);
     assert.ok(Math.abs((inc.dilutedEps as number) - 8.25) < 1e-9);
     assert.equal(inc.dilutedAverageShares, 4); // unchanged
+    assert.ok(b.cashFlow[0].freeCashFlow != null);
     assert.ok(Math.abs(b.cashFlow[0].freeCashFlow - 27.5) < 1e-9);
     assert.ok(Math.abs((b.cashFlow[0].capitalExpenditure as number) + 16.5) < 1e-9);
     assert.ok(Math.abs((b.balanceSheet[0].netDebt as number) - 11) < 1e-9);
@@ -85,7 +86,10 @@ describe("convertBundleFundamentals", () => {
   });
 
   it("preserves nulls", () => {
-    const b = convertBundleFundamentals(makeBundle(), 1.1);
+    const bundle = makeBundle();
+    bundle.cashFlow[0].freeCashFlow = null;
+    const b = convertBundleFundamentals(bundle, 1.1);
+    assert.equal(b.cashFlow[0].freeCashFlow, null);
     assert.equal(b.cashFlow[0].investingCashFlow, null);
     assert.equal(b.balanceSheet[0].accountsReceivable, null);
   });

@@ -11,10 +11,10 @@ export function rowsForCharts(
   opts?: { keepPeriodEnd?: boolean },
 ): Record<string, unknown>[] {
   return rows.map((r) => {
-    const { fiscalYear: _fy, ...rest } = r;
-    if (opts?.keepPeriodEnd) return rest;
-    const { periodEnd: _p, ...withoutPeriod } = rest;
-    return withoutPeriod;
+    const rest = { ...r };
+    delete rest.fiscalYear;
+    if (!opts?.keepPeriodEnd) delete rest.periodEnd;
+    return rest;
   });
 }
 
@@ -127,7 +127,7 @@ export function buildAnnualChartRows(
           ? safePct(r.netIncome, bs.stockholdersEquity)
           : null,
       roa: bs?.totalAssets != null && bs.totalAssets !== 0 ? safePct(r.netIncome, bs.totalAssets) : null,
-      fcfMargin: cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
+      fcfMargin: cf?.freeCashFlow != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
       dilutedEps: r.dilutedEps ?? null,
       dilutedShares: r.dilutedAverageShares ?? null,
     };
@@ -209,7 +209,7 @@ export function buildQuarterlyChartRows(
           ? safePct(r.netIncome, bs.stockholdersEquity)
           : null,
       roa: bs?.totalAssets != null && bs.totalAssets !== 0 ? safePct(r.netIncome, bs.totalAssets) : null,
-      fcfMargin: cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
+      fcfMargin: cf?.freeCashFlow != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
       dilutedEps: r.dilutedEps ?? null,
       dilutedShares: r.dilutedAverageShares ?? null,
     };

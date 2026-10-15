@@ -101,7 +101,7 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
     if (!g) return row;
     return {
       ...row,
-      freeCashFlow: mergeGapScalar(row.freeCashFlow, g.freeCashFlow),
+      freeCashFlow: mergeGapNullable(row.freeCashFlow, g.freeCashFlow),
       operatingCashFlow: mergeGapNullable(row.operatingCashFlow, g.operatingCashFlow) ?? row.operatingCashFlow,
       capitalExpenditure: mergeGapNullable(row.capitalExpenditure, g.capitalExpenditure) ?? row.capitalExpenditure,
     };
@@ -187,7 +187,7 @@ function mergeGapFillIntoBundle(bundle: StockAnalysisBundle, parsed: unknown): v
       ...row,
       operatingCashFlow: mergeGapNullable(row.operatingCashFlow, g.operatingCashFlow),
       capitalExpenditure: mergeGapNullable(row.capitalExpenditure, g.capitalExpenditure),
-      freeCashFlow: mergeGapScalar(row.freeCashFlow, g.freeCashFlow),
+      freeCashFlow: mergeGapNullable(row.freeCashFlow, g.freeCashFlow),
     };
   });
 

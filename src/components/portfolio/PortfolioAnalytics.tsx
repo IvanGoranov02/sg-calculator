@@ -238,8 +238,8 @@ export function PortfolioMoversSection({ analytics }: { analytics: PortfolioAnal
         <CardTitle className="text-base">{t("portfolioAnalytics.moversTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
-        <MoverList title={t("portfolioAnalytics.topGainers")} items={a.best} tone="pos" />
-        <MoverList title={t("portfolioAnalytics.topLosers")} items={a.worst} tone="neg" />
+        <MoverList title={t("portfolioAnalytics.topGainers")} items={a.best} />
+        <MoverList title={t("portfolioAnalytics.topLosers")} items={a.worst} />
       </CardContent>
     </Card>
   );
@@ -589,11 +589,9 @@ function BarRow({
 function MoverList({
   title,
   items,
-  tone,
 }: {
   title: string;
   items: { symbol: string; name: string | null; plPct: number }[];
-  tone: "pos" | "neg";
 }) {
   return (
     <div>

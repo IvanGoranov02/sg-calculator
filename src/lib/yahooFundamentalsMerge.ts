@@ -203,8 +203,8 @@ export function applyYahooFundamentalsToBundle(
 
   const symU = sym;
 
-  const mergeFcf = (cur: number, yahoo: unknown, ocf: number | null, capex: number | null): number => {
-    if (fillOnly && Number.isFinite(cur) && cur !== 0) return cur;
+  const mergeFcf = (cur: number | null, yahoo: unknown, ocf: number | null, capex: number | null): number | null => {
+    if (fillOnly && cur != null && Number.isFinite(cur) && cur !== 0) return cur;
     const yFcf = pickNum(yahoo);
     if (yFcf != null) return yFcf;
     if (ocf != null && capex != null) return ocf + capex;

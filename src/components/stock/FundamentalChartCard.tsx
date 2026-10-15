@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CategoryAxisTick } from "@/components/stock/CategoryAxisTick";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatRatio, formatVolume } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { useStockMoneyCurrency } from "@/lib/stockMoneyContext";
 import {
   categoryAxisWidth,
   categoryYearKey,
@@ -63,7 +64,7 @@ type FundamentalChartCardProps = {
   growthNote?: string | null;
   /** Multi-horizon growth pill badges (1Y / 2Y / 3Y). */
   growthPills?: GrowthPillsEntry[] | null;
-  /** Quote currency for per-share amounts (USD when omitted). */
+  /** Currency for monetary amounts; inherits the fundamentals currency when omitted. */
   currency?: string;
   /** Hide the sparse "Data from …" caption under the plot (default: show when sparse). */
   hideCoverageNote?: boolean;
@@ -135,7 +136,7 @@ function formatTooltipValue(fmt: ValueFormat, v: number, currency?: string): str
   if (!Number.isFinite(v)) return "—";
   switch (fmt) {
     case "currency":
-      return formatCurrencyCompact(v);
+      return formatCurrencyCompact(v, currency);
     case "percent":
       return `${v.toFixed(1)}%`;
     case "ratio":
@@ -153,7 +154,7 @@ function axisTick(fmt: ValueFormat, v: number, currency?: string): string {
   if (!Number.isFinite(v)) return "";
   switch (fmt) {
     case "currency":
-      return formatCurrencyCompact(v);
+      return formatCurrencyCompact(v, currency);
     case "percent":
       return `${v.toFixed(0)}%`;
     case "ratio":
@@ -179,10 +180,12 @@ export function FundamentalChartCard({
   className,
   growthNote,
   growthPills,
-  currency,
+  currency: currencyProp,
   hideCoverageNote = false,
 }: FundamentalChartCardProps) {
   const { t } = useI18n();
+  const inheritedCurrency = useStockMoneyCurrency();
+  const currency = currencyProp ?? inheritedCurrency;
   const pillLabels = useMemo(
     () => ({
       oneYear: t("chartsFund.pill1Y"),
