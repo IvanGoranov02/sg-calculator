@@ -1,45 +1,23 @@
 import "server-only";
 
-import YahooFinance from "yahoo-finance2";
+import { yahooFinance } from "@/lib/yahooFinanceClient";
+import { createPortfolioFxRatesLoader, PORTFOLIO_USD_FX_PAIRS, type PortfolioFxRates } from "@/lib/portfolioFx";
 
-import type { PortfolioFxRates } from "@/lib/portfolioFx";
-
-const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
-
+let quotesPending: Promise<Map<string, number>> | null = null;
 async function usdPerUnit(pairSymbol: string): Promise<number | null> {
-  try {
-    const raw = await yahooFinance.quote(pairSymbol);
-    const q = Array.isArray(raw) ? raw[0] : raw;
-    const n = Number((q as { regularMarketPrice?: unknown })?.regularMarketPrice);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  } catch {
-    return null;
+  if (!quotesPending) {
+    const request = yahooFinance.quote(PORTFOLIO_USD_FX_PAIRS.map(([, symbol]) => symbol))
+      .then((raw) => new Map((Array.isArray(raw) ? raw : [raw]).flatMap((quote) => {
+        const rate = Number(quote.regularMarketPrice);
+        return Number.isFinite(rate) && rate > 0 ? [[quote.symbol, rate] as const] : [];
+      })))
+      .catch(() => new Map<string, number>());
+    quotesPending = request;
+    void request.finally(() => { if (quotesPending === request) quotesPending = null; });
   }
+  return (await quotesPending).get(pairSymbol) ?? null;
 }
+const loadSpotRates = createPortfolioFxRatesLoader(usdPerUnit);
 
-const EXTRA_USD_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ["CHF", "CHFUSD=X"],
-  ["CAD", "CADUSD=X"],
-  ["AUD", "AUDUSD=X"],
-  ["HKD", "HKDUSD=X"],
-  ["JPY", "JPYUSD=X"],
-];
-
-/** Fetch spot rates used to convert quote currency ↔ holding currency. */
-export async function fetchPortfolioFxRates(): Promise<PortfolioFxRates> {
-  const [eurUsd, gbpUsd, ...extra] = await Promise.all([
-    usdPerUnit("EURUSD=X"),
-    usdPerUnit("GBPUSD=X"),
-    ...EXTRA_USD_PAIRS.map(([, symbol]) => usdPerUnit(symbol)),
-  ]);
-  const usdPerUnitRates: Partial<Record<string, number>> = {};
-  EXTRA_USD_PAIRS.forEach(([ccy], i) => {
-    const rate = extra[i];
-    if (rate != null && rate > 0) usdPerUnitRates[ccy] = rate;
-  });
-  return {
-    eurPerUsd: eurUsd != null && eurUsd > 0 ? 1 / eurUsd : null,
-    gbpPerUsd: gbpUsd != null && gbpUsd > 0 ? 1 / gbpUsd : null,
-    usdPerUnit: usdPerUnitRates,
-  };
-}
+/** One bounded Yahoo batch, cached and shared between portfolio endpoints. */
+export async function fetchPortfolioFxRates(): Promise<PortfolioFxRates> { return loadSpotRates(); }

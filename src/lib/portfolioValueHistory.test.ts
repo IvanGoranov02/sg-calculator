@@ -80,6 +80,18 @@ describe("portfolioValueHistory listing currency", () => {
     assert.equal(isYahooPenceHistory("AAPL", "AAPL_US_EQ"), false);
   });
 
+  it("uses the same local currency for manual and Trading 212 exchange listings", () => {
+    const listings: Array<[string, string, string]> = [
+      ["RY.TO", "RYt_EQ", "CAD"], ["NESN.SW", "NESNs_EQ", "CHF"],
+      ["VOLV-B.ST", "VOLVx_EQ", "SEK"], ["EQNR.OL", "EQNRo_EQ", "NOK"],
+      ["NOVO-B.CO", "NOVOc_EQ", "DKK"], ["PKN.WA", "PKNw_EQ", "PLN"],
+    ];
+    for (const [symbol, ticker, currency] of listings) {
+      assert.equal(listingPriceCurrency(symbol), currency, symbol);
+      assert.equal(listingPriceCurrency(symbol, ticker), currency, ticker);
+    }
+  });
+
   it("scales London GBp history to pounds", () => {
     const bars: QuoteHistoryBar[] = [
       { date: "2024-03-01", close: 500 },
@@ -200,9 +212,9 @@ describe("portfolioValueHistory quantity timeline", () => {
     );
   });
 
-  it("uses absolute share tolerance, not a relative percent", () => {
+  it("allows numerical rounding noise but rejects a materially different share count", () => {
     const qtyByMonth = quantitiesByMonthFromEvents(
-      [{ symbolYahoo: "AAPL", date: "2024-01-15", delta: 10.1 }],
+      [{ symbolYahoo: "AAPL", date: "2024-01-15", delta: 10.00000001 }],
       ["2024-03"],
     );
     assert.equal(
@@ -222,10 +234,38 @@ describe("portfolioValueHistory quantity timeline", () => {
       false,
     );
   });
+
+  it("rejects incomplete fractional positions and missing fractional tickers", () => {
+    const live = [{ symbolYahoo: "AAPL", quantity: 0.2, currency: "USD" }];
+    assert.equal(
+      quantityTimelineMatchesHoldings(new Map([["2024-03", new Map([["AAPL", 0.01]])]]), "2024-03", live),
+      false,
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(
+        new Map([["2024-03", new Map([["AAPL", 10]])]]),
+        "2024-03",
+        [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }, { symbolYahoo: "MSFT", quantity: 0.1, currency: "USD" }],
+      ),
+      false,
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(new Map([["2024-03", new Map([["AAPL", 0.200000001]])]]), "2024-03", live),
+      true,
+    );
+    assert.equal(
+      quantityTimelineMatchesHoldings(
+        new Map([["2024-03", new Map([["AAPL", 10.1]])]]),
+        "2024-03",
+        [{ symbolYahoo: "AAPL", quantity: 10, currency: "USD" }],
+      ),
+      false,
+    );
+  });
 });
 
 describe("computeMonthlyValuesFromHoldings coverage", () => {
-  it("prices a month from the names that have daily history", () => {
+  it("does not publish a partial portfolio total when a contributor has empty history", () => {
     const byMonth = computeMonthlyValuesFromHoldings(
       [
         { symbolYahoo: "AAPL", quantity: 10, currency: "USD" },
@@ -239,8 +279,7 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
       "USD",
       ["2024-03"],
     );
-    // MSFT was fetched and came back empty (typical UCITS gap). 10 * 100 stays.
-    assert.equal(byMonth.get("2024-03"), 1000);
+    assert.equal(byMonth.get("2024-03"), null);
   });
 
   it("returns null when a contributor was never fetched", () => {
@@ -298,7 +337,53 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
     assert.equal(byMonth.get("2024-03"), 80 * 10 * 1.1 * 0.92);
   });
 
-  it("keeps a later month when a new name has no daily history", () => {
+  it("values manual non-euro listings using local FX rates, including closed positions", () => {
+    const rates = { CHF: 1.1, CAD: 0.75, SEK: 0.095, NOK: 0.09, DKK: 0.14, PLN: 0.25 };
+    const listingFx = { eurPerUsd: 0.85, gbpPerUsd: 0.75, usdPerUnit: rates };
+    const symbols: Record<keyof typeof rates, string> = {
+      CHF: "NESN.SW", CAD: "RY.TO", SEK: "VOLV-B.ST", NOK: "EQNR.OL", DKK: "NOVO-B.CO", PLN: "PKN.WA",
+    };
+    for (const [currency, symbol] of Object.entries(symbols)) {
+      const bars = { [symbol]: [{ date: "2024-03-28", close: 100 }] };
+      const manual = computeMonthlyValuesFromHoldings(
+        [{ symbolYahoo: symbol, quantity: 1, currency: "EUR" }], bars, listingFx, "EUR", ["2024-03"],
+      ).get("2024-03");
+      const closed = computeMonthlyValuesFromHoldings(
+        [], bars, listingFx, "EUR", ["2024-03"], new Map([["2024-03", new Map([[symbol, 1]])]]),
+      ).get("2024-03");
+      const expected = 100 * rates[currency as keyof typeof rates] * 0.85;
+      assert.ok(manual != null && Math.abs(manual - expected) < 1e-10, symbol);
+      assert.equal(closed, manual, symbol);
+      assert.equal(
+        computeMonthlyValuesFromHoldings(
+          [{ symbolYahoo: symbol, quantity: 1, currency: "EUR" }], bars,
+          { eurPerUsd: 0.85, gbpPerUsd: 0.75 }, "EUR", ["2024-03"],
+        ).get("2024-03"),
+        null,
+        `${symbol} without its FX rate`,
+      );
+    }
+  });
+
+  it("cannot invent a 10000% gain by comparing incomplete history with the full live value", () => {
+    const holdings = [
+      { symbolYahoo: "AAPL", quantity: 1, currency: "USD" },
+      { symbolYahoo: "MISSING", quantity: 100, currency: "USD" },
+    ];
+    const qtyByMonth = new Map(["2024-01", "2024-02"].map((month) => [month, new Map([["AAPL", 1], ["MISSING", 100]])]));
+    const series = buildPortfolioValueChartSeries({
+      snapshots: [], manualRows: [], holdings, qtyByMonth,
+      historyBySymbol: {
+        AAPL: [{ date: "2024-01-31", close: 100 }, { date: "2024-02-28", close: 100 }],
+        MISSING: [],
+      },
+      fx: { eurPerUsd: null, gbpPerUsd: null }, baseCurrency: "USD", liveValue: 10100,
+      now: new Date("2024-02-28T12:00:00Z"),
+    });
+    assert.deepEqual(series, [{ month: "2024-02", value: 10100, source: "computed", changePct: null }]);
+  });
+
+  it("keeps complete earlier months and omits a later month with an unpriced new position", () => {
     const qtyByMonth = quantitiesByMonthFromEvents(
       [
         { symbolYahoo: "AAPL", date: "2024-01-10", delta: 10 },
@@ -328,8 +413,7 @@ describe("computeMonthlyValuesFromHoldings coverage", () => {
     });
     assert.equal(series.find((p) => p.month === "2024-01")?.value, 1000);
     assert.equal(series.find((p) => p.month === "2024-02")?.value, 1100);
-    // March is AAPL only (120 * 10). MSFT has no bars, so it does not erase the month.
-    assert.equal(series.find((p) => p.month === "2024-03")?.value, 1200);
+    assert.equal(series.find((p) => p.month === "2024-03"), undefined);
   });
 
   it("omits a month when a held name has history but no close that month", () => {
@@ -640,6 +724,10 @@ describe("pickPortfolioHistorySymbols", () => {
 });
 
 describe("classifyPortfolioHistory", () => {
+  it("marks complete order history as partial when contributor prices or FX are missing", () => {
+    assert.deepEqual(classifyPortfolioHistory({ connected: true, scopeDenied: false, ordersPartial: false,
+      usedQuantityTimeline: true, hasHoldings: true, priceCoverageComplete: false }), { status: "partial", reason: "incomplete" });
+  });
   it("asks for a rebuild while older pages are still loading", () => {
     assert.deepEqual(
       classifyPortfolioHistory({

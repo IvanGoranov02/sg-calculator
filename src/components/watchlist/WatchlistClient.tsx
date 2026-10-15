@@ -2,7 +2,7 @@
 
 import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -23,28 +23,38 @@ const QUOTES_REFRESH_MS = 60_000;
 
 export function WatchlistClient() {
   const { t } = useI18n();
-  const { symbols, add, remove } = useWatchlist();
+  const { symbols, add, remove, cloudReady, error: cloudError, retry } = useWatchlist();
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
+  const quotesGeneration = useRef(0);
+  const quotesRequest = useRef<AbortController | null>(null);
 
   const loadQuotes = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true;
+      const generation = ++quotesGeneration.current;
+      quotesRequest.current?.abort();
+      quotesRequest.current = null;
       if (symbols.length === 0) {
         setQuotes([]);
+        setLoading(false);
         setError(null);
         return;
       }
+      const controller = new AbortController();
+      quotesRequest.current = controller;
+      const stale = () => controller.signal.aborted || generation !== quotesGeneration.current;
       if (!silent) {
         setLoading(true);
         setError(null);
       }
       try {
         const q = `/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`;
-        const res = await fetch(q);
+        const res = await fetch(q, { signal: controller.signal });
         const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
+        if (stale()) return;
         if (!res.ok) {
           // Background refresh failures keep the last good quotes on screen.
           if (silent) return;
@@ -61,11 +71,15 @@ export function WatchlistClient() {
         setQuotes(ordered);
         setError(null);
       } catch {
+        if (stale()) return;
         if (silent) return;
         setError(t("watchlist.errNetwork"));
         setQuotes([]);
       } finally {
-        if (!silent) setLoading(false);
+        if (!stale()) {
+          quotesRequest.current = null;
+          setLoading(false);
+        }
       }
     },
     [symbols, t],
@@ -73,6 +87,11 @@ export function WatchlistClient() {
 
   useEffect(() => {
     void loadQuotes();
+    return () => {
+      quotesGeneration.current += 1;
+      quotesRequest.current?.abort();
+      quotesRequest.current = null;
+    };
   }, [loadQuotes]);
 
   useEffect(() => {
@@ -81,8 +100,9 @@ export function WatchlistClient() {
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const q = `/api/quotes/history?symbols=${encodeURIComponent(symbols.join(","))}`;
-    void fetch(q)
+    void fetch(q, { signal: controller.signal })
       .then(async (res) => {
         const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
         if (cancelled || !res.ok) return;
@@ -93,6 +113,7 @@ export function WatchlistClient() {
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [symbols]);
 
@@ -114,7 +135,7 @@ export function WatchlistClient() {
             onSelectSymbol={(symbol) => void add(symbol)}
             placeholder=""
             submitLabel={t("watchlist.addLabel")}
-            disabled={symbols.length >= WATCHLIST_MAX}
+            disabled={!cloudReady || symbols.length >= WATCHLIST_MAX}
           />
         </div>
         <Button type="button" variant="outline" onClick={() => void loadQuotes()} disabled={loading || symbols.length === 0}>
@@ -123,6 +144,12 @@ export function WatchlistClient() {
         </Button>
       </div>
 
+      {cloudError && (
+        <div role="alert" className="flex items-center gap-2 text-sm text-red-400">
+          {t(cloudError === "load" ? "watchlist.errLoad" : "watchlist.errSave")}
+          <Button type="button" variant="outline" size="sm" onClick={retry}>{t("watchlist.refresh")}</Button>
+        </div>
+      )}
       {error && (
         <p className="text-sm text-red-400" role="alert">
           {error}
@@ -194,7 +221,7 @@ export function WatchlistClient() {
                       />
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {formatCurrency(q.price)}
+                      {formatCurrency(q.price, q.currency)}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -203,7 +230,7 @@ export function WatchlistClient() {
                       )}
                     >
                       {formatPercent(q.changesPercentage)}
-                      <span className="ml-1 text-muted-foreground">({formatCurrency(q.change)})</span>
+                      <span className="ml-1 text-muted-foreground">({formatCurrency(q.change, q.currency)})</span>
                     </TableCell>
                     <TableCell
                       className={cn(

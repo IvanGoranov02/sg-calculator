@@ -153,6 +153,12 @@ describe("bundleFromFmpStatements (stable field names)", () => {
 });
 
 describe("bundleFromFmpStatements guards", () => {
+  it("keeps FCF unknown when capex is missing rather than showing operating cash flow", () => {
+    const statements = v3Statements();
+    statements.cashFlowAnnual = [{ date: "2024-12-31", operatingCashFlow: 100 }];
+    const bundle = bundleFromFmpStatements("TEST", statements);
+    assert.equal(bundle?.cashFlow.find((row) => row.fiscalYear === "2024")?.freeCashFlow, null);
+  });
   it("accepts a single filed annual (recent IPOs)", () => {
     const st = v3Statements();
     st.incomeAnnual = st.incomeAnnual.slice(0, 1);

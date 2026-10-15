@@ -198,6 +198,7 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
   const displaySymbol = seed?.symbol ?? ticker;
   const displayName = seed?.name ?? ticker;
   const currentPrice = seed?.currentPrice ?? 0;
+  const currency = seed?.currency ?? "USD";
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
@@ -218,7 +219,7 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
               />
               {currentPrice > 0 && displaySymbol ? (
                 <p className="mt-1 font-mono text-sm tabular-nums text-muted-foreground sm:ml-[4.75rem]">
-                  {displaySymbol} | {formatCurrency(currentPrice)}
+                  {displaySymbol} | {formatCurrency(currentPrice, currency)}
                 </p>
               ) : null}
             </div>
@@ -303,19 +304,19 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
                   </p>
                   <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
                     {result.entryPriceForDesiredReturn != null
-                      ? formatCurrency(result.entryPriceForDesiredReturn)
+                      ? formatCurrency(result.entryPriceForDesiredReturn, currency)
                       : "—"}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {t("dcf.entryHint", {
-                      target: formatCurrency(result.targetPrice),
+                      target: formatCurrency(result.targetPrice, currency),
                       years: result.horizonYears,
                     })}
                   </p>
                 </div>
               </div>
 
-              <DcfEpsProjectionChart points={result.chartPoints} horizonYears={result.horizonYears} />
+              <DcfEpsProjectionChart points={result.chartPoints} horizonYears={result.horizonYears} currency={currency} />
             </>
           )}
 

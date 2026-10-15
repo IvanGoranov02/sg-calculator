@@ -210,7 +210,7 @@ export function mergeValidatedBackfill(bundle: StockAnalysisBundle, parsed: unkn
         date: q.date,
         symbol: sym,
         freeCashFlow:
-          q.freeCashFlow ?? (capex != null ? q.operatingCashFlow + capex : q.operatingCashFlow),
+          q.freeCashFlow ?? (capex != null ? q.operatingCashFlow + capex : null),
         operatingCashFlow: q.operatingCashFlow,
         capitalExpenditure: capex,
         investingCashFlow: null,

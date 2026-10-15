@@ -109,6 +109,7 @@ type StockMetricChartProps = {
 
 export function StockMetricChart({ data }: StockMetricChartProps) {
   const { t } = useI18n();
+  const currency = data.quote.currency ?? data.investor.currency;
   const [range, setRange] = useState<PerformanceRange>("1y");
 
   const rangeOptions = useMemo(
@@ -134,8 +135,8 @@ export function StockMetricChart({ data }: StockMetricChartProps) {
 
   const series = useMemo(() => buildPriceSeries(data, range), [data, range]);
 
-  const fmtValue = useCallback((v: number) => formatCurrency(v), []);
-  const fmtAxis = useCallback((v: number) => formatCurrencyCompact(v), []);
+  const fmtValue = useCallback((v: number) => formatCurrency(v, currency), [currency]);
+  const fmtAxis = useCallback((v: number) => formatCurrencyCompact(v, currency), [currency]);
 
   const stats = useMemo(() => priceStatsForRange(data, range), [data, range]);
 

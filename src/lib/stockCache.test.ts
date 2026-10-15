@@ -77,6 +77,13 @@ describe("readAdminEditedAt", () => {
 });
 
 describe("cacheIsFresh", () => {
+  it("expires old source reports even when live price refresh just updated the row", () => {
+    const payload = buildCachePayload(makeBundle(), {
+      lastFullFetchAt: new Date(Date.now() - CACHE_MAX_AGE_MS - 1000).toISOString(),
+    }) as CachePayload;
+    assert.equal(cacheIsFresh(payload, new Date()), false);
+  });
+
   it("expires plain payloads after the max age", () => {
     const payload = buildCachePayload(makeBundle()) as CachePayload;
     const old = new Date(Date.now() - CACHE_MAX_AGE_MS - 1000);

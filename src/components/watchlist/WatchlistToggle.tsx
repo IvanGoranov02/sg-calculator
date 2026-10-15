@@ -16,7 +16,7 @@ type WatchlistToggleProps = {
 
 export function WatchlistToggle({ symbol, compact = false }: WatchlistToggleProps) {
   const { t } = useI18n();
-  const { has, toggle, symbols } = useWatchlist();
+  const { has, toggle, symbols, cloudReady } = useWatchlist();
   const saved = has(symbol);
   const full = !saved && symbols.length >= WATCHLIST_MAX;
 
@@ -26,7 +26,7 @@ export function WatchlistToggle({ symbol, compact = false }: WatchlistToggleProp
       variant="outline"
       size={compact ? "icon" : "sm"}
       className="shrink-0 gap-2 border-white/15"
-      disabled={full}
+      disabled={full || !cloudReady}
       title={full ? t("watchlist.fullTitle", { max: WATCHLIST_MAX }) : undefined}
       aria-label={`${saved ? t("watchlist.saved") : t("watchlist.toggle")}: ${symbol}`}
       aria-pressed={saved}

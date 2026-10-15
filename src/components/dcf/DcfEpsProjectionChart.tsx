@@ -20,9 +20,10 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 type DcfEpsProjectionChartProps = {
   points: EpsModelChartPoint[];
   horizonYears: number;
+  currency?: string;
 };
 
-export function DcfEpsProjectionChart({ points, horizonYears }: DcfEpsProjectionChartProps) {
+export function DcfEpsProjectionChart({ points, horizonYears, currency = "USD" }: DcfEpsProjectionChartProps) {
   const { t } = useI18n();
   const todayLabel = t("dcf.chartToday");
 
@@ -55,10 +56,10 @@ export function DcfEpsProjectionChart({ points, horizonYears }: DcfEpsProjection
             tickLine={false}
             axisLine={false}
             width={56}
-            tickFormatter={(v) => formatCurrencyCompact(Number(v))}
+            tickFormatter={(v) => formatCurrencyCompact(Number(v), currency)}
           />
           <Tooltip
-            formatter={(v) => formatCurrency(Number(v))}
+            formatter={(v) => formatCurrency(Number(v), currency)}
             labelFormatter={(label) => String(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
@@ -86,7 +87,7 @@ export function DcfEpsProjectionChart({ points, horizonYears }: DcfEpsProjection
               dataKey="projectedPrice"
               position="top"
               formatter={(value) =>
-                formatCurrencyCompact(typeof value === "number" ? value : Number(value))
+                formatCurrencyCompact(typeof value === "number" ? value : Number(value), currency)
               }
               className="fill-foreground text-[10px] font-mono"
             />
