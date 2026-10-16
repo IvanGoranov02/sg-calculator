@@ -55,10 +55,19 @@ export async function GET(request: Request) {
   const requestedBase = url.searchParams.get("base");
 
   try {
-    const [holdings, snapshots, manualRows, fx, t212Row] = await Promise.all([
+    const [marketData, snapshots, manualRows, t212Row] = await Promise.all([
       prisma.portfolioHolding.findMany({
         where: { userId },
         select: { symbolYahoo: true, symbolT212: true, quantity: true, currency: true, brokerPrice: true, source: true },
+      }).then(async (holdings) => {
+        const [fx, quotes] = await Promise.all([
+          fetchPortfolioFxRates(),
+          fetchPortfolioQuotesForHoldings(holdings.map((h) => ({
+            ...h,
+            brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
+          })), { includeDividends: false }),
+        ]);
+        return { holdings, fx, quotes };
       }),
       prisma.portfolioAccountSnapshot.findMany({
         where: { userId },
@@ -68,9 +77,10 @@ export async function GET(request: Request) {
         where: { userId },
         orderBy: { month: "asc" },
       }),
-      fetchPortfolioFxRates(),
       prisma.trading212Connection.findUnique({ where: { userId } }),
     ]);
+
+    const { holdings, fx, quotes } = marketData;
 
     const fallbackBase =
       snapshots[snapshots.length - 1]?.currency ??
@@ -172,19 +182,6 @@ export async function GET(request: Request) {
       events: qtyEvents,
       holdings,
     });
-
-    const quotes =
-      holdings.length > 0
-        ? await fetchPortfolioQuotesForHoldings(
-            holdings.map((h) => ({
-              symbolYahoo: h.symbolYahoo,
-              symbolT212: h.symbolT212,
-              currency: h.currency,
-              brokerPrice: h.brokerPrice != null ? Number(h.brokerPrice) : null,
-              source: h.source,
-            })),
-          )
-        : {};
 
     const liveValue = computeLiveHoldingsValue(holdings, quotes, fx, baseCurrency);
 

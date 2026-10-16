@@ -404,9 +404,12 @@ async function fetchOnePortfolioQuote(
 
   const candidates = buildOrderedCandidates(portfolioSymbol, symbolT212, quoteCurrency, blocked);
   const rows: QuoteRowWithType[] = [];
-  for (const c of candidates) {
-    const row = await tryQuoteSymbol(portfolioSymbol, c);
-    if (row) rows.push(row);
+  // Promise.all retains candidate order even when later requests finish first.
+  for (let i = 0; i < candidates.length; i += 3) {
+    const batch = await Promise.all(
+      candidates.slice(i, i + 3).map((c) => tryQuoteSymbol(portfolioSymbol, c)),
+    );
+    for (const row of batch) if (row) rows.push(row);
   }
 
   let best = pickBestQuoteRow(rows, quoteCurrency, symbolT212, blocked);
@@ -442,6 +445,7 @@ export type PortfolioHoldingQuoteKey = {
 
 export async function fetchPortfolioQuotesForHoldings(
   holdings: PortfolioHoldingQuoteKey[],
+  options: { includeDividends?: boolean } = {},
 ): Promise<Record<string, PortfolioQuoteRow | null>> {
   const metaByYahoo = new Map<
     string,
@@ -493,7 +497,7 @@ export async function fetchPortfolioQuotesForHoldings(
     }),
   );
 
-  await enrichTrailingDividends(out);
+  if (options.includeDividends !== false) await enrichTrailingDividends(out);
   return out;
 }
 

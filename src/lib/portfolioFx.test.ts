@@ -1,3 +1,5 @@
+import { fetchPortfolioFxRates } from "./portfolioFxServer";
+import YahooFinance from "yahoo-finance2";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -97,4 +99,40 @@ describe("European listing dividend currencies", () => {
       "VOLV.ST": "SEK", "EQNR.OL": "NOK", "NOVO.CO": "DKK", "PKN.WA": "PLN",
     })) assert.equal(inferCurrencyFromSymbol(symbol), currency);
   });
+});
+
+it("batches FX, deduplicates loads, expires after ten minutes, and falls back only on batch failure", async (t) => {
+  let now = 1_000_000;
+  t.mock.method(Date, "now", () => now);
+  let failBatch = false;
+  const calls: Array<string | string[]> = [];
+  t.mock.method(YahooFinance.prototype, "quote", async (symbols: string | string[]) => {
+    calls.push(symbols);
+    if (Array.isArray(symbols)) {
+      if (failBatch) throw new Error("batch failed");
+      // Deliberately reverse results and omit CHF: matching must use symbols.
+      return symbols.filter((s) => s !== "CHFUSD=X").reverse().map((symbol) => ({
+        symbol, regularMarketPrice: symbol === "EURUSD=X" ? 2 : symbol === "GBPUSD=X" ? 4 : 5,
+      }));
+    }
+    if (symbols === "CHFUSD=X") throw new Error("missing pair");
+    return { symbol: symbols, regularMarketPrice: 2 };
+  });
+  const [first, concurrent] = await Promise.all([fetchPortfolioFxRates(), fetchPortfolioFxRates()]);
+  assert.deepEqual(first, concurrent);
+  assert.equal(calls.length, 1);
+  assert.equal((calls[0] as string[]).length, 15);
+  assert.equal(first.eurPerUsd, 0.5);
+  assert.equal(first.gbpPerUsd, 0.25);
+  assert.equal(first.usdPerUnit?.CHF, undefined);
+  assert.equal(first.usdPerUnit?.CAD, 5);
+  now += 599_999;
+  await fetchPortfolioFxRates();
+  assert.equal(calls.length, 1);
+  now += 1;
+  failBatch = true;
+  const fallback = await fetchPortfolioFxRates();
+  assert.equal(calls.length, 17);
+  assert.equal(fallback.gbpPerUsd, 0.5);
+  assert.equal(fallback.usdPerUnit?.CHF, undefined);
 });
