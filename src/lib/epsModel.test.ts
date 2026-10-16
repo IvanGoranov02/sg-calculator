@@ -9,6 +9,7 @@ import {
   EPS_MODEL_HORIZON_YEARS,
   seedPeMultiple,
   targetPriceFromEpsModel,
+  tryComputeEpsModel,
   trailingPeFromPriceAndEps,
   validateEpsModelInputs,
 } from "@/lib/epsModel";
@@ -109,6 +110,18 @@ describe("computeEpsModel", () => {
     assert.ok(
       Math.abs(r.chartPoints[5].projectedPrice - targetPriceFromEpsModel(10, 0.1, 15, 5)) < 0.01,
     );
+  });
+});
+
+describe("tryComputeEpsModel", () => {
+  const input = { ttmEps: 5, growthRate: 0.1, peMultiple: 20, currentPrice: 100, desiredReturn: 0.15 };
+
+  it("keeps an editable form usable when finite numeric input overflows the projection", () => {
+    assert.equal(tryComputeEpsModel({ ...input, growthRate: 1e100 }), null);
+    assert.equal(tryComputeEpsModel({ ...input, ttmEps: 1e308 }), null);
+    assert.equal(tryComputeEpsModel({ ...input, growthRate: -1 }), null);
+    assert.equal(tryComputeEpsModel({ ...input, horizonYears: Infinity }), null);
+    assert.ok(tryComputeEpsModel(input)?.targetPrice);
   });
 });
 

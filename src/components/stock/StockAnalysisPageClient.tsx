@@ -6,20 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StockAnalysisView } from "@/components/stock/StockAnalysisView";
 import { debugLogStockBundle } from "@/lib/stockDebugConsole";
 import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
-import type {
-  StockAnalysisLoadProgress,
-  StockAnalysisPageLoadProgress,
-} from "@/lib/stockLoadProgress";
+import { fetchStockAnalysisStream } from "@/lib/stockAnalysisStreamClient";
+import type { StockAnalysisPageLoadProgress } from "@/lib/stockLoadProgress";
 import { stockLoadProgressPercent } from "@/lib/stockLoadProgress";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 type Props = {
   ticker: string;
 };
-
-type NdjsonLine =
-  | { type: "progress"; payload: StockAnalysisLoadProgress }
-  | { type: "done"; bundle: StockAnalysisBundle | null; error: string | null };
 
 export function StockAnalysisPageClient({ ticker }: Props) {
   const { status: sessionStatus } = useSession();
@@ -44,72 +38,41 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       };
       const sym = ticker.trim();
       if (!sym) {
+        setBundle(null);
+        setError(null);
         setLoading(false);
         setLoadProgress(null);
         return;
       }
       setLoading(true);
+      setBundle(null);
       setError(null);
       setLoadProgress({ event: null, percent: 4, connecting: true });
       void (async () => {
         try {
           const qs = `ticker=${encodeURIComponent(sym)}${forceRefresh ? "&refresh=1" : ""}&stream=1`;
-          const res = await fetch(`/api/stock-analysis?${qs}`, { signal: ac.signal });
-
-          if (!res.ok) {
-            const data = (await res.json()) as { bundle?: unknown; error?: string | null };
-            if (cancelled) return;
-            setBundle(null);
-            setError(data.error ?? `HTTP ${res.status}`);
-            setLoadProgress(null);
-            return;
-          }
-
-          const reader = res.body?.getReader();
-          if (!reader) {
-            if (!cancelled) setError("Could not load stock data.");
-            setLoadProgress(null);
-            return;
-          }
-
-          const decoder = new TextDecoder();
-          let buffer = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              let msg: NdjsonLine;
-              try {
-                msg = JSON.parse(line) as NdjsonLine;
-              } catch {
-                continue;
-              }
-              if (msg.type === "progress") {
-                if (cancelled) continue;
-                setLoadProgress({
-                  event: msg.payload,
-                  percent: stockLoadProgressPercent(msg.payload),
-                  connecting: false,
-                });
-              }
-              if (msg.type === "done") {
-                if (cancelled) continue;
-                setBundle(msg.bundle);
-                setError(msg.error);
-                setLoadProgress(null);
-                if (msg.bundle?.quote.symbol) {
-                  pushRecentStockSearch(msg.bundle.quote.symbol, msg.bundle.quote.name);
-                }
-              }
-            }
+          const result = await fetchStockAnalysisStream(`/api/stock-analysis?${qs}`, {
+            signal: ac.signal,
+            onProgress: (payload) => {
+              if (cancelled) return;
+              setLoadProgress({
+                event: payload,
+                percent: stockLoadProgressPercent(payload),
+                connecting: false,
+              });
+            },
+          });
+          if (cancelled) return;
+          setBundle(result.bundle);
+          setError(result.error);
+          setLoadProgress(null);
+          if (result.bundle) {
+            pushRecentStockSearch(result.bundle.quote.symbol, result.bundle.quote.name);
           }
         } catch (e) {
-          if (cancelled || (e instanceof DOMException && e.name === "AbortError")) return;
-          if (!cancelled) setError("Could not load stock data.");
+          if (cancelled) return;
+          setBundle(null);
+          setError(e instanceof Error ? e.message : "Could not load stock data.");
           setLoadProgress(null);
         } finally {
           if (!cancelled) setLoading(false);
@@ -120,8 +83,13 @@ export function StockAnalysisPageClient({ ticker }: Props) {
   );
 
   useEffect(() => {
-    fetchData(false);
-    return () => { cancelRef.current?.(); };
+    let active = true;
+    // StrictMode immediately cleans up its first effect; avoid starting that discarded request.
+    queueMicrotask(() => { if (active) fetchData(false); });
+    return () => {
+      active = false;
+      cancelRef.current?.();
+    };
   }, [fetchData]);
 
   const handleForceRefresh = useCallback(() => fetchData(true), [fetchData]);

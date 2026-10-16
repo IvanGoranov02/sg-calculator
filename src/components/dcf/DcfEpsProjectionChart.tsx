@@ -48,8 +48,8 @@ export function DcfEpsProjectionChart({ points, horizonYears, currency = "USD" }
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            interval={0}
-            minTickGap={0}
+            interval="preserveStartEnd"
+            minTickGap={12}
           />
           <YAxis
             tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}

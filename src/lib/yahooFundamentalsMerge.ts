@@ -143,19 +143,20 @@ function filterRowsSincePeriod1<T extends { date: Date }>(rows: T[], period1: st
   });
 }
 
-export async function fetchYahooFundamentalsPayload(symbol: string): Promise<YahooFundamentalsPayload | null> {
+export async function fetchYahooFundamentalsPayload(symbol: string, signal?: AbortSignal): Promise<YahooFundamentalsPayload | null> {
   const sym = symbol.trim().toUpperCase();
   const period2 = new Date().toISOString().slice(0, 10);
   const period1 = fundamentalsPeriod1Iso();
 
   try {
+    const options = signal ? { fetchOptions: { signal } } : undefined;
     const settled = await Promise.allSettled([
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "financials" }),
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "financials" }),
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "cash-flow" }),
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "cash-flow" }),
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "balance-sheet" }),
-      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "balance-sheet" }),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "financials" }, options),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "financials" }, options),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "cash-flow" }, options),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "cash-flow" }, options),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "annual", module: "balance-sheet" }, options),
+      yahooFinance.fundamentalsTimeSeries(sym, { period1, period2, type: "quarterly", module: "balance-sheet" }, options),
     ]);
     const rows = settled.map((r) => (r.status === "fulfilled" ? r.value : []));
     if (settled.every((r) => r.status === "rejected")) return null;
@@ -380,14 +381,27 @@ export function applyYahooFundamentalsToBundle(
     };
   });
 
+  const reportedDpsDates = new Set<string>();
   bundle.dividendQuarterly = bundle.dividendQuarterly.map((p) => {
     if (fillOnly && p.dividendPerShare != null) return p;
     const fin = exactOrNearestYahooQuarter(p.date.slice(0, 10), finQByDate, finQ) as Fin | null;
     if (!fin) return p;
     const dps = pickNum(fin.dividendPerShare);
     if (dps == null) return p;
+    reportedDpsDates.add(p.date.slice(0, 10));
     return { ...p, dividendPerShare: dps };
   });
+  if (reportedDpsDates.size > 0) {
+    const tagged = bundle as StockAnalysisBundle & {
+      __dividendListingDates?: string[];
+      __dividendQuarterlyCurrency?: string;
+      __dividendHistoryRefreshedAt?: string;
+    };
+    // These new values are reporting-currency fundamentals, not the listing cash previously overlaid.
+    tagged.__dividendListingDates = tagged.__dividendListingDates?.filter((date) => !reportedDpsDates.has(date.slice(0, 10)));
+    delete tagged.__dividendQuarterlyCurrency;
+    delete tagged.__dividendHistoryRefreshedAt;
+  }
 }
 
 export async function enrichBundleFundamentalsFromYahoo(bundle: StockAnalysisBundle): Promise<void> {

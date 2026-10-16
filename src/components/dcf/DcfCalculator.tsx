@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  computeEpsModel,
+  tryComputeEpsModel,
   EPS_MODEL_HORIZON_YEARS,
   seedPeMultiple,
   validateEpsModelInputs,
@@ -185,7 +185,7 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
 
   const result = useMemo(() => {
     if (validationError) return null;
-    return computeEpsModel({
+    return tryComputeEpsModel({
       ttmEps,
       growthRate: pctToDecimal(growthPct),
       peMultiple,
@@ -272,13 +272,13 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
           ) : (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
+                <div className="min-w-0 rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t("dcf.returnFromToday")}
                   </p>
                   <p
                     className={cn(
-                      "mt-1 font-mono text-3xl font-semibold tabular-nums sm:text-4xl",
+                      "mt-1 break-all font-mono text-3xl font-semibold tabular-nums sm:text-4xl",
                       result.annualizedReturnFromPrice != null && result.annualizedReturnFromPrice >= 0
                         ? "text-emerald-400"
                         : "text-red-400",
@@ -296,13 +296,13 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
                     </p>
                   )}
                 </div>
-                <div className="rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
+                <div className="min-w-0 rounded-xl border border-border/80 bg-muted/30 px-4 py-4">
                   <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     {t("dcf.entryForReturn", {
                       pct: Number.isFinite(desiredReturnPct) ? desiredReturnPct : "—",
                     })}
                   </p>
-                  <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
+                  <p className="mt-1 break-all font-mono text-3xl font-semibold tabular-nums text-foreground sm:text-4xl">
                     {result.entryPriceForDesiredReturn != null
                       ? formatCurrency(result.entryPriceForDesiredReturn, currency)
                       : "—"}

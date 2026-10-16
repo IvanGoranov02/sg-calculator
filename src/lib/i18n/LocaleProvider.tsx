@@ -16,38 +16,14 @@ import {
   interpolate,
   LOCALE_STORAGE_KEY,
 } from "@/lib/i18n/messages";
+import { createBrowserPreference } from "@/lib/preferences/browserPreference";
 
-const LOCALE_EVENT = "sg-locale-changed";
-
-function readLocale(): AppLocale {
-  if (typeof window === "undefined") return "en";
-  const v = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return v === "bg" ? "bg" : "en";
-}
-
-function subscribeLocale(onChange: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === LOCALE_STORAGE_KEY) onChange();
-  };
-  const onLocal = () => onChange();
-  window.addEventListener("storage", onStorage);
-  window.addEventListener(LOCALE_EVENT, onLocal);
-  return () => {
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener(LOCALE_EVENT, onLocal);
-  };
-}
-
-function getLocaleSnapshot(): AppLocale {
-  return readLocale();
-}
-
-function persistLocale(locale: AppLocale): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-  window.dispatchEvent(new Event(LOCALE_EVENT));
-}
+const localePreference = createBrowserPreference<AppLocale>({
+  storageKey: LOCALE_STORAGE_KEY,
+  eventName: "sg-locale-changed",
+  defaultValue: "en",
+  values: ["en", "bg"],
+});
 
 type I18nContextValue = {
   locale: AppLocale;
@@ -58,7 +34,7 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, () => "en" as AppLocale);
+  const locale = useSyncExternalStore(localePreference.subscribe, localePreference.read, () => "en" as AppLocale);
 
   useEffect(() => {
     document.documentElement.lang = locale === "bg" ? "bg" : "en";
@@ -67,7 +43,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const setLocale = useCallback((next: AppLocale) => {
-    persistLocale(next);
+    localePreference.write(next);
   }, []);
 
   const t = useCallback(

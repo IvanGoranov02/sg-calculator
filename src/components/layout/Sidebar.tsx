@@ -65,6 +65,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           onClick={() => onNavigate?.()}
           className={cn("flex min-w-0 items-center gap-1.5 font-semibold tracking-tight", collapsed && "justify-center")}
           title={t("nav.brand")}
+          aria-label={t("nav.brand")}
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
             SP
@@ -118,6 +119,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
               key={href}
               href={href}
               title={label}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
               onClick={() => onNavigate?.()}
               className={cn(
                 "flex min-h-9 items-center rounded-lg py-2 text-xs font-medium transition-colors",
@@ -136,6 +139,8 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           <Link
             href="/admin/cache"
             title={t("admin.link")}
+            aria-label={t("admin.link")}
+            aria-current={pathname.startsWith("/admin") ? "page" : undefined}
             onClick={() => onNavigate?.()}
             className={cn(
               "mt-1 flex min-h-9 items-center rounded-lg py-2 text-xs font-medium text-amber-400/90 transition-colors hover:bg-amber-500/10 hover:text-amber-300",

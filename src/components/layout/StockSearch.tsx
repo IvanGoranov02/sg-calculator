@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
@@ -12,7 +12,7 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 import { resolveStockSearchQuery, suggestCompanies, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
-import usCompanies from "@/data/usCompanies.json";
+import { INSTANT_COMPANIES, loadStockCompanyIndex } from "@/lib/stockCompanyIndex";
 
 type SearchTarget = "stock" | "dcf" | "dividend";
 
@@ -51,23 +51,6 @@ type StockSearchProps = {
 
 type CompanyEntry = SearchCompany;
 
-const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
-
-/**
- * Full company index (~6k SEC filers) is lazy-loaded from /public on first use so
- * it never bloats the shared JS bundle. Until it arrives the bundled top-500
- * gives instant results. Cached at module scope across remounts.
- */
-let fullCompaniesPromise: Promise<CompanyEntry[]> | null = null;
-function loadFullCompanies(): Promise<CompanyEntry[]> {
-  if (!fullCompaniesPromise) {
-    fullCompaniesPromise = fetch("/us-companies.json")
-      .then((r) => (r.ok ? (r.json() as Promise<CompanyEntry[]>) : INSTANT_COMPANIES))
-      .catch(() => INSTANT_COMPANIES);
-  }
-  return fullCompaniesPromise;
-}
-
 function StockSearch({ target, compact }: StockSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -89,17 +72,19 @@ function StockSearch({ target, compact }: StockSearchProps) {
   const [highlighted, setHighlighted] = useState(-1);
   const [companies, setCompanies] = useState<CompanyEntry[]>(INSTANT_COMPANIES);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
-  // Pull in the full ~6k company index once (cached); falls back to the bundled set.
+  // The bundled index handles the first keystroke; download the full index on use.
   useEffect(() => {
+    if (!open) return;
     let active = true;
-    void loadFullCompanies().then((list) => {
+    void loadStockCompanyIndex().then((list) => {
       if (active && list.length > INSTANT_COMPANIES.length) setCompanies(list);
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [open]);
 
   // "/" focuses the ticker search from anywhere (unless already typing somewhere).
   useEffect(() => {
@@ -107,6 +92,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      if (el?.closest('[role="dialog"]')) return;
       e.preventDefault();
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -120,6 +106,12 @@ function StockSearch({ target, compact }: StockSearchProps) {
     [query, companies],
   );
   const suggestions = open ? suggestionPool : [];
+
+  useEffect(() => {
+    if (open && highlighted >= 0) {
+      document.getElementById(`${listId}-${highlighted}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlighted, listId, open]);
 
   function go(rawSym: string) {
     const sym = rawSym.trim().toUpperCase();
@@ -164,7 +156,22 @@ function StockSearch({ target, compact }: StockSearchProps) {
     : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
 
   return (
-    <form onSubmit={onSubmit} className={formClass}>
+    <form
+      onSubmit={onSubmit}
+      className={formClass}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+          setHighlighted(-1);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          setOpen(false);
+          setHighlighted(-1);
+        }
+      }}
+    >
       <div className={`flex min-w-0 flex-1 items-center gap-1.5 ${compact ? "h-7 lg:h-8" : "h-8 lg:h-9 lg:gap-2"}`}>
         <Search
           className={`shrink-0 text-muted-foreground ${compact ? "size-3.5 lg:size-4" : "size-4"}`}
@@ -181,27 +188,20 @@ function StockSearch({ target, compact }: StockSearchProps) {
             setHighlighted(-1);
           }}
           onFocus={() => setOpen(true)}
-          onBlur={() => {
-            // Delay so suggestion onMouseDown can run before the list unmounts.
-            setTimeout(() => {
-              setOpen(false);
-              setHighlighted(-1);
-            }, 100);
-          }}
           onKeyDown={(e) => {
-            if (suggestions.length === 0) return;
+            if (suggestionPool.length === 0) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
-              setHighlighted((h) => (h + 1) % suggestions.length);
+              setOpen(true);
+              setHighlighted((h) => (h + 1) % suggestionPool.length);
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
-              setHighlighted((h) => (h <= 0 ? suggestions.length - 1 : h - 1));
-            } else if (e.key === "Escape") {
-              setOpen(false);
-              setHighlighted(-1);
+              setOpen(true);
+              setHighlighted((h) => (h <= 0 ? suggestionPool.length - 1 : h - 1));
             }
           }}
           placeholder={t("search.placeholder")}
+          aria-label={t("search.placeholder")}
           className={`border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 ${
             compact ? "h-7 text-sm lg:h-8 lg:text-sm" : "h-8 text-base lg:h-9 lg:text-sm"
           }`}
@@ -211,6 +211,8 @@ function StockSearch({ target, compact }: StockSearchProps) {
           role="combobox"
           aria-expanded={open && suggestions.length > 0}
           aria-autocomplete="list"
+          aria-controls={open && suggestions.length > 0 ? listId : undefined}
+          aria-activedescendant={open && highlighted >= 0 && highlighted < suggestions.length ? `${listId}-${highlighted}` : undefined}
         />
       </div>
       <Button
@@ -229,11 +231,13 @@ function StockSearch({ target, compact }: StockSearchProps) {
       </Button>
       {open && suggestions.length > 0 ? (
         <ul
+          id={listId}
           role="listbox"
+          aria-label={t("search.placeholder")}
           className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38vh,10.5rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-0.5 shadow-lg backdrop-blur-sm lg:max-h-60 lg:py-1"
         >
           {suggestions.map((c, i) => (
-            <li key={c.s} role="option" aria-selected={i === highlighted} className="flex items-center gap-1 pr-2">
+            <li key={c.s} id={`${listId}-${i}`} role="option" aria-selected={i === highlighted} className="flex items-center gap-1 pr-2">
               <button
                 type="button"
                 className={`flex min-w-0 flex-1 px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${

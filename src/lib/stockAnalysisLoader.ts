@@ -25,9 +25,11 @@ import {
   gapFillIsDue,
   markFundamentalsSource,
   markGapFillAttempt,
+  markYahooFundamentalsRefresh,
   readAdminEditedAt,
   readAdminOverlay,
   readFundamentalsSource,
+  yahooFundamentalsAreDue,
   type BuildCachePayloadOptions,
   type CachePayload,
   type FundamentalsSource,
@@ -66,6 +68,7 @@ export type LoadStockAnalysisOptions = LoadStockOptions & {
 type EnrichOptions = {
   onProgress?: (e: StockAnalysisLoadProgress) => void;
   runGapFill?: boolean;
+  skipYahooRefresh?: boolean;
   /** "fill-gaps" for EDGAR-sourced bundles (as-reported data wins over Yahoo). */
   mergeMode?: YahooMergeMode;
 };
@@ -109,19 +112,15 @@ async function enrichFundamentalsPipeline(
   bundle: StockAnalysisBundle,
   sym: string,
   yahooPayload: YahooFundamentalsPayload | null | undefined,
-  { onProgress, runGapFill = true, mergeMode = "prefer-yahoo" }: EnrichOptions,
+  { onProgress, runGapFill = true, skipYahooRefresh = false, mergeMode = "prefer-yahoo" }: EnrichOptions,
 ): Promise<void> {
-  onProgress?.({ kind: "yahoo_fundamentals" });
+  if (!skipYahooRefresh) onProgress?.({ kind: "yahoo_fundamentals" });
   const y0 = Date.now();
   const payload =
-    yahooPayload !== undefined
+    skipYahooRefresh ? null : yahooPayload !== undefined
       ? yahooPayload
-      : await withTimeoutFallback(
-          fetchYahooFundamentalsPayload(sym),
-          YAHOO_STEP_TIMEOUT_MS,
-          `yahoo fundamentals ${sym}`,
-          null,
-        );
+      : await fetchYahooWithDeadline(sym);
+  if (!skipYahooRefresh) markYahooFundamentalsRefresh(bundle, payload != null);
   if (payload) applyYahooFundamentalsToBundle(bundle, payload, mergeMode);
   logLoadStep(sym, "yahoo_fundamentals", y0, payload ? "ok" : "skip");
   sanitizeBundleDilutedShares(bundle);
@@ -153,23 +152,74 @@ async function enrichFundamentalsPipeline(
     markGapFillAttempt(bundle);
   }
   sanitizeBundleDilutedShares(bundle);
+  if (payload || runGapFill) {
+    // Changed quarters/DPS need a new listing-cash check even if the previous price refresh is recent.
+    delete (bundle as StockAnalysisBundle & { __dividendHistoryRefreshedAt?: string }).__dividendHistoryRefreshedAt;
+  }
 }
 
-async function persistStockCache(
+async function fetchYahooWithDeadline(sym: string): Promise<YahooFundamentalsPayload | null> {
+  const controller = new AbortController();
+  try {
+    return await withTimeoutFallback(
+      fetchYahooFundamentalsPayload(sym, controller.signal),
+      YAHOO_STEP_TIMEOUT_MS,
+      `yahoo fundamentals ${sym}`,
+      null,
+    );
+  } finally {
+    controller.abort();
+  }
+}
+
+type CacheReadVersion = {
+  updatedAt: Date;
+  lastFullFetchAt: string;
+  adminEditedAt: string | null;
+};
+
+function cacheReadVersion(row: { payload: unknown; updatedAt: Date } | null): CacheReadVersion | null {
+  if (!row) return null;
+  const payload = row.payload as Partial<CachePayload> | null;
+  return {
+    updatedAt: row.updatedAt,
+    lastFullFetchAt: payload?.__lastFullFetchAt ?? payload?.__adminEditedAt ?? row.updatedAt.toISOString(),
+    adminEditedAt: payload?.__adminEditedAt ?? null,
+  };
+}
+
+export async function persistStockCache(
   sym: string,
   bundle: StockAnalysisBundle,
   opts?: BuildCachePayloadOptions,
+  expectedVersion?: CacheReadVersion | null,
+  writesFreshReports = false,
 ): Promise<void> {
   const plain = buildCachePayload(bundle, opts);
   const t0 = Date.now();
   try {
-    await withRetry(
-      () =>
-        prisma.stockAnalysisCache.upsert({
-          where: { symbol: sym },
-          create: { symbol: sym, payload: plain },
-          update: { payload: plain },
-        }),
+    const persisted = await withRetry(
+      async () => {
+        if (expectedVersion) {
+          const updateVersion = (updatedAt: Date) => prisma.stockAnalysisCache.updateMany({
+            where: { symbol: sym, updatedAt },
+            data: { payload: plain },
+          });
+          const result = await updateVersion(expectedVersion.updatedAt);
+          if (result.count > 0 || !writesFreshReports) return result.count > 0;
+          const current = await prisma.stockAnalysisCache.findUnique({
+            where: { symbol: sym }, select: { payload: true, updatedAt: true },
+          });
+          const currentVersion = cacheReadVersion(current);
+          if (!currentVersion || currentVersion.lastFullFetchAt !== expectedVersion.lastFullFetchAt
+            || currentVersion.adminEditedAt !== expectedVersion.adminEditedAt) return false;
+          // A live-price write may have won while reports were fetched. Retry once, preserving new reports/admin edits.
+          return (await updateVersion(currentVersion.updatedAt)).count > 0;
+        }
+        // A concurrent load/admin may have created this symbol since the read. Never replace it.
+        await prisma.stockAnalysisCache.create({ data: { symbol: sym, payload: plain } });
+        return true;
+      },
       {
         attempts: PRISMA_CACHE_ATTEMPTS,
         timeoutMs: PRISMA_CACHE_TIMEOUT_MS,
@@ -178,7 +228,7 @@ async function persistStockCache(
         delayMs: 150,
       },
     );
-    logLoadStep(sym, "cache_write", t0);
+    logLoadStep(sym, "cache_write", t0, persisted ? undefined : "newer cache retained");
   } catch (e) {
     console.warn(
       `[stock-load] ${sym} cache write skipped:`,
@@ -196,12 +246,7 @@ async function fetchFreshFundamentals(
   sym: string,
   opts: LoadStockAnalysisOptions | undefined,
 ): Promise<{ bundle: StockAnalysisBundle; source: FundamentalsSource }> {
-  const yahooPromise = withTimeoutFallback(
-    fetchYahooFundamentalsPayload(sym),
-    YAHOO_STEP_TIMEOUT_MS,
-    `yahoo fundamentals ${sym}`,
-    null,
-  );
+  const yahooPromise = fetchYahooWithDeadline(sym);
   let source: FundamentalsSource = "gemini";
   let bundle: StockAnalysisBundle | null = null;
 
@@ -237,13 +282,27 @@ async function fetchFreshFundamentals(
 
 async function refreshLivePrices(bundle: StockAnalysisBundle, sym: string): Promise<void> {
   const t0 = Date.now();
-  await mutateWithinTimeout(
-    bundle,
-    enrichBundleWithYahooPrices,
-    YAHOO_STEP_TIMEOUT_MS,
-    `yahoo prices ${sym}`,
-  );
+  const controller = new AbortController();
+  try {
+    await mutateWithinTimeout(
+      bundle,
+      (working) => enrichBundleWithYahooPrices(working, controller.signal),
+      YAHOO_STEP_TIMEOUT_MS,
+      `yahoo prices ${sym}`,
+    );
+  } finally {
+    controller.abort();
+  }
   logLoadStep(sym, "yahoo_prices", t0);
+}
+
+async function reconcileDisplayCurrency(bundle: StockAnalysisBundle, sym: string): Promise<void> {
+  const controller = new AbortController();
+  try {
+    await mutateWithinTimeout(bundle, (working) => reconcileFundamentalsCurrency(working, controller.signal), 8_000, `fx reconcile ${sym}`);
+  } finally {
+    controller.abort();
+  }
 }
 
 /**
@@ -266,6 +325,7 @@ export async function loadStockAnalysis(
   try {
     const tCache = Date.now();
     const row = await readStockCache(sym);
+    const readVersion = cacheReadVersion(row);
     logLoadStep(sym, "cache_read", tCache, row ? "hit" : "miss");
     const cachedPayload = row ? (row.payload as CachePayload) : null;
     const adminEditedAt = readAdminEditedAt(cachedPayload);
@@ -306,8 +366,8 @@ export async function loadStockAnalysis(
         adminEditedAt,
         adminOverlay: overlay ?? undefined,
         lastFullFetchAt,
-      });
-      await mutateWithinTimeout(working, reconcileFundamentalsCurrency, 8_000, `fx reconcile ${sym}`);
+      }, readVersion, due && overlay != null);
+      await reconcileDisplayCurrency(working, sym);
       logLoadStep(sym, "total", loadStarted);
       return { bundle: working, error: null };
     }
@@ -323,29 +383,23 @@ export async function loadStockAnalysis(
       ) {
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
-        const yahooPromise = withTimeoutFallback(
-          fetchYahooFundamentalsPayload(sym),
-          YAHOO_STEP_TIMEOUT_MS,
-          `yahoo fundamentals ${sym}`,
-          null,
-        );
-        await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
-          onProgress: opts?.onProgress,
-          runGapFill: gapFillIsDue(cachedPayload),
-          mergeMode: readFundamentalsSource(cachedPayload) === "gemini" ? "prefer-yahoo" : "fill-gaps",
-        });
+        const refreshYahoo = yahooFundamentalsAreDue(cachedPayload);
+        const runGapFill = gapFillIsDue(cachedPayload);
+        if (refreshYahoo || runGapFill) {
+          await enrichFundamentalsPipeline(bundle, sym, undefined, {
+            onProgress: opts?.onProgress,
+            runGapFill,
+            skipYahooRefresh: !refreshYahoo,
+            mergeMode: readFundamentalsSource(cachedPayload) === "gemini" ? "prefer-yahoo" : "fill-gaps",
+          });
+        }
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await refreshLivePrices(bundle, sym);
         await persistStockCache(sym, bundle, {
           lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? row.updatedAt.toISOString(),
-        });
+        }, readVersion);
         // Persisted in native currency; convert to the quote currency for display.
-        await mutateWithinTimeout(
-          bundle,
-          reconcileFundamentalsCurrency,
-          8_000,
-          `fx reconcile ${sym}`,
-        );
+        await reconcileDisplayCurrency(bundle, sym);
         logLoadStep(sym, "total", loadStarted);
         return { bundle, error: null };
       }
@@ -354,13 +408,8 @@ export async function loadStockAnalysis(
     const { bundle } = await fetchFreshFundamentals(sym, opts);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await refreshLivePrices(bundle, sym);
-    await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
-    await mutateWithinTimeout(
-      bundle,
-      reconcileFundamentalsCurrency,
-      8_000,
-      `fx reconcile ${sym}`,
-    );
+    await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() }, readVersion, true);
+    await reconcileDisplayCurrency(bundle, sym);
     logLoadStep(sym, "total", loadStarted);
     return { bundle, error: null };
   } catch (e) {
