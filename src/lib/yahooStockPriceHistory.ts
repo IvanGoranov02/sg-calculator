@@ -10,6 +10,7 @@ import {
   dropStaleOpenWindowSum,
   overlayQuarterlyDividends,
 } from "@/lib/bundleCurrency";
+import { withTimeout } from "@/lib/asyncTimeout";
 import { resolveNextEarningsOrEstimate } from "@/lib/calendarEvents";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { dividendRateToMajorUnits, isPenceQuoteCurrency, quoteCurrencyMajor } from "@/lib/portfolioFx";
@@ -17,24 +18,42 @@ import type { HistoricalEodBar, StockAnalysisBundle, StockQuote } from "@/lib/st
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 const DAILY_HISTORY_START = "1990-01-01";
+export const DAILY_HISTORY_REFRESH_MS = 60 * 60 * 1000;
+const PRICE_REQUEST_TIMEOUT_MS = 6_000;
 
-async function resolveYahooSymbol(input: string): Promise<string> {
+/** Bound the complete Yahoo method (including its queue), then cancel any remaining HTTP work. */
+async function priceRequest<T>(
+  run: (options: { fetchOptions: { signal: AbortSignal } }) => Promise<T>,
+  label: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  try {
+    const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+    return await withTimeout(run({ fetchOptions: { signal: requestSignal } }), PRICE_REQUEST_TIMEOUT_MS, label);
+  } finally {
+    controller.abort();
+  }
+}
+
+async function resolveYahooSymbol(input: string, signal?: AbortSignal): Promise<{ symbol: string; quote: Record<string, unknown> }> {
   const trimmed = input.trim();
   const sym = trimmed.toUpperCase();
   if (!sym) throw new Error("Empty ticker.");
 
   try {
-    const quoteResult = await yahooFinance.quote(sym);
+    const quoteResult = await priceRequest((options) => yahooFinance.quote(sym, {}, options), `quote ${sym}`, signal);
     const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
     if (q && (q as { quoteType?: string }).quoteType !== "NONE") {
-      return String((q as { symbol?: string }).symbol ?? sym).toUpperCase();
+      return { symbol: String((q as { symbol?: string }).symbol ?? sym).toUpperCase(), quote: q as unknown as Record<string, unknown> };
     }
   } catch {
     // Quote timed out / failed — fall through to search before failing closed.
   }
 
   try {
-    const searchResult = await yahooFinance.search(trimmed, { quotesCount: 15 });
+    const searchResult = await priceRequest((options) => yahooFinance.search(trimmed, { quotesCount: 15 }, options), `resolve ${sym}`, signal);
     const hit = searchResult.quotes.find((row) => {
       if (typeof row !== "object" || row === null || !("symbol" in row)) return false;
       const r = row as { symbol?: string; quoteType?: string; isYahooFinance?: boolean };
@@ -45,7 +64,14 @@ async function resolveYahooSymbol(input: string): Promise<string> {
       );
     }) as { symbol: string } | undefined;
 
-    if (hit?.symbol) return hit.symbol.toUpperCase();
+    if (hit?.symbol) {
+      const symbol = hit.symbol.toUpperCase();
+      const quoteResult = await priceRequest((options) => yahooFinance.quote(symbol, {}, options), `quote ${symbol}`, signal);
+      const quote = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
+      if (quote && (quote as { quoteType?: string }).quoteType !== "NONE") {
+        return { symbol, quote: quote as unknown as Record<string, unknown> };
+      }
+    }
   } catch {
     /* search failed — fail closed below */
   }
@@ -133,31 +159,6 @@ function numField(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-type HistRow = {
-  date: Date;
-  close?: number;
-  high?: number;
-  low?: number;
-  volume?: number;
-};
-
-function mapHistoricalRows(histArr: HistRow[]): HistoricalEodBar[] {
-  return (histArr ?? [])
-    .filter((h) => h?.date && h.close !== undefined)
-    .map((h) => {
-      const d =
-        h.date instanceof Date ? h.date.toISOString().slice(0, 10) : String(h.date).slice(0, 10);
-      return {
-        date: d,
-        close: Number(h.close),
-        high: h.high !== undefined ? Number(h.high) : undefined,
-        low: h.low !== undefined ? Number(h.low) : undefined,
-        volume: h.volume !== undefined ? Number(h.volume) : undefined,
-      };
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
 function mapChartQuotesToBars(
   quotes: Array<{ date: Date; close?: number | null; high?: number | null; low?: number | null; volume?: number | null }>,
 ): HistoricalEodBar[] {
@@ -173,32 +174,27 @@ function mapChartQuotesToBars(
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-async function fetchDailyPriceBars(resolved: string, period2Str: string): Promise<HistoricalEodBar[]> {
-  const historicalResult = await yahooFinance
-    .historical(resolved, {
+async function fetchDailyPrices(resolved: string, period2: Date, signal?: AbortSignal): Promise<{ bars: HistoricalEodBar[]; dividends: Array<{ date: string; amount: number }> | null }> {
+  // historical() wraps this same endpoint; a second fallback request only repeats the failure.
+  const chartDaily = await priceRequest((options) => yahooFinance.chart(resolved, {
       period1: DAILY_HISTORY_START,
-      period2: period2Str,
-      interval: "1d",
-    })
-    .catch(() => [] as HistRow[]);
-
-  let bars = mapHistoricalRows(historicalResult as HistRow[]);
-  if (bars.length > 0) return bars;
-
-  const chartDaily = await yahooFinance
-    .chart(resolved, {
-      period1: DAILY_HISTORY_START,
-      period2: period2Str,
+      period2,
       interval: "1d",
       return: "array",
-    })
-    .catch(() => null);
-
+      events: "div",
+    }, options), `daily history ${resolved}`, signal).catch(() => null);
+  let bars: HistoricalEodBar[] = [];
   if (chartDaily && typeof chartDaily === "object" && "quotes" in chartDaily) {
     const quotes = (chartDaily as { quotes: Parameters<typeof mapChartQuotesToBars>[0] }).quotes;
     bars = mapChartQuotesToBars(quotes ?? []);
   }
-  return bars;
+  const dividendStart = new Date();
+  dividendStart.setFullYear(dividendStart.getFullYear() - 12);
+  return {
+    bars,
+    dividends: chartDaily == null ? null : extractYahooDividendEvents(chartDaily)
+      .filter((event) => event.date >= dividendStart.toISOString().slice(0, 10)),
+  };
 }
 
 /** Parse Yahoo chart `events.dividends` (array or timestamp-keyed object). */
@@ -219,36 +215,6 @@ function extractYahooDividendEvents(chartResult: unknown): Array<{ date: string;
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** `historical(..., { events: "dividends" })` — often fills gaps when chart events are empty. */
-function extractHistoricalDividendRows(rows: unknown): Array<{ date: string; amount: number }> {
-  if (!Array.isArray(rows)) return [];
-  const out: Array<{ date: string; amount: number }> = [];
-  for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
-    const r = row as { date?: Date; dividends?: unknown };
-    const d = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : null;
-    const amt = typeof r.dividends === "number" ? r.dividends : Number(r.dividends);
-    if (!d || !Number.isFinite(amt) || amt <= 0) continue;
-    out.push({ date: d, amount: amt });
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date));
-}
-
-/** Prefer chart ex-dates; add historical-only dates (some tickers omit chart events). */
-function mergeChartAndHistoricalDividends(
-  chart: Array<{ date: string; amount: number }>,
-  historical: Array<{ date: string; amount: number }>,
-): Array<{ date: string; amount: number }> {
-  const byDate = new Map<string, number>();
-  for (const x of chart) byDate.set(x.date, x.amount);
-  for (const x of historical) {
-    if (!byDate.has(x.date)) byDate.set(x.date, x.amount);
-  }
-  return [...byDate.entries()]
-    .map(([date, amount]) => ({ date, amount }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
 function needsYahooDpsBackfill(bundle: StockAnalysisBundle): boolean {
   const rows = bundle.dividendQuarterly;
   if (rows.length === 0) return false;
@@ -261,6 +227,10 @@ type DividendQuarterlyCurrencyBundle = StockAnalysisBundle & {
   __dividendQuarterlyCurrency?: string;
   /** Quarter-end dates whose DPS is listing cash (major units), not reporting currency. */
   __dividendListingDates?: string[];
+  /** Successful full daily chart refresh; quote/intraday requests stay live. */
+  __dailyHistoryRefreshedAt?: string;
+  /** Successful dividend-history check, including a valid empty non-payer result. */
+  __dividendHistoryRefreshedAt?: string;
 };
 
 type DividendMergeResult = { writtenDates: string[] };
@@ -271,39 +241,30 @@ type DividendMergeResult = { writtenDates: string[] };
  * `fill-gaps` only replaces null/0. `overwrite` replaces reporting-currency DPS
  * where the clamped window has cash, so a later FX pass can skip just those rows.
  */
-async function mergeYahooExDividendsIntoQuarterly(
-  bundle: StockAnalysisBundle,
+async function fetchYahooDividendEvents(
   resolvedYahooSymbol: string,
-  mode: "fill-gaps" | "overwrite" = "fill-gaps",
-): Promise<DividendMergeResult> {
-  if (mode === "fill-gaps" && !needsYahooDpsBackfill(bundle)) return { writtenDates: [] };
-
+  signal?: AbortSignal,
+): Promise<Array<{ date: string; amount: number }> | null> {
   const period2 = new Date();
   const period1 = new Date(period2);
   period1.setFullYear(period1.getFullYear() - 12);
 
-  const [chartResult, histRows] = await Promise.all([
-    yahooFinance
-      .chart(resolvedYahooSymbol, {
+  const chartResult = await priceRequest((options) => yahooFinance.chart(resolvedYahooSymbol, {
         period1,
         period2,
         interval: "1d",
         return: "array",
         events: "div",
-      })
-      .catch(() => null),
-    yahooFinance
-      .historical(resolvedYahooSymbol, {
-        period1,
-        period2,
-        events: "dividends",
-      })
-      .catch(() => []),
-  ]);
+      }, options), `dividend history ${resolvedYahooSymbol}`, signal).catch(() => null);
+  return chartResult == null ? null : extractYahooDividendEvents(chartResult);
+}
 
-  const fromChart = extractYahooDividendEvents(chartResult);
-  const fromHist = extractHistoricalDividendRows(histRows);
-  const divs = mergeChartAndHistoricalDividends(fromChart, fromHist);
+/** Apply fetched events only after the listing quote and currency have been validated. */
+function mergeYahooExDividendsIntoQuarterly(
+  bundle: StockAnalysisBundle,
+  divs: Array<{ date: string; amount: number }>,
+  mode: "fill-gaps" | "overwrite",
+): DividendMergeResult {
   if (divs.length === 0) return { writtenDates: [] };
 
   const tagged = bundle as DividendQuarterlyCurrencyBundle;
@@ -323,39 +284,49 @@ async function mergeYahooExDividendsIntoQuarterly(
   return { writtenDates: applied.listingDates };
 }
 
+function checkedRecently(timestamp: string | undefined, now: number): boolean {
+  if (!timestamp) return false;
+  const age = now - Date.parse(timestamp);
+  return Number.isFinite(age) && age >= 0 && age < DAILY_HISTORY_REFRESH_MS;
+}
+
 /**
  * Overwrites {@link StockAnalysisBundle.quote}, {@link StockAnalysisBundle.historical}, and
  * {@link StockAnalysisBundle.intraday} from Yahoo; may fill {@link StockAnalysisBundle.dividendQuarterly}
  * from Yahoo ex-dividend history when Gemini left gaps. No-op if Yahoo fails (keeps Gemini/cache values).
  */
-export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): Promise<void> {
+export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle, signal?: AbortSignal): Promise<void> {
   const inputSym = bundle.quote.symbol.trim().toUpperCase() || "AAPL";
   // Ensure cached/Gemini past dates never surface even if Yahoo is unavailable.
   sanitizeQuoteEarningsDate(bundle.quote);
 
   try {
-    const resolved = await resolveYahooSymbol(inputSym);
+    const resolution = await resolveYahooSymbol(inputSym, signal);
+    const resolved = resolution.symbol;
+    const rawQuote = resolution.quote;
+    if (!Number.isFinite(Number(rawQuote.regularMarketPrice)) || Number(rawQuote.regularMarketPrice) <= 0) return;
     const period2 = new Date();
     const period2Str = period2.toISOString().slice(0, 10);
     const intradayPeriod1 = new Date(period2);
     intradayPeriod1.setDate(intradayPeriod1.getDate() - 7);
 
     const existingHistLen = bundle.historical?.length ?? 0;
+    const tagged = bundle as DividendQuarterlyCurrencyBundle;
+    const reuseDailyHistory = existingHistLen > 1
+      && bundle.historical.every((bar) => Number.isFinite(bar.close) && bar.close > 0)
+      && checkedRecently(tagged.__dailyHistoryRefreshedAt, period2.getTime());
 
-    const [quoteResult, dailyBars, chartIntraday, quoteSummaryResult, fxQuote, gapFillDividends] =
+    const [dailyResult, chartIntraday, quoteSummaryResult, fxQuote] =
       await Promise.all([
-        yahooFinance.quote(resolved).catch(() => null),
-        fetchDailyPriceBars(resolved, period2Str),
-        yahooFinance
-          .chart(resolved, {
+        reuseDailyHistory ? Promise.resolve({ bars: [] as HistoricalEodBar[], dividends: null }) : fetchDailyPrices(resolved, period2, signal),
+        priceRequest((options) => yahooFinance.chart(resolved, {
             period1: intradayPeriod1,
             period2: period2,
             interval: "5m",
             return: "array",
-          })
+          }, options), `intraday ${resolved}`, signal)
           .catch(() => null),
-        yahooFinance
-          .quoteSummary(resolved, {
+        priceRequest((options) => yahooFinance.quoteSummary(resolved, {
             modules: [
               "calendarEvents",
               "summaryDetail",
@@ -363,33 +334,22 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
               "defaultKeyStatistics",
               "price",
             ],
-          })
+          }, options), `quote summary ${resolved}`, signal)
           .catch(() => null),
-        yahooFinance.quote("EURUSD=X").catch(() => null),
-        mergeYahooExDividendsIntoQuarterly(bundle, resolved, "fill-gaps").catch(() => ({
-          writtenDates: [] as string[],
-        })),
+        priceRequest((options) => yahooFinance.quote("EURUSD=X", {}, options), "EUR/USD", signal).catch(() => null),
       ]);
-
-    const q = Array.isArray(quoteResult) ? quoteResult[0] : quoteResult;
-    const quoteValid = q && (q as { quoteType?: string }).quoteType !== "NONE";
+    signal?.throwIfAborted();
+    const dailyBars = dailyResult.bars;
 
     if (dailyBars.length > 0) {
       bundle.historical = dailyBars;
-    } else if (existingHistLen <= 1 && quoteValid) {
-      const rawQuote = q as Record<string, unknown>;
+    } else if (existingHistLen <= 1) {
       const px = Number(rawQuote.regularMarketPrice ?? 0);
       if (px > 0) {
         bundle.historical = [{ date: period2Str, close: px }];
       }
     }
 
-    if (!quoteValid) {
-      sanitizeQuoteEarningsDate(bundle.quote);
-      return;
-    }
-
-    const rawQuote = q as Record<string, unknown>;
     const qs =
       quoteSummaryResult && typeof quoteSummaryResult === "object"
         ? (quoteSummaryResult as Record<string, unknown>)
@@ -405,18 +365,19 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
     const quoteRaw = bundle.investor?.currency ?? "";
     const finCcy = quoteCurrencyMajor(finRaw);
     const quoteCcy = quoteCurrencyMajor(quoteRaw);
-    const tagged = bundle as DividendQuarterlyCurrencyBundle;
     if (finCcy.code) tagged.__financialCurrency = finCcy.code;
 
-    const writtenNow = new Set(gapFillDividends.writtenDates.map((d) => d.slice(0, 10)));
-    if (finCcy.code && quoteCcy.code && finCcy.code !== quoteCcy.code) {
-      const overwritten = await mergeYahooExDividendsIntoQuarterly(
-        bundle,
-        resolved,
-        "overwrite",
-      ).catch(() => ({ writtenDates: [] as string[] }));
-      for (const d of overwritten.writtenDates) writtenNow.add(d.slice(0, 10));
+    const overwriteDividends = tagged.__financialCurrency && quoteCcy.code && tagged.__financialCurrency !== quoteCcy.code;
+    const dividendsNeeded = bundle.dividendQuarterly.length > 0 && (overwriteDividends || needsYahooDpsBackfill(bundle));
+    let dividendEvents = dailyResult.dividends;
+    if (dividendsNeeded && dividendEvents == null && !checkedRecently(tagged.__dividendHistoryRefreshedAt, period2.getTime())) {
+      dividendEvents = await fetchYahooDividendEvents(resolved, signal);
     }
+    const applied = dividendsNeeded && dividendEvents != null
+      ? mergeYahooExDividendsIntoQuarterly(bundle, dividendEvents, overwriteDividends ? "overwrite" : "fill-gaps")
+      : { writtenDates: [] as string[] };
+    const writtenNow = new Set(applied.writtenDates.map((date) => date.slice(0, 10)));
+    if (dividendEvents != null) tagged.__dividendHistoryRefreshedAt = new Date().toISOString();
 
     if (isPenceQuoteCurrency(quoteRaw)) {
       // Chart ex-div cash is pence. Annual dividendRate is usually already pounds.
@@ -469,6 +430,7 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
       }
     }
     bundle.eurPerUsd = eurPerUsd;
+    if (dailyBars.length > 0) tagged.__dailyHistoryRefreshedAt = new Date().toISOString();
   } catch {
     // Keep Gemini/cache OHLCV and quote if Yahoo is unavailable.
   }
@@ -481,13 +443,13 @@ export async function enrichBundleWithYahooPrices(bundle: StockAnalysisBundle): 
  * valuation are all consistent. Display-only: call AFTER persisting the
  * native-currency bundle. Mutates `bundle`.
  */
-export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle): Promise<void> {
+export async function reconcileFundamentalsCurrency(bundle: StockAnalysisBundle, signal?: AbortSignal): Promise<void> {
   const tagged = bundle as DividendQuarterlyCurrencyBundle;
   const fin = quoteCurrencyMajor(tagged.__financialCurrency);
   const quote = quoteCurrencyMajor(bundle.investor?.currency);
   if (!fin.code || !quote.code || fin.code === quote.code) return;
   try {
-    const fx = await yahooFinance.quote(`${fin.code}${quote.code}=X`);
+    const fx = await priceRequest((options) => yahooFinance.quote(`${fin.code}${quote.code}=X`, {}, options), `report FX ${fin.code}/${quote.code}`, signal);
     const f = Array.isArray(fx) ? fx[0] : fx;
     const rate = Number((f as { regularMarketPrice?: unknown })?.regularMarketPrice);
     if (!Number.isFinite(rate) || rate <= 0) return;

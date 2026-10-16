@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import {
   computeDividendGrowth,
+  buildDividendGrowthChartRows,
   dividendYieldFromDps,
   MAX_HOLDING_YEARS,
   type DividendGrowthInputs,
@@ -103,14 +104,14 @@ function BreakdownRow({
   accent?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2.5 last:border-0">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border/60 py-2.5 last:border-0">
       <div className="flex items-center gap-2">
         {accent ? <span className="size-2.5 shrink-0 rounded-full" style={{ background: accent }} /> : null}
         <span className="text-sm text-muted-foreground">{label}</span>
       </div>
-      <div className="flex items-baseline gap-3 text-right">
-        <span className="font-mono text-sm tabular-nums text-foreground">{value}</span>
-        <span className="w-10 font-mono text-xs tabular-nums text-muted-foreground">{pct}</span>
+      <div className="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-3 text-right">
+        <span className="break-all font-mono text-sm tabular-nums text-foreground">{value}</span>
+        <span className="w-10 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{pct}</span>
       </div>
     </div>
   );
@@ -118,7 +119,7 @@ function BreakdownRow({
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="border-border bg-card">
+    <Card className="min-w-0 border-border bg-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
@@ -160,6 +161,18 @@ export function DividendCalculator({ seed }: Props) {
   const [priceGrowthPct, setPriceGrowthPct] = useState(7);
   const [dividendGrowthPct, setDividendGrowthPct] = useState(seed?.suggestedGrowthPct ?? Number.NaN);
 
+  // A refreshed page can deliver a seed after an earlier fetch failed while
+  // preserving this client component. Keep the user's non-seeded assumptions.
+  const seedKey = JSON.stringify([seed?.symbol, seed?.currentPrice,
+    seed?.dividendYield, seed?.annualDividendPerShare, seed?.suggestedGrowthPct]);
+  const [syncedSeedKey, setSyncedSeedKey] = useState(seedKey);
+  if (seedKey !== syncedSeedKey) {
+    setSyncedSeedKey(seedKey);
+    setPrice(seed?.currentPrice ?? Number.NaN);
+    setYieldPct(defaultYieldPct);
+    setDividendGrowthPct(seed?.suggestedGrowthPct ?? Number.NaN);
+  }
+
   const result = useMemo(() => {
     const input: DividendGrowthInputs = {
       sharePrice: price,
@@ -174,21 +187,7 @@ export function DividendCalculator({ seed }: Props) {
     return computeDividendGrowth(input);
   }, [price, shares, years, yieldPct, annualContribution, dividendGrowthPct, priceGrowthPct, reinvest]);
 
-  const chartData = useMemo(() => {
-    if (!result) return [];
-    const { principal } = result;
-    return result.rows.map((r) => ({
-      year: r.year,
-      annualIncome: Math.round(r.annualIncome),
-      monthlyIncome: Math.round(r.monthlyIncome),
-      cumulativeIncome: Math.round(r.cumulativeIncome),
-      portfolioValue: Math.round(r.portfolioValue),
-      principal: Math.round(principal),
-      contributions: Math.round(r.cumulativeContributions),
-      dividends: Math.round(r.cumulativeIncome),
-      growth: Math.round(r.cumulativeGrowth),
-    }));
-  }, [result]);
+  const chartData = useMemo(() => buildDividendGrowthChartRows(result), [result]);
 
   const yearTableRows = result?.rows ?? [];
   const mid = Math.ceil(yearTableRows.length / 2);
@@ -204,6 +203,15 @@ export function DividendCalculator({ seed }: Props) {
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dividendCalc.title")}
         </h1>
+        {seed ? (
+          <p className="mt-1 break-words text-sm text-muted-foreground">
+            {t("dividendCalc.seedLine", {
+              symbol: seed.symbol,
+              name: seed.name,
+              price: formatCurrency(seed.currentPrice),
+            })}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
@@ -293,6 +301,7 @@ export function DividendCalculator({ seed }: Props) {
               value={priceGrowthPct}
               onChange={setPriceGrowthPct}
               step="0.1"
+              min={-100}
               suffix="%"
             />
             <NumberField
@@ -302,7 +311,7 @@ export function DividendCalculator({ seed }: Props) {
               value={dividendGrowthPct}
               onChange={setDividendGrowthPct}
               step="0.1"
-              min={-50}
+              min={-100}
               suffix="%"
             />
           </CardContent>
@@ -322,7 +331,7 @@ export function DividendCalculator({ seed }: Props) {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {t("dividendCalc.estimatedReturn")}
                   </p>
-                  <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-emerald-400">
+                  <p className="mt-1 break-all font-mono text-3xl font-semibold tabular-nums text-emerald-400">
                     {formatCurrency(result.estimatedDividendReturn)}
                   </p>
                 </div>
@@ -358,8 +367,8 @@ export function DividendCalculator({ seed }: Props) {
 
                 <div>
                   <p className="mb-3 text-sm font-medium text-foreground">{t("dividendCalc.incomeTableTitle")}</p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {[yearColA, yearColB].map((col, colIdx) => (
+                  <div className={cn("grid gap-4", yearColB.length > 0 && "sm:grid-cols-2")}>
+                    {[yearColA, yearColB].filter((col) => col.length > 0).map((col, colIdx) => (
                       <Table key={colIdx}>
                         <TableHeader>
                           <TableRow className="border-border hover:bg-transparent">
@@ -496,10 +505,10 @@ export function DividendCalculator({ seed }: Props) {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="principal" stackId="stack" fill={CHART_COLORS.principal} stroke={CHART_COLORS.principal} />
-                <Area type="monotone" dataKey="contributions" stackId="stack" fill={CHART_COLORS.contributions} stroke={CHART_COLORS.contributions} />
-                <Area type="monotone" dataKey="dividends" stackId="stack" fill={CHART_COLORS.dividends} stroke={CHART_COLORS.dividends} />
-                <Area type="monotone" dataKey="growth" stackId="stack" fill={CHART_COLORS.growth} stroke={CHART_COLORS.growth} />
+                <Area type="monotone" dataKey="principal" name={t("dividendCalc.breakdownPrincipal")} stackId="stack" fill={CHART_COLORS.principal} stroke={CHART_COLORS.principal} />
+                <Area type="monotone" dataKey="contributions" name={t("dividendCalc.breakdownContributions")} stackId="stack" fill={CHART_COLORS.contributions} stroke={CHART_COLORS.contributions} />
+                <Area type="monotone" dataKey="dividends" name={t("dividendCalc.breakdownDividends")} stackId="stack" fill={CHART_COLORS.dividends} stroke={CHART_COLORS.dividends} />
+                <Area type="monotone" dataKey="growth" name={t("dividendCalc.breakdownGrowth")} stackId="stack" fill={CHART_COLORS.growth} stroke={CHART_COLORS.growth} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartCard>

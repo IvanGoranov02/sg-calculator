@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   computeDividendGrowth,
+  buildDividendGrowthChartRows,
   dividendYieldFromDps,
   MAX_HOLDING_YEARS,
   SHARESIGHT_BENCHMARK_EXPECTED,
@@ -26,8 +27,22 @@ function near(actual: number, expected: number, tol = 1e-6): void {
 }
 
 describe("computeDividendGrowth", () => {
-  it("matches Sharesight public calculator benchmark", () => {
+  it("matches independently calculated DPS growth and pre-appreciation contributions", () => {
     const r = computeDividendGrowth(SHARESIGHT_BENCHMARK_INPUTS)!;
+    // Independent closed form: shares at the beginning of year t are initial
+    // shares + sum(contribution / price_k) for earlier years. Annual DPS grows
+    // independently of price; all contributions appreciate from their buy date.
+    const { sharePrice, shares, annualContribution, dividendYield, dividendGrowthRate, priceGrowthRate, years } = SHARESIGHT_BENCHMARK_INPUTS;
+    let expectedDividends = 0;
+    let expectedEndValue = sharePrice * shares * (1 + priceGrowthRate) ** years;
+    for (let year = 1; year <= years; year++) {
+      const priorContributions = Array.from({ length: year - 1 }, (_, k) => annualContribution / (sharePrice * (1 + priceGrowthRate) ** k));
+      expectedDividends += (shares + priorContributions.reduce((sum, qty) => sum + qty, 0)) * sharePrice * dividendYield * (1 + dividendGrowthRate) ** (year - 1);
+      expectedEndValue += annualContribution * (1 + priceGrowthRate) ** (years - year + 1);
+    }
+    near(r.totalIncome, expectedDividends);
+    near(r.finalPortfolioValue, expectedEndValue);
+    near(r.breakdown.growth, expectedEndValue - r.principal - annualContribution * years);
     near(r.estimatedDividendReturn, SHARESIGHT_BENCHMARK_EXPECTED.dividends, 0.02);
     near(r.breakdown.growth, SHARESIGHT_BENCHMARK_EXPECTED.growth, 0.02);
     near(r.rows[0].monthlyIncome, SHARESIGHT_BENCHMARK_EXPECTED.year1Monthly, 0.02);
@@ -48,10 +63,29 @@ describe("computeDividendGrowth", () => {
     assert.equal(r.finalShares, 100);
   });
 
-  it("grows yield after each year (year-2 DPS reflects prior growth)", () => {
+  it("grows DPS after each year", () => {
     const r = computeDividendGrowth(base)!;
     near(r.rows[1].dividendPerShare, 1.1);
     near(r.rows[2].dividendPerShare, 1.21);
+  });
+
+  it("grows DPS independently of share-price appreciation", () => {
+    const r = computeDividendGrowth({ ...base, sharePrice: 100, shares: 1, dividendYield: 0.05, dividendGrowthRate: 0.05, priceGrowthRate: 0.1 })!;
+    near(r.rows[0].dividendPerShare, 5);
+    near(r.rows[1].dividendPerShare, 5.25);
+    near(r.rows[2].dividendPerShare, 5.5125);
+    const unchanged = computeDividendGrowth({ ...base, dividendGrowthRate: 0, priceGrowthRate: 0.1 })!;
+    near(unchanged.rows[2].dividendPerShare, unchanged.rows[0].dividendPerShare);
+  });
+
+  it("keeps the return breakdown consistent with stock value and dividends paid out", () => {
+    for (const reinvest of [false, true]) {
+      const r = computeDividendGrowth({ ...base, annualContribution: 500, priceGrowthRate: 0.1, reinvest })!;
+      near(r.breakdown.totalPortfolioValue, r.finalPortfolioValue + (reinvest ? 0 : r.totalIncome));
+    }
+    const oneYear = computeDividendGrowth({ ...base, sharePrice: 100, shares: 1, years: 1, dividendYield: 0, annualContribution: 100, priceGrowthRate: 0.1 })!;
+    near(oneYear.finalPortfolioValue, 220);
+    near(oneYear.breakdown.growth, 20);
   });
 
   it("computes yield on cost against the original principal", () => {
@@ -89,6 +123,18 @@ describe("computeDividendGrowth", () => {
     assert.equal(computeDividendGrowth({ ...base, sharePrice: 0 }), null);
     assert.equal(computeDividendGrowth({ ...base, years: 0 }), null);
     assert.equal(computeDividendGrowth({ ...base, dividendYield: NaN }), null);
+    assert.equal(computeDividendGrowth({ ...base, priceGrowthRate: -1 }), null);
+    assert.equal(computeDividendGrowth({ ...base, priceGrowthRate: -2 }), null);
+    assert.equal(computeDividendGrowth({ ...base, dividendGrowthRate: -2 }), null);
+    assert.equal(computeDividendGrowth({ ...base, sharePrice: 1e308, shares: 100 }), null);
+    assert.equal(computeDividendGrowth({ ...base, dividendGrowthRate: 1e100, years: 40 }), null);
+  });
+
+  it("allows declining prices and a complete dividend cut without negative cash flows", () => {
+    const r = computeDividendGrowth({ ...base, dividendGrowthRate: -1, priceGrowthRate: -0.5 })!;
+    near(r.rows[0].annualIncome, 100);
+    near(r.rows[1].annualIncome, 0);
+    assert.ok(r.finalPortfolioValue >= 0);
   });
 
   it(`clamps the horizon to ${MAX_HOLDING_YEARS} years`, () => {
@@ -100,6 +146,17 @@ describe("computeDividendGrowth", () => {
     const r = computeDividendGrowth({ ...base, dividendYield: 0 })!;
     assert.equal(r.finalAnnualIncome, 0);
     assert.equal(r.totalIncome, 0);
+  });
+});
+
+describe("buildDividendGrowthChartRows", () => {
+  it("retains fractional monthly cash instead of turning a small portfolio's income into zero", () => {
+    const result = computeDividendGrowth({ ...base, shares: 0.1, dividendYield: 0.084 })!;
+    const rows = buildDividendGrowthChartRows(result);
+    near(rows[0].annualIncome, 0.42);
+    near(rows[0].monthlyIncome, 0.035);
+    assert.equal(rows[0].portfolioValue, result.rows[0].portfolioValue);
+    assert.deepEqual(buildDividendGrowthChartRows(null), []);
   });
 });
 

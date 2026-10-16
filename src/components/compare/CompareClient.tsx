@@ -9,29 +9,22 @@ import { CompareMetricTables } from "@/components/compare/CompareMetricTables";
 import { CompareTickerSlot } from "@/components/compare/CompareTickerSlot";
 import {
   assignCompareSlot,
+  parseCompareSlots,
+  parseCompareSymbols,
   serializeCompareSlots,
   slotAlignedRows,
   twelveMonthLead,
   type CompareSlots,
 } from "@/lib/compareMetrics";
-import usCompanies from "@/data/usCompanies.json";
+import { INSTANT_COMPANIES, loadStockCompanyIndex } from "@/lib/stockCompanyIndex";
 import { formatPercent } from "@/lib/format";
 import type { CompareRow } from "@/lib/yahooCompare";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import type { SearchCompany } from "@/lib/stockSearch";
+import { fetchWithTimeout, withTimeout } from "@/lib/asyncTimeout";
 
 type CompanyEntry = SearchCompany;
-const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
-
-let fullCompaniesPromise: Promise<CompanyEntry[]> | null = null;
-function loadFullCompanies(): Promise<CompanyEntry[]> {
-  if (!fullCompaniesPromise) {
-    fullCompaniesPromise = fetch("/us-companies.json")
-      .then((r) => (r.ok ? (r.json() as Promise<CompanyEntry[]>) : INSTANT_COMPANIES))
-      .catch(() => INSTANT_COMPANIES);
-  }
-  return fullCompaniesPromise;
-}
+const fetchComparison = fetchWithTimeout(25_000);
 
 function syncCompareUrl(slots: CompareSlots) {
   if (typeof window === "undefined") return;
@@ -51,12 +44,16 @@ export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) 
   const [companies, setCompanies] = useState<CompanyEntry[]>(INSTANT_COMPANIES);
 
   const fetchKey = useMemo(() => serializeCompareSlots(slots), [slots]);
-  const symbols = useMemo(() => slots.filter((s): s is string => s != null), [slots]);
 
   useEffect(() => {
     let active = true;
-    void loadFullCompanies().then((list) => {
-      if (active && list.length > INSTANT_COMPANIES.length) setCompanies(list);
+    queueMicrotask(() => {
+      if (!active) return;
+      void withTimeout(loadStockCompanyIndex(), 15_000, "Company index")
+        .catch(() => INSTANT_COMPANIES)
+        .then((list) => {
+          if (active && list.length > INSTANT_COMPANIES.length) setCompanies(list);
+        });
     });
     return () => {
       active = false;
@@ -65,7 +62,9 @@ export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) 
 
   useEffect(() => {
     let cancelled = false;
-    syncCompareUrl(slots);
+    const controller = new AbortController();
+    const symbols = parseCompareSymbols(fetchKey);
+    syncCompareUrl(parseCompareSlots(fetchKey));
 
     async function load() {
       if (symbols.length === 0) {
@@ -77,30 +76,35 @@ export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) 
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/compare?symbols=${encodeURIComponent(fetchKey)}`, {
+        const res = await fetchComparison(`/api/compare?symbols=${encodeURIComponent(fetchKey)}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const data = (await res.json()) as { rows?: CompareRow[]; error?: string };
         if (cancelled) return;
         if (!res.ok) {
-          setError(data.error ?? t("compare.error"));
+          setError("load");
           setRows([]);
           return;
         }
         const bySym = new Map((data.rows ?? []).map((r) => [r.symbol.toUpperCase(), r]));
         setRows(symbols.map((s) => bySym.get(s)).filter((r): r is CompareRow => r != null));
       } catch {
-        if (!cancelled) setError(t("compare.error"));
+        if (!cancelled) {
+          setError("load");
+          setRows([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    void load();
+    queueMicrotask(() => { if (!cancelled) void load(); });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [fetchKey, symbols, slots, t]);
+  }, [fetchKey]);
 
   function setSlot(index: 0 | 1, ticker: string) {
     setSlots((prev) => assignCompareSlot(prev, index, ticker));
@@ -164,7 +168,7 @@ export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) 
           className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           role="alert"
         >
-          {error}
+          {error === "load" ? t("compare.error") : error}
         </p>
       ) : null}
 

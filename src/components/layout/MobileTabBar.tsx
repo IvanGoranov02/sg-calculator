@@ -3,11 +3,17 @@
 import { Briefcase, LayoutDashboard, LineChart, ListPlus, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Ref } from "react";
 
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
-type Props = { onMore: () => void };
+type Props = {
+  onMore: () => void;
+  moreButtonRef?: Ref<HTMLButtonElement>;
+  moreExpanded?: boolean;
+  moreControls?: string;
+};
 
 const TABS = [
   { href: "/dashboard", labelKey: "mobileNav.home", icon: LayoutDashboard, match: (p: string) => p === "/dashboard" },
@@ -17,7 +23,7 @@ const TABS = [
 ] as const;
 
 /** Thumb-reachable primary navigation on phones; "More" opens the full drawer. */
-export function MobileTabBar({ onMore }: Props) {
+export function MobileTabBar({ onMore, moreButtonRef, moreExpanded, moreControls }: Props) {
   const { t } = useI18n();
   const pathname = usePathname();
 
@@ -33,6 +39,7 @@ export function MobileTabBar({ onMore }: Props) {
             <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors",
                 active ? "text-emerald-400" : "text-muted-foreground hover:text-foreground",
@@ -45,7 +52,11 @@ export function MobileTabBar({ onMore }: Props) {
         })}
         <button
           type="button"
+          ref={moreButtonRef}
           onClick={onMore}
+          aria-haspopup="dialog"
+          aria-expanded={moreExpanded}
+          aria-controls={moreExpanded ? moreControls : undefined}
           className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <MoreHorizontal className="size-5" aria-hidden />

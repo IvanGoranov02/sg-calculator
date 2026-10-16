@@ -210,6 +210,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     stockNews: {
       title: "Latest news · {symbol}",
       subtitle: "Recent headlines.",
+      error: "Could not load news.",
     },
     valuation: {
       title: "Valuation",
@@ -820,7 +821,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       priceGrowthHint: "Expected yearly share price increase (often 6–8%).",
       resultTitle: "Estimated dividend return",
       resultDisclaimer: "Illustrative only; not investment advice.",
-      needInputs: "Enter a positive stock price and number of stocks.",
+      needInputs: "Check all inputs and growth assumptions to calculate a projection.",
       estimatedReturn: "Estimated dividend return",
       breakdownDividends: "Dividends",
       breakdownContributions: "Contributions",
@@ -1164,6 +1165,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     stockNews: {
       title: "Последни новини · {symbol}",
       subtitle: "Последни заглавия.",
+      error: "Неуспешно зареждане на новините.",
     },
     valuation: {
       title: "Оценка на стойността",
@@ -1774,7 +1776,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       priceGrowthHint: "Очаквано годишно покачване на цената (често 6–8%).",
       resultTitle: "Очаквана дивидентна възвращаемост",
       resultDisclaimer: "Само илюстративно; не е инвестиционен съвет.",
-      needInputs: "Въведи положителна цена и брой акции.",
+      needInputs: "Провери всички стойности и допускания за растеж, за да изчислиш прогнозата.",
       estimatedReturn: "Очаквана дивидентна възвращаемост",
       breakdownDividends: "Дивиденти",
       breakdownContributions: "Вноски",
@@ -1947,6 +1949,10 @@ export function translateStockError(t: TFn, message: string): string {
   if (m === INVALID_TICKER_SYMBOL_MESSAGE) return t("errors.invalidTickerSymbol");
   if (m === "Empty ticker.") return t("errors.emptyTicker");
   if (m === "Could not load stock data.") return t("errors.loadFailed");
+  if (/^(?:Invalid stock data response|Stock data response has no readable body|Stock data connection ended before loading finished|Stock data request failed)/.test(m)) {
+    return t("errors.loadFailed");
+  }
+  if (/^Stock data request timed out/.test(m)) return t("errors.upstreamBusy");
   const longForm =
     /^Ticker "([^"]+)" was not found\. Use a Yahoo symbol \(e\.g\. NVDA for NVIDIA\)\.$/.exec(m);
   if (longForm) return t("errors.tickerNotFound", { sym: longForm[1] });
