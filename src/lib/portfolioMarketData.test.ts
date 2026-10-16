@@ -1,8 +1,9 @@
+import YahooFinance from "yahoo-finance2";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { estimateHoldingAnnualDividend } from "@/lib/portfolioDividends";
-import { mergeBrokerQuote, rawQuoteToRow, trailing365DividendSum, type PortfolioQuoteRow } from "@/lib/portfolioMarketData";
+import { fetchPortfolioQuotesForHoldings, mergeBrokerQuote, rawQuoteToRow, trailing365DividendSum, type PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 
 describe("portfolio quotes for pence listings", () => {
   it("keeps an annual dividend already quoted in pounds when estimating portfolio income", () => {
@@ -152,4 +153,36 @@ describe("trailing 365-day cash dividends", () => {
       assert.equal(trailing365DividendSum(chart, "USD", now), 0);
     }
   });
+});
+
+it("bounds candidate concurrency, preserves preference order, and makes dividend charts optional", async (t) => {
+  let active = 0;
+  let peak = 0;
+  const symbols: string[] = [];
+  t.mock.method(YahooFinance.prototype, "quote", async (symbol: string) => {
+    symbols.push(symbol);
+    active++;
+    peak = Math.max(peak, active);
+    // Reverse completion order within the initial batch.
+    await new Promise((resolve) => setTimeout(resolve, symbol === "TEST-EQ" ? 15 : 1));
+    active--;
+    return { symbol, quoteType: "EQUITY", regularMarketPrice: 100, currency: "USD", dividendRate: 1 };
+  });
+  t.mock.method(YahooFinance.prototype, "quoteSummary", async () => null);
+  const chart = t.mock.method(YahooFinance.prototype, "chart", async () => ({
+    meta: { currency: "USD" },
+    events: { dividends: [{ date: new Date(), amount: 3 }] },
+  }));
+  const holdings = [{ symbolYahoo: "TEST-EQ", symbolT212: null, currency: "USD" }];
+  const skipped = await fetchPortfolioQuotesForHoldings(holdings, { includeDividends: false });
+  assert.equal(peak, 3);
+  assert.ok(symbols.length > 3);
+  assert.equal(skipped["TEST-EQ"]?.resolvedYahooSymbol, "TEST-EQ");
+  assert.equal(skipped["TEST-EQ"]?.dividendRate, 1);
+  assert.equal(chart.mock.callCount(), 0);
+  const enriched = await fetchPortfolioQuotesForHoldings(holdings);
+  assert.equal(enriched["TEST-EQ"]?.resolvedYahooSymbol, "TEST-EQ");
+  assert.equal(enriched["TEST-EQ"]?.dividendRate, 3);
+  assert.equal(enriched["TEST-EQ"]?.dividendCurrency, "USD");
+  assert.equal(chart.mock.callCount(), 1);
 });
