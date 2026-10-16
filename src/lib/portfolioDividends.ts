@@ -172,6 +172,8 @@ export function buildHoldingMonthlyTimeline(
 
 type UpcomingDividendQuote = {
   currency?: string | null;
+  dividendCurrency?: string | null;
+  lastDividendCurrency?: string | null;
   price?: number | null;
   dividendYield?: number | null;
   dividendRate?: number | null;
@@ -529,6 +531,13 @@ function listingDividendMatch(perShare: number, annual: number): { gap: number; 
 
 /** Annual dividend in the listing currency: price × yield, else Yahoo dividendRate. */
 function quoteAnnualDividend(quote: UpcomingDividendQuote): number | null {
+  // A broker price may use wallet currency while annual and latest cash remain
+  // in the original Yahoo units. Use their shared rate before price × yield.
+  if (quote.dividendCurrency && quote.dividendCurrency !== quote.currency) {
+    const rate = quote.dividendRate;
+    if (rate != null && rate > 0 && Number.isFinite(rate)) return rate;
+    return null;
+  }
   const price = quote.price;
   const yieldDec = quote.dividendYield;
   if (price != null && price > 0 && yieldDec != null && yieldDec > 0) {
@@ -554,8 +563,9 @@ export function resolveUpcomingDividendCurrency(
   symbol: string,
   perShare: number,
   quote: UpcomingDividendQuote,
-  _fx: PortfolioFxRates,
+  _fx?: PortfolioFxRates,
 ): string {
+  if (quote.lastDividendCurrency) return normalizePortfolioCurrency(quote.lastDividendCurrency);
   const quoteCcy = normalizePortfolioCurrency(quote.currency);
   if (!isUsSourceDividendSymbol(symbol) || quoteCcy === "USD" || !(perShare > 0)) return quoteCcy;
 
@@ -596,7 +606,7 @@ function upcomingCashFromQuote(
   quote: UpcomingDividendQuote,
   fx: PortfolioFxRates,
 ): { amount: number; currency: string } | null {
-  const dividendCurrency = resolveUpcomingDividendCurrency(symbol, perShare, quote, fx);
+  const dividendCurrency = resolveUpcomingDividendCurrency(symbol, perShare, quote);
   return cashFromPerShare(
     perShare * upcomingDividendNetFactor(symbol),
     quantity,
@@ -978,6 +988,7 @@ export function estimateHoldingAnnualDividend(
   if (!Number.isFinite(qQty) || qQty <= 0) return null;
   const holdingCcy = normalizePortfolioCurrency(holding.currency);
   const quoteCcy = quote ? normalizePortfolioCurrency(quote.currency) : holdingCcy;
+  const dividendCcy = quote ? normalizePortfolioCurrency(quote.dividendCurrency ?? quote.currency) : holdingCcy;
   const hasValidQuote = quote != null && Number.isFinite(quote.price) && quote.price > 0;
   const priceInHolding =
     hasValidQuote && quote ? convertPortfolioMoney(quote.price, quoteCcy, holdingCcy, fx) : null;
@@ -988,7 +999,7 @@ export function estimateHoldingAnnualDividend(
   let estAnnual: number | null = null;
   if (hasValidQuote && quote) {
     if (quote.dividendRate != null && Number.isFinite(quote.dividendRate)) {
-      const rateInHolding = convertPortfolioMoney(quote.dividendRate, quoteCcy, holdingCcy, fx);
+      const rateInHolding = convertPortfolioMoney(quote.dividendRate, dividendCcy, holdingCcy, fx);
       if (rateInHolding != null) {
         dividendPerShare = rateInHolding;
         estAnnual = rateInHolding * qQty;

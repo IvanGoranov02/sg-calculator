@@ -8,7 +8,7 @@ import YahooFinance from "yahoo-finance2";
 
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { normalizeYahooDividendYieldToDecimal } from "@/lib/format";
-import { normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency } from "@/lib/portfolioFx";
+import { dividendRateToMajorUnits, normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency } from "@/lib/portfolioFx";
 import {
   buildBlockedYahooSymbols,
   isBlockedYahooSymbol,
@@ -18,7 +18,7 @@ import {
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
 import { extractDividendPayDate, extractExDividendDate } from "@/lib/calendarEvents";
-import { exDividendDatesFromYahooChart } from "@/lib/portfolioDividends";
+import { exDividendDatesFromYahooChart, resolveUpcomingDividendCurrency } from "@/lib/portfolioDividends";
 import {
   parseT212Ticker,
   t212QuoteCurrency,
@@ -39,6 +39,8 @@ export type PortfolioQuoteRow = {
   currency: string;
   dividendYield: number | null;
   dividendRate: number | null;
+  /** Currency of the annual dividend rate, independent of a broker-overridden price. */
+  dividendCurrency?: string;
   changePercent: number;
   /** 200-day moving average from Yahoo, when available. */
   twoHundredDayAverage: number | null;
@@ -50,8 +52,10 @@ export type PortfolioQuoteRow = {
   exDividendDate?: string | null;
   /** Next dividend pay date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
   dividendPayDate?: string | null;
-  /** Latest cash dividend per share in quote currency (major units, not pence). */
+  /** Latest cash dividend per share (major units, not pence). */
   lastDividendPerShare?: number | null;
+  /** Currency of the latest cash dividend when resolved before a broker price override. */
+  lastDividendCurrency?: string;
   /** Date tied to `lastDividendPerShare` (ISO yyyy-mm-dd), when Yahoo publishes one. */
   lastDividendDate?: string | null;
   /** GICS-style sector from Yahoo assetProfile, when available. */
@@ -200,7 +204,7 @@ function buildOrderedCandidates(
   return out;
 }
 
-function rawQuoteToRow(
+export function rawQuoteToRow(
   portfolioKey: string,
   resolvedYahoo: string,
   raw: Record<string, unknown>,
@@ -211,7 +215,8 @@ function rawQuoteToRow(
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
 
   const metrics = mapInvestorMetrics(raw, qs);
-  const normalized = normalizeQuotePrice(rawPrice, metrics.currency);
+  const rawCurrency = typeof raw.currency === "string" ? raw.currency : metrics.currency;
+  const normalized = normalizeQuotePrice(rawPrice, rawCurrency);
   const price = normalized.price;
   const currency = normalized.currency;
 
@@ -219,18 +224,15 @@ function rawQuoteToRow(
   const yieldDec = normalizeYahooDividendYieldToDecimal(metrics.dividendYield);
   const smaRaw = metrics.twoHundredDayAverage;
   const sma =
-    smaRaw != null && isPenceQuoteCurrency(metrics.currency) ? smaRaw / 100 : smaRaw;
+    smaRaw != null && isPenceQuoteCurrency(rawCurrency) ? smaRaw / 100 : smaRaw;
   const dipVsSma200Pct =
     sma != null && sma !== 0 && Number.isFinite(price) ? ((price - sma) / sma) * 100 : null;
 
-  let dividendRate = metrics.dividendRate;
-  if (dividendRate != null && isPenceQuoteCurrency(metrics.currency)) {
-    dividendRate = dividendRate / 100;
-  }
+  const dividendRate = dividendRateToMajorUnits(metrics.dividendRate, rawPrice, rawCurrency);
 
   const lastDividend = readLastDividend(raw, qs);
   let lastDividendPerShare = lastDividend.perShare;
-  if (lastDividendPerShare != null && isPenceQuoteCurrency(metrics.currency)) {
+  if (lastDividendPerShare != null && isPenceQuoteCurrency(rawCurrency)) {
     lastDividendPerShare = lastDividendPerShare / 100;
   }
 
@@ -244,6 +246,7 @@ function rawQuoteToRow(
     currency,
     dividendYield: yieldDec,
     dividendRate,
+    dividendCurrency: currency,
     changePercent: Number.isFinite(pct) ? pct : 0,
     twoHundredDayAverage: sma,
     dipVsSma200Pct,
@@ -347,7 +350,7 @@ async function searchFallbackQuote(
   }
 }
 
-function mergeBrokerQuote(
+export function mergeBrokerQuote(
   portfolioSymbol: string,
   best: QuoteRowWithType | null,
   broker: { price: number; currency: string },
@@ -367,6 +370,7 @@ function mergeBrokerQuote(
     currency: brokerCcy,
     dividendYield: best?.dividendYield ?? null,
     dividendRate: best?.dividendRate ?? null,
+    dividendCurrency: best ? best.dividendCurrency ?? best.currency : undefined,
     changePercent: 0,
     twoHundredDayAverage: dip.twoHundredDayAverage,
     dipVsSma200Pct: dip.dipVsSma200Pct,
@@ -374,6 +378,9 @@ function mergeBrokerQuote(
     exDividendDate: best?.exDividendDate ?? null,
     dividendPayDate: best?.dividendPayDate ?? null,
     lastDividendPerShare: best?.lastDividendPerShare ?? null,
+    lastDividendCurrency: best?.lastDividendPerShare != null
+      ? resolveUpcomingDividendCurrency(best.resolvedYahooSymbol ?? portfolioSymbol, best.lastDividendPerShare, best)
+      : undefined,
     lastDividendDate: best?.lastDividendDate ?? null,
     sector: best?.sector ?? null,
     fromBroker: true,
@@ -486,7 +493,59 @@ export async function fetchPortfolioQuotesForHoldings(
     }),
   );
 
+  await enrichTrailingDividends(out);
   return out;
+}
+
+/** Sum positive cash events in the trailing 365 days, expressed in major currency units. */
+export function trailing365DividendSum(chartResult: unknown, currency: string, now: Date): number {
+  const events = (chartResult as { events?: { dividends?: unknown } } | null)?.events?.dividends;
+  if (!events || typeof events !== "object") return 0;
+  const cutoff = now.getTime() - 365 * 86_400_000;
+  let sum = 0;
+  for (const event of Object.values(events)) {
+    if (!event || typeof event !== "object") continue;
+    const { date, amount } = event as { date?: unknown; amount?: unknown };
+    const time = date instanceof Date ? date.getTime()
+      : typeof date === "number" ? (date < 1e12 ? date * 1000 : date)
+      : typeof date === "string" ? Date.parse(date) : NaN;
+    if (time >= cutoff && time <= now.getTime() && typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
+      sum += amount;
+    }
+  }
+  return isPenceQuoteCurrency(currency) ? sum / 100 : sum;
+}
+
+/** Also enrich broker-merged rows, retaining the Yahoo listing's dividend currency. */
+async function enrichTrailingDividends(rows: Record<string, PortfolioQuoteRow | null>): Promise<void> {
+  const now = new Date();
+  const symbols = [...new Set(Object.values(rows).flatMap((row) => row?.resolvedYahooSymbol ? [row.resolvedYahooSymbol] : []))];
+  await Promise.all(symbols.map(async (symbol) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const chart = await Promise.race([
+        yahooFinance.chart(symbol, {
+          period1: new Date(now.getTime() - 400 * 86_400_000),
+          period2: now, interval: "1d", return: "array", events: "div",
+        }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Dividend chart timeout")), 8000); }),
+      ]);
+      for (const row of Object.values(rows)) {
+        if (!row || row.resolvedYahooSymbol !== symbol) continue;
+        const listingCurrency = chart.meta.currency ?? row.dividendCurrency ?? row.currency;
+        const sum = trailing365DividendSum(chart, listingCurrency, now);
+        if (sum > 0 && sum > (row.dividendRate ?? 0)) {
+          row.dividendRate = sum;
+          row.dividendCurrency = normalizePortfolioCurrency(listingCurrency);
+          if (row.currency === row.dividendCurrency && row.price > 0) row.dividendYield = sum / row.price;
+        }
+      }
+    } catch {
+      // Missing events or a failed chart must not discard a usable quote.
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }));
 }
 
 /** Past ex-dividend dates (Yahoo chart events) keyed by symbol. Empty when Yahoo has none. */

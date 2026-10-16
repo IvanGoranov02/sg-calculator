@@ -23,6 +23,14 @@ const EXTRA_USD_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ["AUD", "AUDUSD=X"],
   ["HKD", "HKDUSD=X"],
   ["JPY", "JPYUSD=X"],
+  ["SEK", "SEKUSD=X"],
+  ["NOK", "NOKUSD=X"],
+  ["DKK", "DKKUSD=X"],
+  ["PLN", "PLNUSD=X"],
+  ["ISK", "ISKUSD=X"],
+  ["NZD", "NZDUSD=X"],
+  ["CZK", "CZKUSD=X"],
+  ["HUF", "HUFUSD=X"],
 ];
 
 /** Fetch spot rates used to convert quote currency ↔ holding currency. */
