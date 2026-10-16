@@ -230,3 +230,14 @@ function mapStorage(items: Map<string, string>) {
     },
   };
 }
+
+it("ignores dividend totals cached before the currency fix after a hard refresh", () => {
+  const oldRecord = JSON.stringify({ userId: "u1", localDate: userLocalCalendarDay(), payload: payload() });
+  const items = new Map([["sg-portfolio-dividends-day-v1", oldRecord]]);
+  const storage = { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => { items.set(key, value); } };
+  assert.equal(readStoredPortfolioDividendsDayCache(storage, "u1"), null);
+  assert.equal(decidePortfolioDividendsLoad({
+    userId: "u1", reloadToken: 0, liveRefreshToken: 0, memory: null,
+    stored: readStoredPortfolioDividendsDayCache(storage, "u1"),
+  }).action, "fetch");
+});

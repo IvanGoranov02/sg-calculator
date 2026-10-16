@@ -11,7 +11,7 @@
  * Only the latest in-flight GET may write the cache back.
  */
 
-export const PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY = "sg-portfolio-dividends-day-v1";
+export const PORTFOLIO_DIVIDENDS_DAY_CACHE_KEY = "sg-portfolio-dividends-day-v2";
 
 export type PortfolioDividendsDayCacheRecord<T> = {
   userId: string;

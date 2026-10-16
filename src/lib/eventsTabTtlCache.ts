@@ -23,7 +23,7 @@ import type { PortfolioFxRates } from "@/lib/portfolioFx";
 import type { PortfolioQuoteRow } from "@/lib/portfolioMarketData";
 
 export const EVENTS_TAB_TTL_MS = 24 * 60 * 60 * 1000;
-export const EVENTS_TAB_TTL_CACHE_KEY = "sg-events-tab-ttl-v1";
+export const EVENTS_TAB_TTL_CACHE_KEY = "sg-events-tab-ttl-v2";
 
 export type EventsTabCachePayload = {
   portfolioSymbols: string[];

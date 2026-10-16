@@ -73,18 +73,34 @@ export function normalizeQuotePrice(
   return { price, currency: normalizePortfolioCurrency(currency) };
 }
 
+/** Listing currencies for the Yahoo exchanges supported by manual and broker holdings. */
+const YAHOO_EXCHANGE_CURRENCIES: Readonly<Record<string, string>> = {
+  ".L": "GBP",
+  ".DE": "EUR", ".F": "EUR", ".HA": "EUR", ".MU": "EUR", ".BE": "EUR",
+  ".DU": "EUR", ".HM": "EUR", ".XC": "EUR", ".XD": "EUR",
+  ".PA": "EUR", ".AS": "EUR", ".MI": "EUR", ".BR": "EUR", ".VI": "EUR",
+  ".HE": "EUR", ".MC": "EUR", ".LS": "EUR", ".IR": "EUR", ".AT": "EUR",
+  ".SW": "CHF", ".VX": "CHF",
+  ".TO": "CAD", ".V": "CAD",
+  ".ST": "SEK", ".OL": "NOK", ".CO": "DKK", ".WA": "PLN", ".IC": "ISK",
+  ".AX": "AUD", ".NZ": "NZD", ".HK": "HKD", ".T": "JPY",
+  ".PR": "CZK", ".BD": "HUF",
+};
+
+/** Null for an unknown exchange, so callers can retain an explicit currency fallback. */
+export function currencyForYahooSuffix(suffix: string | null | undefined): string | null {
+  return suffix ? YAHOO_EXCHANGE_CURRENCIES[suffix.trim().toUpperCase()] ?? null : null;
+}
+
 /** Guess listing currency from Yahoo-style suffix (manual entry without explicit currency). */
 export function inferCurrencyFromSymbol(symbol: string): string {
   const u = symbol.trim().toUpperCase();
-  if (/\.L$/.test(u)) return "GBP";
-  if (/\.(DE|PA|AS|MI|BR|VI|ST|OL|F|HA|HE|MU|BE|MC|SW|LS|IC|WA|CO|IR|TO|LS|MC|AT)$/.test(u)) {
-    return "EUR";
-  }
-  return "USD";
+  const dot = u.lastIndexOf(".");
+  return currencyForYahooSuffix(dot >= 0 ? u.slice(dot) : null) ?? "USD";
 }
 
 /**
- * Exchange suffix can hint EUR/GBP. A bare US ticker must not overwrite the
+ * Exchange suffix can hint a listing currency. A bare US ticker must not overwrite the
  * form's EUR default — that's how "added in euros, stored as dollars" happened.
  */
 export function listingCurrencyOverride(symbol: string): string | null {

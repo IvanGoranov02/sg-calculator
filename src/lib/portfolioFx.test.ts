@@ -89,3 +89,12 @@ describe("dividendRateToMajorUnits", () => {
     assert.equal(dividendRateToMajorUnits(2.1, 500, "USD"), 2.1);
   });
 });
+
+describe("European listing dividend currencies", () => {
+  it("distinguishes euro listings from other European currencies", () => {
+    for (const [symbol, currency] of Object.entries({
+      "SAP.DE": "EUR", "ASML.AS": "EUR", "VOD.L": "GBP", "NESN.SW": "CHF",
+      "VOLV.ST": "SEK", "EQNR.OL": "NOK", "NOVO.CO": "DKK", "PKN.WA": "PLN",
+    })) assert.equal(inferCurrencyFromSymbol(symbol), currency);
+  });
+});
