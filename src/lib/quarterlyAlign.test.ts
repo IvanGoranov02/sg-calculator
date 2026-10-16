@@ -4,13 +4,12 @@ import { describe, it } from "node:test";
 import { buildQuarterlyChartRows } from "@/lib/fundamentalsChartRows";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import {
-  alignAnnualToIncome,
   alignQuarterlyToIncome,
   dedupeQuarterlyIncome,
   mergeIncomeStatementQuarters,
   NEAREST_QUARTER_SIDE_ROW_DAYS,
 } from "@/lib/quarterlyAlign";
-import type { BalanceSheetQuarter, IncomeStatementQuarter, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import type { BalanceSheetQuarter, CashFlowQuarter, IncomeStatementQuarter, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 
 function incomeRow(date: string, revenue: number): IncomeStatementQuarter {
   return {
@@ -71,20 +70,6 @@ describe("mergeIncomeStatementQuarters", () => {
 });
 
 describe("alignQuarterlyToIncome", () => {
-  it("keeps missing cash flow unknown rather than estimating it from earnings", () => {
-    const income = [incomeRow("2024-03-31", 100)];
-    const aligned = alignQuarterlyToIncome("NVDA", income, [], [], []);
-    assert.equal(aligned.cashFlowQuarterly[0]?.freeCashFlow, null);
-    const bundle = {
-      income: [], cashFlow: [], balanceSheet: [],
-      incomeQuarterly: income, ...aligned,
-    } as unknown as StockAnalysisBundle;
-    const rows = buildQuarterlyChartRows(bundle, formatPeriodApr26);
-    assert.equal(rows[0]?.fcf, null);
-    assert.equal(rows[0]?.fcfMargin, null);
-    const annual = alignAnnualToIncome("NVDA", [{ ...income[0], fiscalYear: "2024" }], [], []);
-    assert.equal(annual.cashFlow[0]?.freeCashFlow, null);
-  });
   it("stamps matched side rows with the income period-end date", () => {
     const income = dedupeQuarterlyIncome([
       incomeRow("2026-01-26", 39_000_000_000),

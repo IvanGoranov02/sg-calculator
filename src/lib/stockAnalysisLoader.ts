@@ -6,7 +6,7 @@ import {
   backfillQuarterlyHistoryFromGemini,
   quarterlyHistoryIsThin,
 } from "@/lib/geminiQuarterlyBackfill";
-import { withRetry, mutateWithinTimeout, withTimeoutFallback } from "@/lib/asyncTimeout";
+import { withRetry, withTimeout, withTimeoutFallback } from "@/lib/asyncTimeout";
 import { prisma } from "@/lib/prisma";
 import { isTransientPrismaError } from "@/lib/prismaPool";
 import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
@@ -131,15 +131,14 @@ async function enrichFundamentalsPipeline(
     onProgress?.({ kind: "gemini_gap_fill" });
     const g0 = Date.now();
     try {
-      await mutateWithinTimeout(
-        bundle,
-        async (working) => {
-          if (mergeMode === "fill-gaps" && quarterlyHistoryIsThin(working)) {
-            await backfillQuarterlyHistoryFromGemini(working);
-            trimBundleToFundamentalsWindow(working);
+      await withTimeout(
+        (async () => {
+          if (mergeMode === "fill-gaps" && quarterlyHistoryIsThin(bundle)) {
+            await backfillQuarterlyHistoryFromGemini(bundle);
+            trimBundleToFundamentalsWindow(bundle);
           }
-          await fillBundleGapsFromGemini(working);
-        },
+          await fillBundleGapsFromGemini(bundle);
+        })(),
         GEMINI_GAP_FILL_BUDGET_MS,
         `gemini gap-fill ${sym}`,
       );
@@ -237,11 +236,11 @@ async function fetchFreshFundamentals(
 
 async function refreshLivePrices(bundle: StockAnalysisBundle, sym: string): Promise<void> {
   const t0 = Date.now();
-  await mutateWithinTimeout(
-    bundle,
-    enrichBundleWithYahooPrices,
+  await withTimeoutFallback(
+    enrichBundleWithYahooPrices(bundle),
     YAHOO_STEP_TIMEOUT_MS,
     `yahoo prices ${sym}`,
+    undefined,
   );
   logLoadStep(sym, "yahoo_prices", t0);
 }
@@ -292,22 +291,12 @@ export async function loadStockAnalysis(
 
       opts?.onProgress?.({ kind: "yahoo_prices" });
       await refreshLivePrices(working, sym);
-      if (overlay) {
-        const tagged = working as StockAnalysisBundle & {
-          __financialCurrency?: string;
-          __displayFundamentalsCurrency?: string;
-        };
-        const nativeCurrency = tagged.__financialCurrency;
-        applyAdminOverlay(working, overlay);
-        tagged.__financialCurrency = overlay.investor.financialCurrency ?? nativeCurrency ?? overlay.investor.currency;
-        tagged.__displayFundamentalsCurrency = tagged.__financialCurrency;
-      }
+      if (overlay) applyAdminOverlay(working, overlay);
       await persistStockCache(sym, working, {
         adminEditedAt,
         adminOverlay: overlay ?? undefined,
         lastFullFetchAt,
       });
-      await mutateWithinTimeout(working, reconcileFundamentalsCurrency, 8_000, `fx reconcile ${sym}`);
       logLoadStep(sym, "total", loadStarted);
       return { bundle: working, error: null };
     }
@@ -337,14 +326,14 @@ export async function loadStockAnalysis(
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await refreshLivePrices(bundle, sym);
         await persistStockCache(sym, bundle, {
-          lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? row.updatedAt.toISOString(),
+          lastFullFetchAt: cachedPayload.__lastFullFetchAt ?? undefined,
         });
         // Persisted in native currency; convert to the quote currency for display.
-        await mutateWithinTimeout(
-          bundle,
-          reconcileFundamentalsCurrency,
+        await withTimeoutFallback(
+          reconcileFundamentalsCurrency(bundle),
           8_000,
           `fx reconcile ${sym}`,
+          undefined,
         );
         logLoadStep(sym, "total", loadStarted);
         return { bundle, error: null };
@@ -355,11 +344,11 @@ export async function loadStockAnalysis(
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await refreshLivePrices(bundle, sym);
     await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
-    await mutateWithinTimeout(
-      bundle,
-      reconcileFundamentalsCurrency,
+    await withTimeoutFallback(
+      reconcileFundamentalsCurrency(bundle),
       8_000,
       `fx reconcile ${sym}`,
+      undefined,
     );
     logLoadStep(sym, "total", loadStarted);
     return { bundle, error: null };

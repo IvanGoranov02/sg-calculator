@@ -1,9 +1,10 @@
+import YahooFinance from "yahoo-finance2";
 import { NextResponse } from "next/server";
 
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
 import { WATCHLIST_MAX } from "@/lib/watchlistStorage";
 
-import { yahooFinance } from "@/lib/yahooFinanceClient";
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 function num(v: unknown): number | null {
   if (v === undefined || v === null) return null;
@@ -28,7 +29,6 @@ function mapQuoteRow(symbol: string, q: Record<string, unknown>): WatchlistQuote
   return {
     symbol: String(q.symbol ?? symbol).toUpperCase(),
     name: String(q.longName ?? q.shortName ?? symbol),
-    currency: typeof q.currency === "string" ? q.currency : "USD",
     price,
     change,
     changesPercentage: Number.isFinite(pct) ? pct : 0,

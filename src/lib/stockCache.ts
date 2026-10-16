@@ -12,7 +12,7 @@ import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysis
  * NOTE: admin-curated rows are protected independently of this version (see
  * readAdminEditedAt / cacheIsFresh) — hand-curated data is never auto-discarded.
  */
-export const CACHE_SCHEMA_VERSION = 11;
+export const CACHE_SCHEMA_VERSION = 10;
 
 /** Rolling window: auto-sourced fundamentals stay in DB this long before re-fetch. */
 export const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -127,10 +127,7 @@ export function cacheIsFresh(payload: CachePayload, updatedAt: Date): boolean {
   // only an explicit admin refresh or a new earnings report replaces them.
   if (payload.__adminEditedAt) return true;
   if ((payload.__cacheVersion ?? 0) < CACHE_SCHEMA_VERSION) return false;
-  // Price/gap-fill writes update the DB timestamp without refreshing source reports.
-  const fullFetchAt = payload.__lastFullFetchAt ? Date.parse(payload.__lastFullFetchAt) : NaN;
-  const anchor = Number.isFinite(fullFetchAt) ? fullFetchAt : updatedAt.getTime();
-  return Date.now() - anchor < CACHE_MAX_AGE_MS;
+  return Date.now() - updatedAt.getTime() < CACHE_MAX_AGE_MS;
 }
 
 /**

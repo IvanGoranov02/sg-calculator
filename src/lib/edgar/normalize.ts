@@ -493,7 +493,7 @@ export function bundleFromCompanyFacts(
     const freeCashFlow =
       operatingCashFlow != null && capitalExpenditure != null
         ? operatingCashFlow + capitalExpenditure
-        : null;
+        : (operatingCashFlow ?? 0);
     return {
       freeCashFlow,
       operatingCashFlow,

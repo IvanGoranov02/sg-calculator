@@ -4,11 +4,11 @@
  * Prefer T212 broker price only when Yahoo is missing, mismatched, or a trap.
  */
 
-import { withTimeout } from "@/lib/asyncTimeout";
-import { yahooFinance } from "@/lib/yahooFinanceClient";
+import YahooFinance from "yahoo-finance2";
+
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import { normalizeYahooDividendYieldToDecimal } from "@/lib/format";
-import { dividendRateToMajorUnits, normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency } from "@/lib/portfolioFx";
+import { normalizePortfolioCurrency, normalizeQuotePrice, isPenceQuoteCurrency } from "@/lib/portfolioFx";
 import {
   buildBlockedYahooSymbols,
   isBlockedYahooSymbol,
@@ -18,13 +18,17 @@ import {
   shouldPreferBrokerPrice,
 } from "@/lib/portfolioQuoteResolve";
 import { extractDividendPayDate, extractExDividendDate } from "@/lib/calendarEvents";
-import { exDividendDatesFromYahooChart, resolveUpcomingDividendCurrency } from "@/lib/portfolioDividends";
+import { exDividendDatesFromYahooChart } from "@/lib/portfolioDividends";
 import {
   parseT212Ticker,
   t212QuoteCurrency,
   t212TickerToYahooCandidates,
   germanListingYahooSymbols,
 } from "@/lib/t212Ticker";
+
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["ripHistorical", "yahooSurvey"],
+});
 
 export type PortfolioQuoteRow = {
   symbol: string;
@@ -35,8 +39,6 @@ export type PortfolioQuoteRow = {
   currency: string;
   dividendYield: number | null;
   dividendRate: number | null;
-  /** Currency of the annual dividend rate, independent of a broker-overridden price. */
-  dividendCurrency?: string;
   changePercent: number;
   /** 200-day moving average from Yahoo, when available. */
   twoHundredDayAverage: number | null;
@@ -48,10 +50,8 @@ export type PortfolioQuoteRow = {
   exDividendDate?: string | null;
   /** Next dividend pay date (ISO yyyy-mm-dd) from Yahoo calendar, when available. */
   dividendPayDate?: string | null;
-  /** Latest cash dividend per share (major units, not pence). */
+  /** Latest cash dividend per share in quote currency (major units, not pence). */
   lastDividendPerShare?: number | null;
-  /** Currency of the latest cash dividend when resolved before a broker price override. */
-  lastDividendCurrency?: string;
   /** Date tied to `lastDividendPerShare` (ISO yyyy-mm-dd), when Yahoo publishes one. */
   lastDividendDate?: string | null;
   /** GICS-style sector from Yahoo assetProfile, when available. */
@@ -200,7 +200,7 @@ function buildOrderedCandidates(
   return out;
 }
 
-export function rawQuoteToRow(
+function rawQuoteToRow(
   portfolioKey: string,
   resolvedYahoo: string,
   raw: Record<string, unknown>,
@@ -211,8 +211,7 @@ export function rawQuoteToRow(
   if (!Number.isFinite(rawPrice) || rawPrice <= 0) return null;
 
   const metrics = mapInvestorMetrics(raw, qs);
-  const rawCurrency = typeof raw.currency === "string" ? raw.currency : metrics.currency;
-  const normalized = normalizeQuotePrice(rawPrice, rawCurrency);
+  const normalized = normalizeQuotePrice(rawPrice, metrics.currency);
   const price = normalized.price;
   const currency = normalized.currency;
 
@@ -220,15 +219,18 @@ export function rawQuoteToRow(
   const yieldDec = normalizeYahooDividendYieldToDecimal(metrics.dividendYield);
   const smaRaw = metrics.twoHundredDayAverage;
   const sma =
-    smaRaw != null && isPenceQuoteCurrency(rawCurrency) ? smaRaw / 100 : smaRaw;
+    smaRaw != null && isPenceQuoteCurrency(metrics.currency) ? smaRaw / 100 : smaRaw;
   const dipVsSma200Pct =
     sma != null && sma !== 0 && Number.isFinite(price) ? ((price - sma) / sma) * 100 : null;
 
-  const dividendRate = dividendRateToMajorUnits(metrics.dividendRate, rawPrice, rawCurrency);
+  let dividendRate = metrics.dividendRate;
+  if (dividendRate != null && isPenceQuoteCurrency(metrics.currency)) {
+    dividendRate = dividendRate / 100;
+  }
 
   const lastDividend = readLastDividend(raw, qs);
   let lastDividendPerShare = lastDividend.perShare;
-  if (lastDividendPerShare != null && isPenceQuoteCurrency(rawCurrency)) {
+  if (lastDividendPerShare != null && isPenceQuoteCurrency(metrics.currency)) {
     lastDividendPerShare = lastDividendPerShare / 100;
   }
 
@@ -242,7 +244,6 @@ export function rawQuoteToRow(
     currency,
     dividendYield: yieldDec,
     dividendRate,
-    dividendCurrency: currency,
     changePercent: Number.isFinite(pct) ? pct : 0,
     twoHundredDayAverage: sma,
     dipVsSma200Pct,
@@ -268,20 +269,10 @@ function pickSector(qs: Record<string, unknown> | null): string | null {
 
 type QuoteRowWithType = PortfolioQuoteRow & { quoteType?: string | null };
 
-const QUOTE_REQUEST_TIMEOUT_MS = 4_000;
-const HOLDING_RESOLUTION_TIMEOUT_MS = 12_000;
-const QUOTE_CACHE_TTL_MS = 60_000;
-const MAX_QUOTE_CACHE_ENTRIES = 256;
-const MAX_FALLBACK_CANDIDATES = 8;
-const CANDIDATE_CONCURRENCY = 3;
-const quoteCache = new Map<string, { row: QuoteRowWithType; expiresAt: number }>();
-const quoteInFlight = new Map<string, Promise<QuoteRowWithType | null>>();
-
-async function loadQuoteSymbol(yahooSym: string): Promise<QuoteRowWithType | null> {
+async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<QuoteRowWithType | null> {
   try {
-    const moduleOptions = { fetchOptions: { signal: AbortSignal.timeout(QUOTE_REQUEST_TIMEOUT_MS) } };
-    const [q, qs] = await withTimeout(Promise.all([
-      yahooFinance.quote(yahooSym, {}, moduleOptions),
+    const [q, qs] = await Promise.all([
+      yahooFinance.quote(yahooSym),
       yahooFinance
         .quoteSummary(yahooSym, {
           modules: [
@@ -292,14 +283,13 @@ async function loadQuoteSymbol(yahooSym: string): Promise<QuoteRowWithType | nul
             "calendarEvents",
             "assetProfile",
           ],
-        }, moduleOptions)
+        })
         .catch(() => null),
-    ]), QUOTE_REQUEST_TIMEOUT_MS, `Portfolio quote ${yahooSym}`);
+    ]);
     const raw = Array.isArray(q) ? q[0] : q;
     if (!raw || typeof raw !== "object") return null;
     const r = raw as Record<string, unknown>;
-    if (typeof r.symbol === "string" && r.symbol.trim().toUpperCase() !== yahooSym.toUpperCase()) return null;
-    const row = rawQuoteToRow(yahooSym, yahooSym, r, qs as Record<string, unknown> | null);
+    const row = rawQuoteToRow(portfolioKey, yahooSym, r, qs as Record<string, unknown> | null);
     if (!row) return null;
     return { ...row, quoteType: typeof r.quoteType === "string" ? r.quoteType : null };
   } catch {
@@ -307,68 +297,40 @@ async function loadQuoteSymbol(yahooSym: string): Promise<QuoteRowWithType | nul
   }
 }
 
-async function tryQuoteSymbol(portfolioKey: string, yahooSym: string): Promise<QuoteRowWithType | null> {
-  const sym = yahooSym.trim().toUpperCase();
-  const cached = quoteCache.get(sym);
-  if (cached && cached.expiresAt > Date.now()) return { ...cached.row, symbol: portfolioKey };
-  if (cached) quoteCache.delete(sym);
-  let pending = quoteInFlight.get(sym);
-  if (!pending) {
-    pending = loadQuoteSymbol(sym).then((row) => {
-      // Failed requests remain retryable; never turn an outage into missing dividends.
-      if (row) {
-        quoteCache.delete(sym);
-        if (quoteCache.size >= MAX_QUOTE_CACHE_ENTRIES) quoteCache.delete(quoteCache.keys().next().value!);
-        quoteCache.set(sym, { row, expiresAt: Date.now() + QUOTE_CACHE_TTL_MS });
-      }
-      return row;
-    }).finally(() => quoteInFlight.delete(sym));
-    quoteInFlight.set(sym, pending);
-  }
-  const row = await pending;
-  return row ? { ...row, symbol: portfolioKey } : null;
-}
-
-/** Ordered, bounded resolution: a valid exact listing avoids all fallback requests. */
-export async function resolvePortfolioQuoteCandidates(
-  candidates: string[],
-  holdingCurrency: string | null,
-  symbolT212: string | null,
-  blocked: Set<string>,
-  load: (symbol: string) => Promise<QuoteRowWithType | null>,
-  signal?: AbortSignal,
-): Promise<QuoteRowWithType | null> {
-  const limited = candidates.filter((s) => !isBlockedYahooSymbol(s, blocked)).slice(0, MAX_FALLBACK_CANDIDATES);
-  if (limited.length === 0 || signal?.aborted) return null;
-  const first = await load(limited[0]!);
-  const bestFirst = first ? pickBestQuoteRow([first], holdingCurrency, symbolT212, blocked) : null;
-  if (bestFirst && (!holdingCurrency || normalizePortfolioCurrency(bestFirst.currency) === normalizePortfolioCurrency(holdingCurrency))) {
-    return bestFirst;
-  }
-  const rows = first ? [first] : [];
-  for (let start = 1; start < limited.length && !signal?.aborted; start += CANDIDATE_CONCURRENCY) {
-    const loaded = await Promise.all(limited.slice(start, start + CANDIDATE_CONCURRENCY).map(load));
-    for (const row of loaded) if (row) rows.push(row);
-    const best = pickBestQuoteRow(rows, holdingCurrency, symbolT212, blocked);
-    if (best && (!holdingCurrency || normalizePortfolioCurrency(best.currency) === normalizePortfolioCurrency(holdingCurrency))) return best;
-  }
-  return pickBestQuoteRow(rows, holdingCurrency, symbolT212, blocked);
-}
-
 async function searchFallbackQuote(
   portfolioKey: string,
   symbolT212: string | null,
   holdingCurrency: string | null,
   blocked: Set<string>,
-  signal: AbortSignal,
 ): Promise<QuoteRowWithType | null> {
+  const parsed = symbolT212 ? parseT212Ticker(symbolT212) : null;
+  if (parsed?.isNonUsListing) {
+    const query = searchQueryForPortfolioSymbol(portfolioKey, symbolT212, holdingCurrency);
+    if (!query) return null;
+    try {
+      const r = await yahooFinance.search(query, { quotesCount: 14, newsCount: 0 });
+      const rows: QuoteRowWithType[] = [];
+      for (const hit of r.quotes ?? []) {
+        if (typeof hit !== "object" || hit === null || !("symbol" in hit)) continue;
+        const h = hit as { symbol?: string; quoteType?: string };
+        const sym = typeof h.symbol === "string" ? h.symbol : "";
+        if (!sym || isBlockedYahooSymbol(sym, blocked)) continue;
+        const qt = h.quoteType ?? "";
+        if (qt !== "EQUITY" && qt !== "ETF" && qt !== "MUTUALFUND") continue;
+        const row = await tryQuoteSymbol(portfolioKey, sym);
+        if (row) rows.push(row);
+      }
+      return pickBestQuoteRow(rows, holdingCurrency, symbolT212, blocked);
+    } catch {
+      return null;
+    }
+  }
+
   const query = searchQueryForPortfolioSymbol(portfolioKey, symbolT212, holdingCurrency);
-  if (!query || signal.aborted) return null;
+  if (!query) return null;
   try {
-    const r = await withTimeout(yahooFinance.search(query, { quotesCount: 8, newsCount: 0 }, {
-      fetchOptions: { signal: AbortSignal.any([signal, AbortSignal.timeout(QUOTE_REQUEST_TIMEOUT_MS)]) },
-    }), QUOTE_REQUEST_TIMEOUT_MS, `Portfolio search ${query}`);
-    const symbols: string[] = [];
+    const r = await yahooFinance.search(query, { quotesCount: 14, newsCount: 0 });
+    const rows: QuoteRowWithType[] = [];
     for (const hit of r.quotes ?? []) {
       if (typeof hit !== "object" || hit === null || !("symbol" in hit)) continue;
       const h = hit as { symbol?: string; quoteType?: string };
@@ -376,16 +338,16 @@ async function searchFallbackQuote(
       if (!sym || isBlockedYahooSymbol(sym, blocked)) continue;
       const qt = h.quoteType ?? "";
       if (qt !== "EQUITY" && qt !== "ETF" && qt !== "MUTUALFUND") continue;
-      if (!symbols.includes(sym)) symbols.push(sym);
+      const row = await tryQuoteSymbol(portfolioKey, sym);
+      if (row) rows.push(row);
     }
-    return resolvePortfolioQuoteCandidates(symbols, holdingCurrency, symbolT212, blocked,
-      (sym) => tryQuoteSymbol(portfolioKey, sym), signal);
+    return pickBestQuoteRow(rows, holdingCurrency, symbolT212, blocked);
   } catch {
     return null;
   }
 }
 
-export function mergeBrokerQuote(
+function mergeBrokerQuote(
   portfolioSymbol: string,
   best: QuoteRowWithType | null,
   broker: { price: number; currency: string },
@@ -405,7 +367,6 @@ export function mergeBrokerQuote(
     currency: brokerCcy,
     dividendYield: best?.dividendYield ?? null,
     dividendRate: best?.dividendRate ?? null,
-    dividendCurrency: best ? best.dividendCurrency ?? best.currency : undefined,
     changePercent: 0,
     twoHundredDayAverage: dip.twoHundredDayAverage,
     dipVsSma200Pct: dip.dipVsSma200Pct,
@@ -413,9 +374,6 @@ export function mergeBrokerQuote(
     exDividendDate: best?.exDividendDate ?? null,
     dividendPayDate: best?.dividendPayDate ?? null,
     lastDividendPerShare: best?.lastDividendPerShare ?? null,
-    lastDividendCurrency: best?.lastDividendPerShare != null
-      ? resolveUpcomingDividendCurrency(best.resolvedYahooSymbol ?? portfolioSymbol, best.lastDividendPerShare, best)
-      : undefined,
     lastDividendDate: best?.lastDividendDate ?? null,
     sector: best?.sector ?? null,
     fromBroker: true,
@@ -438,13 +396,16 @@ async function fetchOnePortfolioQuote(
       : null;
 
   const candidates = buildOrderedCandidates(portfolioSymbol, symbolT212, quoteCurrency, blocked);
-  const signal = AbortSignal.timeout(HOLDING_RESOLUTION_TIMEOUT_MS);
-  const resolve = async () => {
-    const matched = await resolvePortfolioQuoteCandidates(candidates, quoteCurrency, symbolT212, blocked,
-      (sym) => tryQuoteSymbol(portfolioSymbol, sym), signal);
-    return matched ?? searchFallbackQuote(portfolioSymbol, symbolT212, quoteCurrency, blocked, signal);
-  };
-  const best = await withTimeout(resolve(), HOLDING_RESOLUTION_TIMEOUT_MS, `Portfolio listing ${portfolioSymbol}`).catch(() => null);
+  const rows: QuoteRowWithType[] = [];
+  for (const c of candidates) {
+    const row = await tryQuoteSymbol(portfolioSymbol, c);
+    if (row) rows.push(row);
+  }
+
+  let best = pickBestQuoteRow(rows, quoteCurrency, symbolT212, blocked);
+  if (!best) {
+    best = await searchFallbackQuote(portfolioSymbol, symbolT212, quoteCurrency, blocked);
+  }
 
   if (
     broker &&
@@ -456,8 +417,7 @@ async function fetchOnePortfolioQuote(
   }
 
   if (best) {
-    const row = { ...best };
-    delete row.quoteType;
+    const { quoteType: _qt, ...row } = best;
     return row;
   }
 
@@ -546,14 +506,13 @@ async function loadExDividendDates(symbol: string): Promise<string[]> {
   const period1 = new Date(period2);
   period1.setUTCFullYear(period1.getUTCFullYear() - 4);
   try {
-    const chart = await withTimeout(yahooFinance.chart(symbol, {
+    const chart = await yahooFinance.chart(symbol, {
       period1,
       period2,
       interval: "1d",
       return: "array",
       events: "div",
-    }, { fetchOptions: { signal: AbortSignal.timeout(HOLDING_RESOLUTION_TIMEOUT_MS) } }),
-    HOLDING_RESOLUTION_TIMEOUT_MS, `Portfolio ex-dividend history ${symbol}`);
+    });
     return exDividendDatesFromYahooChart(chart);
   } catch {
     return [];

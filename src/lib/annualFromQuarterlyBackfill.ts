@@ -1,11 +1,10 @@
 /**
  * When Gemini annual statements lag quarterly (e.g. annual stops at FY2024 but quarters include FY2025),
- * synthesize missing fiscal annual rows from four complete quarters, using an existing annual
- * statement's period end to identify the company's fiscal year and year-label convention.
+ * synthesize missing **calendar-year** annual rows by summing four quarters. Fits calendar fiscal years
+ * (e.g. ASML); may mis-aggregate for off-calendar fiscal years if quarters split oddly across calendar years.
  */
 
-import { fiscalAnniversary, isCompleteQuarterlyPeriod, periodEndDate } from "@/lib/fiscalPeriods";
-import { alignAnnualToIncome, dedupeQuarterlyIncome } from "@/lib/quarterlyAlign";
+import { alignAnnualToIncome } from "@/lib/quarterlyAlign";
 import {
   sortQuarterlyByDateAsc,
   type BalanceSheetAnnual,
@@ -22,6 +21,10 @@ const MAX_ANNUAL_ROWS = FUNDAMENTALS_HISTORY_YEARS;
 
 function sortAnnualByFy<T extends { fiscalYear: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
+}
+
+function utcYearFromIso(iso: string): number {
+  return new Date(iso.slice(0, 10) + "T12:00:00Z").getUTCFullYear();
 }
 
 function sumIfAllFinite(values: (number | null | undefined)[]): number | null {
@@ -74,38 +77,19 @@ function quarterBsToAnnual(bs: BalanceSheetQuarter, sym: string, fy: string): Ba
 }
 
 /**
- * Mutates `bundle`: appends missing fiscal years with four consecutive quarters, then trims
- * to the last {@link MAX_ANNUAL_ROWS} fiscal years. Without a real annual anchor, the fiscal
- * year is unknown and no annual totals are invented. The historical export name is retained.
+ * Mutates `bundle`: appends annual rows for calendar years that have 4 quarterly income rows
+ * but no matching `fiscalYear`, then trims to the last {@link MAX_ANNUAL_ROWS} fiscal years.
  */
 export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): void {
   const sym = bundle.quote.symbol.trim().toUpperCase();
   const existing = new Set(bundle.income.map((r) => r.fiscalYear));
 
-  const anchor = [...bundle.income]
-    .filter((r) => /^\d{4}$/.test(r.fiscalYear) && periodEndDate(r.date) != null)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .at(-1);
-  if (!anchor) return;
-  const anchorDate = periodEndDate(anchor.date)!;
-  const allQuarters = sortQuarterlyByDateAsc(dedupeQuarterlyIncome(bundle.incomeQuarterly));
-  const fiscalQuarters = new Map<string, IncomeStatementQuarter[]>();
-  for (const q of allQuarters) {
-    const end = periodEndDate(q.date);
-    if (!end) continue;
-    const candidates = [end.getUTCFullYear() - 1, end.getUTCFullYear(), end.getUTCFullYear() + 1];
-    const endYear = candidates.find(
-      (year) => Math.abs(end.getTime() - fiscalAnniversary(anchorDate, year).getTime()) <= 14 * 86_400_000,
-    );
-    if (endYear == null) continue;
-    const fy = String(Number(anchor.fiscalYear) + endYear - anchorDate.getUTCFullYear());
-    if (existing.has(fy)) continue;
-    const start = fiscalAnniversary(anchorDate, endYear - 1).getTime();
-    const quarters = allQuarters.filter((row) => {
-      const date = periodEndDate(row.date)?.getTime();
-      return date != null && date > start && date <= end.getTime();
-    });
-    if (isCompleteQuarterlyPeriod(quarters)) fiscalQuarters.set(fy, quarters);
+  const incByYear = new Map<number, IncomeStatementQuarter[]>();
+  for (const q of bundle.incomeQuarterly) {
+    const y = utcYearFromIso(q.date);
+    const arr = incByYear.get(y);
+    if (arr) arr.push(q);
+    else incByYear.set(y, [q]);
   }
 
   const cfByDate = new Map(bundle.cashFlowQuarterly.map((r) => [r.date.slice(0, 10), r]));
@@ -115,8 +99,13 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
   const syntheticCf: CashFlowAnnual[] = [];
   const syntheticBs: BalanceSheetAnnual[] = [];
 
-  for (const [fy, qs] of fiscalQuarters) {
-    if (!qs.every((q) => [q.revenue, q.grossProfit, q.operatingExpenses, q.netIncome].every(Number.isFinite))) continue;
+  const years = [...incByYear.keys()].sort((a, b) => a - b);
+  for (const y of years) {
+    if (existing.has(String(y))) continue;
+    const raw = incByYear.get(y);
+    if (!raw) continue;
+    const qs = sortQuarterlyByDateAsc(raw);
+    if (qs.length < 4) continue;
 
     const lastD = qs[qs.length - 1]!.date.slice(0, 10);
 
@@ -144,14 +133,14 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
     const finiteShares = qs
       .map((q) => q.dilutedAverageShares)
       .filter((v): v is number => v != null && Number.isFinite(v));
-    if (finiteShares.length === 4) {
+    if (finiteShares.length > 0) {
       dilutedAverageShares = finiteShares.reduce((a, b) => a + b, 0) / finiteShares.length;
     }
 
     syntheticIncome.push({
       date: lastD,
       symbol: sym,
-      fiscalYear: fy,
+      fiscalYear: String(y),
       revenue,
       grossProfit,
       operatingExpenses,
@@ -166,15 +155,19 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
 
     const ocf = sumIfAllFinite(cfs.map((c) => c?.operatingCashFlow));
     const capex = sumIfAllFinite(cfs.map((c) => c?.capitalExpenditure));
-    let freeCashFlow = sumIfAllFinite(cfs.map((c) => c?.freeCashFlow));
+    const fcfSum = cfs.reduce(
+      (s, c) => s + (c && Number.isFinite(c.freeCashFlow) ? c.freeCashFlow : 0),
+      0,
+    );
+    let freeCashFlow = fcfSum;
     if (ocf != null && capex != null) {
       freeCashFlow = ocf + capex;
     }
 
-    if (!bundle.cashFlow.some((row) => row.fiscalYear === fy)) syntheticCf.push({
+    syntheticCf.push({
       date: lastD,
       symbol: sym,
-      fiscalYear: fy,
+      fiscalYear: String(y),
       freeCashFlow,
       operatingCashFlow: ocf,
       capitalExpenditure: capex,
@@ -185,8 +178,8 @@ export function appendCalendarAnnualFromQuarterly(bundle: StockAnalysisBundle): 
     });
 
     const lastBs = bsByDate.get(lastD);
-    if (!bundle.balanceSheet.some((row) => row.fiscalYear === fy)) syntheticBs.push(
-      lastBs ? quarterBsToAnnual(lastBs, sym, fy) : stubAnnualBs(sym, lastD, fy),
+    syntheticBs.push(
+      lastBs ? quarterBsToAnnual(lastBs, sym, String(y)) : stubAnnualBs(sym, lastD, String(y)),
     );
   }
 

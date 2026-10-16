@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
+  formatDecimalAsPercent,
   formatDividendYieldPercent,
   formatLocaleDateShort,
   formatPercent,
@@ -71,7 +72,7 @@ import {
   normalizeTrading212ErrorMessage,
 } from "@/lib/trading212Errors";
 
-const MANUAL_CURRENCIES = ["EUR", "USD", "GBP", "CHF", "CAD", "SEK", "NOK", "DKK", "PLN", "ISK", "AUD", "NZD", "HKD", "JPY", "CZK", "HUF"] as const;
+const MANUAL_CURRENCIES = ["EUR", "USD", "GBP"] as const;
 
 type HoldingApi = {
   id: string;
@@ -175,16 +176,26 @@ export function PortfolioClient() {
   // router.replace updates search params asynchronously. Keep the selected tab local so
   // a Holdings click is not ignored while Dividends is still the active tab.
   const [portfolioView, setPortfolioViewState] = useState<PortfolioView>(urlView);
+  const desiredView = useRef<PortfolioView>(urlView);
+  const userChoseView = useRef(false);
   const setPortfolioView = useCallback(
     (view: PortfolioView) => {
+      userChoseView.current = true;
+      desiredView.current = view;
       setPortfolioViewState(view);
       router.replace(portfolioViewHref(view, window.location.search), { scroll: false });
     },
     [router],
   );
   useEffect(() => {
-    setPortfolioViewState(urlView);
-  }, [urlView]);
+    if (!userChoseView.current) {
+      desiredView.current = urlView;
+      setPortfolioViewState(urlView);
+      return;
+    }
+    if (urlView === desiredView.current) return;
+    router.replace(portfolioViewHref(desiredView.current, window.location.search), { scroll: false });
+  }, [router, urlView]);
   const [holdingsSeed] = useState(() => initialHoldingsFromCache(userId));
   const [holdings, setHoldings] = useState<HoldingApi[]>(() => holdingsSeed.payload?.holdings ?? []);
   const [quotes, setQuotes] = useState<Record<string, PortfolioQuoteRow | null>>(
@@ -237,9 +248,6 @@ export function PortfolioClient() {
   const historyLoadInFlight = useRef(false);
   const historyLoadQueued = useRef(false);
   const historyRefreshQueued = useRef(false);
-  const historyMounted = useRef(false);
-  const historyRequest = useRef<AbortController | null>(null);
-  const historyGeneration = useRef(0);
   const [savingMonthlyValue, setSavingMonthlyValue] = useState(false);
 
   useEffect(() => {
@@ -359,7 +367,6 @@ export function PortfolioClient() {
   }, []);
 
   const scheduleHistoryPoll = useCallback(() => {
-    if (!historyMounted.current) return;
     // history:orders allows 6 requests/minute. Do not start another walk inside that window.
     // Two pages per poll. A book with many cancelled orders needs more than 10 polls
     // before older months exist; stopping early leaves the chart on the current month.
@@ -376,7 +383,6 @@ export function PortfolioClient() {
   }, [clearHistoryPoll]);
 
   const loadValueHistory = useCallback(async (opts?: { poll?: boolean; refresh?: boolean }) => {
-    if (!historyMounted.current) return;
     if (historyLoadInFlight.current) {
       if (!opts?.poll) {
         historyLoadQueued.current = true;
@@ -385,11 +391,6 @@ export function PortfolioClient() {
       return;
     }
     historyLoadInFlight.current = true;
-    const controller = new AbortController();
-    const generation = ++historyGeneration.current;
-    historyRequest.current = controller;
-    const stale = () =>
-      !historyMounted.current || controller.signal.aborted || generation !== historyGeneration.current;
     if (!opts?.poll) {
       historyPollCount.current = 0;
       setHistoryBackfillPaused(false);
@@ -399,15 +400,13 @@ export function PortfolioClient() {
     try {
       const params = new URLSearchParams({ base: preferredPortfolioCurrency });
       if (opts?.refresh) params.set("refresh", "1");
-      const res = await fetch(`/api/portfolio/value-history?${params.toString()}`, { signal: controller.signal });
-      if (stale()) return;
+      const res = await fetch(`/api/portfolio/value-history?${params.toString()}`);
       if (!res.ok) {
         if (opts?.poll) scheduleHistoryPoll();
         else setValueHistory(null);
         return;
       }
       const data = (await res.json()) as PortfolioValueHistoryPayload;
-      if (stale()) return;
       setValueHistory(data);
       const morePending = data.historyStatus === "partial" && data.historyHasMore === true;
       if (morePending) {
@@ -422,39 +421,23 @@ export function PortfolioClient() {
         clearHistoryPoll();
       }
     } catch {
-      if (stale()) return;
       if (opts?.poll) scheduleHistoryPoll();
       else setValueHistory(null);
     } finally {
-      if (!stale()) {
-        setValueHistoryLoading(false);
-        historyLoadInFlight.current = false;
-        historyRequest.current = null;
-        if (historyLoadQueued.current) {
-          const refresh = historyRefreshQueued.current;
-          historyLoadQueued.current = false;
-          historyRefreshQueued.current = false;
-          void loadValueHistoryRef.current(refresh ? { refresh: true } : undefined);
-        }
+      setValueHistoryLoading(false);
+      historyLoadInFlight.current = false;
+      if (historyLoadQueued.current) {
+        const refresh = historyRefreshQueued.current;
+        historyLoadQueued.current = false;
+        historyRefreshQueued.current = false;
+        void loadValueHistoryRef.current(refresh ? { refresh: true } : undefined);
       }
     }
   }, [clearHistoryPoll, preferredPortfolioCurrency, scheduleHistoryPoll]);
 
   loadValueHistoryRef.current = loadValueHistory;
 
-  useEffect(() => {
-    historyMounted.current = true;
-    return () => {
-      historyMounted.current = false;
-      historyGeneration.current += 1;
-      historyRequest.current?.abort();
-      historyRequest.current = null;
-      historyLoadInFlight.current = false;
-      historyLoadQueued.current = false;
-      historyRefreshQueued.current = false;
-      clearHistoryPoll();
-    };
-  }, [clearHistoryPoll]);
+  useEffect(() => () => clearHistoryPoll(), [clearHistoryPoll]);
 
   const reloadDividendsFromCache = useCallback(() => {
     // Drop localStorage now. The React token dies on reload, so a later open would
@@ -810,8 +793,8 @@ export function PortfolioClient() {
       let estAnnual: number | null = null;
       if (hasValidQuote && q) {
         if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
-          const dividendCcy = normalizePortfolioCurrency(q.dividendCurrency ?? q.currency);
-          const rateInHolding = convertPortfolioMoney(q.dividendRate, dividendCcy, holdingCcy, fx);
+          // Without FX rates the raw rate would be in the quote currency — show nothing instead.
+          const rateInHolding = convertPortfolioMoney(q.dividendRate, quoteCcy, holdingCcy, fx);
           if (rateInHolding != null) estAnnual = rateInHolding * qQty;
         }
         if (

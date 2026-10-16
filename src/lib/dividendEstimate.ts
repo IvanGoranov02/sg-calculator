@@ -78,7 +78,7 @@ export function dividendDpsBasisFromQuote(
   annualFromHolding: { dividendPerShare: number | null } | null,
 ): DividendDpsBasis | null {
   const holdingCcy = normalizePortfolioCurrency(holdingCurrency);
-  const quoteCcy = quote ? normalizePortfolioCurrency(quote.dividendCurrency ?? quote.currency) : holdingCcy;
+  const quoteCcy = quote ? normalizePortfolioCurrency(quote.currency) : holdingCcy;
   let annualQuote: number | null =
     quote?.dividendRate != null && Number.isFinite(quote.dividendRate) ? quote.dividendRate : null;
   let annualHolding = annualFromHolding?.dividendPerShare ?? null;

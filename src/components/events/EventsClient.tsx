@@ -247,26 +247,30 @@ export function EventsClient() {
             cache: opts?.force ? "no-store" : "default",
           });
           if (stale()) return;
-          // A failed portfolio request is not an empty portfolio. Do not persist
-          // incomplete results for the Events tab's 24-hour TTL.
-          if (!portfolioRes.ok) throw new Error("Could not load portfolio events");
-          const data = (await portfolioRes.json()) as {
-            holdings?: PortfolioHoldingApi[];
-            quotes?: Record<string, PortfolioQuoteRow | null>;
-            fx?: PortfolioFxRates;
-          };
-          nextHoldings = data.holdings ?? [];
-          nextQuotes = data.quotes ?? {};
-          nextFx = data.fx ?? { eurPerUsd: null, gbpPerUsd: null };
-          nextPortfolioSymbols = nextHoldings.map((h) => h.symbolYahoo);
+          if (portfolioRes.ok) {
+            const data = (await portfolioRes.json()) as {
+              holdings?: PortfolioHoldingApi[];
+              quotes?: Record<string, PortfolioQuoteRow | null>;
+              fx?: PortfolioFxRates;
+            };
+            nextHoldings = data.holdings ?? [];
+            nextQuotes = data.quotes ?? {};
+            nextFx = data.fx ?? { eurPerUsd: null, gbpPerUsd: null };
+            nextPortfolioSymbols = nextHoldings.map((h) => h.symbolYahoo);
+          }
 
-          const dividendsRes = await fetch("/api/portfolio/dividends", {
-            cache: opts?.force ? "no-store" : "default",
-          });
-          if (stale()) return;
-          if (!dividendsRes.ok) throw new Error("Could not load portfolio dividends");
-          const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
-          nextPayments = divData.payments ?? [];
+          try {
+            const dividendsRes = await fetch("/api/portfolio/dividends", {
+              cache: opts?.force ? "no-store" : "default",
+            });
+            if (stale()) return;
+            if (dividendsRes.ok) {
+              const divData = (await dividendsRes.json()) as { payments?: PortfolioDividendPayment[] };
+              nextPayments = divData.payments ?? [];
+            }
+          } catch {
+            nextPayments = [];
+          }
           if (stale()) return;
         }
 
@@ -420,9 +424,9 @@ export function EventsClient() {
 
   const symbolsSettling =
     sessionStatus === "loading" || (sessionStatus === "authenticated" && !portfolioReady);
-  const showLoading = symbolsSettling || loading;
   const emptyBoth =
-    !showLoading && !error && watchlistSymbols.length === 0 && portfolioSymbols.length === 0;
+    !symbolsSettling && watchlistSymbols.length === 0 && portfolioSymbols.length === 0;
+  const showLoading = symbolsSettling || loading;
 
   return (
     <div className="flex w-full flex-col gap-6">

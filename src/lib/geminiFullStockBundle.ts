@@ -267,7 +267,7 @@ function normalizeCashFlowAnnual(sym: string, raw: unknown): CashFlowAnnual | nu
     date: date || `${fy}-12-31`,
     symbol: str(o.symbol as string, sym),
     fiscalYear: fy || date.slice(0, 4),
-    freeCashFlow: numOrNull(pick(o, "freeCashFlow", "free_cash_flow", "fcf", "FCF")),
+    freeCashFlow: num(pick(o, "freeCashFlow", "free_cash_flow", "fcf", "FCF")),
     operatingCashFlow: numOrNull(pick(o, "operatingCashFlow", "operating_cash_flow", "cashFromOperations", "operatingCashflow")),
     capitalExpenditure: numOrNull(pick(o, "capitalExpenditure", "capital_expenditure", "capex", "capitalExpenditures")),
     investingCashFlow: numOrNull(pick(o, "investingCashFlow", "investing_cash_flow", "cashFromInvesting")),
@@ -331,7 +331,7 @@ function normalizeCashFlowQuarter(sym: string, raw: unknown): CashFlowQuarter | 
   return {
     date,
     symbol: str(o.symbol as string, sym),
-    freeCashFlow: numOrNull(pick(o, "freeCashFlow", "free_cash_flow", "fcf", "FCF")),
+    freeCashFlow: num(pick(o, "freeCashFlow", "free_cash_flow", "fcf", "FCF")),
     operatingCashFlow: numOrNull(pick(o, "operatingCashFlow", "operating_cash_flow", "cashFromOperations", "operatingCashflow")),
     capitalExpenditure: numOrNull(pick(o, "capitalExpenditure", "capital_expenditure", "capex", "capitalExpenditures")),
     investingCashFlow: numOrNull(pick(o, "investingCashFlow", "investing_cash_flow", "cashFromInvesting")),

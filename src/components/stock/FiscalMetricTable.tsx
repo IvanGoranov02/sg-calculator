@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/table";
 import { formatCurrencyCompact, formatCurrencyPerShare, formatPercent, formatRatio, formatVolume } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useStockMoneyCurrency } from "@/lib/stockMoneyContext";
 
 export type FiscalMetricRowDef = {
   label: string;
@@ -27,11 +26,11 @@ type FiscalMetricTableProps = {
   yearLabel: (y: string) => string;
 };
 
-function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null, currency: string): string {
+function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null): string {
   if (v === null || !Number.isFinite(v)) return "—";
   switch (fmt) {
     case "currency":
-      return formatCurrencyCompact(v, currency);
+      return formatCurrencyCompact(v);
     case "yoy":
       return formatPercent(v);
     case "margin":
@@ -39,7 +38,7 @@ function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null, currenc
     case "ratio":
       return formatRatio(v);
     case "eps":
-      return formatCurrencyPerShare(v, currency);
+      return formatCurrencyPerShare(v);
     case "shares":
       return formatVolume(v);
     default:
@@ -48,7 +47,6 @@ function formatCell(fmt: FiscalMetricRowDef["format"], v: number | null, currenc
 }
 
 export function FiscalMetricTable({ title, subtitle, metricCol, years, rows, yearLabel }: FiscalMetricTableProps) {
-  const currency = useStockMoneyCurrency();
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-sm">
       <div className="space-y-2 border-b border-border px-4 py-5 sm:px-6">
@@ -88,7 +86,7 @@ export function FiscalMetricTable({ title, subtitle, metricCol, years, rows, yea
                       key={`${row.label}-${years[i] ?? i}`}
                       className="px-2.5 py-3.5 text-right font-mono text-sm tabular-nums leading-snug sm:px-3"
                     >
-                      {formatCell(row.format, v, currency)}
+                      {formatCell(row.format, v)}
                     </TableCell>
                   ))}
                 </TableRow>

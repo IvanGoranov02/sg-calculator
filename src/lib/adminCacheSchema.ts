@@ -7,8 +7,6 @@ const str = z.string();
 export const adminQuoteSchema = z.object({
   symbol: str,
   name: str,
-  currency: str.optional(),
-  usdPerUnit: nullableNum.optional(),
   price: num,
   change: num,
   changesPercentage: num,
@@ -59,7 +57,7 @@ export const adminCashFlowAnnualSchema = z.object({
   date: str,
   symbol: str,
   fiscalYear: str,
-  freeCashFlow: nullableNum,
+  freeCashFlow: num,
   operatingCashFlow: nullableNum,
   capitalExpenditure: nullableNum,
   investingCashFlow: nullableNum,
@@ -101,7 +99,7 @@ export const adminBalanceQuarterSchema = z.object({
 export const adminCashFlowQuarterSchema = z.object({
   date: str,
   symbol: str,
-  freeCashFlow: nullableNum,
+  freeCashFlow: num,
   operatingCashFlow: nullableNum,
   capitalExpenditure: nullableNum,
   investingCashFlow: nullableNum,
@@ -117,8 +115,6 @@ export const adminDividendQuarterSchema = z.object({
 
 export const adminInvestorSchema = z.object({
   currency: str,
-  financialCurrency: str.optional(),
-  dividendCurrency: str.optional(),
   marketCap: nullableNum,
   enterpriseValue: nullableNum,
   trailingPE: nullableNum,

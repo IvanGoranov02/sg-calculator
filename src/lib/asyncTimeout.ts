@@ -57,24 +57,6 @@ export async function withTimeoutFallback<T>(
   }
 }
 
-/** Commit asynchronous mutations only if they finish in time. Late work stays isolated. */
-export async function mutateWithinTimeout<T extends object>(
-  value: T,
-  mutate: (working: T) => Promise<void>,
-  timeoutMs: number,
-  label: string,
-): Promise<boolean> {
-  const working = structuredClone(value);
-  try {
-    await withTimeout(mutate(working), timeoutMs, label);
-    Object.assign(value, working);
-    return true;
-  } catch (error) {
-    if (isTimeoutError(error)) return false;
-    throw error;
-  }
-}
-
 export type RetryOptions = {
   attempts: number;
   timeoutMs: number;

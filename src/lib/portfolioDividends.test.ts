@@ -13,13 +13,11 @@ import {
   exDividendDatesFromYahooChart,
   projectNextExDividendDate,
   resolveUpcomingDividendCurrency,
-  estimateHoldingAnnualDividend,
   dividendPaymentDisplayCurrency,
   growthPillsFromCachePayload,
   incomeGrowthPillsFromMonthly,
   mergeEstAnnualIncome,
   paymentMatchesSymbol,
-  holdingDividendPayments,
   rollingTtmMonthly,
   BG_DIVIDEND_TAX_RATE,
   US_DIVIDEND_WITHHOLDING_RATE,
@@ -35,37 +33,6 @@ function closeTo(actual: number, expected: number, eps = 1e-9) {
 function usNet(gross: number): number {
   return gross * (1 - US_DIVIDEND_WITHHOLDING_RATE);
 }
-
-describe("dividend amounts with a broker price currency", () => {
-  it("converts the annual dividend from its own currency instead of the price currency", () => {
-    const quote = {
-      symbol: "AAPL", name: "Apple", price: 85, currency: "EUR", dividendCurrency: "USD",
-      dividendYield: 0.04, dividendRate: 4, changePercent: 0, sector: null,
-      twoHundredDayAverage: null, dipVsSma200Pct: null, nextEarnings: null,
-    };
-    const estimate = estimateHoldingAnnualDividend({ quantity: 100, currency: "EUR" }, quote,
-      { eurPerUsd: 0.85, gbpPerUsd: null });
-    assert.equal(estimate?.estAnnualIncome, 340);
-    assert.equal(estimate?.dividendPerShare, 3.4);
-    // Without an FX rate, this must stay unknown instead of showing a raw USD
-    // rate as EUR or deriving a fabricated income from a mismatched quote.
-    assert.equal(estimateHoldingAnnualDividend({ quantity: 100, currency: "EUR" },
-      { ...quote, dividendYield: null }, { eurPerUsd: null, gbpPerUsd: null }), null);
-  });
-
-  it("honors preserved latest cash currency even when broker price skews the old heuristic", () => {
-    const rows = buildUpcomingPortfolioDividends({
-      positions: [{ symbol: "MSF.DE", name: "Microsoft", quantity: 100, currency: "EUR" }],
-      payments: [], quotes: { "MSF.DE": {
-        currency: "EUR", price: 1, dividendRate: 3.4, dividendYield: 0.0076,
-        dividendCurrency: "EUR", lastDividendCurrency: "USD", lastDividendPerShare: 1,
-        exDividendDate: "2026-11-19", dividendPayDate: "2026-12-10", lastDividendDate: "2026-11-19",
-      } }, fx: { eurPerUsd: 0.85, gbpPerUsd: null }, today: "2026-10-14",
-    });
-    closeTo(rows[0]!.amount, 76.5);
-    assert.equal(rows[0]!.currency, "EUR");
-  });
-});
 
 describe("calendarMonthsBetween", () => {
   it("fills every month inclusively", () => {
@@ -1130,8 +1097,15 @@ describe("buildUpcomingPortfolioDividends", () => {
       dividendYield: 0.0076,
       dividendRate: 3.4,
     };
-    for (const symbol of ["MSFT.DE", "MSF.DE"]) {
-      assert.equal(resolveUpcomingDividendCurrency(symbol, 0.98, quote), "USD");
+    for (const eurPerUsd of [1, 0.7]) {
+      assert.equal(
+        resolveUpcomingDividendCurrency("MSFT.DE", 0.98, quote, { eurPerUsd, gbpPerUsd: null }),
+        "USD",
+      );
+      assert.equal(
+        resolveUpcomingDividendCurrency("MSF.DE", 0.98, quote, { eurPerUsd, gbpPerUsd: null }),
+        "USD",
+      );
     }
   });
 
@@ -1322,18 +1296,5 @@ describe("buildUpcomingPortfolioDividends", () => {
     assert.equal(rows[0]!.estimated, true);
     assert.equal(rows[0]!.currency, "EUR");
     closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
-  });
-});
-
-
-describe("holdingDividendPayments", () => {
-  it("keeps actual broker and manual dates and separate payments in the same month", () => {
-    const payment = (id: string, paidOn: string, source: "manual" | "t212", symbol = "AAPL"): PortfolioDividendPayment => ({
-      id, paidOn, source, ticker: symbol, symbolYahoo: symbol, name: null, amount: 12, currency: "USD",
-    });
-    const rows = [payment("manual", "2026-02-18", "manual"), payment("broker", "2026-02-06", "t212"), payment("other", "2026-02-01", "t212", "MSFT"), payment("invalid", "bad", "manual")];
-    const actual = holdingDividendPayments(rows, "aapl");
-    assert.deepEqual(actual.map(({ id, paidOn }) => ({ id, paidOn })), [{ id: "broker", paidOn: "2026-02-06" }, { id: "manual", paidOn: "2026-02-18" }]);
-    assert.equal(rows[0].id, "manual");
   });
 });

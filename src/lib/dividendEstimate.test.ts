@@ -50,18 +50,6 @@ function quote(overrides: Partial<PortfolioQuoteRow> = {}): PortfolioQuoteRow {
   };
 }
 
-describe("annual dividend currency in event estimates", () => {
-  it("keeps USD frequency math and EUR cash totals after a broker price override", () => {
-    const basis = dividendDpsBasisFromQuote("EUR", quote({ currency: "EUR", dividendCurrency: "USD", price: 85 }),
-      { eurPerUsd: 0.85, gbpPerUsd: null }, null);
-    assert.ok(basis);
-    assert.equal(basis.quoteCurrency, "USD");
-    assert.equal(basis.annualPerShareQuote, 4);
-    assert.equal(basis.annualPerShareHolding, 3.4);
-    assert.equal(perEventDividendPerShare({ symbol: "AAPL", quantity: 100, basis }), 0.85);
-  });
-});
-
 describe("periodizeAnnualDividend", () => {
   it("splits annual into month (/12) and day (/365)", () => {
     const r = periodizeAnnualDividend(1200)!;

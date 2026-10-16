@@ -7,11 +7,10 @@ import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { Button } from "@/components/ui/button";
 import { resolveNextEarningsOrEstimate } from "@/lib/calendarEvents";
-import { formatCurrency, formatLocaleDate, formatPercent } from "@/lib/format";
+import { formatCurrency, formatCurrencyEur, formatLocaleDate, formatPercent } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import type { DisplayCurrency } from "@/lib/preferences/preferences";
-import { stockDisplayMoney } from "@/lib/stockMoney";
 import type { StockQuote } from "@/lib/stockAnalysisTypes";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +33,15 @@ function subscribeNoop(): () => void {
   return () => {};
 }
 
-function fmtLive(amount: number, ccy: DisplayCurrency, eurPerUsd: number | null | undefined, quote: StockQuote): string {
-  const converted = stockDisplayMoney({ amount, sourceCurrency: quote.currency ?? "USD", targetCurrency: ccy === "eur" ? "EUR" : "USD", usdPerUnit: quote.usdPerUnit, eurPerUsd });
-  return formatCurrency(converted.amount, converted.currency);
+function fmtLive(
+  usd: number,
+  ccy: DisplayCurrency,
+  eurPerUsd: number | null | undefined,
+): string {
+  if (ccy === "eur" && eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0) {
+    return formatCurrencyEur(usd * eurPerUsd);
+  }
+  return formatCurrency(usd);
 }
 
 function extendedChangeText(
@@ -79,12 +84,11 @@ export function StockLiveHeader({
   );
   const nextEarnings = useSyncExternalStore(subscribeNoop, () => clientEarnings, () => serverEarnings);
 
-  const canEur = stockDisplayMoney({ amount: 1, sourceCurrency: quote.currency ?? "USD", targetCurrency: "EUR", usdPerUnit: quote.usdPerUnit, eurPerUsd }).currency === "EUR";
-  const canUsd = stockDisplayMoney({ amount: 1, sourceCurrency: quote.currency ?? "USD", targetCurrency: "USD", usdPerUnit: quote.usdPerUnit, eurPerUsd }).currency === "USD";
+  const canEur = eurPerUsd != null && Number.isFinite(eurPerUsd) && eurPerUsd > 0;
 
   const fmt = useCallback(
-    (value: number) => fmtLive(value, ccy, eurPerUsd, quote),
-    [ccy, eurPerUsd, quote],
+    (usd: number) => fmtLive(usd, ccy, eurPerUsd),
+    [ccy, eurPerUsd],
   );
 
   const positive = quote.changesPercentage >= 0;
@@ -111,7 +115,12 @@ export function StockLiveHeader({
   const prePos =
     (quote.preMarketChangePercent ?? 0) >= 0 || (quote.preMarketChange ?? 0) >= 0;
 
-  const changeLabel = fmt(quote.change);
+  const changeLabel = useMemo(() => {
+    if (ccy === "eur" && canEur) {
+      return fmtLive(quote.change, "eur", eurPerUsd);
+    }
+    return formatCurrency(quote.change);
+  }, [ccy, canEur, eurPerUsd, quote.change]);
 
   const sessionLabel = showPost ? t("stock.afterHours") : showPre ? t("stock.preMarket") : null;
   const sessionPrice = showPost ? post : showPre ? pre : null;
@@ -207,8 +216,7 @@ export function StockLiveHeader({
                 size="sm"
                 variant={ccy === "usd" ? "secondary" : "ghost"}
                 className="h-7 px-2.5 font-mono text-[11px]"
-                disabled={!canUsd}
-                onClick={() => canUsd && persistCcy("usd")}
+                onClick={() => persistCcy("usd")}
               >
                 USD
               </Button>
