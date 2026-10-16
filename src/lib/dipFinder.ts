@@ -218,7 +218,7 @@ export function dipChartYDomain(values: number[]): { min: number; max: number } 
   hi = Math.max(hi, 0);
 
   const step = dipChartTickStep(lo, hi);
-  let min = roundDownToStep(lo, step);
+  const min = roundDownToStep(lo, step);
   let max = roundUpToStep(hi, step);
   if (min >= max) max = min + step;
 

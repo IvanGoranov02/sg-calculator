@@ -1,6 +1,7 @@
 /**
  * Portfolio holdings tab cache (1 hour rolling TTL, per user).
  *
+ * Stored only for this browser tab/session; a new session fetches again.
  * A successful /api/portfolio payload is reused until TTL expires. Opening
  * Holdings again within the hour does not refetch or show a spinner.
  * Refresh data, sync, disconnect, holding edits, and base-currency change
@@ -8,7 +9,6 @@
  */
 
 import {
-  browserLocalStorage,
   decideClientTtlLoad,
   readStoredClientTtlCache,
   removeStoredClientTtlCache,
@@ -75,7 +75,12 @@ export function isPortfolioHoldingsLoadCurrent(generation: number): boolean {
 }
 
 export function browserHoldingsTtlStorage(): Storage | null {
-  return browserLocalStorage();
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 export function invalidatePortfolioHoldingsTtlCache(storage: KeyValueStorage | null): void {

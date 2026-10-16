@@ -262,8 +262,10 @@ export function PortfolioClient() {
     setHoldingsReloadToken((n) => n + 1);
   }, [preferredPortfolioCurrency]);
 
+  const holdingsLoadInFlight = useRef<{ generation: number; userId: string; reloadToken: number } | null>(null);
   const load = useCallback(async (opts?: { clearPageError?: boolean; force?: boolean }) => {
     const generation = beginPortfolioHoldingsLoad();
+    holdingsLoadInFlight.current = { generation, userId, reloadToken: holdingsReloadTokenRef.current };
     const stale = () => !isPortfolioHoldingsLoadCurrent(generation);
     setLoading(true);
     if (opts?.clearPageError !== false) {
@@ -272,7 +274,7 @@ export function PortfolioClient() {
     try {
       const portfolioUrl = opts?.force ? "/api/portfolio?refresh=1" : "/api/portfolio";
       const [portfolioRes, settingsRes] = await Promise.all([
-        fetch(portfolioUrl, { cache: opts?.force ? "no-store" : "default" }),
+        fetch(portfolioUrl, { cache: "no-store" }),
         fetch("/api/trading212/settings", { cache: opts?.force ? "no-store" : "default" }),
       ]);
       if (stale()) return;
@@ -351,6 +353,9 @@ export function PortfolioClient() {
       if (stale()) return;
       setError(t("portfolio.errorLoad"));
     } finally {
+      if (holdingsLoadInFlight.current?.generation === generation) {
+        holdingsLoadInFlight.current = null;
+      }
       if (!stale()) setLoading(false);
     }
   }, [t, userId]);
@@ -513,31 +518,46 @@ export function PortfolioClient() {
     }
     if (status !== "authenticated" || !userId) return;
 
-    const decision = decidePortfolioHoldingsLoad({
-      userId,
-      reloadToken: holdingsReloadToken,
-      liveRefreshToken: 0,
-      memory: readPortfolioHoldingsSessionMemory(),
-      stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
-    });
-    if (decision.adoptMemory) {
-      writePortfolioHoldingsSessionMemory(decision.adoptMemory);
-    }
-    if (decision.action === "reuse" && decision.payload) {
-      applyHoldingsCachePayload(decision.payload, {
-        setHoldings,
-        setQuotes,
-        setFx,
-        setTrading212,
-        setT212Env,
+    const checkHoldings = () => {
+      const pending = holdingsLoadInFlight.current;
+      if (pending?.userId === userId && pending.reloadToken === holdingsReloadToken) return;
+      const decision = decidePortfolioHoldingsLoad({
+        userId,
+        reloadToken: holdingsReloadToken,
+        liveRefreshToken: 0,
+        memory: readPortfolioHoldingsSessionMemory(),
+        stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
       });
-      setError(null);
-      setLoading(false);
-      return;
-    }
-    // Do not hydrate a non-reuse payload (force/fetch) — avoids a stale flash before refetch.
-    void load({ force: decision.action === "force" });
-  }, [status, userId, holdingsReloadToken, load]);
+      if (decision.adoptMemory) {
+        writePortfolioHoldingsSessionMemory(decision.adoptMemory);
+      }
+      if (decision.action === "reuse" && decision.payload) {
+        applyHoldingsCachePayload(decision.payload, {
+          setHoldings,
+          setQuotes,
+          setFx,
+          setTrading212,
+          setT212Env,
+        });
+        setError(null);
+        setLoading(false);
+        return;
+      }
+      // Do not hydrate a non-reuse payload (force/fetch) — avoids a stale flash before refetch.
+      void load({ force: decision.action === "force" });
+    };
+    if (portfolioView !== "holdings") return;
+    checkHoldings();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkHoldings();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [status, userId, holdingsReloadToken, load, portfolioView]);
 
   // Value-history is independent of the holdings TTL cache (rebuild logic from #91/#95/#101/#103).
   useEffect(() => {

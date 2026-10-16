@@ -1,9 +1,6 @@
+import { syncTrading212Positions } from "@/lib/syncTrading212Positions";
 import { auth } from "@/auth";
-import {
-  PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC,
-  privateTtlCacheControl,
-  requestWantsRefresh,
-} from "@/lib/apiCacheHeaders";
+import { isPortfolioPositionSyncDue } from "@/lib/apiCacheHeaders";
 import { prisma } from "@/lib/prisma";
 import { fetchPortfolioFxRates } from "@/lib/portfolioFxServer";
 import { fetchPortfolioQuotesForHoldings } from "@/lib/portfolioMarketData";
@@ -38,16 +35,24 @@ function serializeHolding(h: {
   };
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const refresh = requestWantsRefresh(request.url);
-
   try {
+    const connection = await prisma.trading212Connection.findUnique({ where: { userId } });
+    if (connection && isPortfolioPositionSyncDue(connection.lastSyncAt)) {
+      // Best effort: a T212 rate limit/outage must not break the holdings view;
+      // fall back to the last stored snapshot.
+      try {
+        await syncTrading212Positions(userId, false);
+      } catch {
+        // ignore — stored holdings are returned below
+      }
+    }
     const [holdings, t212] = await Promise.all([
       prisma.portfolioHolding.findMany({
         where: { userId },
@@ -92,7 +97,7 @@ export async function GET(request: Request) {
       },
       {
         headers: {
-          "Cache-Control": privateTtlCacheControl(PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC, refresh),
+          "Cache-Control": "private, no-store",
           // Authed payload — keep browser HTTP cache from mixing users on the same URL.
           Vary: "Cookie",
         },

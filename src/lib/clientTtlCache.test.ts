@@ -9,6 +9,8 @@ import {
   type ClientTtlMemory,
 } from "@/lib/clientTtlCache";
 import {
+  browserHoldingsTtlStorage,
+  readStoredPortfolioHoldingsTtlCache,
   PORTFOLIO_HOLDINGS_TTL_MS,
   PORTFOLIO_HOLDINGS_TTL_CACHE_KEY,
   decidePortfolioHoldingsLoad,
@@ -26,6 +28,7 @@ import {
   type EventsTabCachePayload,
 } from "@/lib/eventsTabTtlCache";
 import {
+  isPortfolioPositionSyncDue,
   EVENTS_SERVER_MAX_AGE_SEC,
   PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC,
   privateTtlCacheControl,
@@ -105,7 +108,7 @@ describe("isFreshTtlRecord", () => {
 describe("decidePortfolioHoldingsLoad", () => {
   const nowMs = 1_000_000 + 30 * 60 * 1000;
 
-  it("reuses a fresh stored payload on the first open of this tab", () => {
+  it("reuses a fresh session payload on subsequent opens of this tab", () => {
     const decision = decidePortfolioHoldingsLoad({
       userId: "user-1",
       reloadToken: 0,
@@ -299,5 +302,58 @@ describe("sign-out and cross-user cache isolation", () => {
     const header = privateTtlCacheControl(PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC, false);
     assert.match(header, /^private/);
     assert.equal(header.includes("public"), false);
+  });
+});
+
+
+describe("holdings session lifetime and broker freshness", () => {
+  it("ignores persistent holdings from a previous visit and reuses only this session", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const persistent = new Map<string, string>();
+    const session = new Map<string, string>();
+    const storage = (items: Map<string, string>) => ({
+      getItem: (key: string) => items.get(key) ?? null,
+      setItem: (key: string, value: string) => { items.set(key, value); },
+    });
+    const localStorage = storage(persistent);
+    const sessionStorage = storage(session);
+    const record = memory();
+    localStorage.setItem(PORTFOLIO_HOLDINGS_TTL_CACHE_KEY, JSON.stringify(record));
+    Object.defineProperty(globalThis, "window", {
+      configurable: true, value: { localStorage, sessionStorage },
+    });
+    try {
+      const decide = () => decidePortfolioHoldingsLoad({
+        userId: "user-1", reloadToken: 0, liveRefreshToken: 0,
+        nowMs: record.fetchedAt + 1000, memory: null,
+        stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), "user-1"),
+      });
+      assert.equal(decide().action, "fetch");
+      sessionStorage.setItem(PORTFOLIO_HOLDINGS_TTL_CACHE_KEY, JSON.stringify(record));
+      assert.equal(decide().action, "reuse");
+      session.clear(); // A new tab/session starts without the old holdings payload.
+      assert.equal(decide().action, "fetch");
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  });
+
+  it("rechecks cached memory on revisit/focus without extending its one-hour TTL", () => {
+    const cached = memory();
+    const decide = (elapsed: number) => decidePortfolioHoldingsLoad({
+      userId: "user-1", reloadToken: 0, liveRefreshToken: 0,
+      nowMs: cached.fetchedAt + elapsed, memory: cached, stored: null,
+    });
+    assert.equal(decide(1000).action, "reuse");
+    assert.equal(decide(PORTFOLIO_HOLDINGS_TTL_MS - 1).action, "reuse");
+    assert.equal(decide(PORTFOLIO_HOLDINGS_TTL_MS + 1).action, "fetch");
+  });
+
+  it("syncs never-loaded and hour-old broker positions, but skips fresh snapshots", () => {
+    const now = 10_000_000;
+    assert.equal(isPortfolioPositionSyncDue(null, now), true);
+    assert.equal(isPortfolioPositionSyncDue(new Date(now - PORTFOLIO_HOLDINGS_TTL_MS + 1), now), false);
+    assert.equal(isPortfolioPositionSyncDue(new Date(now - PORTFOLIO_HOLDINGS_TTL_MS), now), true);
   });
 });

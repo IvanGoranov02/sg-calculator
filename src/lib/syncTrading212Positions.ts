@@ -1,0 +1,180 @@
+import { Prisma } from "@prisma/client";
+
+import { prisma } from "@/lib/prisma";
+import { decryptSecret, isPortfolioEncryptionConfigured } from "@/lib/portfolioEncryption";
+import { isPrismaInfrastructureError, prismaErrorToHttp } from "@/lib/prismaHttpError";
+import { logApiException } from "@/lib/serverDebugLog";
+import { mapT212PositionToHolding, mergeT212HoldingRows } from "@/lib/t212PositionSync";
+import {
+  fetchT212AccountSummary,
+  fetchT212Positions,
+  t212HoldingsMarketValue,
+  type T212RequestError,
+} from "@/lib/trading212Client";
+import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
+import { normalizeTrading212ErrorMessage } from "@/lib/trading212Errors";
+
+/** Shared position sync; automatic holdings loads leave dividend caching alone. */
+export async function syncTrading212Positions(userId: string, refreshDividends = true) {
+  if (!isPortfolioEncryptionConfigured()) {
+    return Response.json(
+      {
+        error:
+          "Server cannot decrypt credentials: set AUTH_SECRET or PORTFOLIO_ENCRYPTION_KEY on the server.",
+      },
+      { status: 503 },
+    );
+  }
+
+  let conn;
+  try {
+    conn = await prisma.trading212Connection.findUnique({ where: { userId } });
+  } catch (e) {
+    if (isPrismaInfrastructureError(e)) {
+      const { status, error } = prismaErrorToHttp(e);
+      return Response.json({ error }, { status });
+    }
+    throw e;
+  }
+  if (!conn) {
+    return Response.json({ error: "Trading 212 is not connected" }, { status: 400 });
+  }
+
+  let apiKey: string;
+  let apiSecret: string;
+  try {
+    apiKey = decryptSecret(conn.apiKeyEnc);
+    apiSecret = decryptSecret(conn.apiSecretEnc);
+  } catch {
+    return Response.json({ error: "Failed to decrypt credentials" }, { status: 500 });
+  }
+
+  try {
+    const [positions, summary, manualSymbolsRows] = await Promise.all([
+      fetchT212Positions(conn.environment, apiKey, apiSecret),
+      fetchT212AccountSummary(conn.environment, apiKey, apiSecret),
+      prisma.portfolioHolding.findMany({
+        where: { userId, source: "manual" },
+        select: { symbolYahoo: true },
+      }),
+    ]);
+
+    const manualSymbols = new Set(manualSymbolsRows.map((r) => r.symbolYahoo));
+    const skippedDueToManual: string[] = [];
+
+    if (positions.length === 0) {
+      const existingT212 = await prisma.portfolioHolding.count({
+        where: { userId, source: "t212" },
+      });
+      if (existingT212 > 0) {
+        return Response.json(
+          {
+            error:
+              "Trading 212 returned no open positions; your synced holdings were not changed. Try again in a moment.",
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    const accountCurrency = summary?.currency ?? null;
+    const mapped: Prisma.PortfolioHoldingCreateManyInput[] = [];
+    for (const p of positions) {
+      const row = mapT212PositionToHolding(p, userId, accountCurrency);
+      if (row) mapped.push(row);
+    }
+
+    if (positions.length > 0 && mapped.length === 0) {
+      const existingT212 = await prisma.portfolioHolding.count({
+        where: { userId, source: "t212" },
+      });
+      if (existingT212 > 0) {
+        return Response.json(
+          {
+            error:
+              "Trading 212 returned positions that could not be mapped; your synced holdings were not changed.",
+            positionsReceived: positions.length,
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    const mergedRows = mergeT212HoldingRows(mapped).filter((row) => {
+      if (!manualSymbols.has(row.symbolYahoo)) return true;
+      if (!skippedDueToManual.includes(row.symbolYahoo)) skippedDueToManual.push(row.symbolYahoo);
+      return false;
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.portfolioHolding.deleteMany({ where: { userId, source: "t212" } });
+      if (mergedRows.length > 0) {
+        await tx.portfolioHolding.createMany({ data: mergedRows });
+      }
+      await tx.trading212Connection.update({
+        where: { userId },
+        data: {
+          lastSyncAt: new Date(),
+          lastError: null,
+        },
+      });
+      const holdingsValue = summary ? t212HoldingsMarketValue(summary) : null;
+      if (holdingsValue != null) {
+        await tx.portfolioAccountSnapshot.create({
+          data: {
+            userId,
+            totalValue: new Prisma.Decimal(holdingsValue),
+            currency: summary?.currency ?? accountCurrency ?? "USD",
+          },
+        });
+      }
+    });
+
+    if (refreshDividends) {
+      try {
+        await refreshT212DividendsCache({
+          userId,
+          environment: conn.environment,
+          apiKeyEnc: conn.apiKeyEnc,
+          apiSecretEnc: conn.apiSecretEnc,
+        });
+      } catch (e) {
+        logApiException("POST /api/trading212/sync dividends cache", e, { userId });
+      }
+    }
+
+    return Response.json({
+      ok: true,
+      positionsReceived: positions.length,
+      positionsMapped: mapped.length,
+      positionsSynced: mergedRows.length,
+      skippedDueToManual,
+      accountCurrency: summary?.currency ?? null,
+      totalValue: summary ? t212HoldingsMarketValue(summary) : null,
+    });
+  } catch (e) {
+    if (isPrismaInfrastructureError(e)) {
+      const { status, error } = prismaErrorToHttp(e);
+      return Response.json({ error }, { status });
+    }
+    const rawMsg = e instanceof Error ? e.message : "Sync failed";
+    const msg = normalizeTrading212ErrorMessage(rawMsg) ?? rawMsg;
+    const status = (e as T212RequestError).status;
+    logApiException("POST /api/trading212/sync (broker API or other)", e, {
+      userId,
+      trading212HttpStatus: status ?? undefined,
+    });
+    try {
+      await prisma.trading212Connection.update({
+        where: { userId },
+        data: { lastError: msg.slice(0, 2000) },
+      });
+    } catch {
+      /* ignore if row missing */
+    }
+    return Response.json(
+      { error: msg, trading212Status: status ?? null },
+      { status: status && status >= 400 && status < 500 ? status : 502 },
+    );
+  }
+}
