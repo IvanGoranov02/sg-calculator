@@ -9,6 +9,7 @@ import {
   fetchT212AccountSummary,
   fetchT212Positions,
   t212HoldingsMarketValue,
+  t212SummaryConfirmsNoInvestments,
   type T212RequestError,
 } from "@/lib/trading212Client";
 import { refreshT212DividendsCache } from "@/lib/t212DividendsCache";
@@ -66,7 +67,7 @@ export async function syncTrading212Positions(userId: string, refreshDividends =
       const existingT212 = await prisma.portfolioHolding.count({
         where: { userId, source: "t212" },
       });
-      if (existingT212 > 0) {
+      if (existingT212 > 0 && !t212SummaryConfirmsNoInvestments(summary)) {
         return Response.json(
           {
             error:

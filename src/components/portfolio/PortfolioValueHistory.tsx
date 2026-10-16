@@ -78,10 +78,29 @@ function historyNotice(
 type ChartProps = {
   data: PortfolioValueHistoryPayload | null;
   loading: boolean;
+  error?: boolean;
+  onRetry?: () => void;
   backfillPaused?: boolean;
 };
 
-export function PortfolioValueChartCard({ data, loading, backfillPaused = false }: ChartProps) {
+export function PortfolioValueChartCard({ error, onRetry, ...props }: ChartProps) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-2">
+      {error ? (
+        <div role="alert" className="flex items-center gap-2 text-sm text-muted-foreground">
+          {t("portfolio.valueHistoryError")}
+          <Button variant="outline" size="sm" disabled={props.loading} onClick={onRetry}>
+            {t("portfolio.valueHistoryRetry")}
+          </Button>
+        </div>
+      ) : null}
+      <PortfolioValueChartContent {...props} />
+    </div>
+  );
+}
+
+function PortfolioValueChartContent({ data, loading, backfillPaused = false }: ChartProps) {
   const { t, locale } = useI18n();
 
   const chartData = useMemo(() => {

@@ -34,14 +34,19 @@ function mapChartQuotes(quotes: Array<{ date?: Date; close?: number | null }>): 
   return out;
 }
 
-async function fetchDailyCloses(symbol: string, period1: Date): Promise<QuoteHistoryBar[]> {
+/** Null when every provider call failed (unknown), [] when Yahoo answered with no bars. */
+async function fetchDailyCloses(symbol: string, period1: Date): Promise<QuoteHistoryBar[] | null> {
+  let chartFailed = false;
   const chartDaily = await yahooFinance
     .chart(symbol, {
       period1,
       interval: "1d",
       return: "array",
     })
-    .catch(() => null);
+    .catch(() => {
+      chartFailed = true;
+      return null;
+    });
 
   if (chartDaily && typeof chartDaily === "object" && "quotes" in chartDaily) {
     const quotes = (chartDaily as { quotes: Array<{ date?: Date; close?: number | null }> }).quotes;
@@ -54,7 +59,8 @@ async function fetchDailyCloses(symbol: string, period1: Date): Promise<QuoteHis
       period1,
       interval: "1d",
     })
-    .catch(() => []);
+    .catch(() => null);
+  if (historical == null && chartFailed) return null;
 
   const histArr = Array.isArray(historical) ? historical : [];
   return mapChartQuotes(
@@ -85,10 +91,13 @@ export async function fetchPortfolioQuoteHistory(
     const chunk = unique.slice(i, i + FETCH_CHUNK);
     await Promise.all(
       chunk.map(async (sym) => {
+        // A failed fetch is left out so value history treats the month as
+        // incomplete instead of silently dropping the holding from the total.
         try {
-          history[sym] = await fetchDailyCloses(sym, from);
+          const bars = await fetchDailyCloses(sym, from);
+          if (bars) history[sym] = bars;
         } catch {
-          history[sym] = [];
+          /* omit */
         }
       }),
     );

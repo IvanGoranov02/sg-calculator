@@ -1323,3 +1323,18 @@ describe("buildUpcomingPortfolioDividends", () => {
     closeTo(rows[0]!.amount, 2.5 * 2 * (1 - BG_DIVIDEND_TAX_RATE));
   });
 });
+
+it("keeps holding timeline currencies separate and fills quiet months", () => {
+  const payment = (amount: number, currency: string, paidOn: string): PortfolioDividendPayment => ({
+    id: `${currency}:${paidOn}`, source: "manual", ticker: "AAPL", symbolYahoo: "AAPL", name: null, amount, currency, paidOn,
+  });
+  assert.deepEqual(buildHoldingMonthlyTimeline([
+    payment(2, "USD", "2025-01-10"), payment(3, "EUR", "2025-01-20"),
+    payment(4, "USD", "2025-01-25"), payment(5, "EUR", "2025-03-10"),
+  ], "AAPL"), [
+    { month: "2025-01", amount: 3, currency: "EUR" },
+    { month: "2025-01", amount: 6, currency: "USD" },
+    { month: "2025-02", amount: null, currency: "USD" },
+    { month: "2025-03", amount: 5, currency: "EUR" },
+  ]);
+});

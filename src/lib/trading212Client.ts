@@ -54,6 +54,12 @@ export type T212AccountSummary = {
   };
 };
 
+/** Only explicit investment fields can confirm that an empty positions response is safe. */
+export function t212SummaryConfirmsNoInvestments(summary: T212AccountSummary | null): boolean {
+  const value = summary?.investments?.currentValue ?? summary?.investments?.value;
+  return typeof value === "number" && Number.isFinite(value) && value === 0;
+}
+
 export type T212Paginated<T> = {
   items: T[];
   nextPagePath: string | null;
