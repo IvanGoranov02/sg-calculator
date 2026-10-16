@@ -15,3 +15,8 @@ export function privateTtlCacheControl(maxAgeSec: number, refresh: boolean): str
   if (refresh) return "private, no-store";
   return `private, max-age=${maxAgeSec}, stale-while-revalidate=${Math.min(maxAgeSec, 300)}`;
 }
+
+/** A holdings load must refresh missing/expired broker snapshots before reading positions. */
+export function isPortfolioPositionSyncDue(lastSyncAt: Date | null, nowMs = Date.now()): boolean {
+  return !lastSyncAt || nowMs - lastSyncAt.getTime() >= PORTFOLIO_HOLDINGS_SERVER_MAX_AGE_SEC * 1000;
+}
