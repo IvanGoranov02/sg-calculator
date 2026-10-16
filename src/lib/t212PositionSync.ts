@@ -48,7 +48,7 @@ export function mapT212PositionToHolding(
   const pxInst = normalizeQuotePrice(Number(pxRaw ?? 0), instrumentRaw);
   const instrumentCcy = avgInst.currency;
 
-  const currency = walletCcy;
+  let currency = walletCcy;
   let avgPrice = avgInst.price;
   let brokerPrice = pxInst.price > 0 ? pxInst.price : null;
 

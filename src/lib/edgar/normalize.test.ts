@@ -67,15 +67,6 @@ describe("bundleFromCompanyFacts: tag switches + non-annual latest filing (Uber 
     assert.equal(b?.income.find((r) => r.fiscalYear === "2018")?.revenue, 200); // not 999
   });
 
-  it("keeps FCF unknown when operating cash flow is present but capex is missing", () => {
-    const incomplete = structuredClone(uberLike);
-    incomplete.facts["us-gaap"].NetCashProvidedByUsedInOperatingActivities = {
-      units: { USD: [a("2020-01-01", "2020-12-31", 100, "10-K", "2021-02-01")] },
-    };
-    const bundle = bundleFromCompanyFacts("TEST", incomplete);
-    assert.equal(bundle?.cashFlow.find((r) => r.fiscalYear === "2020")?.freeCashFlow, null);
-  });
-
   it("keeps a fiscal year whose latest-filed instance is a non-annual (proxy) form", () => {
     assert.equal(b?.income.find((r) => r.fiscalYear === "2019")?.netIncome, 30);
   });

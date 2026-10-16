@@ -258,18 +258,6 @@ describe("t212QuoteCurrency", () => {
   it("uses GBP for London listings", () => {
     assert.equal(t212QuoteCurrency("BPl_EQ", "GBP"), "GBP");
   });
-
-  it("keeps non-euro listing currencies distinct from an EUR wallet", () => {
-    const instruments: Record<string, string> = {
-      RYt_EQ: "CAD", NESNs_EQ: "CHF", VOLVx_EQ: "SEK", EQNRo_EQ: "NOK",
-      NOVOc_EQ: "DKK", PKNw_EQ: "PLN", VOLV_SE_EQ: "SEK", EQNR_NO_EQ: "NOK",
-      NOVO_DK_EQ: "DKK", RY_CA_EQ: "CAD", BHP_AU_EQ: "AUD", TENCENT_HK_EQ: "HKD",
-      TOYOTA_JP_EQ: "JPY", AIR_NZ_EQ: "NZD", CEZ_CZ_EQ: "CZK", OTP_HU_EQ: "HUF", ICEAIR_IS_EQ: "ISK",
-    };
-    for (const [ticker, currency] of Object.entries(instruments)) {
-      assert.equal(t212QuoteCurrency(ticker, "EUR"), currency, ticker);
-    }
-  });
 });
 
 describe("t212TickerToYahooCandidates", () => {

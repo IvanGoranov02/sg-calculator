@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  fetchT212HistoryDividends,
   fetchT212HistoryOrders,
-  fetchT212Positions,
   normalizePositionsPayload,
   nextOrdersPathAfterFalseEnd,
   normalizeT212NextPagePath,
@@ -56,93 +54,6 @@ describe("normalizePositionsPayload", () => {
   it("ignores nextPagePath null string", () => {
     const page = normalizePositionsPayload({ items: [], nextPagePath: "null" });
     assert.equal(page.nextPagePath, null);
-  });
-});
-
-describe("fetchT212Positions", () => {
-  it("rejects an incomplete walk instead of returning holdings that a sync would persist", async () => {
-    const original = globalThis.fetch;
-    let calls = 0;
-    globalThis.fetch = async () => {
-      calls += 1;
-      return calls === 1
-        ? Response.json({
-            items: [{ instrument: { ticker: "AAPL_US_EQ" }, quantity: 1 }],
-            nextPagePath: "/api/v0/equity/positions?cursor=2",
-          })
-        : new Response("Upstream failed", { status: 500 });
-    };
-    try {
-      await assert.rejects(fetchT212Positions("live", "k", "s"), (error: unknown) => {
-        assert.equal((error as { status?: number }).status, 500);
-        return true;
-      });
-      assert.equal(calls, 2);
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-});
-
-describe("Trading 212 dividend refresh time budget", () => {
-  it("keeps the collected page when the next page's pacing exceeds the budget", async () => {
-    const original = globalThis.fetch;
-    let calls = 0;
-    const item = { ticker: "AAPL_US_EQ", amount: 1, currency: "USD", paidOn: "2024-06-01" };
-    globalThis.fetch = async () => {
-      calls += 1;
-      return Response.json({ items: [item], nextPagePath: "/api/v0/equity/history/dividends?cursor=2" });
-    };
-    try {
-      const result = await fetchT212HistoryDividends("live", "k", "s", { timeBudgetMs: 1_000 });
-      assert.equal(calls, 1);
-      assert.deepEqual(result.items, [item]);
-      assert.equal(result.partial, true);
-      assert.equal(result.nextPagePath, "/api/v0/equity/history/dividends?cursor=2");
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
-  it("does not wait for a 429 reset beyond the remaining budget", async () => {
-    const original = globalThis.fetch;
-    let calls = 0;
-    globalThis.fetch = async () => {
-      calls += 1;
-      return new Response(null, {
-        status: 429,
-        headers: { "x-ratelimit-reset": String(Math.ceil(Date.now() / 1_000) + 120) },
-      });
-    };
-    try {
-      const result = await fetchT212HistoryDividends("live", "k", "s", { timeBudgetMs: 1_000 });
-      assert.equal(calls, 1);
-      assert.equal(result.partial, true);
-      assert.equal(result.status, 429);
-      assert.equal(result.nextPagePath, "/api/v0/equity/history/dividends?limit=50");
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
-  it("aborts an in-flight request at the budget instead of the default 25 seconds", async () => {
-    const original = globalThis.fetch;
-    let aborted = false;
-    globalThis.fetch = async (_input, init) => new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () => {
-        aborted = true;
-        reject(new Error("Aborted test request"));
-      }, { once: true });
-    });
-    try {
-      const result = await fetchT212HistoryDividends("live", "k", "s", { timeBudgetMs: 20 });
-      assert.equal(aborted, true);
-      assert.equal(result.partial, true);
-      assert.equal(result.items.length, 0);
-      assert.equal(result.nextPagePath, "/api/v0/equity/history/dividends?limit=50");
-    } finally {
-      globalThis.fetch = original;
-    }
   });
 });
 

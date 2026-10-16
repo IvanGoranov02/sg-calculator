@@ -145,6 +145,8 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
     return [...ys].sort((a, b) => a - b);
   }, [data.incomeQuarterly]);
 
+  const yearOptions = freq === "annual" ? annualYearOptions : quarterlyYearOptions;
+
   /** Union of calendar years in annual + quarterly data — used for custom range so switching freq does not crush the selection. */
   const mergedYearOptions = useMemo(() => {
     const s = new Set<number>([...annualYearOptions, ...quarterlyYearOptions]);

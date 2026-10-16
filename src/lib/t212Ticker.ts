@@ -1,5 +1,4 @@
 import crossListingLogos from "@/lib/data/euCrossListingLogos.json";
-import { currencyForYahooSuffix } from "@/lib/portfolioFx";
 
 /**
  * Map Trading 212 instrument tickers (e.g. AAPL_US_EQ, MSFTd_EQ, BPl_EQ) to Yahoo-style symbols.
@@ -54,10 +53,6 @@ const T212_COUNTRY_YAHOO_SUFFIX: Record<string, string | null> = {
   AU: ".AX",
   HK: ".HK",
   JP: ".T",
-  NZ: ".NZ",
-  CZ: ".PR",
-  HU: ".BD",
-  IS: ".IC",
 };
 
 const T212_COUNTRY_CODES = new Set(Object.keys(T212_COUNTRY_YAHOO_SUFFIX));
@@ -488,8 +483,33 @@ export function t212QuoteCurrency(symbolT212: string | null, fallback = "USD"): 
   if (!symbolT212) return fallback.trim().toUpperCase().slice(0, 3) || "USD";
   const parsed = parseT212Ticker(symbolT212);
   if (!parsed.isNonUsListing) return "USD";
-  const listingCurrency = currencyForYahooSuffix(parsed.yahooSuffix);
-  if (listingCurrency) return listingCurrency;
+  const suf = parsed.yahooSuffix;
+  if (suf === ".L") return "GBP";
+  if (suf === ".SW") return "CHF";
+  if (suf === ".TO") return "CAD";
+  if (suf === ".AX") return "AUD";
+  if (suf === ".HK") return "HKD";
+  if (suf === ".T") return "JPY";
+  if (
+    suf === ".DE" ||
+    suf === ".F" ||
+    suf === ".PA" ||
+    suf === ".AS" ||
+    suf === ".MI" ||
+    suf === ".VI" ||
+    suf === ".ST" ||
+    suf === ".OL" ||
+    suf === ".HE" ||
+    suf === ".HA" ||
+    suf === ".IR" ||
+    suf === ".BR" ||
+    suf === ".MC" ||
+    suf === ".LS" ||
+    suf === ".CO" ||
+    suf === ".WA"
+  ) {
+    return "EUR";
+  }
   const fb = fallback.trim().toUpperCase().slice(0, 3);
   return fb || "USD";
 }

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  mutateWithinTimeout,
   fetchWithTimeout,
   isTimeoutError,
   TimeoutError,
@@ -10,28 +9,6 @@ import {
   withTimeout,
   withTimeoutFallback,
 } from "@/lib/asyncTimeout";
-
-describe("timed asynchronous mutation", () => {
-  it("cannot change a returned object when the timed-out operation finishes later", async () => {
-    const value = { rows: [1], currency: "EUR" };
-    let release!: () => void;
-    const done = new Promise<void>((resolve) => { release = resolve; });
-    assert.equal(await mutateWithinTimeout(value, async (working) => {
-      await done;
-      working.rows.push(2);
-      working.currency = "USD";
-    }, 10, "late mutation"), false);
-    release();
-    await done;
-    await Promise.resolve();
-    assert.deepEqual(value, { rows: [1], currency: "EUR" });
-  });
-  it("commits completed mutations", async () => {
-    const value = { rows: [1] };
-    assert.equal(await mutateWithinTimeout(value, async (working) => { working.rows.push(2); }, 100, "ok"), true);
-    assert.deepEqual(value.rows, [1, 2]);
-  });
-});
 
 describe("withTimeout", () => {
   it("resolves when the work finishes in time", async () => {

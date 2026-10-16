@@ -4,8 +4,6 @@ import { AnnualFundamentalsSection } from "@/components/stock/AnnualFundamentals
 import { DividendChartsSection } from "@/components/stock/DividendChartsSection";
 import { FundamentalsChartsSection } from "@/components/stock/FundamentalsChartsSection";
 import { InvestorMetricsSection } from "@/components/stock/InvestorMetricsSection";
-import { StockMoneyCurrencyProvider } from "@/lib/stockMoneyContext";
-import { stockFundamentalsCurrency } from "@/lib/stockMoney";
 import { StockLiveHeader } from "@/components/stock/StockLiveHeader";
 import { StockLoadProgressBar } from "@/components/stock/StockLoadProgressBar";
 import { StockMetricChart } from "@/components/stock/StockMetricChart";
@@ -111,7 +109,6 @@ export function StockAnalysisView({
 
   return (
     <StockAnalysisPeriodProvider key={symbol}>
-      <StockMoneyCurrencyProvider currency={stockFundamentalsCurrency(bundle)}>
       <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
         {loading && loadProgress ? (
           <div className="rounded-xl border border-emerald-500/20 bg-card p-4 shadow-inner shadow-sm">
@@ -124,7 +121,7 @@ export function StockAnalysisView({
         ) : null}
         <div className="flex flex-col gap-4">
           <StockLiveHeader
-            quote={quote.currency ? quote : { ...quote, currency: bundle.investor.currency }}
+            quote={quote}
             eurPerUsd={eurPerUsd}
             onForceRefresh={onForceRefresh}
             refreshing={loading}
@@ -142,7 +139,6 @@ export function StockAnalysisView({
         <InvestorMetricsSection data={bundle.investor} />
         <StockNewsSection symbol={symbol} name={bundle.quote.name} />
       </div>
-    </StockMoneyCurrencyProvider>
     </StockAnalysisPeriodProvider>
   );
 }

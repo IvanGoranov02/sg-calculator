@@ -2,7 +2,9 @@
  * Server-only: single-symbol quote for dashboard teasers.
  */
 
-import { yahooFinance } from "@/lib/yahooFinanceClient";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 export type QuickQuote = {
   symbol: string;

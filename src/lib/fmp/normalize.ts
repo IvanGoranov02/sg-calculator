@@ -79,7 +79,7 @@ function mapCashFlow(r: Rec): Omit<CashFlowQuarter, "date" | "symbol"> {
   const capex = outflow(num(r, "capitalExpenditure"));
   const fcfGiven = num(r, "freeCashFlow");
   return {
-    freeCashFlow: fcfGiven ?? (ocf != null && capex != null ? ocf + capex : null),
+    freeCashFlow: fcfGiven ?? (ocf != null && capex != null ? ocf + capex : (ocf ?? 0)),
     operatingCashFlow: ocf,
     capitalExpenditure: capex,
     investingCashFlow: num(

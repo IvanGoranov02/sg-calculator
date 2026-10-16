@@ -217,6 +217,14 @@ export async function GET(request: Request) {
       }
     }
 
+    const history = classifyPortfolioHistory({
+      connected: Boolean(t212),
+      scopeDenied,
+      ordersPartial,
+      usedQuantityTimeline: qtyByMonth != null,
+      hasHoldings: holdings.length > 0,
+    });
+
     const chartSeries = buildPortfolioValueChartSeries({
       snapshots: snapshots.map((s) => ({
         capturedAt: s.capturedAt,
@@ -234,12 +242,6 @@ export async function GET(request: Request) {
       baseCurrency,
       qtyByMonth,
       liveValue,
-    });
-    const history = classifyPortfolioHistory({
-      connected: Boolean(t212), scopeDenied, ordersPartial,
-      usedQuantityTimeline: qtyByMonth != null, hasHoldings: holdings.length > 0,
-      priceCoverageComplete: !chartSeries.some((point) => point.value == null &&
-        [...(qtyByMonth?.get(point.month)?.values() ?? [])].some((quantity) => quantity > 0)),
     });
 
     return Response.json({

@@ -2,12 +2,12 @@
 
 import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StockLandingSearch } from "@/components/stock/StockLandingSearch";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DipFinderPanel } from "@/components/watchlist/DipFinderPanel";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
@@ -23,38 +23,29 @@ const QUOTES_REFRESH_MS = 60_000;
 
 export function WatchlistClient() {
   const { t } = useI18n();
-  const { symbols, add, remove, cloudReady, error: cloudError, retry } = useWatchlist();
+  const { symbols, add, remove, storageMode } = useWatchlist();
+  const [input, setInput] = useState("");
   const [quotes, setQuotes] = useState<WatchlistQuoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
-  const quotesGeneration = useRef(0);
-  const quotesRequest = useRef<AbortController | null>(null);
 
   const loadQuotes = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent === true;
-      const generation = ++quotesGeneration.current;
-      quotesRequest.current?.abort();
-      quotesRequest.current = null;
       if (symbols.length === 0) {
         setQuotes([]);
-        setLoading(false);
         setError(null);
         return;
       }
-      const controller = new AbortController();
-      quotesRequest.current = controller;
-      const stale = () => controller.signal.aborted || generation !== quotesGeneration.current;
       if (!silent) {
         setLoading(true);
         setError(null);
       }
       try {
         const q = `/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`;
-        const res = await fetch(q, { signal: controller.signal });
+        const res = await fetch(q);
         const data = (await res.json()) as { quotes?: WatchlistQuoteRow[]; error?: string };
-        if (stale()) return;
         if (!res.ok) {
           // Background refresh failures keep the last good quotes on screen.
           if (silent) return;
@@ -71,15 +62,11 @@ export function WatchlistClient() {
         setQuotes(ordered);
         setError(null);
       } catch {
-        if (stale()) return;
         if (silent) return;
         setError(t("watchlist.errNetwork"));
         setQuotes([]);
       } finally {
-        if (!stale()) {
-          quotesRequest.current = null;
-          setLoading(false);
-        }
+        if (!silent) setLoading(false);
       }
     },
     [symbols, t],
@@ -87,11 +74,6 @@ export function WatchlistClient() {
 
   useEffect(() => {
     void loadQuotes();
-    return () => {
-      quotesGeneration.current += 1;
-      quotesRequest.current?.abort();
-      quotesRequest.current = null;
-    };
   }, [loadQuotes]);
 
   useEffect(() => {
@@ -100,9 +82,8 @@ export function WatchlistClient() {
       return;
     }
     let cancelled = false;
-    const controller = new AbortController();
     const q = `/api/quotes/history?symbols=${encodeURIComponent(symbols.join(","))}`;
-    void fetch(q, { signal: controller.signal })
+    void fetch(q)
       .then(async (res) => {
         const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
         if (cancelled || !res.ok) return;
@@ -113,7 +94,6 @@ export function WatchlistClient() {
       });
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [symbols]);
 
@@ -124,32 +104,65 @@ export function WatchlistClient() {
     [quotes],
   );
 
+  const missingCount = useMemo(
+    () => symbols.filter((s) => !quoteMap.has(s)).length,
+    [symbols, quoteMap],
+  );
+
+  async function onAdd(e: FormEvent) {
+    e.preventDefault();
+    const t = input.trim().toUpperCase();
+    if (!t) return;
+    if (symbols.length >= WATCHLIST_MAX) return;
+    await Promise.resolve(add(t));
+    setInput("");
+  }
+
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <div>
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("watchlist.title")}</h1>
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <StockLandingSearch
-            onSelectSymbol={(symbol) => void add(symbol)}
-            placeholder=""
-            submitLabel={t("watchlist.addLabel")}
-            disabled={!cloudReady || symbols.length >= WATCHLIST_MAX}
-          />
-        </div>
-        <Button type="button" variant="outline" onClick={() => void loadQuotes()} disabled={loading || symbols.length === 0}>
-          {loading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
-          {t("watchlist.refresh")}
-        </Button>
+        <p className="mt-2 text-muted-foreground">
+          {t(
+            storageMode === "cloud" ? "watchlist.introCloud" : "watchlist.intro",
+            { max: WATCHLIST_MAX },
+          )}
+        </p>
       </div>
 
-      {cloudError && (
-        <div role="alert" className="flex items-center gap-2 text-sm text-red-400">
-          {t(cloudError === "load" ? "watchlist.errLoad" : "watchlist.errSave")}
-          <Button type="button" variant="outline" size="sm" onClick={retry}>{t("watchlist.refresh")}</Button>
+      <form onSubmit={onAdd} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <label htmlFor="wl-add" className="mb-1 block text-xs font-medium text-muted-foreground">
+            {t("watchlist.addLabel")}
+          </label>
+          <Input
+            id="wl-add"
+            value={input}
+            onChange={(e) => setInput(e.target.value.toUpperCase())}
+            placeholder={t("watchlist.placeholder")}
+            maxLength={32}
+            autoComplete="off"
+            spellCheck={false}
+          />
         </div>
-      )}
+        <Button type="submit" disabled={symbols.length >= WATCHLIST_MAX || !input.trim()}>
+          {t("watchlist.addButton")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void loadQuotes()}
+          disabled={loading || symbols.length === 0}
+        >
+          {loading ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <RefreshCw className="size-4" aria-hidden />
+          )}
+          <span className="ml-2">{t("watchlist.refresh")}</span>
+        </Button>
+      </form>
+
       {error && (
         <p className="text-sm text-red-400" role="alert">
           {error}
@@ -171,6 +184,15 @@ export function WatchlistClient() {
         </Card>
       ) : (
         <Card className="border-white/10 bg-zinc-900/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t("watchlist.yourSymbols")}</CardTitle>
+            <CardDescription>
+              {t("watchlist.savedLine", { count: symbols.length })}
+              {missingCount > 0
+                ? t("watchlist.delayedInvalid", { n: missingCount })
+                : t("watchlist.allQuoted")}
+            </CardDescription>
+          </CardHeader>
           <Table>
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
@@ -194,7 +216,6 @@ export function WatchlistClient() {
                         {loading ? t("watchlist.loading") : t("watchlist.quoteUnavailable")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Link href={`/dcf-calculator?ticker=${encodeURIComponent(sym)}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>DCF</Link>
                         <Button
                           type="button"
                           size="icon"
@@ -221,7 +242,7 @@ export function WatchlistClient() {
                       />
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {formatCurrency(q.price, q.currency)}
+                      {formatCurrency(q.price)}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -230,7 +251,7 @@ export function WatchlistClient() {
                       )}
                     >
                       {formatPercent(q.changesPercentage)}
-                      <span className="ml-1 text-muted-foreground">({formatCurrency(q.change, q.currency)})</span>
+                      <span className="ml-1 text-muted-foreground">({formatCurrency(q.change)})</span>
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -254,7 +275,6 @@ export function WatchlistClient() {
                         >
                           {t("watchlist.analyze")}
                         </Link>
-                        <Link href={`/dcf-calculator?ticker=${encodeURIComponent(sym)}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>DCF</Link>
                         <Button
                           type="button"
                           size="icon"

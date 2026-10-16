@@ -1,9 +1,25 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { createWatchlistMutations } from "@/lib/watchlistMutations";
-import { getWatchlistSnapshot, normalizeTicker, readWatchlistFromStorage, subscribeWatchlist, WATCHLIST_MAX, writeWatchlistToStorage } from "@/lib/watchlistStorage";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+
+import {
+  getWatchlistSnapshot,
+  normalizeTicker,
+  readWatchlistFromStorage,
+  subscribeWatchlist,
+  WATCHLIST_MAX,
+  writeWatchlistToStorage,
+} from "@/lib/watchlistStorage";
 
 type WatchlistContextValue = {
   symbols: string[];
@@ -11,100 +27,192 @@ type WatchlistContextValue = {
   remove: (symbol: string) => Promise<void> | void;
   has: (symbol: string) => boolean;
   toggle: (raw: string) => Promise<void> | void;
+  /** True when logged in and cloud list has finished loading (or failed). */
   cloudReady: boolean;
-  error: string | null;
-  retry: () => void;
+  /** Saved on server when signed in; otherwise local-only. */
   storageMode: "guest" | "cloud";
 };
-const WatchlistContext = createContext<WatchlistContextValue | null>(null);
-const SERVER_WATCHLIST_EMPTY: string[] = [];
-type CloudState = { userId: string; symbols: string[] | null; ready: boolean; error: string | null };
 
-async function patchWatchlist(operation: { action: "add" | "remove"; symbol: string } | { action: "addMany"; symbols: string[] }): Promise<false | { symbols: string[] }> {
-  const res = await fetch("/api/watchlist", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(operation) });
-  if (!res.ok) return false;
-  const data = await res.json() as { symbols?: unknown };
-  if (!Array.isArray(data.symbols) || !data.symbols.every((symbol) => typeof symbol === "string")) return false;
-  return { symbols: data.symbols };
+const WatchlistContext = createContext<WatchlistContextValue | null>(null);
+
+/** Stable empty snapshot for SSR — must be the same reference every call (React 19 useSyncExternalStore). */
+const SERVER_WATCHLIST_EMPTY: string[] = [];
+
+async function putWatchlist(symbols: string[]): Promise<boolean> {
+  const res = await fetch("/api/watchlist", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ symbols }),
+  });
+  return res.ok;
 }
 
 export function WatchlistProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession();
-  const userId = status === "authenticated" ? session?.user?.id ?? "" : "";
-  const isAuthed = !!userId;
-  const guestSymbols = useSyncExternalStore(subscribeWatchlist, getWatchlistSnapshot, () => SERVER_WATCHLIST_EMPTY);
-  const [cloud, setCloud] = useState<CloudState>({ userId: "", symbols: null, ready: false, error: null });
-  const [retryToken, setRetryToken] = useState(0);
-  const mutationsRef = useRef<ReturnType<typeof createWatchlistMutations> | null>(null);
+  const isAuthed = status === "authenticated" && !!session?.user?.id;
+
+  const guestSymbols = useSyncExternalStore(
+    subscribeWatchlist,
+    getWatchlistSnapshot,
+    () => SERVER_WATCHLIST_EMPTY,
+  );
+
+  const [serverSymbols, setServerSymbols] = useState<string[] | null>(null);
+  const [serverReady, setServerReady] = useState(false);
 
   useEffect(() => {
-    mutationsRef.current?.deactivate();
-    mutationsRef.current = null;
-    let cancelled = false;
-    setCloud((prev) => ({ userId, symbols: prev.userId === userId ? prev.symbols : null, ready: false, error: null }));
-    if (!userId) return;
+    if (!isAuthed) {
+      setServerSymbols(null);
+      setServerReady(true);
+      return;
+    }
 
-    void (async () => {
+    setServerReady(false);
+    let cancelled = false;
+
+    (async () => {
       try {
         const res = await fetch("/api/watchlist");
         if (!res.ok) throw new Error("watchlist fetch failed");
-        const data = (await res.json()) as { symbols?: unknown };
-        // An unknown/malformed response is not evidence that the account list is empty.
-        if (!Array.isArray(data.symbols) || !data.symbols.every((s) => typeof s === "string")) throw new Error("invalid watchlist");
+        const data = (await res.json()) as { symbols?: string[] };
         if (cancelled) return;
-        let symbols: string[] = data.symbols;
+        let symbols = data.symbols ?? [];
+
         const local = readWatchlistFromStorage();
         if (local.length > 0) {
-          const unchanged = local.every((symbol) => symbols.includes(symbol));
-          const merged = unchanged ? { symbols } : await patchWatchlist({ action: "addMany", symbols: local });
-          if (merged) {
-            if (cancelled) return;
-            symbols = merged.symbols;
-            // Retain guest symbols that did not fit; never silently discard them on login.
-            writeWatchlistToStorage(local.filter((symbol) => !symbols.includes(symbol)));
+          const merged = [...new Set([...symbols, ...local])].slice(0, WATCHLIST_MAX);
+          const unchanged =
+            merged.length === symbols.length && merged.every((s, i) => s === symbols[i]);
+          if (!unchanged) {
+            const put = await putWatchlist(merged);
+            if (put) {
+              symbols = merged;
+              writeWatchlistToStorage([]);
+            }
+          } else {
+            writeWatchlistToStorage([]);
           }
         }
-        if (cancelled) return;
-        mutationsRef.current = createWatchlistMutations({
-          symbols, save: (_next, operation) => patchWatchlist(operation),
-          onSaved: (next) => { if (!cancelled) setCloud({ userId, symbols: next, ready: true, error: null }); },
-          onError: () => { if (!cancelled) setCloud((prev) => ({ ...prev, error: "save" })); },
-        });
-        setCloud({ userId, symbols, ready: true, error: null });
+
+        setServerSymbols(symbols);
       } catch {
-        if (!cancelled) setCloud((prev) => ({ ...prev, ready: false, error: "load" }));
+        if (!cancelled) setServerSymbols([]);
+      } finally {
+        if (!cancelled) setServerReady(true);
       }
     })();
-    return () => { cancelled = true; mutationsRef.current?.deactivate(); mutationsRef.current = null; };
-  }, [userId, retryToken]);
 
-  const cloudReady = status !== "loading" && (!isAuthed || (cloud.userId === userId && cloud.ready));
-  const symbols = isAuthed ? (cloud.userId === userId ? cloud.symbols ?? SERVER_WATCHLIST_EMPTY : SERVER_WATCHLIST_EMPTY) : guestSymbols;
-  const mutate = useCallback(async (action: "add" | "remove" | "toggle", raw: string) => {
-    if (!cloudReady) return false;
-    if (isAuthed) return mutationsRef.current?.mutate(action, raw) ?? false;
-    const symbol = normalizeTicker(raw);
-    if (!symbol) return false;
-    const prev = getWatchlistSnapshot();
-    const exists = prev.includes(symbol);
-    const removing = action === "remove" || (action === "toggle" && exists);
-    if (removing && !exists) return false;
-    if (!removing && (exists || prev.length >= WATCHLIST_MAX)) return false;
-    writeWatchlistToStorage(removing ? prev.filter((s) => s !== symbol) : [...prev, symbol]);
-    return true;
-  }, [cloudReady, isAuthed]);
-  const add = useCallback((symbol: string) => mutate("add", symbol), [mutate]);
-  const remove = useCallback(async (symbol: string) => { await mutate("remove", symbol); }, [mutate]);
-  const toggle = useCallback(async (symbol: string) => { await mutate("toggle", symbol); }, [mutate]);
-  const has = useCallback((symbol: string) => symbols.includes(normalizeTicker(symbol)), [symbols]);
-  const retry = useCallback(() => setRetryToken((n) => n + 1), []);
-  const error = isAuthed && cloud.userId === userId ? cloud.error : null;
-  const value = useMemo((): WatchlistContextValue => ({ symbols, add, remove, has, toggle, cloudReady, error, retry, storageMode: isAuthed ? "cloud" : "guest" }), [symbols, add, remove, has, toggle, cloudReady, error, retry, isAuthed]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed, session?.user?.id]);
+
+  const symbols = useMemo(() => {
+    if (!isAuthed) return guestSymbols;
+    if (!serverReady) return guestSymbols;
+    return serverSymbols ?? [];
+  }, [isAuthed, guestSymbols, serverReady, serverSymbols]);
+
+  const add = useCallback(
+    async (raw: string) => {
+      const s = normalizeTicker(raw);
+      if (!s) return false;
+
+      if (!isAuthed) {
+        const prev = getWatchlistSnapshot();
+        if (prev.includes(s)) return false;
+        if (prev.length >= WATCHLIST_MAX) return false;
+        writeWatchlistToStorage([...prev, s]);
+        return true;
+      }
+
+      if (!serverReady || serverSymbols === null) return false;
+      const prev = serverSymbols;
+      if (prev.includes(s)) return false;
+      if (prev.length >= WATCHLIST_MAX) return false;
+      const next = [...prev, s];
+      const ok = await putWatchlist(next);
+      if (ok) setServerSymbols(next);
+      return ok;
+    },
+    [isAuthed, serverReady, serverSymbols],
+  );
+
+  const remove = useCallback(
+    async (symbol: string) => {
+      const u = normalizeTicker(symbol);
+
+      if (!isAuthed) {
+        const prev = getWatchlistSnapshot();
+        writeWatchlistToStorage(prev.filter((x) => x !== u));
+        return;
+      }
+
+      if (!serverReady || serverSymbols === null) return;
+      const prev = serverSymbols;
+      const next = prev.filter((x) => x !== u);
+      const ok = await putWatchlist(next);
+      if (ok) setServerSymbols(next);
+    },
+    [isAuthed, serverReady, serverSymbols],
+  );
+
+  const has = useCallback(
+    (symbol: string) => symbols.includes(normalizeTicker(symbol)),
+    [symbols],
+  );
+
+  const toggle = useCallback(
+    async (raw: string) => {
+      const s = normalizeTicker(raw);
+      if (!s) return;
+
+      if (!isAuthed) {
+        const prev = getWatchlistSnapshot();
+        if (prev.includes(s)) {
+          writeWatchlistToStorage(prev.filter((x) => x !== s));
+        } else if (prev.length < WATCHLIST_MAX) {
+          writeWatchlistToStorage([...prev, s]);
+        }
+        return;
+      }
+
+      if (!serverReady || serverSymbols === null) return;
+      const prev = serverSymbols;
+      let next: string[];
+      if (prev.includes(s)) {
+        next = prev.filter((x) => x !== s);
+      } else if (prev.length < WATCHLIST_MAX) {
+        next = [...prev, s];
+      } else {
+        return;
+      }
+      const ok = await putWatchlist(next);
+      if (ok) setServerSymbols(next);
+    },
+    [isAuthed, serverReady, serverSymbols],
+  );
+
+  const value = useMemo((): WatchlistContextValue => {
+    const storageMode: WatchlistContextValue["storageMode"] = isAuthed ? "cloud" : "guest";
+    return {
+      symbols,
+      add,
+      remove,
+      has,
+      toggle,
+      cloudReady: !isAuthed || serverReady,
+      storageMode,
+    };
+  }, [symbols, add, remove, has, toggle, isAuthed, serverReady]);
+
   return <WatchlistContext.Provider value={value}>{children}</WatchlistContext.Provider>;
 }
 
 export function useWatchlist(): WatchlistContextValue {
   const ctx = useContext(WatchlistContext);
-  if (!ctx) throw new Error("useWatchlist must be used within WatchlistProvider");
+  if (!ctx) {
+    throw new Error("useWatchlist must be used within WatchlistProvider");
+  }
   return ctx;
 }

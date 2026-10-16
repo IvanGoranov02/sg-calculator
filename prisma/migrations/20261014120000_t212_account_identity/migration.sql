@@ -1,1 +1,0 @@
-ALTER TABLE "Trading212Connection" ADD COLUMN IF NOT EXISTS "accountId" TEXT;

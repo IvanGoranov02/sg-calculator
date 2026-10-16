@@ -4,7 +4,6 @@ import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,19 +232,20 @@ function StockSearch({ target, compact }: StockSearchProps) {
           className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38vh,10.5rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-0.5 shadow-lg backdrop-blur-sm lg:max-h-60 lg:py-1"
         >
           {suggestions.map((c, i) => (
-            <li key={c.s} role="option" aria-selected={i === highlighted} className="flex items-center gap-1 pr-2">
+            <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
-                className={`flex min-w-0 flex-1 px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
+                className={`flex w-full px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
                   i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
-                onClick={() => go(c.s)}
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  go(c.s);
+                }}
                 onMouseEnter={() => setHighlighted(i)}
               >
                 <CompanyIdentity symbol={c.s} name={c.n} size="sm" />
               </button>
-              <WatchlistToggle symbol={c.s} compact />
             </li>
           ))}
         </ul>

@@ -10,8 +10,6 @@ import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { computeValuationByPeriodEnd } from "@/lib/valuationFromHistory";
 import { computeValuationVerdict } from "@/lib/valuationVerdict";
 import { cn } from "@/lib/utils";
-import { stockFundamentalsCurrency } from "@/lib/stockMoney";
-import { quoteCurrencyMajor } from "@/lib/portfolioFx";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -19,15 +17,13 @@ function clamp(n: number, lo: number, hi: number): number {
 
 export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle }) {
   const { t } = useI18n();
-  const currency = data.quote.currency ?? data.investor.currency;
 
   const result = useMemo(() => {
-    if (quoteCurrencyMajor(currency).code !== quoteCurrencyMajor(stockFundamentalsCurrency(data)).code) return null;
     const price = data.quote.price;
     const inv = data.investor;
 
     const annualCf = [...data.cashFlow].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-    const baseFcf = annualCf.length ? annualCf[annualCf.length - 1].freeCashFlow ?? Number.NaN : Number.NaN;
+    const baseFcf = annualCf.length ? annualCf[annualCf.length - 1].freeCashFlow : 0;
 
     const annualBs = [...data.balanceSheet].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
     const latestNetDebt = annualBs.length ? annualBs[annualBs.length - 1].netDebt : null;
@@ -64,10 +60,10 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
       wacc,
       terminalGrowth: 0.025,
     });
-  }, [currency, data]);
+  }, [data]);
 
   // Nothing trustworthy to show → render nothing (avoids an empty/misleading panel).
-  if (!result || result.verdict === "unknown" || result.fairValueMid == null) return null;
+  if (result.verdict === "unknown" || result.fairValueMid == null) return null;
 
   const price = data.quote.price;
   const low = result.fairValueLow as number;
@@ -113,7 +109,7 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
         <div className="space-y-0.5">
           <p className={cn("font-mono text-2xl font-semibold", tone.text)}>{headline}</p>
           <p className="font-mono text-xs text-muted-foreground">
-            {formatCurrency(price, currency)} · {formatCurrency(low, currency)}–{formatCurrency(high, currency)}
+            {formatCurrency(price)} · {formatCurrency(low)}–{formatCurrency(high)}
           </p>
         </div>
 
@@ -132,8 +128,8 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <Method label={t("valuation.methodDcf")} value={dcf != null ? formatCurrency(dcf, currency) : "—"} />
-          <Method label={t("valuation.methodMultiples")} value={multiples != null ? formatCurrency(multiples, currency) : "—"} />
+          <Method label={t("valuation.methodDcf")} value={dcf != null ? formatCurrency(dcf) : "—"} />
+          <Method label={t("valuation.methodMultiples")} value={multiples != null ? formatCurrency(multiples) : "—"} />
           <Method
             label={t("valuation.impliedGrowth")}
             value={result.impliedGrowthPct != null ? `${result.impliedGrowthPct.toFixed(1)}%` : "—"}

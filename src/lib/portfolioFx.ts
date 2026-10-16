@@ -7,7 +7,7 @@ export type PortfolioFxRates = {
   eurPerUsd: number | null;
   /** GBP per 1 USD. */
   gbpPerUsd: number | null;
-  /** USD per 1 unit of another ISO currency. Missing pairs cannot be converted. */
+  /** USD per 1 unit of another ISO currency (CHF, CAD, AUD, HKD, JPY). */
   usdPerUnit?: Partial<Record<string, number | null>>;
 };
 
@@ -73,34 +73,18 @@ export function normalizeQuotePrice(
   return { price, currency: normalizePortfolioCurrency(currency) };
 }
 
-/** Listing currencies for the Yahoo exchanges supported by manual and broker holdings. */
-const YAHOO_EXCHANGE_CURRENCIES: Readonly<Record<string, string>> = {
-  ".L": "GBP",
-  ".DE": "EUR", ".F": "EUR", ".HA": "EUR", ".MU": "EUR", ".BE": "EUR",
-  ".DU": "EUR", ".HM": "EUR", ".XC": "EUR", ".XD": "EUR",
-  ".PA": "EUR", ".AS": "EUR", ".MI": "EUR", ".BR": "EUR", ".VI": "EUR",
-  ".HE": "EUR", ".MC": "EUR", ".LS": "EUR", ".IR": "EUR", ".AT": "EUR",
-  ".SW": "CHF", ".VX": "CHF",
-  ".TO": "CAD", ".V": "CAD",
-  ".ST": "SEK", ".OL": "NOK", ".CO": "DKK", ".WA": "PLN", ".IC": "ISK",
-  ".AX": "AUD", ".NZ": "NZD", ".HK": "HKD", ".T": "JPY",
-  ".PR": "CZK", ".BD": "HUF",
-};
-
-/** Null for an unknown exchange, so callers can retain an explicit currency fallback. */
-export function currencyForYahooSuffix(suffix: string | null | undefined): string | null {
-  return suffix ? YAHOO_EXCHANGE_CURRENCIES[suffix.trim().toUpperCase()] ?? null : null;
-}
-
 /** Guess listing currency from Yahoo-style suffix (manual entry without explicit currency). */
 export function inferCurrencyFromSymbol(symbol: string): string {
   const u = symbol.trim().toUpperCase();
-  const dot = u.lastIndexOf(".");
-  return currencyForYahooSuffix(dot >= 0 ? u.slice(dot) : null) ?? "USD";
+  if (/\.L$/.test(u)) return "GBP";
+  if (/\.(DE|PA|AS|MI|BR|VI|ST|OL|F|HA|HE|MU|BE|MC|SW|LS|IC|WA|CO|IR|TO|LS|MC|AT)$/.test(u)) {
+    return "EUR";
+  }
+  return "USD";
 }
 
 /**
- * Exchange suffix can hint a listing currency. A bare US ticker must not overwrite the
+ * Exchange suffix can hint EUR/GBP. A bare US ticker must not overwrite the
  * form's EUR default — that's how "added in euros, stored as dollars" happened.
  */
 export function listingCurrencyOverride(symbol: string): string | null {
@@ -110,75 +94,7 @@ export function listingCurrencyOverride(symbol: string): string | null {
 
 function usdPerListedUnit(fx: PortfolioFxRates, ccy: string): number | null {
   const rate = fx.usdPerUnit?.[ccy];
-  return isUsableFxRate(rate) ? rate : null;
-}
-
-function isUsableFxRate(rate: number | null | undefined): rate is number {
-  return rate != null && Number.isFinite(rate) && rate > 0;
-}
-
-/** USD per unit pairs for the non-USD listing currencies above (BGN uses its EUR peg). */
-export const PORTFOLIO_USD_FX_PAIRS: ReadonlyArray<readonly [string, string]> = [
-  ["EUR", "EURUSD=X"], ["GBP", "GBPUSD=X"],
-  ["CHF", "CHFUSD=X"], ["CAD", "CADUSD=X"], ["AUD", "AUDUSD=X"],
-  ["HKD", "HKDUSD=X"], ["JPY", "JPYUSD=X"], ["SEK", "SEKUSD=X"],
-  ["NOK", "NOKUSD=X"], ["DKK", "DKKUSD=X"], ["PLN", "PLNUSD=X"],
-  ["ISK", "ISKUSD=X"], ["NZD", "NZDUSD=X"], ["CZK", "CZKUSD=X"], ["HUF", "HUFUSD=X"],
-];
-
-/** Build portfolio FX rates from an injected quote reader; unavailable pairs stay unavailable. */
-export async function loadPortfolioFxRatesFromQuotes(
-  readUsdPerUnit: (symbol: string) => Promise<number | null>,
-): Promise<PortfolioFxRates> {
-  const rates = await Promise.all(
-    PORTFOLIO_USD_FX_PAIRS.map(async ([, symbol]) => {
-      try {
-        const rate = await readUsdPerUnit(symbol);
-        return isUsableFxRate(rate) ? rate : null;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const usdPerUnit: Partial<Record<string, number>> = {};
-  PORTFOLIO_USD_FX_PAIRS.forEach(([currency], i) => {
-    const rate = rates[i];
-    if (currency !== "EUR" && currency !== "GBP" && rate != null) usdPerUnit[currency] = rate;
-  });
-  const reciprocal = (rate: number | null) => {
-    const result = rate != null ? 1 / rate : null;
-    return isUsableFxRate(result) ? result : null;
-  };
-  return {
-    eurPerUsd: reciprocal(rates[0]),
-    gbpPerUsd: reciprocal(rates[1]),
-    usdPerUnit,
-  };
-}
-
-/** Public market FX is shared between portfolio endpoints for a short window. */
-export function createPortfolioFxRatesLoader(
-  readUsdPerUnit: (symbol: string) => Promise<number | null>,
-  options: { ttlMs?: number; now?: () => number } = {},
-): () => Promise<PortfolioFxRates> {
-  const ttlMs = options.ttlMs ?? 60_000;
-  const now = options.now ?? Date.now;
-  let cached: { expiresAt: number; rates: PortfolioFxRates } | null = null;
-  let pending: Promise<PortfolioFxRates> | null = null;
-  return async () => {
-    if (cached && cached.expiresAt > now()) return cached.rates;
-    if (pending) return pending;
-    const request = loadPortfolioFxRatesFromQuotes(readUsdPerUnit).then((rates) => {
-      cached = { rates, expiresAt: now() + ttlMs };
-      return rates;
-    });
-    pending = request;
-    try {
-      return await request;
-    } finally {
-      if (pending === request) pending = null;
-    }
-  };
+  return rate != null && rate > 0 ? rate : null;
 }
 
 /**
@@ -203,16 +119,16 @@ export function convertPortfolioMoney(
   const toUsd = (amt: number, ccy: string): number | null => {
     if (ccy === "USD") return amt;
     if (ccy === "EUR") {
-      if (!isUsableFxRate(fx.eurPerUsd)) return null;
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return amt / fx.eurPerUsd;
     }
     if (ccy === "GBP") {
-      if (!isUsableFxRate(fx.gbpPerUsd)) return null;
+      if (fx.gbpPerUsd == null || fx.gbpPerUsd <= 0) return null;
       return amt / fx.gbpPerUsd;
     }
     if (ccy === "BGN") {
       const eur = amt / BGN_PER_EUR;
-      if (!isUsableFxRate(fx.eurPerUsd)) return null;
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return eur / fx.eurPerUsd;
     }
     const listed = usdPerListedUnit(fx, ccy);
@@ -223,15 +139,15 @@ export function convertPortfolioMoney(
   const fromUsd = (usd: number, ccy: string): number | null => {
     if (ccy === "USD") return usd;
     if (ccy === "EUR") {
-      if (!isUsableFxRate(fx.eurPerUsd)) return null;
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return usd * fx.eurPerUsd;
     }
     if (ccy === "GBP") {
-      if (!isUsableFxRate(fx.gbpPerUsd)) return null;
+      if (fx.gbpPerUsd == null || fx.gbpPerUsd <= 0) return null;
       return usd * fx.gbpPerUsd;
     }
     if (ccy === "BGN") {
-      if (!isUsableFxRate(fx.eurPerUsd)) return null;
+      if (fx.eurPerUsd == null || fx.eurPerUsd <= 0) return null;
       return usd * fx.eurPerUsd * BGN_PER_EUR;
     }
     const listed = usdPerListedUnit(fx, ccy);
@@ -240,7 +156,6 @@ export function convertPortfolioMoney(
   };
 
   const usd = toUsd(amount, f);
-  if (usd == null || !Number.isFinite(usd)) return null;
-  const converted = fromUsd(usd, t);
-  return converted != null && Number.isFinite(converted) ? converted : null;
+  if (usd == null) return null;
+  return fromUsd(usd, t);
 }

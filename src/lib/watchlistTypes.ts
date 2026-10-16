@@ -1,8 +1,6 @@
 export type WatchlistQuoteRow = {
   symbol: string;
   name: string;
-  /** Original Yahoo quote units; GBp prices remain pence until formatted. */
-  currency?: string;
   price: number;
   change: number;
   changesPercentage: number;

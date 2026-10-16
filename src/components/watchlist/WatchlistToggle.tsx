@@ -11,12 +11,11 @@ import { useWatchlist } from "./WatchlistProvider";
 
 type WatchlistToggleProps = {
   symbol: string;
-  compact?: boolean;
 };
 
-export function WatchlistToggle({ symbol, compact = false }: WatchlistToggleProps) {
+export function WatchlistToggle({ symbol }: WatchlistToggleProps) {
   const { t } = useI18n();
-  const { has, toggle, symbols, cloudReady } = useWatchlist();
+  const { has, toggle, symbols } = useWatchlist();
   const saved = has(symbol);
   const full = !saved && symbols.length >= WATCHLIST_MAX;
 
@@ -24,17 +23,14 @@ export function WatchlistToggle({ symbol, compact = false }: WatchlistToggleProp
     <Button
       type="button"
       variant="outline"
-      size={compact ? "icon" : "sm"}
+      size="sm"
       className="shrink-0 gap-2 border-white/15"
-      disabled={full || !cloudReady}
+      disabled={full}
       title={full ? t("watchlist.fullTitle", { max: WATCHLIST_MAX }) : undefined}
-      aria-label={`${saved ? t("watchlist.saved") : t("watchlist.toggle")}: ${symbol}`}
-      aria-pressed={saved}
-      onMouseDown={(e) => e.preventDefault()}
       onClick={() => void Promise.resolve(toggle(symbol))}
     >
       <Bookmark className={cn("size-4", saved && "fill-amber-400 text-amber-400")} aria-hidden />
-      {!compact && (saved ? t("watchlist.saved") : t("watchlist.toggle"))}
+      {saved ? t("watchlist.saved") : t("watchlist.toggle")}
     </Button>
   );
 }

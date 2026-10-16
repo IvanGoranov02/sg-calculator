@@ -12,7 +12,6 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import {
   computePayoutRatioPercent,
   computeTrailingPayoutRatios,
-  dividendSeriesInOneCurrency,
   sumQuarterlyDpsForFiscalYear,
 } from "@/lib/payoutRatio";
 import {
@@ -24,7 +23,6 @@ import {
 } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
-import { stockFundamentalsCurrency } from "@/lib/stockMoney";
 import { cn } from "@/lib/utils";
 
 type DividendChartsSectionProps = {
@@ -37,22 +35,7 @@ function numOrNull(v: unknown): number | null {
 
 export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   const { t, locale } = useI18n();
-  const fundamentalsCurrency = stockFundamentalsCurrency(data);
-  const dividendSeries = useMemo(() => {
-    const tagged = data as StockAnalysisBundle & {
-      __dividendQuarterlyCurrency?: string;
-      __dividendListingDates?: string[];
-    };
-    return dividendSeriesInOneCurrency(data.dividendQuarterly, {
-      fundamentalsCurrency,
-      quoteCurrency: data.quote.currency ?? data.investor.currency ?? "USD",
-      listingDates: tagged.__dividendListingDates,
-      listingSeriesCurrency: tagged.__dividendQuarterlyCurrency,
-    });
-  }, [data, fundamentalsCurrency]);
-  const dividendCurrency = dividendSeries.currency;
-  const dividendPoints = dividendSeries.points;
-  const perShareCurrenciesMatch = dividendCurrency === fundamentalsCurrency;
+  const dividendCurrency = data.investor.currency || "USD";
   const { timeRange, freq, customFromYear, customToYear } = useStockAnalysisPeriod();
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
@@ -78,12 +61,12 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   );
 
   const pack = useMemo(() => {
-    const allSorted = sortQuarterlyByDateAsc(dividendPoints);
+    const allSorted = sortQuarterlyByDateAsc(data.dividendQuarterly);
     const allRows = allSorted.map((p) => ({ qDps: p.dividendPerShare }));
     const qDpsPills = growthPillsForKey(allRows, "qDps", "quarterly");
 
     const filtered = filterDividendQuarterlyByPeriod(
-      dividendPoints,
+      data.dividendQuarterly,
       timeRange,
       customFromYear,
       customToYear,
@@ -97,27 +80,17 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       qDps: p.dividendPerShare,
     }));
     return { rows, hasDps, qDpsPills };
-  }, [dividendPoints, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
+  }, [data.dividendQuarterly, formatPeriod, timeRange, customFromYear, customToYear, quarterBounds]);
 
   const payoutPack = useMemo(() => {
     const dpsByDate = new Map(
-      dividendPoints.map((p) => [p.date.slice(0, 10), p.dividendPerShare] as const),
+      data.dividendQuarterly.map((p) => [p.date.slice(0, 10), p.dividendPerShare] as const),
     );
 
     if (freq === "annual") {
       const baseRows = buildAnnualChartRows(data, formatYear);
-      const income = sortIncomeByYearAsc(data.income);
-      const periods = new Map(income.map((row, i) => [row.fiscalYear, {
-        end: row.date,
-        previousEnd: income[i - 1]?.date,
-      }]));
-      const annualDps = (fy: string) => {
-        const period = periods.get(fy);
-        return period && perShareCurrenciesMatch
-          ? sumQuarterlyDpsForFiscalYear(fy, dividendPoints, period.end, period.previousEnd) : null;
-      };
       const incFiltered = filterAnnualRowsByPeriod(
-        income,
+        sortIncomeByYearAsc(data.income),
         timeRange,
         customFromYear,
         customToYear,
@@ -128,7 +101,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       );
       const allPayout = baseRows.map((r) => {
         const fy = typeof r.fiscalYear === "string" ? r.fiscalYear : "";
-        const dps = annualDps(fy);
+        const dps = fy ? sumQuarterlyDpsForFiscalYear(fy, data.dividendQuarterly) : null;
         return {
           payoutRatio: computePayoutRatioPercent({
             dps,
@@ -140,7 +113,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
       });
       const rows = filtered.map((r) => {
         const fy = typeof r.fiscalYear === "string" ? r.fiscalYear : "";
-        const dps = annualDps(fy);
+        const dps = fy ? sumQuarterlyDpsForFiscalYear(fy, data.dividendQuarterly) : null;
         return {
           label: String(r.label ?? fy),
           fiscalYear: fy,
@@ -180,8 +153,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     const inputs = baseRows.map((r) => {
       const pe = typeof r.periodEnd === "string" ? r.periodEnd.slice(0, 10) : "";
       return {
-        date: pe,
-        dps: pe && perShareCurrenciesMatch ? (dpsByDate.get(pe) ?? null) : null,
+        dps: pe ? (dpsByDate.get(pe) ?? null) : null,
         eps: numOrNull(r.dilutedEps),
         dividendsPaid: numOrNull(r.dividendsPaid),
         netIncome: numOrNull(r.netIncome),
@@ -210,8 +182,6 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
     };
   }, [
     data,
-    dividendPoints,
-    perShareCurrenciesMatch,
     freq,
     formatYear,
     formatPeriod,

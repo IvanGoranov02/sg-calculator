@@ -4,7 +4,6 @@ import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,17 +28,12 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
 }
 
 type StockLandingSearchProps = {
-  /** Handle selection without navigating (for adding a watchlist company). */
-  onSelectSymbol?: (symbol: string) => void;
-  placeholder?: string;
-  submitLabel?: string;
-  disabled?: boolean;
   /** Where a chosen symbol opens. Defaults to the stock analysis page. */
   hrefForSymbol?: (symbol: string) => string;
 };
 
 /** Prominent company search (Stock Analysis landing, and other empty states). */
-export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder, submitLabel, disabled }: StockLandingSearchProps) {
+export function StockLandingSearch({ hrefForSymbol }: StockLandingSearchProps) {
   const { t } = useI18n();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -71,11 +65,6 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
     setSymbolError(false);
     setOpen(false);
     setHighlighted(-1);
-    if (onSelectSymbol) {
-      if (!disabled) onSelectSymbol(sym);
-      setQuery("");
-      return;
-    }
     pushRecentStockSearch(sym, name);
     const href = hrefForSymbol
       ? hrefForSymbol(sym)
@@ -136,9 +125,7 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
               setHighlighted(-1);
             }
           }}
-          placeholder={placeholder ?? t("search.placeholder")}
-          aria-label={submitLabel ?? t("search.submit")}
-          disabled={disabled}
+          placeholder={t("search.placeholder")}
           className="h-11 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
           autoComplete="off"
           spellCheck={false}
@@ -147,8 +134,8 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
           aria-expanded={open && suggestions.length > 0}
           aria-autocomplete="list"
         />
-        <Button disabled={disabled} type="submit" size="sm" variant="secondary" className="shrink-0">
-          {submitLabel ?? t("search.submit")}
+        <Button type="submit" size="sm" variant="secondary" className="shrink-0">
+          {t("search.submit")}
         </Button>
       </div>
       {open && suggestions.length > 0 ? (
@@ -157,19 +144,20 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
           className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-50 max-h-60 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg backdrop-blur-sm"
         >
           {suggestions.map((c, i) => (
-            <li key={c.s} role="option" aria-selected={i === highlighted} className="flex items-center gap-1 pr-2">
+            <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
-                className={`flex min-w-0 flex-1 px-3 py-2 text-left text-sm ${
+                className={`flex w-full px-3 py-2 text-left text-sm ${
                   i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
-                onClick={() => go(c.s, c.n)}
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  go(c.s, c.n);
+                }}
                 onMouseEnter={() => setHighlighted(i)}
               >
                 <CompanyIdentity symbol={c.s} name={c.n} size="sm" />
               </button>
-              {!onSelectSymbol && <WatchlistToggle symbol={c.s} compact />}
             </li>
           ))}
         </ul>
