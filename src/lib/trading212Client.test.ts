@@ -15,6 +15,7 @@ import {
   retryPathForEmptyHistoryPage,
   t212CashBalance,
   t212HoldingsMarketValue,
+  t212SummaryConfirmsNoInvestments,
   t212OrderItemKey,
   T212_ORDERS_LIMIT10_RESTART_PATH,
   T212_ORDERS_LIMIT10_WALK_PREFIX,
@@ -535,4 +536,15 @@ describe("normalizeT212Position", () => {
     assert.equal(p.averagePricePaid, 220);
     assert.equal(p.quantityInPies, 0);
   });
+});
+
+ it("requires explicit zero investments to accept empty positions", () => {
+  assert.equal(t212SummaryConfirmsNoInvestments(null), false);
+  assert.equal(t212SummaryConfirmsNoInvestments({ totalValue: 0 }), false);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: {} }), false);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: { currentValue: 100 } }), false);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: { currentValue: NaN } }), false);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: { currentValue: 0 }, totalValue: 500 }), true);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: { value: 0 } }), true);
+  assert.equal(t212SummaryConfirmsNoInvestments({ investments: { currentValue: 100, value: 0 } }), false);
 });

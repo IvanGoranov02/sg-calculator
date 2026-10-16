@@ -150,24 +150,26 @@ export function buildHoldingMonthlyTimeline(
   );
   if (symPayments.length === 0) return [];
 
-  const monthAmounts = new Map<string, number>();
-  const monthCurrencies = new Map<string, string>();
+  const monthAmounts = new Map<string, Map<string, number>>();
   for (const p of symPayments) {
     const key = monthKey(p.paidOn);
     if (!key) continue;
-    monthAmounts.set(key, (monthAmounts.get(key) ?? 0) + p.amount);
-    monthCurrencies.set(key, dividendPaymentDisplayCurrency(p.paidOn, p.currency));
+    const currency = dividendPaymentDisplayCurrency(p.paidOn, p.currency);
+    const amounts = monthAmounts.get(key) ?? new Map<string, number>();
+    amounts.set(currency, (amounts.get(currency) ?? 0) + p.amount);
+    monthAmounts.set(key, amounts);
   }
 
   const months = [...monthAmounts.keys()].sort();
   if (months.length === 0) return [];
 
   const calendar = calendarMonthsBetween(months[0]!, months[months.length - 1]!);
-  return calendar.map((month) => ({
-    month,
-    amount: monthAmounts.get(month) ?? null,
-    currency: monthCurrencies.get(month) ?? "USD",
-  }));
+  return calendar.flatMap((month): HoldingDividendMonthRow[] => {
+    const amounts = monthAmounts.get(month);
+    if (!amounts) return [{ month, amount: null, currency: "USD" }];
+    return [...amounts.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([currency, amount]) => ({ month, amount, currency }));
+  });
 }
 
 type UpcomingDividendQuote = {

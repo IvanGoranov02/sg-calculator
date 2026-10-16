@@ -638,6 +638,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Holdings market value only — cash is not included. Past months use your broker fills when they match current positions; otherwise add a manual value. Manual entries override auto for that month.",
       valueChartLoading: "Loading portfolio history…",
+      valueHistoryError: "Could not load portfolio history.",
+      valueHistoryRetry: "Retry",
       valueHistoryPartial: "Loading earlier months from Trading 212…",
       valueHistoryPartialPaused:
         "Some earlier months are still on Trading 212. Refresh this page to keep loading them.",
@@ -933,7 +935,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       annualIncome: "Est. annual income",
       yieldOnValue: "{pct}% on value",
       holdings: "Holdings",
-      unconverted: "{n} not converted (no FX)",
+      unconverted: "{n} missing value or FX",
       allocationTitle: "Allocation by holding",
       sectorTitle: "Sector allocation",
       sectorChartLabel:
@@ -1592,6 +1594,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       valueChartHint:
         "Само пазарната стойност на позициите — кешът не влиза. Минали месеци ползват сделки от брокера, когато съвпадат с позициите; иначе добави ръчна стойност. Ръчните записи заменят авто за този месец.",
       valueChartLoading: "Зареждане на история на портфолиото…",
+      valueHistoryError: "Историята на портфолиото не можа да се зареди.",
+      valueHistoryRetry: "Опитай отново",
       valueHistoryPartial: "Зареждане на по-ранни месеци от Trading 212…",
       valueHistoryPartialPaused:
         "По-ранни месеци още са в Trading 212. Презареди страницата, за да продължи зареждането.",
@@ -1887,7 +1891,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       annualIncome: "Очакв. годишен доход",
       yieldOnValue: "{pct}% спрямо стойността",
       holdings: "Позиции",
-      unconverted: "{n} без конверсия (няма курс)",
+      unconverted: "{n} без стойност или валутен курс",
       allocationTitle: "Разпределение по позиция",
       sectorTitle: "Разпределение по сектор",
       sectorChartLabel:

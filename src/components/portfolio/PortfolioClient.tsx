@@ -19,6 +19,7 @@ import {
   formatPercent,
   resolveDateLocaleTag,
 } from "@/lib/format";
+import { estimateHoldingAnnualDividend } from "@/lib/portfolioDividends";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode, readStoredDisplayCurrency } from "@/lib/preferences/preferences";
@@ -241,6 +242,7 @@ export function PortfolioClient() {
   const [dividendsLiveRefreshToken, setDividendsLiveRefreshToken] = useState(0);
 
   const [valueHistory, setValueHistory] = useState<PortfolioValueHistoryPayload | null>(null);
+  const [valueHistoryError, setValueHistoryError] = useState(false);
   const [valueHistoryLoading, setValueHistoryLoading] = useState(false);
   const [historyBackfillPaused, setHistoryBackfillPaused] = useState(false);
   const historyPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -411,11 +413,12 @@ export function PortfolioClient() {
       const res = await fetch(`/api/portfolio/value-history?${params.toString()}`);
       if (!res.ok) {
         if (opts?.poll) scheduleHistoryPoll();
-        else setValueHistory(null);
+        else setValueHistoryError(true);
         return;
       }
       const data = (await res.json()) as PortfolioValueHistoryPayload;
       setValueHistory(data);
+      setValueHistoryError(false);
       const morePending = data.historyStatus === "partial" && data.historyHasMore === true;
       if (morePending) {
         setHistoryBackfillPaused(false);
@@ -430,7 +433,7 @@ export function PortfolioClient() {
       }
     } catch {
       if (opts?.poll) scheduleHistoryPoll();
-      else setValueHistory(null);
+      else setValueHistoryError(true);
     } finally {
       setValueHistoryLoading(false);
       historyLoadInFlight.current = false;
@@ -813,23 +816,7 @@ export function PortfolioClient() {
       const pl = mv != null ? mv - cost : null;
       const plPct = cost > 0 && pl != null ? (pl / cost) * 100 : null;
       const fxMismatch = hasValidQuote && quoteCcy !== holdingCcy && priceInHolding == null;
-      let estAnnual: number | null = null;
-      if (hasValidQuote && q) {
-        if (q.dividendRate != null && Number.isFinite(q.dividendRate)) {
-          // Without FX rates the raw rate would be in the quote currency — show nothing instead.
-          const rateInHolding = convertPortfolioMoney(q.dividendRate, quoteCcy, holdingCcy, fx);
-          if (rateInHolding != null) estAnnual = rateInHolding * qQty;
-        }
-        if (
-          estAnnual == null &&
-          q.dividendYield != null &&
-          Number.isFinite(q.dividendYield) &&
-          mv != null &&
-          mv > 0
-        ) {
-          estAnnual = mv * q.dividendYield;
-        }
-      }
+      const estAnnual = estimateHoldingAnnualDividend(h, q, fx)?.estAnnualIncome ?? null;
       return {
         h,
         q,
@@ -1103,6 +1090,8 @@ export function PortfolioClient() {
       <PortfolioValueChartCard
         data={valueHistory}
         loading={valueHistoryLoading}
+        error={valueHistoryError}
+        onRetry={() => void loadValueHistory()}
         backfillPaused={historyBackfillPaused}
       />
 

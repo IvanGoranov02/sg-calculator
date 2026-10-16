@@ -646,7 +646,7 @@ export function PortfolioDividendsView({
                             <div className="flex flex-wrap gap-x-4 gap-y-2">
                               {holdingMonths.map((row) => (
                                 <div
-                                  key={row.month}
+                                  key={`${row.month}:${row.currency}`}
                                   className="min-w-[4.5rem] text-center"
                                 >
                                   <p className="text-[11px] font-medium text-muted-foreground">
