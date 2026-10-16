@@ -21,7 +21,7 @@ import {
 } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
-import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
+import { displayCurrencyToPortfolioCode, readStoredDisplayCurrency } from "@/lib/preferences/preferences";
 import { invalidatePortfolioRelatedClientCaches, clearPortfolioRelatedClientCachesOnSignOut } from "@/lib/invalidatePortfolioRelatedClientCaches";
 import {
   browserDividendsDayStorage,
@@ -209,7 +209,7 @@ export function PortfolioClient() {
   const [holdingsReloadToken, setHoldingsReloadToken] = useState(0);
   const holdingsReloadTokenRef = useRef(0);
   holdingsReloadTokenRef.current = holdingsReloadToken;
-  const prevCurrencyRef = useRef(preferredPortfolioCurrency);
+  const prevCurrencyRef = useRef(displayCurrencyToPortfolioCode(readStoredDisplayCurrency()));
 
   const [t212Env, setT212Env] = useState<"demo" | "live">("demo");
   const [apiKey, setApiKey] = useState("");
@@ -254,8 +254,11 @@ export function PortfolioClient() {
     setManualCurrency(preferredPortfolioCurrency);
   }, [preferredPortfolioCurrency]);
 
-  // Base currency change invalidates holdings + events caches (per product request).
+  // Use the saved preference as the baseline: the provider may first expose its
+  // USD server snapshot while this Suspense boundary hydrates on navigation.
+  // That snapshot is not a user currency change.
   useEffect(() => {
+    if (preferredPortfolioCurrency !== displayCurrencyToPortfolioCode(readStoredDisplayCurrency())) return;
     if (prevCurrencyRef.current === preferredPortfolioCurrency) return;
     prevCurrencyRef.current = preferredPortfolioCurrency;
     invalidatePortfolioRelatedClientCaches();

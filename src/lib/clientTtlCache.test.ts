@@ -122,6 +122,22 @@ describe("decidePortfolioHoldingsLoad", () => {
     assert.equal(decision.adoptMemory?.fetchedAt, 1_000_000);
   });
 
+  it("reuses fresh holdings after remount resets local reload tokens", () => {
+    const cached = memory({ reloadToken: 2, liveRefreshToken: 1 });
+    for (const source of ["memory", "stored"] as const) {
+      const decision = decidePortfolioHoldingsLoad({
+        userId: "user-1",
+        reloadToken: 0,
+        liveRefreshToken: 0,
+        nowMs: cached.fetchedAt + 60_000,
+        memory: source === "memory" ? cached : null,
+        stored: cached,
+      });
+      assert.equal(decision.action, "reuse");
+      assert.deepEqual(decision.payload, cached.payload);
+    }
+  });
+
   it("fetches after the 1h TTL expires", () => {
     const decision = decidePortfolioHoldingsLoad({
       userId: "user-1",
