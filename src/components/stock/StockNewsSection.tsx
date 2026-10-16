@@ -4,10 +4,13 @@ import { Newspaper } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import type { MarketNewsItem } from "@/lib/yahooQuickQuote";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
+import { fetchWithTimeout } from "@/lib/asyncTimeout";
 
 type Props = { symbol: string; name?: string };
+const fetchNews = fetchWithTimeout(25_000);
 
 function timeAgo(iso: string | null, locale: string): string | null {
   if (!iso) return null;
@@ -23,25 +26,40 @@ function timeAgo(iso: string | null, locale: string): string | null {
 
 export function StockNewsSection({ symbol, name }: Props) {
   const { t, locale } = useI18n();
-  const [items, setItems] = useState<MarketNewsItem[] | null>(null);
+  const [result, setResult] = useState<{ key: string; items: MarketNewsItem[]; failed: boolean } | null>(null);
+  const [retry, setRetry] = useState(0);
+  const requestKey = JSON.stringify([symbol, name ?? "", retry]);
+  const items = result?.key === requestKey ? result.items : null;
+  const failed = result?.key === requestKey && result.failed;
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     const qs = new URLSearchParams({ symbol });
     if (name) qs.set("name", name);
-    fetch(`/api/stock-news?${qs.toString()}`)
-      .then((r) => (r.ok ? r.json() : { items: [] }))
-      .then((d: { items?: MarketNewsItem[] }) => {
-        if (active) setItems(d.items ?? []);
+    queueMicrotask(() => {
+      if (!active) return;
+      void fetchNews(`/api/stock-news?${qs.toString()}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load news");
+        return r.json();
       })
-      .catch(() => active && setItems([]));
+      .then((d: { items?: MarketNewsItem[] }) => {
+        if (!Array.isArray(d.items)) throw new Error("Invalid news response");
+        if (active) setResult({ key: requestKey, items: d.items, failed: false });
+      })
+      .catch(() => {
+        if (active) setResult({ key: requestKey, items: [], failed: true });
+      });
+    });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [symbol, name]);
+  }, [symbol, name, retry, requestKey]);
 
   // Hide entirely until we know there's something to show.
-  if (items != null && items.length === 0) return null;
+  if (!failed && items != null && items.length === 0) return null;
 
   return (
     <Card className="border-border bg-card">
@@ -52,6 +70,12 @@ export function StockNewsSection({ symbol, name }: Props) {
         </CardTitle>
         <CardDescription>{t("stockNews.subtitle")}</CardDescription>
       </CardHeader>
+      {failed ? (
+        <div className="flex items-center gap-3 px-6 pb-6">
+          <p role="alert" className="text-sm text-muted-foreground">{t("stockNews.error")}</p>
+          <Button type="button" size="sm" variant="outline" onClick={() => setRetry((n) => n + 1)}>{t("stock.tryAgain")}</Button>
+        </div>
+      ) : null}
       <div className="grid gap-2 px-6 pb-6 sm:grid-cols-2">
         {items == null
           ? Array.from({ length: 4 }).map((_, i) => (

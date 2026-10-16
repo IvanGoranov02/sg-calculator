@@ -199,3 +199,17 @@ export function computeEpsModel(input: EpsModelInputs): EpsModelResult {
     chartPoints,
   };
 }
+
+/** Editable inputs can be finite yet overflow when projected; keep the form usable. */
+export function tryComputeEpsModel(input: EpsModelInputs): EpsModelResult | null {
+  const years = input.horizonYears ?? EPS_MODEL_HORIZON_YEARS;
+  if (!Number.isFinite(years) || years < 1 || years > 30) return null;
+  try {
+    const result = computeEpsModel(input);
+    return result.chartPoints.every((point) => Number.isFinite(point.projectedPrice) && Number.isFinite(point.projectedEps))
+      ? result
+      : null;
+  } catch {
+    return null;
+  }
+}

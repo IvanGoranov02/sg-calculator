@@ -19,6 +19,9 @@ export const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Unfillable gaps stay gappy; don't retry the paid Gemini gap-fill on every view. */
 export const GAP_FILL_RETRY_MS = 24 * 60 * 60 * 1000;
+/** Reports can update independently of live prices; repeated visits need no six-query re-merge. */
+export const YAHOO_FUNDAMENTALS_REFRESH_MS = 60 * 60 * 1000;
+export const YAHOO_FUNDAMENTALS_RETRY_MS = 5 * 60 * 1000;
 
 /** A new earnings report triggers at most one full re-fetch within this window. */
 export const EARNINGS_REFRESH_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +40,10 @@ export type CachePayload = StockAnalysisBundle & {
   __lastFullFetchAt?: string;
   /** Last Gemini gap-fill attempt; carried through persist via the bundle object itself. */
   __gapFillAt?: string;
+  __yahooFundamentalsRefreshedAt?: string;
+  __yahooFundamentalsAttemptedAt?: string;
+  __dailyHistoryRefreshedAt?: string;
+  __dividendHistoryRefreshedAt?: string;
   /** Where the fundamentals came from; EDGAR data is authoritative over Yahoo on re-merge. */
   __fundamentalsSource?: FundamentalsSource;
   /**
@@ -107,6 +114,22 @@ export function gapFillIsDue(payload: CachePayload | null | undefined): boolean 
 
 export function markGapFillAttempt(bundle: StockAnalysisBundle): void {
   (bundle as CachePayload).__gapFillAt = new Date().toISOString();
+}
+
+/** Live quote writes must never extend a source-fundamentals refresh window. */
+export function yahooFundamentalsAreDue(payload: CachePayload, nowMs = Date.now()): boolean {
+  const ageOf = (stamp: string | undefined) => stamp ? nowMs - Date.parse(stamp) : NaN;
+  const refreshedAge = ageOf(payload.__yahooFundamentalsRefreshedAt);
+  if (Number.isFinite(refreshedAge) && refreshedAge >= 0 && refreshedAge < YAHOO_FUNDAMENTALS_REFRESH_MS) return false;
+  const attemptedAge = ageOf(payload.__yahooFundamentalsAttemptedAt);
+  return !(Number.isFinite(attemptedAge) && attemptedAge >= 0 && attemptedAge < YAHOO_FUNDAMENTALS_RETRY_MS);
+}
+
+export function markYahooFundamentalsRefresh(bundle: StockAnalysisBundle, successful: boolean): void {
+  const payload = bundle as CachePayload;
+  const now = new Date().toISOString();
+  payload.__yahooFundamentalsAttemptedAt = now;
+  if (successful) payload.__yahooFundamentalsRefreshedAt = now;
 }
 
 /**

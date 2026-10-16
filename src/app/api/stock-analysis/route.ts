@@ -1,8 +1,10 @@
 import { auth } from "@/auth";
 import { checkRateLimit, clientKeyFromRequest, rateLimitResponse } from "@/lib/rateLimit";
 import { loadStockAnalysis } from "@/lib/stockAnalysisLoader";
-import type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 import { INVALID_TICKER_SYMBOL_MESSAGE, isValidStockSymbolInput } from "@/lib/stockSymbol";
+import { createStockAnalysisJobs, stockAnalysisStreamResponse } from "@/lib/stockAnalysisRequest";
+import { RequestCapacityError } from "@/lib/sharedRequestCache";
+import { withTimeout } from "@/lib/asyncTimeout";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -14,9 +16,7 @@ const LOAD_WINDOW_MS = 60_000;
 const REFRESH_LIMIT = 3;
 const REFRESH_WINDOW_MS = 10 * 60_000;
 
-type NdjsonLine =
-  | { type: "progress"; payload: StockAnalysisLoadProgress }
-  | { type: "done"; bundle: unknown; error: string | null };
+const stockJobs = createStockAnalysisJobs(loadStockAnalysis);
 
 /** Client-side stock page: JSON, or NDJSON stream when `stream=1` (progress + final bundle). */
 export async function GET(request: Request) {
@@ -32,7 +32,14 @@ export async function GET(request: Request) {
   // Session is only required to authorize a paid full re-fetch. Skip Prisma/auth
   // on the anonymous hot path so a pooler hang cannot stall the NDJSON stream.
   if (forceRefresh) {
-    const session = await auth();
+    let session;
+    try {
+      // Keep the auth check plus the 110-second shared load inside this route's
+      // 120-second ceiling; an unverified session never starts a forced fetch.
+      session = await withTimeout(auth(), 8_000, "Stock sign-in check");
+    } catch {
+      return Response.json({ bundle: null, error: "Could not load stock data." }, { status: 503 });
+    }
     const userId = session?.user?.id ?? null;
     if (!userId) {
       forceRefresh = false;
@@ -51,37 +58,12 @@ export async function GET(request: Request) {
     return rateLimitResponse(general.retryAfterSec);
   }
 
-  if (!stream) {
-    const { bundle, error } = await loadStockAnalysis(ticker, { forceRefresh });
-    return Response.json({ bundle, error });
+  try {
+    const job = stockJobs(ticker, forceRefresh);
+    if (!stream) return Response.json(await job.result);
+    return stockAnalysisStreamResponse(job, request.signal);
+  } catch (error) {
+    if (error instanceof RequestCapacityError) return Response.json({ bundle: null, error: error.message }, { status: 503 });
+    throw error;
   }
-
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (line: NdjsonLine) => {
-        controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
-      };
-      try {
-        const result = await loadStockAnalysis(ticker, {
-          forceRefresh,
-          onProgress: (payload) => send({ type: "progress", payload }),
-        });
-        send({ type: "done", bundle: result.bundle, error: result.error });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Could not load stock data.";
-        send({ type: "done", bundle: null, error: message });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
 }

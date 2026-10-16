@@ -5,6 +5,7 @@
 import YahooFinance from "yahoo-finance2";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+import { normalizeMarketNews, type MarketNewsItem } from "@/lib/marketNews";
 
 export type QuickQuote = {
   symbol: string;
@@ -51,39 +52,16 @@ export async function fetchQuickQuote(symbol: string): Promise<QuickQuote | null
   }
 }
 
-export type MarketNewsItem = {
-  title: string;
-  publisher: string | null;
-  link: string;
-  publishedAt: string | null;
-};
+export type { MarketNewsItem } from "@/lib/marketNews";
 
-export async function fetchMarketNews(query: string, limit = 3): Promise<MarketNewsItem[]> {
+export async function fetchMarketNews(query: string, limit = 3, options?: { throwOnError?: boolean }): Promise<MarketNewsItem[]> {
   const q = query.trim();
   if (!q) return [];
   try {
     const result = await yahooFinance.search(q, { quotesCount: 0, newsCount: limit });
-    const news = Array.isArray(result.news) ? result.news : [];
-    return news
-      .map((item: unknown): MarketNewsItem | null => {
-        if (!item || typeof item !== "object") return null;
-        const rec = item as Record<string, unknown>;
-        const title = typeof rec.title === "string" ? rec.title.trim() : "";
-        const link = typeof rec.link === "string" ? rec.link.trim() : "";
-        if (!title || !link) return null;
-        const providerPublishTime = Number(rec.providerPublishTime);
-        return {
-          title,
-          publisher: typeof rec.publisher === "string" ? rec.publisher : null,
-          link,
-          publishedAt: Number.isFinite(providerPublishTime)
-            ? new Date(providerPublishTime * 1000).toISOString()
-            : null,
-        };
-      })
-      .filter((item): item is MarketNewsItem => item !== null)
-      .slice(0, limit);
-  } catch {
+    return normalizeMarketNews(result.news, limit);
+  } catch (error) {
+    if (options?.throwOnError) throw error;
     return [];
   }
 }

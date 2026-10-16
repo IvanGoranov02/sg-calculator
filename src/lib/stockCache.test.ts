@@ -12,9 +12,13 @@ import {
   GAP_FILL_RETRY_MS,
   gapFillIsDue,
   markGapFillAttempt,
+  markYahooFundamentalsRefresh,
   mergeAdminEditableIntoCache,
   readAdminEditedAt,
   readAdminOverlay,
+  yahooFundamentalsAreDue,
+  YAHOO_FUNDAMENTALS_REFRESH_MS,
+  YAHOO_FUNDAMENTALS_RETRY_MS,
   type CachePayload,
 } from "@/lib/stockCache";
 import type { AdminEditableBundle } from "@/lib/adminCacheSchema";
@@ -34,6 +38,36 @@ function makeBundle(): StockAnalysisBundle {
     dividendQuarterly: [],
   };
 }
+
+describe("Yahoo fundamentals refresh cooldown", () => {
+  it("does not re-fetch six report queries just because live quote cache was written", () => {
+    const bundle = makeBundle();
+    markYahooFundamentalsRefresh(bundle, true);
+    const payload = buildCachePayload(bundle) as CachePayload;
+    const at = Date.parse(payload.__yahooFundamentalsRefreshedAt!);
+    assert.equal(yahooFundamentalsAreDue(payload, at + 1), false);
+    assert.equal(yahooFundamentalsAreDue(payload, at + YAHOO_FUNDAMENTALS_REFRESH_MS + 1), true);
+  });
+
+  it("backs off failed optional reports without extending successful-data freshness", () => {
+    const bundle = makeBundle() as CachePayload;
+    const old = new Date(Date.now() - YAHOO_FUNDAMENTALS_REFRESH_MS - 1000).toISOString();
+    bundle.__yahooFundamentalsRefreshedAt = old;
+    markYahooFundamentalsRefresh(bundle, false);
+    assert.equal(bundle.__yahooFundamentalsRefreshedAt, old);
+    const at = Date.parse(bundle.__yahooFundamentalsAttemptedAt!);
+    assert.equal(yahooFundamentalsAreDue(bundle, at + 1), false);
+    assert.equal(yahooFundamentalsAreDue(bundle, at + YAHOO_FUNDAMENTALS_RETRY_MS + 1), true);
+  });
+
+  it("refreshes legacy and invalid/future timestamps rather than caching indefinitely", () => {
+    const payload = makeBundle() as CachePayload;
+    assert.equal(yahooFundamentalsAreDue(payload), true);
+    payload.__yahooFundamentalsRefreshedAt = "invalid";
+    payload.__yahooFundamentalsAttemptedAt = new Date(Date.now() + 60_000).toISOString();
+    assert.equal(yahooFundamentalsAreDue(payload), true);
+  });
+});
 
 describe("buildCachePayload", () => {
   it("stamps the schema version and omits the admin flag by default", () => {
