@@ -133,6 +133,35 @@ export function prepareHistoryBarsForValue(
   return bars;
 }
 
+/** Preserve omitted fetch failures so incomplete months stay blank. */
+export function buildHistoryBarsForSymbols(
+  symbols: string[],
+  raw: Record<string, QuoteHistoryBar[]>,
+  holdings: Pick<HoldingRow, "symbolYahoo" | "symbolT212">[],
+  quotes: Record<string, LiveQuote | null | undefined>,
+): Record<string, QuoteHistoryBar[]> {
+  const historyBySymbol: Record<string, QuoteHistoryBar[]> = {};
+  for (const sym of symbols) {
+    const h = holdings.find((x) => x.symbolYahoo.trim().toUpperCase() === sym.trim().toUpperCase());
+    const key = Object.prototype.hasOwnProperty.call(raw, sym)
+      ? sym
+      : h && Object.prototype.hasOwnProperty.call(raw, h.symbolYahoo)
+        ? h.symbolYahoo
+        : null;
+    if (key === null) continue;
+    const liveQuote = quotes[sym] ?? quotes[h?.symbolYahoo ?? ""];
+    const listingCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
+    const liveCcy = liveQuote?.currency ? normalizePortfolioCurrency(liveQuote.currency) : null;
+    historyBySymbol[sym] = prepareHistoryBarsForValue(
+      raw[key],
+      h?.symbolYahoo ?? sym,
+      h?.symbolT212,
+      liveCcy === listingCcy ? liveQuote?.price : null,
+    );
+  }
+  return historyBySymbol;
+}
+
 /** Last snapshot in each UTC calendar month (T212 sync captures). */
 export function aggregateSnapshotsByMonth(
   snapshots: SnapshotRow[],

@@ -1,3 +1,5 @@
+import { withTimeoutFallback } from "@/lib/asyncTimeout";
+import { shouldAttemptAutoSync, recordAutoSyncFailure, clearAutoSyncFailure } from "@/lib/t212AutoSyncBackoff";
 import { syncTrading212Positions } from "@/lib/syncTrading212Positions";
 import { auth } from "@/auth";
 import { isPortfolioPositionSyncDue } from "@/lib/apiCacheHeaders";
@@ -44,13 +46,20 @@ export async function GET() {
 
   try {
     const connection = await prisma.trading212Connection.findUnique({ where: { userId } });
-    if (connection && isPortfolioPositionSyncDue(connection.lastSyncAt)) {
+    if (connection && isPortfolioPositionSyncDue(connection.lastSyncAt) && shouldAttemptAutoSync(userId)) {
       // Best effort: a T212 rate limit/outage must not break the holdings view;
       // fall back to the last stored snapshot.
       try {
-        await syncTrading212Positions(userId, false);
+        const result = await withTimeoutFallback(
+          syncTrading212Positions(userId, false),
+          10_000,
+          "t212-auto-sync",
+          null,
+        );
+        if (result?.ok) clearAutoSyncFailure(userId);
+        else recordAutoSyncFailure(userId);
       } catch {
-        // ignore — stored holdings are returned below
+        recordAutoSyncFailure(userId);
       }
     }
     const [holdings, t212] = await Promise.all([

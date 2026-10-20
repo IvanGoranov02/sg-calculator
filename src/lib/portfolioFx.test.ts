@@ -1,4 +1,4 @@
-import { fetchPortfolioFxRates } from "./portfolioFxServer";
+import { fetchPortfolioFxRates } from "./portfolioFxFetch";
 import YahooFinance from "yahoo-finance2";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
