@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { requireAdminSession } from "@/lib/admin";
 import { FMP_ANNUAL_LIMIT, fetchStockBundleFromFmp, fmpApiKey, fmpRecentFailures } from "@/lib/fmp/client";
 import { getGeminiApiKey } from "@/lib/geminiClient";
 import { prisma } from "@/lib/prisma";
@@ -29,13 +30,26 @@ async function probeFmp(): Promise<string> {
 
 export async function GET(request: Request) {
   const limited = checkRateLimit("health", clientKeyFromRequest(request), 10, 60_000);
-  if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
+  if (!limited.ok) {
+    const response = rateLimitResponse(limited.retryAfterSec);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
 
+  const admin = await requireAdminSession();
   let db = "ok";
   try {
     await prisma.stockAnalysisCache.count();
   } catch {
     db = "error";
+  }
+
+  const ok = db === "ok";
+  if (!admin.ok) {
+    return NextResponse.json(
+      { ok, db },
+      { status: ok ? 200 : 503, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   // Exercise the exact code path the loader uses, not just a single request.
@@ -51,12 +65,16 @@ export async function GET(request: Request) {
       : `null (${probeSym})`;
   }
 
-  return NextResponse.json({
-    fmp: await probeFmp(),
-    fmpBundle,
-    fmpRecentFailures: fmpRecentFailures(),
-    gemini: getGeminiApiKey() ? "configured" : "not_configured",
-    edgarUserAgent: process.env.SEC_EDGAR_USER_AGENT?.trim() ? "configured" : "default",
-    db,
-  });
+  return NextResponse.json(
+    {
+      ok,
+      fmp: await probeFmp(),
+      fmpBundle,
+      fmpRecentFailures: fmpRecentFailures(),
+      gemini: getGeminiApiKey() ? "configured" : "not_configured",
+      edgarUserAgent: process.env.SEC_EDGAR_USER_AGENT?.trim() ? "configured" : "default",
+      db,
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
