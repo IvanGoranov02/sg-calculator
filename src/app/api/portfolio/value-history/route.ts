@@ -13,11 +13,10 @@ import {
   computeLiveHoldingsValue,
   currentMonthKey,
   isValidMonthKey,
-  listingPriceCurrency,
   parseChartBaseCurrency,
   pickBaseCurrencyFromHoldings,
   pickPortfolioHistorySymbols,
-  prepareHistoryBarsForValue,
+  buildHistoryBarsForSymbols,
   classifyPortfolioHistory,
   quantityTimelineForChart,
 } from "@/lib/portfolioValueHistory";
@@ -198,20 +197,7 @@ export async function GET(request: Request) {
         .sort()[0];
       const period1 = firstEvent ? new Date(`${firstEvent}T00:00:00Z`) : undefined;
       const raw = await fetchPortfolioQuoteHistory(historySymbols, period1);
-      historyBySymbol = {};
-      for (const sym of historySymbols) {
-        const h = holdings.find((x) => x.symbolYahoo.trim().toUpperCase() === sym.trim().toUpperCase());
-        const liveQuote = quotes[sym] ?? quotes[h?.symbolYahoo ?? ""];
-        const livePx = liveQuote?.price ?? null;
-        const listingCcy = listingPriceCurrency(h?.symbolYahoo ?? sym, h?.symbolT212);
-        const liveCcy = liveQuote?.currency ? normalizePortfolioCurrency(liveQuote.currency) : null;
-        historyBySymbol[sym] = prepareHistoryBarsForValue(
-          raw[sym] ?? raw[h?.symbolYahoo ?? ""] ?? [],
-          h?.symbolYahoo ?? sym,
-          h?.symbolT212,
-          liveCcy === listingCcy ? livePx : null,
-        );
-      }
+      historyBySymbol = buildHistoryBarsForSymbols(historySymbols, raw, holdings, quotes);
     }
 
     const history = classifyPortfolioHistory({

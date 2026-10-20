@@ -4,6 +4,8 @@ import { describe, it } from "node:test";
 import type { T212HistoryDividendItem } from "@/lib/trading212Client";
 import {
   decideT212DividendsCacheWrite,
+  isT212DividendsCacheStale,
+  T212_DIVIDENDS_CACHE_MAX_AGE_MS,
   mergeT212DividendItems,
   t212DividendPaymentKey,
 } from "@/lib/t212DividendsCache";
@@ -76,5 +78,23 @@ describe("decideT212DividendsCacheWrite", () => {
     assert.equal(decision.items.length, prev.length);
     assert.equal(decision.partial, true);
     assert.equal(decision.replaced, false);
+  });
+});
+
+describe("isT212DividendsCacheStale", () => {
+  const now = Date.UTC(2026, 9, 20);
+
+  it("refreshes an absent cache", () => {
+    assert.equal(isT212DividendsCacheStale(null, now), true);
+  });
+
+  it("keeps caches up to 24 hours old", () => {
+    assert.equal(isT212DividendsCacheStale(new Date(now), now), false);
+    assert.equal(isT212DividendsCacheStale(new Date(now - T212_DIVIDENDS_CACHE_MAX_AGE_MS), now), false);
+    assert.equal(isT212DividendsCacheStale(new Date(now + 1000), now), false);
+  });
+
+  it("refreshes caches older than 24 hours", () => {
+    assert.equal(isT212DividendsCacheStale(new Date(now - T212_DIVIDENDS_CACHE_MAX_AGE_MS - 1), now), true);
   });
 });

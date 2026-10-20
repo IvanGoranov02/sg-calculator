@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import type { QuoteHistoryBar } from "@/lib/dipFinder";
 import {
   aggregateSnapshotsByMonth,
+  buildHistoryBarsForSymbols,
   buildPortfolioValueChartSeries,
   calendarMonthsForEvents,
   classifyPortfolioHistory,
@@ -697,5 +698,34 @@ describe("parseChartBaseCurrency", () => {
   it("accepts EUR USD GBP and falls back otherwise", () => {
     assert.equal(parseChartBaseCurrency("eur", "USD"), "EUR");
     assert.equal(parseChartBaseCurrency("CHF", "EUR"), "EUR");
+  });
+});
+
+describe("buildHistoryBarsForSymbols", () => {
+  it("keeps present bars and empty arrays but omits failed symbols", () => {
+    const bars = [{ date: "2026-01-30", close: 100 }];
+    const result = buildHistoryBarsForSymbols(
+      ["AAPL", "EMPTY", "MISSING"],
+      { AAPL: bars, EMPTY: [] },
+      [],
+      {},
+    );
+    assert.deepEqual(result, { AAPL: bars, EMPTY: [] });
+    assert.equal(Object.prototype.hasOwnProperty.call(result, "MISSING"), false);
+  });
+
+  it("checks the holding's original key and prepares its listing currency", () => {
+    const result = buildHistoryBarsForSymbols(
+      ["VOD.L", "EMPTY"],
+      { "vod.l": [{ date: "2026-01-30", close: 100 }], EMPTY: [], empty: [{ date: "2026-01-30", close: 50 }] },
+      [{ symbolYahoo: "vod.l" }, { symbolYahoo: "empty" }],
+      {},
+    );
+    assert.deepEqual(result, { "VOD.L": [{ date: "2026-01-30", close: 1 }], EMPTY: [] });
+  });
+
+  it("does not treat inherited keys as fetched history", () => {
+    const raw = Object.create({ MISSING: [] }) as Record<string, QuoteHistoryBar[]>;
+    assert.deepEqual(buildHistoryBarsForSymbols(["MISSING"], raw, [{ symbolYahoo: "missing" }], {}), {});
   });
 });

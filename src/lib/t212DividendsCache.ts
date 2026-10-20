@@ -8,6 +8,7 @@ export type T212DividendsCacheFields = {
   dividendsCachePartial: boolean;
 };
 
+import { withTimeoutFallback } from "@/lib/asyncTimeout";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/portfolioEncryption";
 import {
@@ -15,6 +16,23 @@ import {
   type T212HistoryDividendItem,
   type T212PaginatedFetchResult,
 } from "@/lib/trading212Client";
+
+export const T212_DIVIDENDS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function isT212DividendsCacheStale(cachedAt: Date | null, nowMs = Date.now()): boolean {
+  return cachedAt === null || nowMs - cachedAt.getTime() > T212_DIVIDENDS_CACHE_MAX_AGE_MS;
+}
+
+const T212_DIVIDENDS_AUTO_REFRESH_RETRY_MS = 60 * 60 * 1000;
+const autoRefreshAttempts = new Map<string, number>();
+
+function shouldAutoRefreshDividends(userId: string, nowMs = Date.now()): boolean {
+  for (const [id, at] of autoRefreshAttempts) {
+    if (nowMs - at >= T212_DIVIDENDS_AUTO_REFRESH_RETRY_MS) autoRefreshAttempts.delete(id);
+  }
+  const last = autoRefreshAttempts.get(userId);
+  return last === undefined || nowMs - last >= T212_DIVIDENDS_AUTO_REFRESH_RETRY_MS;
+}
 
 export type T212DividendsCacheRead = {
   items: T212HistoryDividendItem[];
@@ -200,6 +218,24 @@ export async function loadT212DividendsForUser(
         return { ...cached, fetchError: msg };
       }
       return { items: [], cachedAt: cached.cachedAt, partial: true, error: msg, fetchError: msg };
+    }
+  }
+
+  if (isT212DividendsCacheStale(conn.dividendsCachedAt) && shouldAutoRefreshDividends(userId)) {
+    // cachedAt is not bumped when T212 returns no new rows, so throttle attempts
+    // per instance instead of re-fetching on every request.
+    autoRefreshAttempts.set(userId, Date.now());
+    try {
+      const refreshed = await withTimeoutFallback(
+        loadT212DividendsForUser(userId, conn, { refresh: true }),
+        15_000,
+        "t212-dividends-auto-refresh",
+        null,
+      );
+      // Refresh results are merged with the stored history, so a partial result is still safe to show.
+      if (refreshed && !refreshed.fetchError) return refreshed;
+    } catch {
+      // Automatic refresh must preserve the stored cache on failure.
     }
   }
 
