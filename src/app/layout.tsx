@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
@@ -45,6 +46,7 @@ export default function RootLayout({
             <AuthSessionProvider>{children}</AuthSessionProvider>
           </PreferencesProvider>
         </LocaleProvider>
+        <Analytics />
       </body>
     </html>
   );
