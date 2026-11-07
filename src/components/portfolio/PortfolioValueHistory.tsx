@@ -3,10 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import {
-  Bar,
+  Area,
+  AreaChart,
   CartesianGrid,
-  ComposedChart,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,6 +33,7 @@ export type PortfolioValueHistoryPayload = {
   baseCurrency: string;
   manualEntries: { month: string; amount: string; currency: string }[];
   computedHint: boolean;
+  historyDiagnostics?: { orderCount: number; eventCount: number; reconstructedMonths: number; requestedSymbols: number; fetchedSymbols: number; hasResumeCursor: boolean };
   historyStatus?: PortfolioHistoryStatus;
   historyReason?: PortfolioHistoryReason;
   /** Another orders page is stored and the walk should continue. */
@@ -71,6 +71,7 @@ function historyNotice(
     return backfillPaused ? t("portfolio.valueHistoryPartialPaused") : t("portfolio.valueHistoryPartial");
   }
   if (data.historyReason === "missing_scope") return t("portfolio.valueHistoryMissingScope");
+  if (data.historyReason === "prices_missing") return t("portfolio.valueHistoryPricesMissing");
   if (data.historyReason === "mismatch") return t("portfolio.valueHistoryMismatch");
   return null;
 }
@@ -80,10 +81,11 @@ type ChartProps = {
   loading: boolean;
   error?: boolean;
   onRetry?: () => void;
+  onRebuild?: () => void;
   backfillPaused?: boolean;
 };
 
-export function PortfolioValueChartCard({ error, onRetry, ...props }: ChartProps) {
+export function PortfolioValueChartCard({ error, onRetry, onRebuild, ...props }: ChartProps) {
   const { t } = useI18n();
   return (
     <div className="space-y-2">
@@ -96,6 +98,10 @@ export function PortfolioValueChartCard({ error, onRetry, ...props }: ChartProps
         </div>
       ) : null}
       <PortfolioValueChartContent {...props} />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+        {props.data?.historyDiagnostics ? <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">{t("portfolio.valueHistoryDetails")}</summary><p className="mt-2">{t("portfolio.valueHistoryProgress", { orders: props.data.historyDiagnostics.orderCount, events: props.data.historyDiagnostics.eventCount, months: props.data.historyDiagnostics.reconstructedMonths, prices: props.data.historyDiagnostics.fetchedSymbols, requested: props.data.historyDiagnostics.requestedSymbols })}</p></details> : <span />}
+        {onRebuild ? <Button size="sm" variant="outline" disabled={props.loading} onClick={onRebuild}>{t("portfolio.valueHistoryRebuild")}</Button> : null}
+      </div>
     </div>
   );
 }
@@ -168,7 +174,7 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
       </CardHeader>
       <div className="h-64 px-2 pb-4 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="label"
@@ -201,9 +207,8 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
                 );
               }}
             />
-            <Bar dataKey="value" fill="#34d399" radius={[4, 4, 0, 0]} barSize={18} />
-            <Line type="monotone" dataKey="value" stroke="#38bdf8" strokeWidth={2} dot={false} />
-          </ComposedChart>
+            <Area type="linear" dataKey="value" stroke="var(--chart-1)" fill="var(--chart-1)" fillOpacity={0.15} strokeWidth={2.5} dot={{ r: 3 }} connectNulls={false} />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </Card>

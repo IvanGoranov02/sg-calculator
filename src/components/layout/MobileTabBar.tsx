@@ -35,7 +35,7 @@ export function MobileTabBar({ onMore }: Props) {
               href={href}
               className={cn(
                 "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors",
-                active ? "text-emerald-400" : "text-muted-foreground hover:text-foreground",
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <Icon className="size-5" aria-hidden />

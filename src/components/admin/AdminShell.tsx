@@ -12,8 +12,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
 
   return (
-    <div className="flex min-h-dvh flex-col bg-zinc-950">
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-zinc-950/95 backdrop-blur-md">
+    <div className="flex min-h-dvh flex-col bg-card">
+      <header className="sticky top-0 z-10 border-b border-border bg-card backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Link href="/admin/cache" className="font-semibold tracking-tight text-foreground">
@@ -33,7 +33,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               type="button"
               variant="outline"
               size="sm"
-              className="border-white/15 bg-zinc-900/60"
+              className="border-border bg-card"
               onClick={() => {
                 clearPortfolioRelatedClientCachesOnSignOut();
                 void signOut({ callbackUrl: "/dashboard" });

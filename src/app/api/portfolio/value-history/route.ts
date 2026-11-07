@@ -23,6 +23,7 @@ import {
 import {
   clearedT212OrdersCacheData,
   isT212OrdersCacheStale,
+  ordersCacheBehindPositions,
   isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
   ordersCacheGenerationWhere,
@@ -94,6 +95,7 @@ export async function GET(request: Request) {
     let ordersNextPath = ordersRead?.nextPagePath ?? null;
     const thisMonth = currentMonthKey();
     const userRefresh = url.searchParams.get("refresh") === "1";
+    const rebuild = userRefresh && url.searchParams.get("rebuild") === "1";
 
     const holdingSymbols = t212HoldingSymbolMap(holdings);
 
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
         previewTimeline != null && [...previewTimeline.keys()].some((month) => month < thisMonth);
       // Same cache clear as a credential reconnect when this walk cannot draw earlier months.
       if (
-        shouldRebuildOrdersCacheOnRefresh({
+        rebuild || shouldRebuildOrdersCacheOnRefresh({
           userRefresh: true,
           scopeDenied: scopeDeniedNow,
           ordersPartial,
@@ -139,10 +141,23 @@ export async function GET(request: Request) {
       }
     }
 
+    const cachedTimeline = quantityTimelineForChart({
+      ordersPartial,
+      scopeDenied: isT212OrdersScopeDenied(ordersError),
+      events: mapT212OrderItemsToQtyEvents(orderItems, holdingSymbols),
+      holdings,
+    });
+    const behindPositions = t212 && ordersCacheBehindPositions({
+      cachedAt: t212.ordersCachedAt,
+      lastSyncAt: t212.lastSyncAt,
+      partial: ordersPartial,
+      hasMismatch: holdings.length > 0 && cachedTimeline == null,
+    });
+
     if (
       t212 &&
       isPortfolioEncryptionConfigured() &&
-      (isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
+      (behindPositions || isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
         isT212OrdersScopeDenied(ordersError))
     ) {
       const refreshed = await withTimeoutFallback(
@@ -227,6 +242,12 @@ export async function GET(request: Request) {
       liveValue,
     });
 
+    if (history.status === "ready" && qtyByMonth && [...qtyByMonth.keys()].some(month => month < thisMonth) &&
+      !chartSeries.some(point => point.month < thisMonth && point.source === "computed" && point.value != null)) {
+      history.status = "unavailable";
+      history.reason = "prices_missing";
+    }
+
     return Response.json({
       chartSeries,
       baseCurrency,
@@ -236,6 +257,14 @@ export async function GET(request: Request) {
         currency: r.currency,
       })),
       computedHint: holdings.length > 0 || snapshots.length > 0,
+      historyDiagnostics: {
+        orderCount: orderItems.length,
+        eventCount: qtyEvents.length,
+        reconstructedMonths: qtyByMonth?.size ?? 0,
+        requestedSymbols: historySymbols.length,
+        fetchedSymbols: Object.keys(historyBySymbol).length,
+        hasResumeCursor: Boolean(ordersNextPath?.trim()),
+      },
       historyStatus: history.status,
       historyReason: history.reason,
       historyHasMore: Boolean(t212) && ordersPartial && !scopeDenied && Boolean(ordersNextPath?.trim()),

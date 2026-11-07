@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   Briefcase,
   CalendarClock,
   Calculator,
@@ -38,6 +39,7 @@ const nav = [
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
   { href: "/portfolio", labelKey: "nav.portfolio" as const, icon: Briefcase },
   { href: "/events", labelKey: "nav.events" as const, icon: CalendarClock },
+  { href: "/articles", labelKey: "nav.articles" as const, icon: BookOpen },
 ];
 
 export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNavigate }: SidebarProps) {
@@ -66,7 +68,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           className={cn("flex min-w-0 items-center gap-1.5 font-semibold tracking-tight", collapsed && "justify-center")}
           title={t("nav.brand")}
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary ring-1 ring-primary/30">
             SP
           </span>
           {!collapsed ? <span className="truncate text-sm text-sidebar-foreground">{t("nav.brand")}</span> : null}

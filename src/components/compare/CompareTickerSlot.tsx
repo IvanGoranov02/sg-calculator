@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Plus, X } from "lucide-react";
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,9 @@ import { formatCurrency, formatCurrencyCompact, formatPercent } from "@/lib/form
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import {
   resolveStockSearchQuery,
-  suggestCompanies,
   type SearchCompany,
 } from "@/lib/stockSearch";
+import { useCompanySearch } from "@/lib/useCompanySearch";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
 import type { CompareRow } from "@/lib/yahooCompare";
 import { cn } from "@/lib/utils";
@@ -45,11 +45,7 @@ export function CompareTickerSlot({
   const status = compareSlotStatus(Boolean(symbol), loading, row != null);
   const showSearch = !symbol || editing;
 
-  const suggestionPool = useMemo(
-    () =>
-      suggestCompanies(companies, input).filter((c) => c.s.toUpperCase() !== symbol),
-    [companies, input, symbol],
-  );
+  const suggestionPool = useCompanySearch(companies, input).filter((c) => c.s.toUpperCase() !== symbol);
   const suggestions = open ? suggestionPool : [];
 
   function pickTicker(raw: string) {
