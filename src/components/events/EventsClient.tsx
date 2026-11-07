@@ -446,11 +446,11 @@ export function EventsClient() {
             <CardTitle>{t("events.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("events.emptyDescBefore")}{" "}
-              <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/watchlist" className="text-foreground underline-offset-4 hover:underline">
                 {t("events.emptyWatchlistLink")}
               </Link>
               {t("events.emptyDescMiddle")}{" "}
-              <Link href="/portfolio" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/portfolio" className="text-foreground underline-offset-4 hover:underline">
                 {t("events.emptyPortfolioLink")}
               </Link>
               {t("events.emptyDescAfter")}
@@ -459,7 +459,7 @@ export function EventsClient() {
         </Card>
       ) : showLoading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
-          <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
+          <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
           {t("events.loading")}
         </div>
       ) : error ? (

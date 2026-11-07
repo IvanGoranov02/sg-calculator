@@ -132,7 +132,7 @@ export function CompareTickerSlot({
               type="button"
               className={cn(
                 "flex w-full px-3 py-1.5 text-left text-sm",
-                i === highlighted ? "bg-emerald-500/15" : "hover:bg-muted/50",
+                i === highlighted ? "bg-accent text-accent-foreground" : "hover:bg-muted/50",
               )}
               onMouseDown={(e) => {
                 e.preventDefault();

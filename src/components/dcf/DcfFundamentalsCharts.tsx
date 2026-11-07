@@ -181,10 +181,7 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
                 type="button"
                 size="sm"
                 variant={metric === m.id ? "default" : "outline"}
-                className={cn(
-                  "rounded-lg text-left",
-                  metric === m.id && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                )}
+                className="rounded-lg text-left"
                 onClick={() => setMetric(m.id)}
               >
                 {m.label}

@@ -370,7 +370,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
   const empty = chartRows.length === 0;
 
   const selectClass =
-    "h-9 min-w-[8.5rem] rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-emerald-500/50";
+    "h-9 min-w-[8.5rem] rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring/50";
 
   return (
     <div className="flex flex-col gap-6">
@@ -439,10 +439,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               type="button"
               size="lg"
               variant={freq === "quarterly" ? "default" : "outline"}
-              className={cn(
-                "rounded-lg",
-                freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-              )}
+              className="rounded-lg"
               onClick={() => setFreq("quarterly")}
               disabled={!hasQuarterly}
               title={!hasQuarterly ? t("chartsFund.quarterlyUnavailable") : undefined}
@@ -453,10 +450,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               type="button"
               size="lg"
               variant={freq === "annual" ? "default" : "outline"}
-              className={cn(
-                "rounded-lg",
-                freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
-              )}
+              className="rounded-lg"
               onClick={() => setFreq("annual")}
             >
               {t("chartsFund.annual")}

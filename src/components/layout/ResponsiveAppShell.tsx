@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { SiteEditor } from "@/components/content/SiteEditor";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
@@ -10,6 +10,32 @@ import { TopHeader } from "@/components/layout/TopHeader";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 
 const SIDEBAR_COLLAPSED_KEY = "sg-sidebar-collapsed-v2";
+const SIDEBAR_COLLAPSED_EVENT = "sg-sidebar-collapsed-changed";
+
+function readSidebarCollapsed(): boolean {
+  return (
+    typeof window === "undefined" ||
+    window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== "0"
+  );
+}
+
+function getServerSidebarCollapsed(): boolean {
+  return true;
+}
+
+function subscribeSidebarCollapsed(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === SIDEBAR_COLLAPSED_KEY || event.key === null) onChange();
+  };
+  const onLocal = () => onChange();
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(SIDEBAR_COLLAPSED_EVENT, onLocal);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(SIDEBAR_COLLAPSED_EVENT, onLocal);
+  };
+}
 
 type ResponsiveAppShellProps = {
   children: React.ReactNode;
@@ -17,22 +43,19 @@ type ResponsiveAppShellProps = {
 
 export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () =>
-      typeof window === "undefined" ||
-      window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== "0",
+  const sidebarCollapsed = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    readSidebarCollapsed,
+    getServerSidebarCollapsed,
   );
   const { t } = useI18n();
   const pathname = usePathname();
 
   const toggleSidebarCollapsed = useCallback(() => {
-    setSidebarCollapsed((c) => {
-      const next = !c;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
-      }
-      return next;
-    });
+    if (typeof window === "undefined") return;
+    const next = !readSidebarCollapsed();
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+    window.dispatchEvent(new Event(SIDEBAR_COLLAPSED_EVENT));
   }, []);
 
   function closeMobileNav() {
