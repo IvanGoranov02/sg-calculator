@@ -103,7 +103,7 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
   return (
     <form
       onSubmit={onSubmit}
-      className="relative rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20"
+      className="relative rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/30"
     >
       <div className="flex min-w-0 items-center gap-2">
         <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden />
@@ -148,7 +148,7 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
           aria-expanded={open && suggestions.length > 0}
           aria-autocomplete="list"
         />
-        <Button disabled={disabled} type="submit" size="sm" variant="secondary" className="shrink-0">
+        <Button disabled={disabled} type="submit" size="sm" className="shrink-0">
           {submitLabel ?? t("search.submit")}
         </Button>
       </div>
@@ -162,7 +162,7 @@ export function StockLandingSearch({ hrefForSymbol, onSelectSymbol, placeholder,
               <button
                 type="button"
                 className={`flex min-w-0 flex-1 px-3 py-2 text-left text-sm ${
-                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
+                  i === highlighted ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
                 }`}
                 onClick={() => go(c.s, c.n)}
                 onMouseDown={(e) => e.preventDefault()}

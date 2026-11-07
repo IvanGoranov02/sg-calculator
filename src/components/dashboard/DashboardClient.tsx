@@ -129,14 +129,14 @@ export function DashboardClient() {
         {symbols.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t("dashboard.watchlistEmptyBefore")}{" "}
-            <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
+            <Link href="/watchlist" className="text-foreground underline-offset-4 hover:underline">
               {t("dashboard.watchlistEmptyLink")}
             </Link>{" "}
             {t("dashboard.watchlistEmptyAfter")}
           </p>
         ) : loading && quotes.length === 0 ? (
           <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
-            <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
+            <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
             {t("dashboard.watchlistLoading")}
           </div>
         ) : (

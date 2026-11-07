@@ -158,8 +158,8 @@ function StockSearch({ target, compact }: StockSearchProps) {
   }
 
   const formClass = compact
-    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:bg-muted/30 lg:px-2.5 lg:py-1"
-    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
+    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-ring focus-within:bg-card focus-within:ring-1 focus-within:ring-ring/30 lg:bg-muted/30 lg:px-2.5 lg:py-1"
+    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-ring focus-within:bg-card focus-within:ring-1 focus-within:ring-ring/30 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
 
   return (
     <form onSubmit={onSubmit} className={formClass}>
@@ -235,7 +235,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
               <button
                 type="button"
                 className={`flex min-w-0 flex-1 px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
-                  i === highlighted ? "bg-primary/15 text-accent-foreground" : "hover:bg-muted/50"
+                  i === highlighted ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
                 }`}
                 onClick={() => go(c.s)}
                 onMouseDown={(e) => e.preventDefault()}

@@ -69,7 +69,7 @@ export function Articles({ id }: { id?: string }) {
     return (
       <article className="mx-auto max-w-4xl space-y-7 pb-12">
         <div className="flex items-center justify-between">
-          <Link href="/articles" className="text-sm text-primary">
+          <Link href="/articles" className="text-sm text-foreground">
             ← {t("editorial.allArticles")}
           </Link>
           {admin ? (
@@ -79,7 +79,7 @@ export function Articles({ id }: { id?: string }) {
           ) : null}
         </div>
         <header className="mx-auto max-w-3xl space-y-4">
-          <p className="text-sm font-medium text-primary">
+          <p className="text-sm font-medium text-foreground">
             {article.published ? t("editorial.article") : t("editorial.draft")}{" "}
             · {Math.max(1, Math.ceil(words / 200))} {t("editorial.minRead")}
           </p>
@@ -153,7 +153,7 @@ export function Articles({ id }: { id?: string }) {
     <section className="mx-auto max-w-6xl space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-2 text-sm font-medium text-primary">
+          <p className="mb-2 text-sm font-medium text-foreground">
             {t("editorial.ideasPerspectives")}
           </p>
           <h1 className="text-3xl font-semibold">{t("editorial.articles")}</h1>
@@ -185,17 +185,17 @@ export function Articles({ id }: { id?: string }) {
               />
               <div className="space-y-3 p-5">
                 {!a.published ? (
-                  <p className="text-xs font-medium text-primary">
+                  <p className="text-xs font-medium text-foreground">
                     {t("editorial.draft")}
                   </p>
                 ) : null}
-                <h2 className="text-xl font-semibold group-hover:text-primary">
+                <h2 className="text-xl font-semibold group-hover:underline underline-offset-4">
                   {a.title}
                 </h2>
                 <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                   {a.excerpt}
                 </p>
-                <span className="inline-block text-sm font-medium text-primary">
+                <span className="inline-block text-sm font-medium text-foreground">
                   {t("editorial.readArticle")} →
                 </span>
               </div>
