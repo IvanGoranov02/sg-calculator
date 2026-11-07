@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { SiteEditor } from "@/components/content/SiteEditor";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopHeader } from "@/components/layout/TopHeader";
@@ -68,6 +69,7 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
           {/* Keyed by route so content gently animates in on each navigation. */}
           <div key={pathname} className="animate-page-in">
             {children}
+            <SiteEditor />
           </div>
         </main>
       </div>

@@ -716,3 +716,12 @@ describe("isT212OrdersCacheStale", () => {
     assert.equal(isT212OrdersCacheStale(old, false), true);
   });
 });
+
+it("preserves identified executions when the remaining order was cancelled", () => {
+ const events = mapT212OrderItemsToQtyEvents([
+  {fill:{id:101,filledAt:"2024-01-15T12:00:00Z",quantity:2,type:"TRADE"},order:{ticker:"AAPL_US_EQ",side:"BUY",status:"CANCELLED"}},
+  {fill:{id:102,filledAt:"2024-02-15T12:00:00Z",quantity:1,type:"TRADE"},order:{ticker:"AAPL_US_EQ",side:"SELL",status:"CANCELLED"}},
+  {order:{ticker:"AAPL_US_EQ",side:"BUY",status:"CANCELLED",quantity:20}},
+ ]);
+ assert.deepEqual(events.map(e=>e.delta),[2,-1]);
+});

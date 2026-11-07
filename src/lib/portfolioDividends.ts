@@ -140,6 +140,13 @@ export function paymentMatchesSymbol(p: PortfolioDividendPayment, symbol: string
   return false;
 }
 
+/** Individual cash payments retain their source dates, including multiple payouts in a month. */
+export function holdingDividendPayments(payments: PortfolioDividendPayment[], symbol: string): PortfolioDividendPayment[] {
+  return payments
+    .filter((p) => paymentMatchesSymbol(p, symbol) && p.amount > 0 && Number.isFinite(p.amount) && normalizeIsoDateString(p.paidOn))
+    .sort((a, b) => a.paidOn.localeCompare(b.paidOn));
+}
+
 /** Continuous calendar months for one holding; quiet months have amount null. */
 export function buildHoldingMonthlyTimeline(
   payments: PortfolioDividendPayment[],

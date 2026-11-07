@@ -94,6 +94,7 @@ export async function GET(request: Request) {
     let ordersNextPath = ordersRead?.nextPagePath ?? null;
     const thisMonth = currentMonthKey();
     const userRefresh = url.searchParams.get("refresh") === "1";
+    const rebuild = userRefresh && url.searchParams.get("rebuild") === "1";
 
     const holdingSymbols = t212HoldingSymbolMap(holdings);
 
@@ -110,7 +111,7 @@ export async function GET(request: Request) {
         previewTimeline != null && [...previewTimeline.keys()].some((month) => month < thisMonth);
       // Same cache clear as a credential reconnect when this walk cannot draw earlier months.
       if (
-        shouldRebuildOrdersCacheOnRefresh({
+        rebuild || shouldRebuildOrdersCacheOnRefresh({
           userRefresh: true,
           scopeDenied: scopeDeniedNow,
           ordersPartial,
@@ -227,6 +228,12 @@ export async function GET(request: Request) {
       liveValue,
     });
 
+    if (history.status === "ready" && qtyByMonth && [...qtyByMonth.keys()].some(month => month < thisMonth) &&
+      !chartSeries.some(point => point.month < thisMonth && point.source === "computed" && point.value != null)) {
+      history.status = "unavailable";
+      history.reason = "prices_missing";
+    }
+
     return Response.json({
       chartSeries,
       baseCurrency,
@@ -236,6 +243,14 @@ export async function GET(request: Request) {
         currency: r.currency,
       })),
       computedHint: holdings.length > 0 || snapshots.length > 0,
+      historyDiagnostics: {
+        orderCount: orderItems.length,
+        eventCount: qtyEvents.length,
+        reconstructedMonths: qtyByMonth?.size ?? 0,
+        requestedSymbols: historySymbols.length,
+        fetchedSymbols: Object.keys(historyBySymbol).length,
+        hasResumeCursor: Boolean(ordersNextPath?.trim()),
+      },
       historyStatus: history.status,
       historyReason: history.reason,
       historyHasMore: Boolean(t212) && ordersPartial && !scopeDenied && Boolean(ordersNextPath?.trim()),

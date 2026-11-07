@@ -40,3 +40,13 @@ Set **ADMIN_EMAILS** (comma-separated Google sign-in emails). Sign in, then open
 ## Stack
 
 Next.js (App Router), TypeScript, Tailwind, shadcn/ui, Recharts.
+
+## Articles and page editing
+
+`/articles` lists published reads. Signed-in administrators (configured through the existing `ADMIN_EMAILS`) also see drafts and can create a read at `/articles/new`, or use **Edit article** on a read. The editor supports long text, headings, reordered blocks, images with drag/slider framing, and HTTPS video links (including YouTube/Vimeo embeds). Uploaded PNG/JPEG/WebP/GIF images are stored with the document; each upload is limited to 2 MB and the whole document to 4 MB. Use hosted HTTPS media URLs for larger documents and videos.
+
+**Edit page**, at the bottom of application pages for administrators, previews and saves EN/BG interface copy and image overrides. Labels can be selected from the page or found by text/key; dynamic financial values remain source data. Translation placeholders must be preserved. Cancel restores the previously saved content. Both editors reject stale writes from another tab and enforce administrator access on the server.
+
+The additive `Article` and `SiteContent` schema is included in Prisma and in a migration. The existing Vercel production build applies the schema and runs `prisma/lock-supabase-api.sql`; preview builds still skip schema application. Draft reads and their cover images are unavailable to public/non-admin requests. Uploaded covers are served separately to avoid sending image payloads in the article listing.
+
+Portfolio history now includes identified fills on cancelled orders, exposes reconstruction counts, and provides **Rebuild history** to restart the order-history cache walk. This does not delete holdings, credentials or manual monthly values. Historical-price failures remain visible rather than being described as a successfully rebuilt history.

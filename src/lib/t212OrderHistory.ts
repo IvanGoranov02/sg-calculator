@@ -136,7 +136,10 @@ export function mapT212OrderItemsToQtyEvents(
     const order = item.order;
     const fill = item.fill;
     const status = (order?.status ?? "").trim().toUpperCase();
-    if (SKIP_STATUS.has(status)) continue;
+    // Cancelling an order cancels its unfilled remainder, not an identified execution.
+    const confirmedCancelledFill = status === "CANCELLED" && fill?.id != null &&
+      Number.isFinite(Number(fill.quantity)) && Number(fill.quantity) !== 0 && !!fill.filledAt;
+    if (SKIP_STATUS.has(status) && !confirmedCancelledFill) continue;
     if (status && !FILLED_STATUS.has(status) && fill?.quantity == null) continue;
 
     const ticker = (order?.ticker ?? order?.instrument?.ticker ?? "").trim();
