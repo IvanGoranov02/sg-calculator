@@ -33,8 +33,7 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
 import { displayCurrencyToPortfolioCode } from "@/lib/preferences/preferences";
 import {
-  holdingDividendPayments,
-  dividendPaymentDisplayCurrency,
+  buildHoldingMonthlyTimeline,
   buildMonthlyChartSeries,
   incomeGrowthPillsFromMonthly,
   mergeEstAnnualIncome,
@@ -582,9 +581,9 @@ export function PortfolioDividendsView({
               </TableHeader>
               <TableBody>
                 {data.positions.map((p) => {
-                  const holdingPayments = holdingDividendPayments(data.payments, p.symbol);
+                  const holdingMonths = buildHoldingMonthlyTimeline(data.payments, p.symbol);
                   const isExpanded = expandedSymbol === p.symbol;
-                  const canExpand = holdingPayments.length > 0;
+                  const canExpand = holdingMonths.length > 0;
                   return (
                     <Fragment key={p.symbol}>
                       <TableRow
@@ -641,20 +640,20 @@ export function PortfolioDividendsView({
                           )}
                         </TableCell>
                       </TableRow>
-                      {isExpanded && holdingPayments.length > 0 ? (
+                      {isExpanded && holdingMonths.length > 0 ? (
                         <TableRow className="border-border bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={6} className="py-3">
                             <div className="flex flex-wrap gap-x-4 gap-y-2">
-                              {holdingPayments.map((row) => (
+                              {holdingMonths.map((row) => (
                                 <div
-                                  key={row.id}
+                                  key={`${row.month}:${row.currency}`}
                                   className="min-w-[4.5rem] text-center"
                                 >
                                   <p className="text-[11px] font-medium text-muted-foreground">
-                                    {formatLocaleDate(row.paidOn, locale, dateFormat)}
+                                    {formatMonthKeyLabel(row.month, locale)}
                                   </p>
                                   <p className="mt-0.5 text-sm tabular-nums text-foreground">
-                                    {fmtMoney(row.amount, dividendPaymentDisplayCurrency(row.paidOn, row.currency))}
+                                    {row.amount != null ? fmtMoney(row.amount, row.currency) : ""}
                                   </p>
                                 </div>
                               ))}

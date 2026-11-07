@@ -17,8 +17,6 @@ import {
   LOCALE_STORAGE_KEY,
 } from "@/lib/i18n/messages";
 
-import { useSiteCopy } from "@/lib/siteCopy";
-
 const LOCALE_EVENT = "sg-locale-changed";
 
 function readLocale(): AppLocale {
@@ -60,7 +58,6 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const copy = useSiteCopy();
   const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, () => "en" as AppLocale);
 
   useEffect(() => {
@@ -75,11 +72,11 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (path: string, vars?: Record<string, string | number>) => {
-      let s = copy[locale][path] ?? getMessage(locale, path) ?? getMessage("en", path) ?? path;
+      let s = getMessage(locale, path) ?? getMessage("en", path) ?? path;
       if (vars) s = interpolate(s, vars);
       return s;
     },
-    [locale, copy],
+    [locale],
   );
 
   const value = useMemo(

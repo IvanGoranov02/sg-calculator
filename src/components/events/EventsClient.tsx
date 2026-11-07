@@ -441,16 +441,16 @@ export function EventsClient() {
       </div>
 
       {emptyBoth ? (
-        <Card className="border-dashed border-border bg-card">
+        <Card className="border-dashed border-white/15 bg-zinc-900/30">
           <CardHeader>
             <CardTitle>{t("events.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("events.emptyDescBefore")}{" "}
-              <Link href="/watchlist" className="text-foreground underline-offset-4 hover:underline">
+              <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
                 {t("events.emptyWatchlistLink")}
               </Link>
               {t("events.emptyDescMiddle")}{" "}
-              <Link href="/portfolio" className="text-foreground underline-offset-4 hover:underline">
+              <Link href="/portfolio" className="text-emerald-400 underline-offset-4 hover:underline">
                 {t("events.emptyPortfolioLink")}
               </Link>
               {t("events.emptyDescAfter")}
@@ -459,7 +459,7 @@ export function EventsClient() {
         </Card>
       ) : showLoading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground" role="status">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
+          <Loader2 className="size-5 animate-spin text-emerald-500" aria-hidden />
           {t("events.loading")}
         </div>
       ) : error ? (
@@ -518,7 +518,7 @@ export function EventsClient() {
           )}
 
           {undated.length > 0 ? (
-            <details className="rounded-xl border border-border px-4 py-3 text-sm">
+            <details className="rounded-xl border border-white/10 px-4 py-3 text-sm">
               <summary className="cursor-pointer text-muted-foreground">
                 {t("events.noDate", { count: undated.length })}
               </summary>
@@ -527,7 +527,7 @@ export function EventsClient() {
                   <Link
                     key={r.symbol}
                     href={`/stock/${encodeURIComponent(r.symbol)}`}
-                    className="rounded-xl border border-border bg-card px-3 py-2.5 transition-colors hover:bg-card"
+                    className="rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2.5 transition-colors hover:bg-zinc-900/60"
                   >
                     <CompanyIdentity
                       symbol={r.symbol}
@@ -576,7 +576,7 @@ function EventCard({
     <Link
       href={`/stock/${encodeURIComponent(event.symbol)}`}
       className={cn(
-        "block rounded-2xl border bg-card px-4 py-3.5 shadow-sm transition-colors hover:bg-card",
+        "block rounded-2xl border bg-zinc-900/60 px-4 py-3.5 shadow-sm transition-colors hover:bg-zinc-900/80",
         meta.cardAccent,
       )}
     >

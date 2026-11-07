@@ -2,17 +2,15 @@
 
 import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { WatchlistToggle } from "@/components/watchlist/WatchlistToggle";
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
-import { resolveStockSearchQuery, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
-import { useCompanySearch } from "@/lib/useCompanySearch";
+import { resolveStockSearchQuery, suggestCompanies, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
 import usCompanies from "@/data/usCompanies.json";
 
 type SearchTarget = "stock" | "dcf" | "dividend";
@@ -116,7 +114,10 @@ function StockSearch({ target, compact }: StockSearchProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const suggestionPool = useCompanySearch(companies, query);
+  const suggestionPool = useMemo(
+    () => suggestCompanies(companies, query),
+    [query, companies],
+  );
   const suggestions = open ? suggestionPool : [];
 
   function go(rawSym: string) {
@@ -158,8 +159,8 @@ function StockSearch({ target, compact }: StockSearchProps) {
   }
 
   const formClass = compact
-    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-ring focus-within:bg-card focus-within:ring-1 focus-within:ring-ring/30 lg:bg-muted/30 lg:px-2.5 lg:py-1"
-    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-ring focus-within:bg-card focus-within:ring-1 focus-within:ring-ring/30 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
+    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:bg-muted/30 lg:px-2.5 lg:py-1"
+    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
 
   return (
     <form onSubmit={onSubmit} className={formClass}>
@@ -231,19 +232,20 @@ function StockSearch({ target, compact }: StockSearchProps) {
           className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38vh,10.5rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-0.5 shadow-lg backdrop-blur-sm lg:max-h-60 lg:py-1"
         >
           {suggestions.map((c, i) => (
-            <li key={c.s} role="option" aria-selected={i === highlighted} className="flex items-center gap-1 pr-2">
+            <li key={c.s} role="option" aria-selected={i === highlighted}>
               <button
                 type="button"
-                className={`flex min-w-0 flex-1 px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
-                  i === highlighted ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
+                className={`flex w-full px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
+                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
                 }`}
-                onClick={() => go(c.s)}
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  go(c.s);
+                }}
                 onMouseEnter={() => setHighlighted(i)}
               >
                 <CompanyIdentity symbol={c.s} name={c.n} size="sm" />
               </button>
-              <WatchlistToggle symbol={c.s} compact />
             </li>
           ))}
         </ul>

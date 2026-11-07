@@ -365,7 +365,7 @@ export function PortfolioClient() {
     }
   }, [t, userId]);
 
-  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean; refresh?: boolean; rebuild?: boolean }) => Promise<void>>(
+  const loadValueHistoryRef = useRef<(opts?: { poll?: boolean; refresh?: boolean }) => Promise<void>>(
     async () => {},
   );
 
@@ -392,7 +392,7 @@ export function PortfolioClient() {
     }, 60_000);
   }, [clearHistoryPoll]);
 
-  const loadValueHistory = useCallback(async (opts?: { poll?: boolean; refresh?: boolean; rebuild?: boolean }) => {
+  const loadValueHistory = useCallback(async (opts?: { poll?: boolean; refresh?: boolean }) => {
     if (historyLoadInFlight.current) {
       if (!opts?.poll) {
         historyLoadQueued.current = true;
@@ -410,7 +410,6 @@ export function PortfolioClient() {
     try {
       const params = new URLSearchParams({ base: preferredPortfolioCurrency });
       if (opts?.refresh) params.set("refresh", "1");
-      if (opts?.rebuild) params.set("rebuild", "1");
       const res = await fetch(`/api/portfolio/value-history?${params.toString()}`);
       if (!res.ok) {
         if (opts?.poll) scheduleHistoryPoll();
@@ -1093,7 +1092,6 @@ export function PortfolioClient() {
         loading={valueHistoryLoading}
         error={valueHistoryError}
         onRetry={() => void loadValueHistory()}
-        onRebuild={() => void loadValueHistory({ refresh: true, rebuild: true })}
         backfillPaused={historyBackfillPaused}
       />
 
@@ -1391,7 +1389,7 @@ export function PortfolioClient() {
               href="https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-foreground underline-offset-4 hover:underline"
+              className="text-emerald-400 underline-offset-4 hover:underline"
             >
               {t("portfolio.t212Docs")}
             </a>

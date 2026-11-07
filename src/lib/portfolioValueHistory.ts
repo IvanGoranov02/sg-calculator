@@ -585,7 +585,7 @@ export function buildPortfolioValueChartSeries(input: {
 }
 
 export type PortfolioHistoryStatus = "ready" | "partial" | "unavailable";
-export type PortfolioHistoryReason = "missing_scope" | "mismatch" | "incomplete" | "prices_missing" | null;
+export type PortfolioHistoryReason = "missing_scope" | "mismatch" | "incomplete" | null;
 
 /** What the value chart should claim after a Trading 212 history read. */
 export function classifyPortfolioHistory(input: {

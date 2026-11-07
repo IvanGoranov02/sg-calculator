@@ -40,7 +40,7 @@ export function StockLoadProgressBar({ event, percent, connecting }: Props) {
       >
         <div
           className={cn(
-            "h-full rounded-full bg-primary ring-1 ring-primary-border transition-[width] duration-300 ease-out",
+            "h-full rounded-full bg-gradient-to-r from-emerald-600/90 to-emerald-400/90 transition-[width] duration-300 ease-out",
             connecting && "animate-pulse",
           )}
           style={{ width: `${pct}%` }}

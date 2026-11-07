@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BookOpen,
   Briefcase,
   CalendarClock,
   Calculator,
@@ -39,7 +38,6 @@ const nav = [
   { href: "/watchlist", labelKey: "nav.watchlist" as const, icon: ListPlus },
   { href: "/portfolio", labelKey: "nav.portfolio" as const, icon: Briefcase },
   { href: "/events", labelKey: "nav.events" as const, icon: CalendarClock },
-  { href: "/articles", labelKey: "nav.articles" as const, icon: BookOpen },
 ];
 
 export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNavigate }: SidebarProps) {
@@ -68,7 +66,7 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
           className={cn("flex min-w-0 items-center gap-1.5 font-semibold tracking-tight", collapsed && "justify-center")}
           title={t("nav.brand")}
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground ring-1 ring-border">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30">
             SP
           </span>
           {!collapsed ? <span className="truncate text-sm text-sidebar-foreground">{t("nav.brand")}</span> : null}
@@ -122,10 +120,10 @@ export function Sidebar({ className, collapsed = false, onToggleCollapsed, onNav
               title={label}
               onClick={() => onNavigate?.()}
               className={cn(
-                "flex min-h-9 items-center rounded-lg py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "flex min-h-9 items-center rounded-lg py-2 text-xs font-medium transition-colors",
                 collapsed ? "justify-center px-0" : "gap-2 px-2",
                 active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground ring-1 ring-border"
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
               )}
             >

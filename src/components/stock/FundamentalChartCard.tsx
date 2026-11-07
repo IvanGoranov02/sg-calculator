@@ -424,7 +424,7 @@ export function FundamentalChartCard({
               {sparseBadge}
               {hasPoints ? (
                 <DialogTrigger
-                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
                   aria-label={t("chartsFund.chartExpand")}
                   title={t("chartsFund.chartExpand")}
                 >

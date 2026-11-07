@@ -125,7 +125,7 @@ export function CompanyIdentity({
     return (
       <Link
         href={href}
-        className="inline-flex min-w-0 max-w-full rounded-md hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="inline-flex min-w-0 max-w-full rounded-md hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
         onClick={onLinkClick}
       >
         {body}
