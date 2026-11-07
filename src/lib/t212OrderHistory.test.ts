@@ -6,6 +6,7 @@ import type { Trading212Environment } from "@prisma/client";
 import {
   decideT212OrdersCacheWrite,
   isT212OrdersCacheStale,
+  ordersCacheBehindPositions,
   isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
   mergeT212OrderItems,
@@ -724,4 +725,23 @@ it("preserves identified executions when the remaining order was cancelled", () 
   {order:{ticker:"AAPL_US_EQ",side:"BUY",status:"CANCELLED",quantity:20}},
  ]);
  assert.deepEqual(events.map(e=>e.delta),[2,-1]);
+});
+
+it("keeps the removal leg of a stock split negative", () => {
+ const events = mapT212OrderItemsToQtyEvents([
+  {fill:{id:201,filledAt:"2025-08-01T12:00:00Z",quantity:0.5,type:"TRADE"},order:{ticker:"NFLX_US_EQ",side:"BUY",status:"FILLED"}},
+  {fill:{id:202,filledAt:"2025-11-17T08:00:00Z",quantity:-0.5,type:"STOCK_SPLIT"},order:{ticker:"NFLX_US_EQ",side:"SELL",status:"FILLED"}},
+  {fill:{id:203,filledAt:"2025-11-17T08:00:00Z",quantity:5,type:"STOCK_SPLIT"},order:{ticker:"NFLX_US_EQ",side:"BUY",status:"FILLED"}},
+  {fill:{id:204,filledAt:"2026-02-03T12:00:00Z",quantity:-5,type:"TRADE"},order:{ticker:"NFLX_US_EQ",side:"SELL",status:"FILLED"}},
+ ]);
+ assert.deepEqual(events.map(e=>e.delta),[0.5,-0.5,5,-5]);
+ assert.equal(events.reduce((sum,e)=>sum+e.delta,0),0);
+});
+
+it("refreshes mismatched history when positions are newer without refetching a matching timeline", () => {
+ const cachedAt=new Date("2026-10-16T11:00:00Z"),lastSyncAt=new Date("2026-10-20T13:00:00Z");
+ assert.equal(ordersCacheBehindPositions({cachedAt,lastSyncAt,partial:false,hasMismatch:true}),true);
+ assert.equal(ordersCacheBehindPositions({cachedAt,lastSyncAt,partial:false,hasMismatch:false}),false);
+ assert.equal(ordersCacheBehindPositions({cachedAt:lastSyncAt,lastSyncAt:cachedAt,partial:false,hasMismatch:true}),false);
+ assert.equal(ordersCacheBehindPositions({cachedAt,lastSyncAt,partial:true,hasMismatch:true}),false);
 });

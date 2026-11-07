@@ -23,6 +23,7 @@ import {
 import {
   clearedT212OrdersCacheData,
   isT212OrdersCacheStale,
+  ordersCacheBehindPositions,
   isT212OrdersScopeDenied,
   mapT212OrderItemsToQtyEvents,
   ordersCacheGenerationWhere,
@@ -140,10 +141,23 @@ export async function GET(request: Request) {
       }
     }
 
+    const cachedTimeline = quantityTimelineForChart({
+      ordersPartial,
+      scopeDenied: isT212OrdersScopeDenied(ordersError),
+      events: mapT212OrderItemsToQtyEvents(orderItems, holdingSymbols),
+      holdings,
+    });
+    const behindPositions = t212 && ordersCacheBehindPositions({
+      cachedAt: t212.ordersCachedAt,
+      lastSyncAt: t212.lastSyncAt,
+      partial: ordersPartial,
+      hasMismatch: holdings.length > 0 && cachedTimeline == null,
+    });
+
     if (
       t212 &&
       isPortfolioEncryptionConfigured() &&
-      (isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
+      (behindPositions || isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
         isT212OrdersScopeDenied(ordersError))
     ) {
       const refreshed = await withTimeoutFallback(

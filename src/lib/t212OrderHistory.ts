@@ -31,19 +31,7 @@ export const T212_ORDERS_SCOPE_DENIED = "scope:history:orders:denied";
 
 const FILLED_STATUS = new Set(["FILLED", "PARTIALLY_FILLED"]);
 const SKIP_STATUS = new Set(["CANCELLED", "REJECTED", "LOCAL", "UNCONFIRMED"]);
-const SHARE_ADD_FILL_TYPES = new Set([
-  "STOCK_SPLIT",
-  "STOCK_DISTRIBUTION",
-  "CUSTOM_STOCK_DISTRIBUTION",
-  "EQUITY_RIGHTS",
-  "SCRIP_STOCK_DIVIDENDS",
-  "STOCK_DIVIDENDS",
-  "STOCK_ACQUISITION",
-  "CASH_AND_STOCK_ACQUISITION",
-  "SPIN_OFF",
-  "FOP",
-  "FOP_CORRECTION",
-]);
+
 
 export { t212OrderItemKey };
 
@@ -151,12 +139,10 @@ export function mapT212OrderItemsToQtyEvents(
     const rawQty = Number(fill?.quantity ?? order?.filledQuantity ?? order?.quantity ?? 0);
     if (!Number.isFinite(rawQty) || rawQty === 0) continue;
 
-    const fillType = (fill?.type ?? "TRADE").trim().toUpperCase();
     const side = (order?.side ?? "").trim().toUpperCase();
     let delta: number;
-    if (SHARE_ADD_FILL_TYPES.has(fillType)) {
-      delta = Math.abs(rawQty);
-    } else if (side === "SELL") {
+    // Corporate actions can include a negative removal leg and a positive replacement leg.
+    if (side === "SELL") {
       delta = -Math.abs(rawQty);
     } else if (side === "BUY") {
       delta = Math.abs(rawQty);
@@ -306,6 +292,17 @@ export function isT212OrdersCacheStale(
   if (partial) return true;
   if (!cachedAt) return true;
   return Date.now() - cachedAt.getTime() > STALE_MS;
+}
+
+/** A newer position sync can expose a new trade before the seven-day history TTL expires. */
+export function ordersCacheBehindPositions(input: {
+  cachedAt: Date | null;
+  lastSyncAt: Date | null;
+  partial: boolean;
+  hasMismatch: boolean;
+}): boolean {
+  return !input.partial && input.hasMismatch && input.lastSyncAt != null &&
+    (input.cachedAt == null || input.lastSyncAt.getTime() > input.cachedAt.getTime());
 }
 
 export type OrdersCacheRefreshDecision = {
