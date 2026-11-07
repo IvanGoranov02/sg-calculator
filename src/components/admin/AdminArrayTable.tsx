@@ -53,10 +53,10 @@ export function AdminArrayTable<Row extends Record<string, unknown>>({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-white/10">
         <Table>
           <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
+            <TableRow className="border-white/10 hover:bg-transparent">
               {columns.map((c) => (
                 <TableHead key={c.key} className="whitespace-nowrap text-xs">
                   {c.label}
@@ -67,7 +67,7 @@ export function AdminArrayTable<Row extends Record<string, unknown>>({
           </TableHeader>
           <TableBody>
             {rows.map((row, ri) => (
-              <TableRow key={ri} className="border-border">
+              <TableRow key={ri} className="border-white/10">
                 {columns.map((c) => {
                   const val = row[c.key];
                   const display =
@@ -79,7 +79,7 @@ export function AdminArrayTable<Row extends Record<string, unknown>>({
                   return (
                     <TableCell key={c.key} className="p-1">
                       <Input
-                        className="h-8 min-w-[4.5rem] border-border bg-card text-xs"
+                        className="h-8 min-w-[4.5rem] border-white/10 bg-zinc-900/80 text-xs"
                         type={c.type === "number" ? "number" : "text"}
                         value={display}
                         onChange={(e) => updateCell(ri, c.key, e.target.value)}
@@ -108,7 +108,7 @@ export function AdminArrayTable<Row extends Record<string, unknown>>({
         type="button"
         variant="outline"
         size="sm"
-        className="border-border"
+        className="border-white/15"
         onClick={() => onChange([...rows, onAddRow()])}
       >
         {addLabel}

@@ -115,7 +115,7 @@ export function CacheListClient() {
           type="button"
           variant="outline"
           size="sm"
-          className="border-border"
+          className="border-white/15"
           onClick={() => void load()}
           disabled={loading}
         >
@@ -125,7 +125,7 @@ export function CacheListClient() {
       </div>
 
       <Input
-        className="max-w-xs border-border bg-card"
+        className="max-w-xs border-white/10 bg-zinc-900/80"
         placeholder={t("admin.filterPlaceholder")}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
@@ -143,10 +143,10 @@ export function CacheListClient() {
           {t("admin.loading")}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-white/10">
           <Table>
             <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
+              <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead>{t("admin.colSymbol")}</TableHead>
                 <TableHead>{t("admin.colName")}</TableHead>
                 <TableHead>{t("admin.colUpdated")}</TableHead>
@@ -162,7 +162,7 @@ export function CacheListClient() {
                 </TableRow>
               ) : (
                 filtered.map((it) => (
-                  <TableRow key={it.symbol} className="border-border">
+                  <TableRow key={it.symbol} className="border-white/10">
                     <TableCell className="font-mono text-sm">
                       <Link
                         href={`/admin/cache/${encodeURIComponent(it.symbol)}`}

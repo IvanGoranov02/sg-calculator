@@ -11,8 +11,8 @@ const vercelJson = JSON.parse(
 );
 
 describe("vercel.json", () => {
-  it("uses npm run build so production can apply Prisma schema via vercel-build.mjs", () => {
-    assert.equal(vercelJson.buildCommand, "npm run build");
+  it("builds the rollback without applying the historical Prisma schema", () => {
+    assert.equal(vercelJson.buildCommand, "npm run build:skip-db");
   });
 });
 

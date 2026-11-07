@@ -55,7 +55,7 @@ function MarketQuoteCard({
   return (
     <div
       className={cn(
-        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-ring/50",
+        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-emerald-500/30",
         emphasized && "border-amber-500/30 bg-amber-500/10",
       )}
     >
@@ -147,7 +147,7 @@ function OilNews({ items }: { items: MarketNewsItem[] }) {
             href={item.link}
             target="_blank"
             rel="noreferrer"
-            className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-ring/50 hover:bg-card"
+            className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-emerald-500/30 hover:bg-card"
             title={item.title}
           >
             <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{item.title}</span>
@@ -165,7 +165,11 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div className="border-b border-border pb-5">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-500/10 via-muted/50 to-card px-5 py-6 sm:px-7 sm:py-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl"
+        />
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dashboard.title")}
         </h1>
@@ -242,7 +246,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
           href="/stock"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-ring/50 group-hover:bg-muted/50">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
                 <BarChart3 className="size-5" aria-hidden />
@@ -256,7 +260,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
           href="/dcf-calculator?ticker=AAPL"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-ring/50 group-hover:bg-muted/50">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
                 <Calculator className="size-5" aria-hidden />
@@ -270,7 +274,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
           href="/watchlist"
           className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-ring/50 group-hover:bg-muted/50">
+          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
                 <ListPlus className="size-5" aria-hidden />

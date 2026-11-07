@@ -303,7 +303,7 @@ export function CacheEditorClient({ symbol }: Props) {
             type="button"
             variant="outline"
             size="sm"
-            className="border-border"
+            className="border-white/15"
             disabled={refreshing || saving}
             onClick={() => void refreshGemini()}
           >
@@ -329,7 +329,7 @@ export function CacheEditorClient({ symbol }: Props) {
       ) : null}
 
       <Tabs defaultValue="quote">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-card p-1">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-zinc-900/80 p-1">
           <TabsTrigger value="quote">{t("admin.tabQuote")}</TabsTrigger>
           <TabsTrigger value="annual">{t("admin.tabAnnual")}</TabsTrigger>
           <TabsTrigger value="quarterly">{t("admin.tabQuarterly")}</TabsTrigger>
@@ -352,7 +352,7 @@ export function CacheEditorClient({ symbol }: Props) {
               <div key={key} className="space-y-1">
                 <Label className="text-xs text-muted-foreground">{key}</Label>
                 <Input
-                  className="border-border bg-card"
+                  className="border-white/10 bg-zinc-900/80"
                   type="text"
                   inputMode={kind === "number" ? "decimal" : undefined}
                   value={
@@ -545,7 +545,7 @@ export function CacheEditorClient({ symbol }: Props) {
                 <div key={key} className="space-y-1">
                   <Label className="text-xs text-muted-foreground">{key}</Label>
                   <Input
-                    className="border-border bg-card"
+                    className="border-white/10 bg-zinc-900/80"
                     type={isStr ? "text" : "number"}
                     value={val == null ? "" : String(val)}
                     onChange={(e) => {
@@ -598,7 +598,7 @@ export function CacheEditorClient({ symbol }: Props) {
             nativeButton={false}
             variant="outline"
             size="sm"
-            className="border-border"
+            className="border-white/15"
             render={<Link href={`/stock/${encodeURIComponent(sym)}`} target="_blank" />}
           >
             {t("admin.viewAsUser")}
