@@ -46,3 +46,21 @@ export function mergeCompanyResults(
     })
     .slice(0, max);
 }
+
+/** SEC's current ticker directory includes newly registered US listings. */
+export function secListedCompanies(raw: unknown): SearchCompany[] {
+  if (!raw || typeof raw !== "object") return [];
+  return Object.values(raw).flatMap((value: unknown) => {
+    if (!value || typeof value !== "object") return [];
+    const row = value as { ticker?: unknown; title?: unknown };
+    if (typeof row.ticker !== "string" || typeof row.title !== "string")
+      return [];
+    const s = row.ticker
+      .trim()
+      .toUpperCase()
+      .replace(/\.([A-Z])$/, "-$1");
+    return s && isValidStockSymbolInput(s) && row.title.trim()
+      ? [{ s, n: row.title.trim() }]
+      : [];
+  });
+}

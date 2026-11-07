@@ -1,10 +1,11 @@
-import { yahooFinance } from "@/lib/yahooFinanceClient";
-import { listedCompanyResults } from "@/lib/companySearch";
+import { searchCurrentCompanies } from "@/lib/companySearchServer";
 import {
   checkRateLimit,
   clientKeyFromRequest,
   rateLimitResponse,
 } from "@/lib/rateLimit";
+
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
@@ -17,14 +18,10 @@ export async function GET(request: Request) {
   );
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
   try {
-    const result = await yahooFinance.search(q, {
-      quotesCount: 12,
-      newsCount: 0,
+    const result = await searchCurrentCompanies(q);
+    return Response.json(result, {
+      headers: { "Cache-Control": "public, max-age=60, s-maxage=60" },
     });
-    return Response.json(
-      { companies: listedCompanyResults(result.quotes) },
-      { headers: { "Cache-Control": "public, max-age=60, s-maxage=60" } },
-    );
   } catch {
     return Response.json(
       { companies: [], error: "Company search is temporarily unavailable." },
