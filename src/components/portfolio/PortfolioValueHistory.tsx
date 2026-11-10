@@ -3,10 +3,9 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import {
-  Bar,
+  Area,
+  AreaChart,
   CartesianGrid,
-  ComposedChart,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -46,6 +45,19 @@ function fmtMoney(n: number, currency: string) {
       style: "currency",
       currency: currency.length === 3 ? currency : "USD",
       maximumFractionDigits: 0,
+    }).format(n);
+  } catch {
+    return n.toFixed(0);
+  }
+}
+
+function fmtMoneyCompact(n: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.length === 3 ? currency : "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
     }).format(n);
   } catch {
     return n.toFixed(0);
@@ -127,6 +139,10 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
 
   if (!data) return null;
 
+  const latest = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+  const firstValue = chartData.length > 1 ? (chartData[0]?.value ?? 0) : 0;
+  const totalChangePct =
+    latest && firstValue > 0 ? (((latest.value ?? 0) - firstValue) / firstValue) * 100 : null;
   const notice = historyNotice(data, t, backfillPaused);
   const noticeIsError = data.historyStatus === "unavailable";
 
@@ -148,8 +164,20 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
     <Card className="border-border bg-card">
       <CardHeader className="space-y-1 pb-2">
         <CardTitle className="text-base">{t("portfolio.valueChartTitle")}</CardTitle>
-        {data.computedHint ? (
-          <CardDescription className="text-xs sm:text-sm">{t("portfolio.valueChartHint")}</CardDescription>
+        {latest ? (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="text-2xl font-semibold tracking-tight">{fmtMoney(latest.value ?? 0, data.baseCurrency)}</span>
+            {totalChangePct != null ? (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-medium",
+                  totalChangePct >= 0 ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400",
+                )}
+              >
+                {formatPercent(totalChangePct)}
+              </span>
+            ) : null}
+          </div>
         ) : null}
         {notice ? (
           <p
@@ -166,19 +194,32 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
           </p>
         ) : null}
       </CardHeader>
-      <div className="h-64 px-2 pb-4 sm:px-4">
+      <div className="h-72 px-2 pb-4 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="pvFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="2 6" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="label"
               tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
               interval="preserveStartEnd"
+              minTickGap={28}
+              axisLine={false}
+              tickLine={false}
+              tickMargin={8}
             />
             <YAxis
               tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              tickFormatter={(v: number) => fmtMoney(v, data.baseCurrency)}
-              width={72}
+              tickFormatter={(v: number) => fmtMoneyCompact(v, data.baseCurrency)}
+              width={56}
+              axisLine={false}
+              tickLine={false}
+              domain={["auto", "auto"]}
             />
             <Tooltip
               content={({ active, payload }) => {
@@ -201,9 +242,19 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
                 );
               }}
             />
-            <Bar dataKey="value" fill="#3fc88a" radius={[4, 4, 0, 0]} barSize={18} />
-            <Line type="monotone" dataKey="value" stroke="#4fc3e8" strokeWidth={2} dot={false} />
-          </ComposedChart>
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="var(--primary)"
+              strokeWidth={2.75}
+              strokeLinecap="round"
+              fill="url(#pvFill)"
+              dot={chartData.length <= 2 ? { r: 4, fill: "var(--primary)", strokeWidth: 0 } : false}
+              activeDot={{ r: 5, fill: "var(--primary)", stroke: "var(--card)", strokeWidth: 2 }}
+              isAnimationActive
+              animationDuration={700}
+            />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </Card>
