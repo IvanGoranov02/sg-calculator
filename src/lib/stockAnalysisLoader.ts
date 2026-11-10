@@ -194,7 +194,7 @@ async function persistStockCache(
 async function fetchFreshFundamentals(
   sym: string,
   opts: LoadStockAnalysisOptions | undefined,
-): Promise<{ bundle: StockAnalysisBundle; source: FundamentalsSource }> {
+): Promise<{ bundle: StockAnalysisBundle; source: FundamentalsSource; degraded?: boolean }> {
   const yahooPromise = withTimeoutFallback(
     fetchYahooFundamentalsPayload(sym),
     YAHOO_STEP_TIMEOUT_MS,
@@ -219,19 +219,56 @@ async function fetchFreshFundamentals(
     logLoadStep(sym, "edgar", t0, bundle ? "ok" : "empty");
     if (bundle) source = "edgar";
   }
+  let degraded = false;
   if (!bundle) {
-    bundle = await fetchStockBundleFromGemini(sym, {
-      onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
-      budgetMs: GEMINI_FULL_BUNDLE_BUDGET_MS,
-    });
+    try {
+      bundle = await fetchStockBundleFromGemini(sym, {
+        onPartStart: (part) => opts?.onProgress?.({ kind: "gemini", step: part, total: 3 }),
+        budgetMs: GEMINI_FULL_BUNDLE_BUDGET_MS,
+      });
+    } catch (e) {
+      // New listings (fresh IPOs) have no SEC filings yet and Gemini may be down. Show live
+      // market data (price, chart, Yahoo metrics) instead of an error; checked below.
+      console.warn(`[fundamentals] ${sym}: Gemini failed, using live-market-only bundle`, e);
+      bundle = liveMarketOnlyBundle(sym);
+      degraded = true;
+    }
   }
   console.log(`[fundamentals] ${sym}: source=${source}`);
   await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
     onProgress: opts?.onProgress,
     mergeMode: source === "gemini" ? "prefer-yahoo" : "fill-gaps",
   });
+  if (degraded) {
+    await withTimeoutFallback(
+      enrichBundleWithYahooPrices(bundle),
+      YAHOO_STEP_TIMEOUT_MS,
+      `yahoo prices ${sym}`,
+      undefined,
+    );
+    if (!(bundle.quote.price > 0)) throw new Error(`Ticker "${sym}" was not found.`);
+    return { bundle, source, degraded: true };
+  }
   markFundamentalsSource(bundle, source);
   return { bundle, source };
+}
+
+/** Empty statements; quote/history/metrics get filled from Yahoo. */
+function liveMarketOnlyBundle(sym: string): StockAnalysisBundle {
+  const investor = {} as StockAnalysisBundle["investor"];
+  investor.currency = "USD";
+  return {
+    quote: { symbol: sym, name: sym, price: 0, change: 0, changesPercentage: 0 },
+    income: [],
+    cashFlow: [],
+    balanceSheet: [],
+    historical: [],
+    investor,
+    incomeQuarterly: [],
+    cashFlowQuarterly: [],
+    balanceSheetQuarterly: [],
+    dividendQuarterly: [],
+  };
 }
 
 async function refreshLivePrices(bundle: StockAnalysisBundle, sym: string): Promise<void> {
@@ -340,10 +377,11 @@ export async function loadStockAnalysis(
       }
     }
 
-    const { bundle } = await fetchFreshFundamentals(sym, opts);
+    const { bundle, degraded } = await fetchFreshFundamentals(sym, opts);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await refreshLivePrices(bundle, sym);
-    await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
+    // A live-market-only bundle is never cached, so real filings are used once available.
+    if (!degraded) await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
     await withTimeoutFallback(
       reconcileFundamentalsCurrency(bundle),
       8_000,
