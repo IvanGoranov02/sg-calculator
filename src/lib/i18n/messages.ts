@@ -17,6 +17,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     nav: {
       dashboard: "Dashboard",
+      reads: "Reads",
       stockAnalysis: "Stock Analysis",
       dcfCalculator: "DCF Calculator",
       dividendCalculator: "Dividend Calculator",
@@ -995,6 +996,7 @@ export const messages: Record<AppLocale, MessageDict> = {
     },
     nav: {
       dashboard: "Табло",
+      reads: "Четива",
       stockAnalysis: "Анализ на акции",
       dcfCalculator: "DCF калкулатор",
       dividendCalculator: "Дивидентен калкулатор",

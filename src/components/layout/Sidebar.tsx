@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpen,
   Briefcase,
   CalendarClock,
   Calculator,
@@ -31,6 +32,7 @@ type SidebarProps = {
 
 const nav = [
   { href: "/dashboard", labelKey: "nav.dashboard" as const, icon: LayoutDashboard },
+  { href: "/reads", labelKey: "nav.reads" as const, icon: BookOpen },
   { href: "/stock", labelKey: "nav.stockAnalysis" as const, icon: LineChart },
   { href: "/compare", labelKey: "nav.compare" as const, icon: GitCompareArrows },
   { href: "/dcf-calculator", labelKey: "nav.dcfCalculator" as const, icon: Calculator },
