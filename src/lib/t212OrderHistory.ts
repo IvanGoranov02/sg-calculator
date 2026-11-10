@@ -136,8 +136,10 @@ export function mapT212OrderItemsToQtyEvents(
     const order = item.order;
     const fill = item.fill;
     const status = (order?.status ?? "").trim().toUpperCase();
-    if (SKIP_STATUS.has(status)) continue;
-    if (status && !FILLED_STATUS.has(status) && fill?.quantity == null) continue;
+    // A partly filled order that was cancelled afterwards still moved real shares.
+    const hasRealFill = fill?.quantity != null && Number(fill.quantity) !== 0;
+    if (SKIP_STATUS.has(status) && !(status === "CANCELLED" && hasRealFill)) continue;
+    if (status && !FILLED_STATUS.has(status) && status !== "CANCELLED" && fill?.quantity == null) continue;
 
     const ticker = (order?.ticker ?? order?.instrument?.ticker ?? "").trim();
     if (!ticker) continue;
@@ -152,7 +154,9 @@ export function mapT212OrderItemsToQtyEvents(
     const side = (order?.side ?? "").trim().toUpperCase();
     let delta: number;
     if (SHARE_ADD_FILL_TYPES.has(fillType)) {
-      delta = Math.abs(rawQty);
+      // Corporate actions come as two legs (e.g. a split books the old shares out, the new in).
+      // The removal leg is a SELL or negative and must stay negative.
+      delta = side === "SELL" || rawQty < 0 ? -Math.abs(rawQty) : Math.abs(rawQty);
     } else if (side === "SELL") {
       delta = -Math.abs(rawQty);
     } else if (side === "BUY") {

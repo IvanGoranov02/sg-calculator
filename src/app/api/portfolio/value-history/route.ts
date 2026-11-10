@@ -139,10 +139,27 @@ export async function GET(request: Request) {
       }
     }
 
+    // Positions synced after the orders were cached and the quantities no longer line up:
+    // the cache is simply old. Re-fetch once; afterwards cachedAt is newer than the sync.
+    const ordersOlderThanPositions =
+      !!t212 &&
+      !ordersPartial &&
+      orderItems.length > 0 &&
+      !!t212.lastSyncAt &&
+      !!t212.ordersCachedAt &&
+      t212.lastSyncAt.getTime() > t212.ordersCachedAt.getTime() &&
+      quantityTimelineForChart({
+        ordersPartial,
+        scopeDenied: isT212OrdersScopeDenied(ordersError),
+        events: mapT212OrderItemsToQtyEvents(orderItems, holdingSymbols),
+        holdings,
+      }) == null;
+
     if (
       t212 &&
       isPortfolioEncryptionConfigured() &&
       (isT212OrdersCacheStale(t212.ordersCachedAt, t212.ordersCachePartial) ||
+        ordersOlderThanPositions ||
         isT212OrdersScopeDenied(ordersError))
     ) {
       const refreshed = await withTimeoutFallback(

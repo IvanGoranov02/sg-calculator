@@ -53,14 +53,47 @@ describe("t212OrderHistory", () => {
     assert.equal(events[0]!.date, "2024-01-15");
   });
 
-  it("skips cancelled orders", () => {
+  it("skips cancelled orders that never filled", () => {
     const events = mapT212OrderItemsToQtyEvents([
       {
-        fill: { filledAt: "2024-01-15T12:00:00Z", quantity: 10, type: "TRADE" },
-        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "CANCELLED" },
+        order: {
+          ticker: "AAPL_US_EQ",
+          side: "BUY",
+          status: "CANCELLED",
+          createdAt: "2024-01-15T12:00:00Z",
+          quantity: 10,
+        },
       },
     ]);
     assert.equal(events.length, 0);
+  });
+
+  it("keeps the real fill of a partly filled order that was cancelled", () => {
+    const events = mapT212OrderItemsToQtyEvents([
+      {
+        fill: { filledAt: "2024-01-15T12:00:00Z", quantity: 4, type: "TRADE" },
+        order: { ticker: "AAPL_US_EQ", side: "BUY", status: "CANCELLED" },
+      },
+    ]);
+    assert.deepEqual(events.map((e) => e.delta), [4]);
+  });
+
+  it("keeps the removal leg of a stock split negative", () => {
+    const events = mapT212OrderItemsToQtyEvents([
+      {
+        fill: { filledAt: "2025-11-17T12:00:00Z", quantity: 1, type: "STOCK_SPLIT" },
+        order: { ticker: "NFLX_US_EQ", side: "SELL", status: "FILLED" },
+      },
+      {
+        fill: { filledAt: "2025-11-17T12:00:00Z", quantity: 10, type: "STOCK_SPLIT" },
+        order: { ticker: "NFLX_US_EQ", side: "BUY", status: "FILLED" },
+      },
+      {
+        fill: { filledAt: "2025-11-17T12:00:00Z", quantity: -2, type: "STOCK_SPLIT" },
+        order: { ticker: "NFLX_US_EQ", status: "FILLED" },
+      },
+    ]);
+    assert.deepEqual(events.map((e) => e.delta), [-1, 10, -2]);
   });
 
   it("merges order pages without dropping older fills", () => {
