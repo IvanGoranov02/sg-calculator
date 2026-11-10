@@ -48,6 +48,11 @@ export function userLocalCalendarDay(now = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Epoch ms of the user's local midnight; sent to the server so "new day" matches this cache. */
+export function userLocalDayStartMs(now = new Date()): number {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
 function isLocalDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }

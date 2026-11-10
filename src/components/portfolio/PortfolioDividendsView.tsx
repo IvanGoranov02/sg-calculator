@@ -44,6 +44,7 @@ import {
   beginPortfolioDividendsLoad,
   browserDividendsDayStorage,
   commitPortfolioDividendsDayCache,
+  userLocalDayStartMs,
   decidePortfolioDividendsLoad,
   isPortfolioDividendsLoadCurrent,
   readPortfolioDividendsSessionMemory,
@@ -206,7 +207,10 @@ export function PortfolioDividendsView({
         setError(null);
       }
       try {
-        const url = forceRefresh ? "/api/portfolio/dividends?refresh=1" : "/api/portfolio/dividends";
+        const dayStart = `dayStart=${userLocalDayStartMs()}`;
+        const url = forceRefresh
+          ? `/api/portfolio/dividends?refresh=1&${dayStart}`
+          : `/api/portfolio/dividends?${dayStart}`;
         const res = await fetch(url);
         if (stale()) return;
         if (res.status === 401) {

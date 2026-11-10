@@ -5,6 +5,8 @@ import type { T212HistoryDividendItem } from "@/lib/trading212Client";
 import {
   decideT212DividendsCacheWrite,
   isT212DividendsCacheStale,
+  isT212DividendsCacheStaleForDay,
+  resolveDividendsDayStartMs,
   T212_DIVIDENDS_CACHE_MAX_AGE_MS,
   mergeT212DividendItems,
   t212DividendPaymentKey,
@@ -96,5 +98,45 @@ describe("isT212DividendsCacheStale", () => {
 
   it("refreshes caches older than 24 hours", () => {
     assert.equal(isT212DividendsCacheStale(new Date(now - T212_DIVIDENDS_CACHE_MAX_AGE_MS - 1), now), true);
+  });
+});
+
+describe('isT212DividendsCacheStaleForDay', () => {
+  // User-local midnight, e.g. 2026-10-20 00:00 at UTC+3 = 2026-10-19T21:00Z.
+  const dayStart = Date.UTC(2026, 9, 19, 21, 0, 0);
+
+  it('refreshes an absent cache', () => {
+    assert.equal(isT212DividendsCacheStaleForDay(null, dayStart), true);
+  });
+
+  it('refreshes in the morning a cache fetched yesterday evening (less than 24h ago)', () => {
+    const yesterday20h = new Date(Date.UTC(2026, 9, 19, 17, 0, 0));
+    assert.equal(isT212DividendsCacheStaleForDay(yesterday20h, dayStart), true);
+  });
+
+  it('keeps a cache fetched earlier today', () => {
+    assert.equal(isT212DividendsCacheStaleForDay(new Date(dayStart + 1), dayStart), false);
+    assert.equal(isT212DividendsCacheStaleForDay(new Date(dayStart), dayStart), false);
+  });
+});
+
+describe('resolveDividendsDayStartMs', () => {
+  const now = Date.UTC(2026, 9, 20, 12, 0, 0);
+  const utcMidnight = Date.UTC(2026, 9, 20);
+
+  it('uses the client-provided local midnight', () => {
+    const local = Date.UTC(2026, 9, 19, 21, 0, 0);
+    assert.equal(resolveDividendsDayStartMs(String(local), now), local);
+  });
+
+  it('falls back to UTC midnight for missing or invalid input', () => {
+    assert.equal(resolveDividendsDayStartMs(null, now), utcMidnight);
+    assert.equal(resolveDividendsDayStartMs('abc', now), utcMidnight);
+    assert.equal(resolveDividendsDayStartMs('-5', now), utcMidnight);
+  });
+
+  it('rejects future values and values more than 26h back (cannot be abused to skip or force refresh)', () => {
+    assert.equal(resolveDividendsDayStartMs(String(now + 60_000), now), utcMidnight);
+    assert.equal(resolveDividendsDayStartMs(String(now - 27 * 3600_000), now), utcMidnight);
   });
 });

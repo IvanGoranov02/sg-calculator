@@ -323,7 +323,7 @@ describe("sign-out and cross-user cache isolation", () => {
 
 
 describe("holdings session lifetime and broker freshness", () => {
-  it("ignores persistent holdings from a previous visit and reuses only this session", () => {
+  it("reuses stored holdings across tabs/sessions within the hour and refetches after it", () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
     const persistent = new Map<string, string>();
     const session = new Map<string, string>();
@@ -339,16 +339,15 @@ describe("holdings session lifetime and broker freshness", () => {
       configurable: true, value: { localStorage, sessionStorage },
     });
     try {
-      const decide = () => decidePortfolioHoldingsLoad({
+      const decide = (elapsed: number) => decidePortfolioHoldingsLoad({
         userId: "user-1", reloadToken: 0, liveRefreshToken: 0,
-        nowMs: record.fetchedAt + 1000, memory: null,
+        nowMs: record.fetchedAt + elapsed, memory: null,
         stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), "user-1"),
       });
-      assert.equal(decide().action, "fetch");
-      sessionStorage.setItem(PORTFOLIO_HOLDINGS_TTL_CACHE_KEY, JSON.stringify(record));
-      assert.equal(decide().action, "reuse");
-      session.clear(); // A new tab/session starts without the old holdings payload.
-      assert.equal(decide().action, "fetch");
+      // A new tab (empty session memory) within the hour reuses the persisted payload.
+      assert.equal(decide(1000).action, "reuse");
+      // The next morning (cache older than one hour) fetches again.
+      assert.equal(decide(PORTFOLIO_HOLDINGS_TTL_MS + 1).action, "fetch");
     } finally {
       if (descriptor) Object.defineProperty(globalThis, "window", descriptor);
       else Reflect.deleteProperty(globalThis, "window");

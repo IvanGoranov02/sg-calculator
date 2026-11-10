@@ -23,6 +23,24 @@ export function isT212DividendsCacheStale(cachedAt: Date | null, nowMs = Date.no
   return cachedAt === null || nowMs - cachedAt.getTime() > T212_DIVIDENDS_CACHE_MAX_AGE_MS;
 }
 
+/**
+ * Start of the current day for auto-refresh. The browser sends its local midnight so
+ * "new day" means the user's calendar day (matches the client day cache). Missing or
+ * implausible values fall back to UTC midnight. Accepts at most ~26h back (DST days).
+ */
+export function resolveDividendsDayStartMs(raw: string | null | undefined, nowMs = Date.now()): number {
+  const utcMidnight = nowMs - (nowMs % (24 * 60 * 60 * 1000));
+  if (!raw || !/^\d{10,16}$/.test(raw)) return utcMidnight;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n > nowMs || nowMs - n > 26 * 60 * 60 * 1000) return utcMidnight;
+  return n;
+}
+
+/** Stale = never fetched, or last successful check was before the start of today. */
+export function isT212DividendsCacheStaleForDay(cachedAt: Date | null, dayStartMs: number): boolean {
+  return cachedAt === null || cachedAt.getTime() < dayStartMs;
+}
+
 const T212_DIVIDENDS_AUTO_REFRESH_RETRY_MS = 60 * 60 * 1000;
 const autoRefreshAttempts = new Map<string, number>();
 
@@ -158,8 +176,12 @@ export async function refreshT212DividendsCache(input: {
   const prevItems = parseCachedItems(prev?.dividendsCache);
   const decision = decideT212DividendsCacheWrite(prevItems, result);
 
+  // A check counts as done when Trading 212 answered with rows or a complete empty list,
+  // even if pagination was truncated (newest pages come first). Only a failed first page
+  // leaves cachedAt alone, so failures are retried instead of being cached for a day.
+  const checkCompleted = result.items.length > 0 || !result.partial;
   const shouldTouchCachedAt =
-    decision.replaced || prevItems.length === 0 || decision.items.length > prevItems.length;
+    checkCompleted || decision.replaced || decision.items.length > prevItems.length;
 
   await prisma.trading212Connection.update({
     where: { userId: input.userId },
@@ -181,7 +203,7 @@ export async function refreshT212DividendsCache(input: {
 export async function loadT212DividendsForUser(
   userId: string,
   conn: Trading212Connection | null,
-  opts: { refresh: boolean },
+  opts: { refresh: boolean; dayStartMs?: number },
 ): Promise<T212DividendsCacheRead & { fetchError?: string }> {
   if (!conn) {
     return { items: [], cachedAt: null, partial: false, error: null };
@@ -221,9 +243,9 @@ export async function loadT212DividendsForUser(
     }
   }
 
-  if (isT212DividendsCacheStale(conn.dividendsCachedAt) && shouldAutoRefreshDividends(userId)) {
-    // cachedAt is not bumped when T212 returns no new rows, so throttle attempts
-    // per instance instead of re-fetching on every request.
+  const dayStartMs = opts.dayStartMs ?? resolveDividendsDayStartMs(null);
+  if (isT212DividendsCacheStaleForDay(conn.dividendsCachedAt, dayStartMs) && shouldAutoRefreshDividends(userId)) {
+    // Failed checks leave cachedAt untouched, so throttle retries per instance.
     autoRefreshAttempts.set(userId, Date.now());
     try {
       const refreshed = await withTimeoutFallback(
