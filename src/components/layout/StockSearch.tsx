@@ -159,8 +159,8 @@ function StockSearch({ target, compact }: StockSearchProps) {
   }
 
   const formClass = compact
-    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:bg-muted/30 lg:px-2.5 lg:py-1"
-    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-emerald-500/30 focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
+    ? "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-0.5 transition-colors focus-within:border-primary focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:bg-muted/30 lg:px-2.5 lg:py-1"
+    : "relative flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 rounded-lg border border-border bg-muted/20 px-2 py-1 transition-colors focus-within:border-primary focus-within:bg-card focus-within:ring-1 focus-within:ring-emerald-500/20 lg:gap-x-2 lg:rounded-xl lg:bg-card lg:px-3 lg:py-1.5 lg:shadow-inner lg:shadow-sm";
 
   return (
     <form onSubmit={onSubmit} className={formClass}>
@@ -236,7 +236,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
               key={c.s}
               role="option"
               aria-selected={i === highlighted}
-              className={`flex items-center ${i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"}`}
+              className={`flex items-center ${i === highlighted ? "bg-primary/15 text-primary" : "hover:bg-muted/50"}`}
               onMouseEnter={() => setHighlighted(i)}
             >
               <button

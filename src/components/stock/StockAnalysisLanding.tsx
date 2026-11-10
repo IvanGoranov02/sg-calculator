@@ -129,7 +129,7 @@ export function StockAnalysisLanding() {
             {watchlistPreview.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {t("watchlist.emptyTitle")}{" "}
-                <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
+                <Link href="/watchlist" className="text-primary underline-offset-4 hover:underline">
                   {t("nav.watchlist")}
                 </Link>
               </p>
@@ -164,7 +164,7 @@ export function StockAnalysisLanding() {
             {status !== "authenticated" ? (
               <p className="text-sm text-muted-foreground">
                 {t("stock.portfolioSignIn")}{" "}
-                <Link href="/login" className="text-emerald-400 underline-offset-4 hover:underline">
+                <Link href="/login" className="text-primary underline-offset-4 hover:underline">
                   {t("header.signIn")}
                 </Link>
               </p>
@@ -173,7 +173,7 @@ export function StockAnalysisLanding() {
             ) : portfolioPreview.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {t("stock.portfolioEmpty")}{" "}
-                <Link href="/portfolio" className="text-emerald-400 underline-offset-4 hover:underline">
+                <Link href="/portfolio" className="text-primary underline-offset-4 hover:underline">
                   {t("nav.portfolio")}
                 </Link>
               </p>

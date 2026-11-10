@@ -1389,7 +1389,7 @@ export function PortfolioClient() {
               href="https://helpcentre.trading212.com/hc/en-us/articles/14584770928157-Trading-212-API-key"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-emerald-400 underline-offset-4 hover:underline"
+              className="text-primary underline-offset-4 hover:underline"
             >
               {t("portfolio.t212Docs")}
             </a>

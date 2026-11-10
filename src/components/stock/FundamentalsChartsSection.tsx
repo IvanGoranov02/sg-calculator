@@ -30,28 +30,28 @@ import { cn } from "@/lib/utils";
 type Row = FundamentalsChartRow;
 
 const C = {
-  revenue: "#60a5fa",
-  netIncome: "#a78bfa",
+  revenue: "#5b8def",
+  netIncome: "#8b6cf0",
   opIncome: "#818cf8",
   gross: "#22d3ee",
   opex: "#f87171",
   fcf: "#fbbf24",
-  ocf: "#34d399",
+  ocf: "#3fc88a",
   capex: "#fb923c",
   invest: "#c084fc",
-  finance: "#f472b6",
-  assets: "#60a5fa",
+  finance: "#e66fb0",
+  assets: "#5b8def",
   debt: "#f87171",
   equity: "#4ade80",
   cash: "#2dd4bf",
   netDebt: "#fb7185",
   capitalLease: "#fbbf24",
   ebitda: "#e879f9",
-  div: "#f472b6",
+  div: "#e66fb0",
   buyback: "#94a3b8",
   revGrowth: "#22c55e",
   niGrowth: "#eab308",
-  valuationPe: "#38bdf8",
+  valuationPe: "#4fc3e8",
   valuationPs: "#fb7185",
 };
 
@@ -307,7 +307,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
     () => ({
       revenue: [{ dataKey: "revenue", color: C.revenue, label: t("income.revenue") }] satisfies FundamentalSeries[],
       netIncomeSolo: [{ dataKey: "netIncome", color: C.netIncome, label: t("income.netIncome") }] satisfies FundamentalSeries[],
-      dilutedEpsSolo: [{ dataKey: "dilutedEps", color: "#f472b6", label: t("annual.dilutedEps") }] satisfies FundamentalSeries[],
+      dilutedEpsSolo: [{ dataKey: "dilutedEps", color: "#e66fb0", label: t("annual.dilutedEps") }] satisfies FundamentalSeries[],
       dilutedSharesSolo: [
         { dataKey: "dilutedShares", color: "#94a3b8", label: t("annual.dilutedShares") },
       ] satisfies FundamentalSeries[],
@@ -441,7 +441,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               variant={freq === "quarterly" ? "default" : "outline"}
               className={cn(
                 "rounded-lg",
-                freq === "quarterly" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                freq === "quarterly" && "bg-primary text-primary-foreground hover:bg-primary/90",
               )}
               onClick={() => setFreq("quarterly")}
               disabled={!hasQuarterly}
@@ -455,7 +455,7 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
               variant={freq === "annual" ? "default" : "outline"}
               className={cn(
                 "rounded-lg",
-                freq === "annual" && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                freq === "annual" && "bg-primary text-primary-foreground hover:bg-primary/90",
               )}
               onClick={() => setFreq("annual")}
             >

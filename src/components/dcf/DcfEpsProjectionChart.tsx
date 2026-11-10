@@ -77,9 +77,9 @@ export function DcfEpsProjectionChart({ points, horizonYears }: DcfEpsProjection
             type="monotone"
             dataKey="projectedPrice"
             name={t("dcf.epsChartProjectedPrice")}
-            stroke="#34d399"
+            stroke="#3fc88a"
             strokeWidth={2.5}
-            dot={{ r: 5, fill: "#34d399", strokeWidth: 0 }}
+            dot={{ r: 5, fill: "#3fc88a", strokeWidth: 0 }}
             activeDot={{ r: 7 }}
           >
             <LabelList

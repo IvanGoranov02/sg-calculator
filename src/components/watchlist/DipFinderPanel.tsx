@@ -61,7 +61,7 @@ export function DipFinderPanel({ quotes, history, compact = false }: DipFinderPa
               variant={dipRange === id ? "secondary" : "ghost"}
               className={cn(
                 "h-8 min-w-11 rounded-md px-2 font-mono text-xs",
-                dipRange === id && "bg-zinc-700 text-white hover:bg-zinc-700",
+                dipRange === id && "bg-primary text-primary-foreground hover:bg-primary",
               )}
               onClick={() => setDipRange(id)}
             >

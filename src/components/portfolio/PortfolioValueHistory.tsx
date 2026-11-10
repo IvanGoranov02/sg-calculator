@@ -201,8 +201,8 @@ function PortfolioValueChartContent({ data, loading, backfillPaused = false }: C
                 );
               }}
             />
-            <Bar dataKey="value" fill="#34d399" radius={[4, 4, 0, 0]} barSize={18} />
-            <Line type="monotone" dataKey="value" stroke="#38bdf8" strokeWidth={2} dot={false} />
+            <Bar dataKey="value" fill="#3fc88a" radius={[4, 4, 0, 0]} barSize={18} />
+            <Line type="monotone" dataKey="value" stroke="#4fc3e8" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -165,11 +165,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-emerald-500/10 via-muted/50 to-card px-5 py-6 sm:px-7 sm:py-8">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-emerald-500/10 blur-3xl"
-        />
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-primary/12 via-card to-card shadow-card px-5 py-6 sm:px-7 sm:py-8">
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dashboard.title")}
         </h1>
@@ -248,7 +244,7 @@ export function DashboardContent({ market, commodities, oilNews }: DashboardCont
         >
           <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
             <CardHeader className="gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
                 <BarChart3 className="size-5" aria-hidden />
               </div>
               <CardTitle className="text-base">{t("dashboard.quickStockTitle")}</CardTitle>

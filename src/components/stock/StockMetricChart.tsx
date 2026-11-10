@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 
 const rangeIds: PerformanceRange[] = ["1d", "1w", "1m", "1y", "5y", "max"];
 
-const PRICE_STROKE = "#34d399";
+const PRICE_STROKE = "#3fc88a";
 const TRADING_DAYS_PER_YEAR = 252;
 
 /** Last calendar session in intraday series (YYYY-MM-DD). */

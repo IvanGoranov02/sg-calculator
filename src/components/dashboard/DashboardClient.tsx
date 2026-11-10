@@ -129,7 +129,7 @@ export function DashboardClient() {
         {symbols.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t("dashboard.watchlistEmptyBefore")}{" "}
-            <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
+            <Link href="/watchlist" className="text-primary underline-offset-4 hover:underline">
               {t("dashboard.watchlistEmptyLink")}
             </Link>{" "}
             {t("dashboard.watchlistEmptyAfter")}
