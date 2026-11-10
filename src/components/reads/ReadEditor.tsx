@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowLeft, ArrowUp, ImagePlus, Minus, Quote, Trash2, Type, Video, Heading2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Heading2, ImagePlus, List, Minus, Quote, Table2, Trash2, Type, Video } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -36,6 +36,8 @@ async function uploadImage(file: File): Promise<string> {
   if (!res.ok || !body.url) throw new Error(body.detail ?? String(res.status));
   return body.url;
 }
+
+const NL = String.fromCharCode(10);
 
 const field =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/25";
@@ -150,6 +152,8 @@ export function ReadEditor({ post }: { post: ReadPost | null }) {
     { label: s.addImage, icon: ImagePlus, make: () => ({ type: "image", src: "", caption: "" }) },
     { label: s.addVideo, icon: Video, make: () => ({ type: "video", url: "", caption: "" }) },
     { label: s.addQuote, icon: Quote, make: () => ({ type: "quote", text: "" }) },
+    { label: s.addList, icon: List, make: () => ({ type: "list", items: [""] }) },
+    { label: s.addTable, icon: Table2, make: () => ({ type: "table", rows: [["", ""], ["", ""]] }) },
     { label: s.addDivider, icon: Minus, make: () => ({ type: "divider" }) },
   ];
 
@@ -166,6 +170,8 @@ export function ReadEditor({ post }: { post: ReadPost | null }) {
       if (b.type === "image") return !!b.src;
       if (b.type === "video") return !!b.url;
       if (b.type === "divider") return true;
+      if (b.type === "list") return b.items.some((x) => x.trim());
+      if (b.type === "table") return b.rows.length > 0;
       return b.text.trim().length > 0;
     });
     try {
@@ -244,7 +250,7 @@ export function ReadEditor({ post }: { post: ReadPost | null }) {
           <div key={i} className="rounded-xl border border-border bg-card p-3 shadow-card">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                {{ paragraph: s.addParagraph, heading: s.addHeading, image: s.addImage, video: s.addVideo, quote: s.addQuote, divider: s.addDivider }[b.type]}
+                {{ paragraph: s.addParagraph, heading: s.addHeading, image: s.addImage, video: s.addVideo, quote: s.addQuote, divider: s.addDivider, list: s.addList, table: s.addTable }[b.type]}
               </span>
               <div className="flex items-center gap-1">
                 <button type="button" className={smallBtn} title={s.moveUp} disabled={i === 0} onClick={() => move(i, -1)}>
@@ -300,6 +306,36 @@ export function ReadEditor({ post }: { post: ReadPost | null }) {
                 <input value={b.url} onChange={(e) => update(i, { url: e.target.value })} placeholder={s.videoPh} className={field} />
                 <input value={b.caption ?? ""} onChange={(e) => update(i, { caption: e.target.value })} placeholder={s.captionPh} className={field} />
               </div>
+            ) : null}
+            {b.type === "list" ? (
+              <div className="space-y-2">
+                <textarea
+                  value={b.items.join(NL)}
+                  onChange={(e) => update(i, { items: e.target.value.split(NL) })}
+                  placeholder={s.listPh}
+                  rows={Math.max(4, b.items.length + 1)}
+                  className={field}
+                />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={!!b.ordered} onChange={(e) => update(i, { ordered: e.target.checked })} />
+                  {s.numbered}
+                </label>
+              </div>
+            ) : null}
+            {b.type === "table" ? (
+              <textarea
+                value={b.rows.map((r) => r.join(" | ")).join(NL)}
+                onChange={(e) => update(i, { rows: e.target.value.split(NL).map((l) => l.split("|").map((c) => c.trim())) })}
+                placeholder={s.tablePh}
+                rows={Math.max(4, b.rows.length + 1)}
+                className={`${field} font-mono text-xs`}
+              />
+            ) : null}
+            {b.type === "heading" ? (
+              <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <input type="checkbox" checked={!!b.sub} onChange={(e) => update(i, { sub: e.target.checked })} />
+                {s.smaller}
+              </label>
             ) : null}
             {b.type === "divider" ? <hr className="border-border" /> : null}
 

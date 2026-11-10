@@ -59,11 +59,60 @@ export function ReadBlocks({ blocks }: { blocks: ReadBlock[] }) {
       {blocks.map((b, i) => {
         switch (b.type) {
           case "heading":
-            return (
+            return b.sub ? (
+              <h3 key={i} className="mb-3 mt-9 text-balance text-xl font-semibold tracking-tight">
+                {b.text}
+              </h3>
+            ) : (
               <h2 key={i} className="mb-4 mt-14 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
                 {b.text}
               </h2>
             );
+          case "list": {
+            const Tag = b.ordered ? "ol" : "ul";
+            return (
+              <Tag
+                key={i}
+                className={`mb-6 space-y-2.5 pl-6 text-[1.05rem] leading-[1.75] text-foreground/85 marker:text-primary ${b.ordered ? "list-decimal" : "list-disc"}`}
+              >
+                {b.items.map((it, j) => (
+                  <li key={j} className="pl-1">
+                    {renderInline(it)}
+                  </li>
+                ))}
+              </Tag>
+            );
+          }
+          case "table": {
+            const [head, ...body] = b.rows;
+            if (!head) return null;
+            return (
+              <div key={i} className="my-8 overflow-x-auto rounded-xl border border-border shadow-card">
+                <table className="w-full min-w-[28rem] border-collapse text-left text-sm">
+                  <thead className="bg-muted/70 text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      {head.map((c, j) => (
+                        <th key={j} className="px-4 py-3 font-semibold">
+                          {renderInline(c)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {body.map((r, ri) => (
+                      <tr key={ri} className="border-t border-border">
+                        {r.map((c, j) => (
+                          <td key={j} className={`px-4 py-3 ${j === 0 ? "font-medium text-foreground" : "text-foreground/85"}`}>
+                            {renderInline(c)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
           case "paragraph":
             return b.text
               .split(/\n{2,}/)
