@@ -131,12 +131,12 @@ export function WatchlistClient() {
       )}
 
       {symbols.length === 0 ? (
-        <Card className="border-dashed border-white/15 bg-zinc-900/30">
+        <Card className="border-dashed border-border bg-card/60">
           <CardHeader>
             <CardTitle>{t("watchlist.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("watchlist.emptyDescBefore")}
-              <Link href="/stock" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/stock" className="text-primary underline-offset-4 hover:underline">
                 {t("watchlist.emptyLink")}
               </Link>
               {t("watchlist.emptyDescAfter")}
@@ -144,10 +144,10 @@ export function WatchlistClient() {
           </CardHeader>
         </Card>
       ) : (
-        <Card className="gap-0 overflow-hidden border-white/10 bg-zinc-900/40 py-0">
+        <Card className="gap-0 overflow-hidden border-border bg-card/60 py-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>{t("watchlist.colSymbol")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colPrice")}</TableHead>
                 <TableHead className="text-right">{t("watchlist.colChange")}</TableHead>
@@ -160,7 +160,7 @@ export function WatchlistClient() {
                 const q = quoteMap.get(sym);
                 if (!q) {
                   return (
-                    <TableRow key={sym} className="border-white/10">
+                    <TableRow key={sym} className="border-border">
                       <TableCell>
                         <CompanyIdentity symbol={sym} size="sm" />
                       </TableCell>
@@ -184,7 +184,7 @@ export function WatchlistClient() {
                 }
                 const positive = q.changesPercentage >= 0;
                 return (
-                  <TableRow key={sym} className="border-white/10">
+                  <TableRow key={sym} className="border-border">
                     <TableCell className="max-w-[240px]">
                       <CompanyIdentity
                         symbol={q.symbol}
@@ -250,7 +250,7 @@ export function WatchlistClient() {
               })}
             </TableBody>
           </Table>
-          <div className="border-t border-white/10 px-4 py-4">
+          <div className="border-t border-border px-4 py-4">
             <DipFinderPanel quotes={quotes} history={history} />
           </div>
         </Card>

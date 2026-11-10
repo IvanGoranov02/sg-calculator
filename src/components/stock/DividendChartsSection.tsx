@@ -211,7 +211,7 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   );
 
   const payoutSeries: FundamentalSeries[] = useMemo(
-    () => [{ dataKey: "payoutRatio", color: "#34d399", label: t("chartsFund.payoutRatioSeries") }],
+    () => [{ dataKey: "payoutRatio", color: "#3fc88a", label: t("chartsFund.payoutRatioSeries") }],
     [t],
   );
 

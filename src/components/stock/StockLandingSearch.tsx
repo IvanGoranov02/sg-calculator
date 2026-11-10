@@ -92,7 +92,7 @@ export function StockLandingSearch({ hrefForSymbol }: StockLandingSearchProps) {
   return (
     <form
       onSubmit={onSubmit}
-      className="relative rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm focus-within:border-emerald-500/30 focus-within:ring-1 focus-within:ring-emerald-500/20"
+      className="relative rounded-xl border border-border bg-card px-3 py-2 shadow-inner shadow-sm focus-within:border-primary focus-within:ring-1 focus-within:ring-emerald-500/20"
     >
       <div className="flex min-w-0 items-center gap-2">
         <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden />
@@ -149,7 +149,7 @@ export function StockLandingSearch({ hrefForSymbol }: StockLandingSearchProps) {
               <button
                 type="button"
                 className={`flex w-full px-3 py-2 text-left text-sm ${
-                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
+                  i === highlighted ? "bg-primary/15 text-primary" : "hover:bg-muted/50"
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault();

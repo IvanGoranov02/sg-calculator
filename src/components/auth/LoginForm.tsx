@@ -19,8 +19,8 @@ export function LoginForm() {
   const { t } = useI18n();
 
   return (
-    <Card className="w-full max-w-md border-white/10 bg-zinc-900/80 shadow-xl ring-white/10">
-      <CardHeader className="border-b border-white/10">
+    <Card className="w-full max-w-md border-border bg-card shadow-xl ring-border">
+      <CardHeader className="border-b border-border">
         <CardTitle>{t("login.title")}</CardTitle>
         <CardDescription>{t("login.subtitle")}</CardDescription>
       </CardHeader>
@@ -36,7 +36,7 @@ export function LoginForm() {
         </Button>
         <p className="text-center text-xs text-muted-foreground">{t("login.hint")}</p>
       </CardContent>
-      <CardFooter className="justify-center border-t border-white/10 pt-4">
+      <CardFooter className="justify-center border-t border-border pt-4">
         <Link href="/dashboard" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
           {t("login.back")}
         </Link>

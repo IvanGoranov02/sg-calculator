@@ -30,9 +30,9 @@ const metrics: { id: ChartMetric; label: string; suffix: string }[] = [
 ];
 
 const strokeByMetric: Record<ChartMetric, string> = {
-  revenue: "#60a5fa",
-  operatingMargin: "#f472b6",
-  netIncome: "#a78bfa",
+  revenue: "#5b8def",
+  operatingMargin: "#e66fb0",
+  netIncome: "#8b6cf0",
   ebitda: "#94a3b8",
   freeCashFlow: "#fbbf24",
 };
@@ -183,7 +183,7 @@ export function DcfFundamentalsCharts({ data }: DcfFundamentalsChartsProps) {
                 variant={metric === m.id ? "default" : "outline"}
                 className={cn(
                   "rounded-lg text-left",
-                  metric === m.id && "bg-emerald-600 text-white hover:bg-emerald-600/90",
+                  metric === m.id && "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
                 onClick={() => setMetric(m.id)}
               >

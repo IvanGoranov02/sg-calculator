@@ -75,9 +75,9 @@ export function DcfProjectionCharts({
   );
 
   const valuationRows = useMemo(() => {
-    const rows = [{ name: t("dcf.chartFairValue"), value: fairValuePerShare, fill: "#34d399" }];
+    const rows = [{ name: t("dcf.chartFairValue"), value: fairValuePerShare, fill: "#3fc88a" }];
     if (currentPrice != null && currentPrice > 0) {
-      rows.push({ name: t("dcf.chartPrice"), value: currentPrice, fill: "#60a5fa" });
+      rows.push({ name: t("dcf.chartPrice"), value: currentPrice, fill: "#5b8def" });
     }
     return rows;
   }, [currentPrice, fairValuePerShare, t]);
@@ -119,7 +119,7 @@ export function DcfProjectionCharts({
                 yAxisId="left"
                 dataKey="projected"
                 name={t("dcf.chartProjected")}
-                fill="#a78bfa"
+                fill="#8b6cf0"
                 radius={[2, 2, 0, 0]}
                 opacity={0.85}
               />

@@ -431,7 +431,7 @@ export function EventsClient() {
   return (
     <div className="flex w-full flex-col gap-6">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
+        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
           <CalendarClock className="size-5" aria-hidden />
         </span>
         <div>
@@ -441,16 +441,16 @@ export function EventsClient() {
       </div>
 
       {emptyBoth ? (
-        <Card className="border-dashed border-white/15 bg-zinc-900/30">
+        <Card className="border-dashed border-border bg-card/60">
           <CardHeader>
             <CardTitle>{t("events.emptyTitle")}</CardTitle>
             <CardDescription>
               {t("events.emptyDescBefore")}{" "}
-              <Link href="/watchlist" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/watchlist" className="text-primary underline-offset-4 hover:underline">
                 {t("events.emptyWatchlistLink")}
               </Link>
               {t("events.emptyDescMiddle")}{" "}
-              <Link href="/portfolio" className="text-emerald-400 underline-offset-4 hover:underline">
+              <Link href="/portfolio" className="text-primary underline-offset-4 hover:underline">
                 {t("events.emptyPortfolioLink")}
               </Link>
               {t("events.emptyDescAfter")}
@@ -518,7 +518,7 @@ export function EventsClient() {
           )}
 
           {undated.length > 0 ? (
-            <details className="rounded-xl border border-white/10 px-4 py-3 text-sm">
+            <details className="rounded-xl border border-border px-4 py-3 text-sm">
               <summary className="cursor-pointer text-muted-foreground">
                 {t("events.noDate", { count: undated.length })}
               </summary>
@@ -527,7 +527,7 @@ export function EventsClient() {
                   <Link
                     key={r.symbol}
                     href={`/stock/${encodeURIComponent(r.symbol)}`}
-                    className="rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2.5 transition-colors hover:bg-zinc-900/60"
+                    className="rounded-xl border border-border bg-card/60 px-3 py-2.5 transition-colors hover:bg-muted/70"
                   >
                     <CompanyIdentity
                       symbol={r.symbol}
@@ -576,7 +576,7 @@ function EventCard({
     <Link
       href={`/stock/${encodeURIComponent(event.symbol)}`}
       className={cn(
-        "block rounded-2xl border bg-zinc-900/60 px-4 py-3.5 shadow-sm transition-colors hover:bg-zinc-900/80",
+        "block rounded-2xl border bg-card px-4 py-3.5 shadow-sm transition-colors hover:bg-muted/70",
         meta.cardAccent,
       )}
     >

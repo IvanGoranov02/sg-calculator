@@ -24,7 +24,7 @@ export function WatchlistToggle({ symbol }: WatchlistToggleProps) {
       type="button"
       variant="outline"
       size="sm"
-      className="shrink-0 gap-2 border-white/15"
+      className="shrink-0 gap-2 border-border"
       disabled={full}
       title={full ? t("watchlist.fullTitle", { max: WATCHLIST_MAX }) : undefined}
       onClick={() => void Promise.resolve(toggle(symbol))}
