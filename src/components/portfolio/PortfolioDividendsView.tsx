@@ -27,6 +27,7 @@ import {
   formatDividendYieldPercent,
   formatLocaleDate,
   formatMonthKeyLabel,
+  formatMonthKeyLabelLong,
   type DateFormat,
 } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
@@ -654,11 +655,16 @@ export function PortfolioDividendsView({
                                   className="min-w-[4.5rem] text-center"
                                 >
                                   <p className="text-[11px] font-medium text-muted-foreground">
-                                    {formatMonthKeyLabel(row.month, locale)}
+                                    {formatMonthKeyLabelLong(row.month, locale)}
                                   </p>
                                   <p className="mt-0.5 text-sm tabular-nums text-foreground">
                                     {row.amount != null ? fmtMoney(row.amount, row.currency) : ""}
                                   </p>
+                                  {row.paidDates.map((day) => (
+                                    <p key={day} className="text-[11px] tabular-nums text-muted-foreground">
+                                      {formatLocaleDate(day, locale, dateFormat)}
+                                    </p>
+                                  ))}
                                 </div>
                               ))}
                             </div>

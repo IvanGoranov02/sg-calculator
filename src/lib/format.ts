@@ -172,6 +172,18 @@ export function formatLocaleDateShort(iso: string, locale: string, dateFormat: D
   });
 }
 
+/** Month + full year from yyyy-mm (e.g. "Feb 2025"); unambiguous next to day numbers. */
+export function formatMonthKeyLabelLong(month: string, locale: string): string {
+  if (!/^d{4}-d{2}$/.test(month)) return "—";
+  const d = new Date(`${month}-01T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 /** Short month label from yyyy-mm; dash when unparseable. */
 export function formatMonthKeyLabel(month: string, locale: string): string {
   if (!/^\d{4}-\d{2}$/.test(month)) return "—";

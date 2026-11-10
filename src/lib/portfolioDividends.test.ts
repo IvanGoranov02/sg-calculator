@@ -643,6 +643,18 @@ describe("buildHoldingMonthlyTimeline", () => {
     );
   });
 
+  it("exposes the real payment dates of each month (T212 and manual), not a fixed day", () => {
+    const payments: PortfolioDividendPayment[] = [
+      { id: "1", source: "t212", ticker: "ASML", symbolYahoo: "ASML.AS", name: null, amount: 1, currency: "EUR", paidOn: "2026-02-03T14:30:00Z" },
+      { id: "2", source: "manual", ticker: "ASML", symbolYahoo: "ASML.AS", name: null, amount: 2, currency: "EUR", paidOn: "2026-02-17" },
+      { id: "3", source: "t212", ticker: "ASML", symbolYahoo: "ASML.AS", name: null, amount: 3, currency: "EUR", paidOn: "2026-04-09" },
+    ];
+    const timeline = buildHoldingMonthlyTimeline(payments, "ASML.AS");
+    assert.deepEqual(timeline.find((r) => r.month === "2026-02")?.paidDates, ["2026-02-03", "2026-02-17"]);
+    assert.deepEqual(timeline.find((r) => r.month === "2026-03")?.paidDates, []);
+    assert.deepEqual(timeline.find((r) => r.month === "2026-04")?.paidDates, ["2026-04-09"]);
+  });
+
   it("labels each month with its payment currency (BGN pre-2026, EUR from 2026)", () => {
     const payments: PortfolioDividendPayment[] = [
       {
@@ -1332,9 +1344,9 @@ it("keeps holding timeline currencies separate and fills quiet months", () => {
     payment(2, "USD", "2025-01-10"), payment(3, "EUR", "2025-01-20"),
     payment(4, "USD", "2025-01-25"), payment(5, "EUR", "2025-03-10"),
   ], "AAPL"), [
-    { month: "2025-01", amount: 3, currency: "EUR" },
-    { month: "2025-01", amount: 6, currency: "USD" },
-    { month: "2025-02", amount: null, currency: "USD" },
-    { month: "2025-03", amount: 5, currency: "EUR" },
+    { month: "2025-01", amount: 3, currency: "EUR", paidDates: ["2025-01-20"] },
+    { month: "2025-01", amount: 6, currency: "USD", paidDates: ["2025-01-10", "2025-01-25"] },
+    { month: "2025-02", amount: null, currency: "USD", paidDates: [] },
+    { month: "2025-03", amount: 5, currency: "EUR", paidDates: ["2025-03-10"] },
   ]);
 });

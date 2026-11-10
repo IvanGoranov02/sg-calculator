@@ -51,6 +51,8 @@ export type HoldingDividendMonthRow = {
   month: string;
   amount: number | null;
   currency: string;
+  /** Real payment dates (yyyy-mm-dd, ascending) from Trading 212 or manual entries; empty for quiet months. */
+  paidDates: string[];
 };
 
 /** How many upcoming dividends the portfolio dividends card shows, left to right. */
@@ -151,6 +153,7 @@ export function buildHoldingMonthlyTimeline(
   if (symPayments.length === 0) return [];
 
   const monthAmounts = new Map<string, Map<string, number>>();
+  const monthDates = new Map<string, Map<string, Set<string>>>();
   for (const p of symPayments) {
     const key = monthKey(p.paidOn);
     if (!key) continue;
@@ -158,6 +161,14 @@ export function buildHoldingMonthlyTimeline(
     const amounts = monthAmounts.get(key) ?? new Map<string, number>();
     amounts.set(currency, (amounts.get(currency) ?? 0) + p.amount);
     monthAmounts.set(key, amounts);
+    const day = normalizeIsoDateString(p.paidOn);
+    if (day) {
+      const byCurrency = monthDates.get(key) ?? new Map<string, Set<string>>();
+      const days = byCurrency.get(currency) ?? new Set<string>();
+      days.add(day);
+      byCurrency.set(currency, days);
+      monthDates.set(key, byCurrency);
+    }
   }
 
   const months = [...monthAmounts.keys()].sort();
@@ -166,9 +177,13 @@ export function buildHoldingMonthlyTimeline(
   const calendar = calendarMonthsBetween(months[0]!, months[months.length - 1]!);
   return calendar.flatMap((month): HoldingDividendMonthRow[] => {
     const amounts = monthAmounts.get(month);
-    if (!amounts) return [{ month, amount: null, currency: "USD" }];
-    return [...amounts.entries()].sort(([a], [b]) => a.localeCompare(b))
-      .map(([currency, amount]) => ({ month, amount, currency }));
+    if (!amounts) return [{ month, amount: null, currency: "USD", paidDates: [] }];
+    return [...amounts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amount]) => ({
+      month,
+      amount,
+      currency,
+      paidDates: [...(monthDates.get(month)?.get(currency) ?? [])].sort(),
+    }));
   });
 }
 

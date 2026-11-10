@@ -1,16 +1,18 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Check, Plus, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
-import { resolveStockSearchQuery, suggestCompanies, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
+import { resolveStockSearchQuery, decodeTickerSegment, type SearchCompany } from "@/lib/stockSearch";
+import { useCompanySearch } from "@/lib/useCompanySearch";
 import usCompanies from "@/data/usCompanies.json";
 
 type SearchTarget = "stock" | "dcf" | "dividend";
@@ -50,7 +52,7 @@ type StockSearchProps = {
 
 type CompanyEntry = SearchCompany;
 
-const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
+export const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
 
 /**
  * Full company index (~6k SEC filers) is lazy-loaded from /public on first use so
@@ -58,7 +60,7 @@ const INSTANT_COMPANIES = usCompanies as CompanyEntry[];
  * gives instant results. Cached at module scope across remounts.
  */
 let fullCompaniesPromise: Promise<CompanyEntry[]> | null = null;
-function loadFullCompanies(): Promise<CompanyEntry[]> {
+export function loadFullCompanies(): Promise<CompanyEntry[]> {
   if (!fullCompaniesPromise) {
     fullCompaniesPromise = fetch("/us-companies.json")
       .then((r) => (r.ok ? (r.json() as Promise<CompanyEntry[]>) : INSTANT_COMPANIES))
@@ -69,6 +71,7 @@ function loadFullCompanies(): Promise<CompanyEntry[]> {
 
 function StockSearch({ target, compact }: StockSearchProps) {
   const { t } = useI18n();
+  const { has: inWatchlist, add: addToWatchlist } = useWatchlist();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,10 +117,7 @@ function StockSearch({ target, compact }: StockSearchProps) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const suggestionPool = useMemo(
-    () => suggestCompanies(companies, query),
-    [query, companies],
-  );
+  const suggestionPool = useCompanySearch(companies, query);
   const suggestions = open ? suggestionPool : [];
 
   function go(rawSym: string) {
@@ -232,20 +232,47 @@ function StockSearch({ target, compact }: StockSearchProps) {
           className="absolute left-0 right-0 top-[calc(100%+0.25rem)] z-50 max-h-[min(38vh,10.5rem)] overflow-y-auto overscroll-contain rounded-lg border border-border bg-popover py-0.5 shadow-lg backdrop-blur-sm lg:max-h-60 lg:py-1"
         >
           {suggestions.map((c, i) => (
-            <li key={c.s} role="option" aria-selected={i === highlighted}>
+            <li
+              key={c.s}
+              role="option"
+              aria-selected={i === highlighted}
+              className={`flex items-center ${i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"}`}
+              onMouseEnter={() => setHighlighted(i)}
+            >
               <button
                 type="button"
-                className={`flex w-full px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5 ${
-                  i === highlighted ? "bg-emerald-500/15 text-emerald-300" : "hover:bg-muted/50"
-                }`}
+                className="flex min-w-0 flex-1 px-2.5 py-1 text-left text-sm lg:px-3 lg:py-1.5"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   go(c.s);
                 }}
-                onMouseEnter={() => setHighlighted(i)}
               >
                 <CompanyIdentity symbol={c.s} name={c.n} size="sm" />
               </button>
+              {inWatchlist(c.s) ? (
+                  <span
+                    className="mr-2 flex size-7 shrink-0 items-center justify-center text-emerald-400"
+                    title={t("search.inWatchlist")}
+                    aria-label={t("search.inWatchlist")}
+                  >
+                    <Check className="size-4" aria-hidden />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="mr-2 flex size-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                    title={t("search.addToWatchlist")}
+                    aria-label={t("search.addToWatchlist")}
+                    onMouseDown={(e) => {
+                      // Keep input focus so the list stays open; add without navigating.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void Promise.resolve(addToWatchlist(c.s));
+                    }}
+                  >
+                    <Plus className="size-4" aria-hidden />
+                  </button>
+                )}
             </li>
           ))}
         </ul>

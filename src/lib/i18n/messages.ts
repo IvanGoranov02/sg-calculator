@@ -119,6 +119,8 @@ export const messages: Record<AppLocale, MessageDict> = {
     search: {
       placeholder: "Search ticker",
       submit: "Search",
+      addToWatchlist: "Add to watchlist",
+      inWatchlist: "In your watchlist",
     },
     dashboard: {
       title: "Dashboard",
@@ -498,8 +500,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Saved locally in this browser (up to {max} symbols). Quotes refresh automatically.",
       introCloud:
         "Synced to your account (up to {max} symbols). Quotes refresh automatically. Sign out to use local-only list again.",
-      addLabel: "Add symbol",
-      placeholder: "e.g. NVDA",
+      addLabel: "Add company",
+      placeholder: "",
       addButton: "Add to watchlist",
       refresh: "Refresh",
       errRefresh: "Could not refresh quotes.",
@@ -519,6 +521,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       loading: "Loading…",
       quoteUnavailable: "Quote unavailable",
       analyze: "Analyze",
+      dcf: "DCF",
       removeAria: "Remove {symbol}",
       toggle: "Watchlist",
       saved: "Saved",
@@ -1075,6 +1078,8 @@ export const messages: Record<AppLocale, MessageDict> = {
     search: {
       placeholder: "Търси тикер",
       submit: "Търси",
+      addToWatchlist: "Добави в списъка",
+      inWatchlist: "Вече е в списъка",
     },
     dashboard: {
       title: "Табло",
@@ -1454,8 +1459,8 @@ export const messages: Record<AppLocale, MessageDict> = {
       intro: "Запазено локално в този браузър (до {max} символа). Котировките се опресняват автоматично.",
       introCloud:
         "Синхронизирано с акаунта ви (до {max} символа). Котировките се опресняват автоматично. При изход отново е локален списък.",
-      addLabel: "Добави символ",
-      placeholder: "напр. NVDA",
+      addLabel: "Добави компания",
+      placeholder: "",
       addButton: "Добави в списъка",
       refresh: "Опресни",
       errRefresh: "Неуспешно опресняване на котировки.",
@@ -1475,6 +1480,7 @@ export const messages: Record<AppLocale, MessageDict> = {
       loading: "Зареждане…",
       quoteUnavailable: "Няма котировка",
       analyze: "Анализ",
+      dcf: "DCF",
       removeAria: "Премахни {symbol}",
       toggle: "Списък",
       saved: "Запазено",

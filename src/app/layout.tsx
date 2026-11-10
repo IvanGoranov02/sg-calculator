@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
+import { SiteContentRuntime } from "@/components/editor/SiteContentRuntime";
 import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
 import { PreferencesProvider } from "@/lib/preferences/PreferencesProvider";
 import { THEME_STORAGE_KEY } from "@/lib/preferences/preferences";
@@ -42,7 +43,10 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <LocaleProvider>
           <PreferencesProvider>
-            <AuthSessionProvider>{children}</AuthSessionProvider>
+            <AuthSessionProvider>
+              {children}
+              <SiteContentRuntime />
+            </AuthSessionProvider>
           </PreferencesProvider>
         </LocaleProvider>
       </body>

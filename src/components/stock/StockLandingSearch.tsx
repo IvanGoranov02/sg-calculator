@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { pushRecentStockSearch } from "@/lib/stockRecentSearches";
 import { isValidStockSymbolInput } from "@/lib/stockSymbol";
-import { resolveStockSearchQuery, suggestCompanies, type SearchCompany } from "@/lib/stockSearch";
+import { resolveStockSearchQuery, type SearchCompany } from "@/lib/stockSearch";
+import { useCompanySearch } from "@/lib/useCompanySearch";
 import usCompanies from "@/data/usCompanies.json";
 
 type CompanyEntry = SearchCompany;
@@ -53,7 +54,7 @@ export function StockLandingSearch({ hrefForSymbol }: StockLandingSearchProps) {
     };
   }, []);
 
-  const suggestionPool = useMemo(() => suggestCompanies(companies, query), [query, companies]);
+  const suggestionPool = useCompanySearch(companies, query);
   const suggestions = open ? suggestionPool : [];
 
   function go(rawSym: string, name?: string) {
