@@ -100,52 +100,63 @@
 }
 
 .dark {
-  /* Dark: lifted blue-violet graphite (not black), lighter cards, mint/coral signals. */
-  --background: #262836;
-  --foreground: #eceef7;
-  --card: #30323f;
-  --card-foreground: #eceef7;
-  --popover: #353746;
-  --popover-foreground: #eceef7;
-  --primary: #6d93f5;
-  --primary-foreground: #121528;
-  --secondary: #3a3d4d;
-  --secondary-foreground: #eceef7;
-  --muted: #393b4b;
-  --muted-foreground: #a4a8bf;
-  --accent: #3b4262;
-  --accent-foreground: #dbe5ff;
-  --destructive: #f2706f;
-  --border: #434659;
-  --input: #4a4d62;
-  --ring: #6d93f5;
-  --chart-1: #6d93f5;
-  --chart-2: #4fd1e0;
-  --chart-3: #9b7cf6;
-  --chart-4: #43cf93;
-  --chart-5: #f5b84b;
-  --sidebar: #2b2d3b;
-  --sidebar-foreground: #eceef7;
-  --sidebar-primary: #6d93f5;
-  --sidebar-primary-foreground: #121528;
-  --sidebar-accent: #3a4160;
-  --sidebar-accent-foreground: #e3eaff;
-  --sidebar-border: #3d4054;
-  --sidebar-ring: #6d93f5;
-  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 28px -14px rgba(8, 10, 24, 0.6);
-  --color-emerald-300: #6fe0b4;
-  --color-emerald-400: #4fd6a0;
-  --color-emerald-500: #3fc88a;
-  --color-emerald-600: #2fae78;
-  --color-emerald-950: #1f3b38;
-  --color-red-300: #ffa0a0;
-  --color-red-400: #ff7d7d;
-  --color-red-500: #f26464;
-  --color-amber-300: #f9cf7a;
-  --color-amber-400: #f6bd4f;
-  --color-amber-500: #f0a93a;
-  --color-amber-950: #3d3220;
-  --color-sky-400: #5cc4f0;
+  /* Dark: deep midnight blue with real colour depth - navy canvas, lifted blue cards, vivid accents. */
+  --background: #0f1729;
+  --foreground: #e9eefb;
+  --card: #17223a;
+  --card-foreground: #e9eefb;
+  --popover: #1b2844;
+  --popover-foreground: #e9eefb;
+  --primary: #5b8cff;
+  --primary-foreground: #08122b;
+  --secondary: #1f2d4b;
+  --secondary-foreground: #e9eefb;
+  --muted: #1d2a46;
+  --muted-foreground: #93a4c9;
+  --accent: #203764;
+  --accent-foreground: #d6e3ff;
+  --destructive: #ff6b7d;
+  --border: #2a3a5e;
+  --input: #30426b;
+  --ring: #5b8cff;
+  --chart-1: #5b8cff;
+  --chart-2: #22d3ee;
+  --chart-3: #9a84ff;
+  --chart-4: #34d399;
+  --chart-5: #fbbf4d;
+  --sidebar: #0b1223;
+  --sidebar-foreground: #e9eefb;
+  --sidebar-primary: #5b8cff;
+  --sidebar-primary-foreground: #08122b;
+  --sidebar-accent: #1b2c52;
+  --sidebar-accent-foreground: #dce8ff;
+  --sidebar-border: #1d2a47;
+  --sidebar-ring: #5b8cff;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 12px 32px -16px rgba(2, 6, 20, 0.85);
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #22c58b;
+  --color-emerald-600: #16a574;
+  --color-emerald-950: #0f3a35;
+  --color-red-300: #ffa3ad;
+  --color-red-400: #ff7a8a;
+  --color-red-500: #f4546a;
+  --color-amber-300: #fcd581;
+  --color-amber-400: #fbbf4d;
+  --color-amber-500: #f4a62a;
+  --color-amber-950: #3b2e14;
+  --color-sky-400: #4cc3f5;
+}
+
+.dark body {
+  background-image:
+    radial-gradient(1200px 600px at 88% -12%, rgba(91, 140, 255, 0.16), transparent 70%),
+    radial-gradient(900px 520px at -8% 4%, rgba(154, 132, 255, 0.11), transparent 70%),
+    radial-gradient(900px 500px at 50% 115%, rgba(34, 211, 238, 0.07), transparent 70%);
+}
+
+.dark [data-slot="card"] {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 55%);
 }
 
 @layer base {
