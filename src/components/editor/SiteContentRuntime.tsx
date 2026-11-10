@@ -221,7 +221,10 @@ export function SiteContentRuntime() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kind, key, value }),
         });
-        if (!res.ok) throw new Error("save failed");
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+          throw new Error(`${res.status} ${body.detail ?? body.error ?? ""}`.trim());
+        }
         setSnapshot((prev) => {
           const next: SiteContentSnapshot = { texts: { ...prev.texts }, images: { ...prev.images } };
           if (kind === "text") {
@@ -232,8 +235,8 @@ export function SiteContentRuntime() {
           return next;
         });
         setDialog(null);
-      } catch {
-        setError(s.error);
+      } catch (e) {
+        setError(`${s.error} ${e instanceof Error ? e.message : ""}`.trim());
       }
     },
     [s.error],

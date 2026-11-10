@@ -49,7 +49,9 @@ export async function PUT(request: Request) {
       await writeSiteContent("image", key, img);
     }
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ error: "Could not save." }, { status: 500 });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message.slice(-400) : String(e);
+    console.error("site-content save failed", e);
+    return Response.json({ error: "Could not save.", detail }, { status: 500 });
   }
 }
