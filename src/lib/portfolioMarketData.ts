@@ -371,7 +371,8 @@ export function mergeBrokerQuote(
     dividendYield: best?.dividendYield ?? null,
     dividendRate: best?.dividendRate ?? null,
     dividendCurrency: best ? best.dividendCurrency ?? best.currency : undefined,
-    changePercent: 0,
+    // The broker has no session change; borrow it from the matched Yahoo listing when there is one.
+    changePercent: best != null && Number.isFinite(best.changePercent) ? best.changePercent : 0,
     twoHundredDayAverage: dip.twoHundredDayAverage,
     dipVsSma200Pct: dip.dipVsSma200Pct,
     nextEarnings: best?.nextEarnings ?? null,

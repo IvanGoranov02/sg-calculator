@@ -450,8 +450,8 @@ export function AllocationWidget({ analytics }: { analytics: PortfolioAnalyticsD
 
   return (
     <Panel title={c.allocation} right={toggle} className="h-full">
-      <div className="flex flex-col items-center gap-4 sm:flex-row">
-        <div className="relative size-40 shrink-0">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative size-44 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={slices} dataKey="value" nameKey="name" innerRadius="64%" outerRadius="100%" paddingAngle={2} stroke="none" startAngle={90} endAngle={-270}>
@@ -465,11 +465,11 @@ export function AllocationWidget({ analytics }: { analytics: PortfolioAnalyticsD
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{slices.length}</span>
           </div>
         </div>
-        <ul className="w-full min-w-0 flex-1 space-y-1.5 text-xs">
+        <ul className="w-full min-w-0 space-y-2 text-sm">
           {slices.map((s, i) => (
             <li key={s.name} className="flex items-center gap-2">
               <span className="size-2.5 shrink-0 rounded-sm" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} />
-              <span className="min-w-0 flex-1 break-words">{s.name}</span>
+              <span className="min-w-0 flex-1 break-words">{s.name.replace(/([a-z])([A-Z])/g, "$1 $2")}</span>
               <span className="tabular-nums text-muted-foreground">{((s.value / total) * 100).toFixed(1)}%</span>
             </li>
           ))}
@@ -671,15 +671,15 @@ export function HoldingsWidget({
   const shown = rows.filter((r) => r.mv != null).slice(0, 9);
   return (
     <Panel title={c.holdings} href="/portfolio" hrefLabel={c.viewAll} className="h-full">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-sm">
+      <div>
+        <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="pb-2 font-semibold">{c.company}</th>
-              <th className="pb-2 text-right font-semibold">{c.value}</th>
-              <th className="w-28 pb-2 pl-4 font-semibold">{c.weight}</th>
-              <th className="pb-2 text-right font-semibold">{c.day}</th>
-              <th className="pb-2 text-right font-semibold">{c.pl}</th>
+              <th className="w-[34%] pb-2 font-semibold">{c.company}</th>
+              <th className="w-[20%] pb-2 text-right font-semibold">{c.value}</th>
+              <th className="w-[18%] pb-2 pl-3 font-semibold">{c.weight}</th>
+              <th className="w-[13%] pb-2 text-right font-semibold">{c.day}</th>
+              <th className="w-[15%] pb-2 text-right font-semibold">{c.pl}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -689,16 +689,16 @@ export function HoldingsWidget({
               const plPct = r.cost > 0 && r.pl != null ? (r.pl / r.cost) * 100 : null;
               return (
                 <tr key={r.symbol}>
-                  <td className="py-1.5 pr-3">
+                  <td className="overflow-hidden py-1.5 pr-2">
                     <CompanyIdentity symbol={r.symbol} name={r.name} size="sm" href={`/stock/${encodeURIComponent(r.symbol)}`} />
                   </td>
                   <td className="py-1.5 text-right tabular-nums">{formatCurrency(mv, base)}</td>
-                  <td className="py-1.5 pl-4">
+                  <td className="py-1.5 pl-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                         <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, w)}%` }} />
                       </div>
-                      <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{w.toFixed(1)}%</span>
+                      <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{w.toFixed(1)}%</span>
                     </div>
                   </td>
                   <td className="py-1.5 text-right">{r.dayChangePct != null ? <Pill value={r.dayChangePct} className="text-xs" /> : <span className="text-muted-foreground">—</span>}</td>

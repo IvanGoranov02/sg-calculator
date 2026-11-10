@@ -47,7 +47,7 @@ export function buildAnalyticsRows(
         cost,
         pl,
         estAnnual,
-        dayChangePct: q && !q.fromBroker && Number.isFinite(q.changePercent) ? q.changePercent : null,
+        dayChangePct: q && (!q.fromBroker || q.changePercent !== 0) && Number.isFinite(q.changePercent) ? q.changePercent : null,
       } satisfies AnalyticsRow;
     })
     .sort((a, b) => (b.mv ?? -1) - (a.mv ?? -1));
