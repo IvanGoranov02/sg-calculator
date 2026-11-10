@@ -207,19 +207,19 @@ export function MarketStrip({ tiles }: { tiles: MarketTile[] }) {
   const shown = tiles.filter((t) => t.quote);
   if (shown.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
       {shown.map(({ key, label, quote, kind }) => {
         const q = quote!;
         const up = q.changesPercentage >= 0;
         return (
           <div
             key={key}
-            className="relative overflow-hidden rounded-xl border border-border bg-card px-4 py-3.5 shadow-card"
+            className="relative overflow-hidden rounded-xl border border-border bg-card px-3 py-3 shadow-card sm:px-4 sm:py-3.5"
             title={q.name}
           >
             <span aria-hidden className={cn("absolute inset-y-0 left-0 w-0.5", up ? "bg-emerald-500" : "bg-red-500")} />
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{formatTilePrice(q, kind)}</p>
+            <p className="mt-1 text-base font-semibold tabular-nums sm:text-lg">{formatTilePrice(q, kind)}</p>
             <Pill value={q.changesPercentage} className="text-xs" />
           </div>
         );
@@ -286,11 +286,11 @@ export function KpiRow({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 2xl:grid-cols-6">
       {tiles.map((t) => (
-        <div key={t.label} className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-card">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t.label}</p>
-          <p className={cn("mt-1.5 break-words text-2xl font-semibold tracking-tight tabular-nums", t.tone)}>{t.value}</p>
+        <div key={t.label} className="min-w-0 rounded-xl border border-border bg-card px-3 py-3 shadow-card sm:px-4 sm:py-3.5">
+          <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t.label}</p>
+          <p className={cn("mt-1.5 break-words text-lg font-semibold sm:text-2xl tracking-tight tabular-nums", t.tone)}>{t.value}</p>
           <div className="mt-1 min-h-4 text-xs text-muted-foreground">{t.sub}</div>
         </div>
       ))}
@@ -675,11 +675,11 @@ export function HoldingsWidget({
         <table className="w-full table-fixed text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="w-[34%] pb-2 font-semibold">{c.company}</th>
-              <th className="w-[20%] pb-2 text-right font-semibold">{c.value}</th>
-              <th className="w-[18%] pb-2 pl-3 font-semibold">{c.weight}</th>
-              <th className="w-[13%] pb-2 text-right font-semibold">{c.day}</th>
-              <th className="w-[15%] pb-2 text-right font-semibold">{c.pl}</th>
+              <th className="w-[44%] pb-2 sm:w-[34%] font-semibold">{c.company}</th>
+              <th className="w-[24%] pb-2 sm:w-[20%] text-right font-semibold">{c.value}</th>
+              <th className="hidden w-[18%] pb-2 pl-3 font-semibold sm:table-cell">{c.weight}</th>
+              <th className="w-[16%] pb-2 sm:w-[13%] text-right font-semibold">{c.day}</th>
+              <th className="w-[16%] pb-2 sm:w-[15%] text-right font-semibold">{c.pl}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
@@ -693,7 +693,7 @@ export function HoldingsWidget({
                     <CompanyIdentity symbol={r.symbol} name={r.name} size="sm" href={`/stock/${encodeURIComponent(r.symbol)}`} />
                   </td>
                   <td className="py-1.5 text-right tabular-nums">{formatCurrency(mv, base)}</td>
-                  <td className="py-1.5 pl-3">
+                  <td className="hidden py-1.5 pl-3 sm:table-cell">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                         <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, w)}%` }} />

@@ -70,7 +70,7 @@ export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: M
   const hasPortfolio = analytics != null && portfolio != null;
 
   return (
-    <div className="mx-auto w-full max-w-[1800px] space-y-3 px-3 py-4 sm:px-5 lg:px-6">
+    <div className="mx-auto w-full max-w-[1800px] space-y-3 px-0 py-1 sm:px-3 sm:py-2 lg:px-6">
       <MarketStrip tiles={tiles} />
 
       {!hasPortfolio && !data.portfolioLoading && data.authed !== undefined && (data.signedOut || data.authed) ? (

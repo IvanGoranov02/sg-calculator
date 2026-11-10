@@ -66,9 +66,9 @@ export function ReadsIndexClient({ posts, isAdmin }: { posts: ReadSummary[]; isA
         <>
           <Link
             href={`/reads/${first.slug}`}
-            className="group grid overflow-hidden rounded-2xl border border-border bg-card shadow-card transition hover:border-primary/50 md:grid-cols-[1.25fr_1fr]"
+            className="group grid overflow-hidden rounded-2xl border border-border bg-card shadow-card transition hover:border-primary/50 xl:grid-cols-[1.4fr_1fr]"
           >
-            <div className="aspect-[16/10] overflow-hidden md:aspect-auto md:min-h-[18rem]">
+            <div className="aspect-[16/10] overflow-hidden xl:aspect-auto xl:min-h-[18rem]">
               <Cover post={first} />
             </div>
             <div className="flex flex-col justify-center gap-3 p-6 sm:p-8">

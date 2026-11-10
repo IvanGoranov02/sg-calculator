@@ -34,7 +34,7 @@ export function MobileTabBar({ onMore }: Props) {
               key={href}
               href={href}
               className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors",
+                "flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] [@media(max-height:500px)]:min-h-10 [@media(max-height:500px)]:gap-0 font-medium transition-colors",
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -46,7 +46,7 @@ export function MobileTabBar({ onMore }: Props) {
         <button
           type="button"
           onClick={onMore}
-          className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="flex min-h-14 flex-col items-center justify-center gap-1 px-1 text-[10px] [@media(max-height:500px)]:min-h-10 [@media(max-height:500px)]:gap-0 font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <MoreHorizontal className="size-5" aria-hidden />
           <span className="truncate" title={t("mobileNav.more")}>{t("mobileNav.more")}</span>

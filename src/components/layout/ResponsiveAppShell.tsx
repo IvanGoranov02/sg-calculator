@@ -64,7 +64,7 @@ export function ResponsiveAppShell({ children }: ResponsiveAppShellProps) {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TopHeader />
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 sm:py-6 lg:pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-clip px-4 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] [@media(max-height:500px)]:pb-[calc(3.25rem+env(safe-area-inset-bottom,0px))] pt-3 sm:px-6 sm:py-6 lg:pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           {/* Keyed by route so content gently animates in on each navigation. */}
           <div key={pathname} className="animate-page-in">
             {children}
