@@ -1,288 +1,138 @@
 "use client";
 
-import { BarChart3, Calculator, ListPlus, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 
-import { DashboardClient } from "@/components/dashboard/DashboardClient";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, formatPercent } from "@/lib/format";
-import { useI18n } from "@/lib/i18n/LocaleProvider";
-import type { MarketNewsItem, QuickQuote } from "@/lib/yahooQuickQuote";
-import { cn } from "@/lib/utils";
+import {
+  AllocationWidget,
+  DividendIncomeWidget,
+  HoldingsWidget,
+  KpiRow,
+  MarketStrip,
+  MoversWidget,
+  NewsWidget,
+  PortfolioCta,
+  UpcomingWidget,
+  ValueWidget,
+  WatchlistWidget,
+  useDashText,
+  type MarketTile,
+} from "@/components/dashboard/DashboardWidgets";
+import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
+import { buildAnalyticsRows } from "@/lib/dashboardData";
+import { useDashboardData } from "@/lib/useDashboardData";
+import { useVisibleInterval } from "@/lib/useVisibleInterval";
+import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
+import type { MarketNewsItem } from "@/lib/yahooQuickQuote";
+import { useMemo } from "react";
 
-type DashboardContentProps = {
-  market: { spy: QuickQuote | null; qqq: QuickQuote | null; oil: QuickQuote | null };
-  commodities: {
-    oil: QuickQuote | null;
-    brent: QuickQuote | null;
-    gold: QuickQuote | null;
-    silver: QuickQuote | null;
-  };
-  oilNews: MarketNewsItem[];
-};
+const QUOTES_REFRESH_MS = 60_000;
 
-function formatQuoteValue(quote: QuickQuote): string {
-  return formatCurrency(quote.price);
-}
+export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: MarketNewsItem[] }) {
+  const { c } = useDashText();
+  const data = useDashboardData(c.other);
+  const { symbols } = useWatchlist();
+  const [watch, setWatch] = useState<WatchlistQuoteRow[]>([]);
+  const [watchLoading, setWatchLoading] = useState(false);
 
-function formatQuoteTime(quote: QuickQuote): string | null {
-  if (!quote.regularMarketTime) return quote.marketState ?? null;
-  const d = new Date(quote.regularMarketTime);
-  if (Number.isNaN(d.getTime())) return quote.marketState ?? null;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+  const loadWatch = useCallback(
+    async (silent: boolean) => {
+      if (symbols.length === 0) {
+        setWatch([]);
+        return;
+      }
+      if (!silent) setWatchLoading(true);
+      try {
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as { quotes?: WatchlistQuoteRow[] };
+        const bySym = new Map((json.quotes ?? []).map((r) => [r.symbol.toUpperCase(), r]));
+        setWatch(symbols.map((s) => bySym.get(s)).filter((r): r is WatchlistQuoteRow => Boolean(r)));
+      } catch {
+        /* keep last good quotes */
+      } finally {
+        if (!silent) setWatchLoading(false);
+      }
+    },
+    [symbols],
+  );
 
-function MarketQuoteCard({
-  quote,
-  displayName,
-  hint,
-  emphasized = false,
-}: {
-  quote: QuickQuote;
-  displayName: string;
-  hint: string;
-  emphasized?: boolean;
-}) {
-  const time = formatQuoteTime(quote);
-  const up = quote.changesPercentage >= 0;
-  const TrendIcon = up ? TrendingUp : TrendingDown;
+  useEffect(() => {
+    void loadWatch(false);
+  }, [loadWatch]);
+  useVisibleInterval(() => void loadWatch(true), QUOTES_REFRESH_MS, symbols.length > 0);
+
+  const { portfolio, analytics } = data;
+  const rows = useMemo(
+    () => (portfolio ? buildAnalyticsRows(portfolio.holdings, portfolio.quotes, portfolio.fx) : []),
+    [portfolio],
+  );
+  const hasPortfolio = analytics != null && portfolio != null;
 
   return (
-    <div
-      className={cn(
-        "group relative min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card px-3.5 py-3 transition-colors hover:border-emerald-500/30",
-        emphasized && "border-amber-500/30 bg-amber-500/10",
-      )}
-    >
-      {/* Direction accent rail */}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute inset-y-0 left-0 w-0.5",
-          up ? "bg-emerald-500/70" : "bg-red-500/70",
-        )}
-      />
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-base font-semibold leading-snug text-foreground" title={displayName}>
-            {displayName}
-          </p>
-          <p className="mt-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {quote.symbol}
-          </p>
-        </div>
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-0.5 font-mono text-xs font-medium tabular-nums",
-            up ? "text-emerald-400" : "text-red-400",
-          )}
-        >
-          <TrendIcon className="size-3" aria-hidden />
-          {formatPercent(quote.changesPercentage)}
-        </span>
-      </div>
-      <p className="mt-2 font-mono text-lg font-semibold tabular-nums text-foreground">
-        {formatQuoteValue(quote)}
-      </p>
-      <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{hint}</p>
-      {time ? (
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground/80">{time}</p>
+    <div className="mx-auto w-full max-w-[1800px] space-y-3 px-3 py-4 sm:px-5 lg:px-6">
+      <MarketStrip tiles={tiles} />
+
+      {!hasPortfolio && !data.portfolioLoading && data.authed !== undefined && (data.signedOut || data.authed) ? (
+        <PortfolioCta signedOut={data.signedOut} />
       ) : null}
-    </div>
-  );
-}
 
-function QuoteGrid({
-  quotes,
-}: {
-  quotes: Array<{
-    quote: QuickQuote | null;
-    displayName: string;
-    hint: string;
-    emphasized?: boolean;
-  }>;
-}) {
-  const shown = quotes.filter(
-    (x): x is { quote: QuickQuote; displayName: string; hint: string; emphasized?: boolean } =>
-      x.quote !== null,
-  );
-  if (shown.length === 0) return null;
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {shown.map(({ quote, displayName, hint, emphasized }) => (
-        <MarketQuoteCard
-          key={quote.symbol}
-          quote={quote}
-          displayName={displayName}
-          hint={hint}
-          emphasized={emphasized}
-        />
-      ))}
-    </div>
-  );
-}
+      {hasPortfolio ? (
+        <>
+          <KpiRow
+            analytics={analytics}
+            dayChange={data.dayChange}
+            dividends={data.dividends}
+            base={data.base}
+            positions={portfolio.holdings.length}
+          />
+          <div className="grid gap-3 xl:grid-cols-12">
+            <div className="xl:col-span-6 2xl:col-span-6">
+              <ValueWidget history={data.valueHistory} loading={data.valueHistoryLoading} base={data.base} />
+            </div>
+            <div className="xl:col-span-3">
+              <AllocationWidget analytics={analytics} />
+            </div>
+            <div className="xl:col-span-3">
+              <UpcomingWidget holdings={portfolio.holdings} quotes={portfolio.quotes} dividends={data.dividends} />
+            </div>
+          </div>
+          <div className="grid gap-3 xl:grid-cols-12">
+            <div className="xl:col-span-7">
+              <HoldingsWidget rows={rows} fx={portfolio.fx} base={data.base} total={analytics.totalValue} />
+            </div>
+            <div className="xl:col-span-5">
+              <DividendIncomeWidget dividends={data.dividends} loading={data.dividendsLoading} base={data.base} />
+            </div>
+          </div>
+        </>
+      ) : null}
 
-function OilNews({ items }: { items: MarketNewsItem[] }) {
-  const { t } = useI18n();
-  if (items.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">{t("dashboard.oilNewsFallback")}</p>
-    );
-  }
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-12">
+        <div className="xl:col-span-5">
+          <WatchlistWidget rows={watch} loading={watchLoading} count={symbols.length} />
+        </div>
+        <div className="xl:col-span-3">
+          <MoversWidget analytics={analytics} watch={watch} />
+        </div>
+        <div className="lg:col-span-2 xl:col-span-4">
+          <NewsWidget items={news} />
+        </div>
+      </div>
 
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {t("dashboard.oilNewsTitle")}
-      </p>
-      <div className="grid gap-2 md:grid-cols-3">
-        {items.map((item) => (
-          <a
-            key={`${item.link}-${item.title}`}
-            href={item.link}
-            target="_blank"
-            rel="noreferrer"
-            className="group rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs transition-colors hover:border-emerald-500/30 hover:bg-card"
-            title={item.title}
-          >
-            <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{item.title}</span>
-            {item.publisher ? <span className="mt-1 block text-[10px] text-muted-foreground/80">{item.publisher}</span> : null}
-          </a>
+      <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 pt-1 text-xs text-muted-foreground">
+        {[
+          ["/portfolio", "Portfolio"],
+          ["/watchlist", "Watchlist"],
+          ["/dcf-calculator", "DCF"],
+          ["/events", "Events"],
+          ["/reads", "Reads"],
+        ].map(([href, label]) => (
+          <Link key={href} href={href} className="hover:text-primary">
+            {label}
+          </Link>
         ))}
       </div>
-    </div>
-  );
-}
-
-export function DashboardContent({ market, commodities, oilNews }: DashboardContentProps) {
-  const { t } = useI18n();
-  const hasMarket = market.spy !== null || market.qqq !== null || market.oil !== null;
-
-  return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8">
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-primary/12 via-card to-card shadow-card px-5 py-6 sm:px-7 sm:py-8">
-        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
-          {t("dashboard.title")}
-        </h1>
-      </div>
-
-      <section aria-label={t("dashboard.marketAria")} className="space-y-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("dashboard.marketTitle")}
-        </h2>
-        {hasMarket ? (
-          <div className="flex flex-col gap-3 sm:flex-row">
-            {market.spy ? (
-              <MarketQuoteCard
-                quote={market.spy}
-                displayName={t("dashboard.nameSpy")}
-                hint={t("dashboard.marketSpyHint")}
-              />
-            ) : null}
-            {market.qqq ? (
-              <MarketQuoteCard
-                quote={market.qqq}
-                displayName={t("dashboard.nameQqq")}
-                hint={t("dashboard.marketQqqHint")}
-              />
-            ) : null}
-            {market.oil ? (
-              <MarketQuoteCard
-                quote={market.oil}
-                displayName={t("dashboard.nameWti")}
-                hint={t("dashboard.marketOilHint")}
-                emphasized
-              />
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("dashboard.marketUnavailable")}</p>
-        )}
-        <OilNews items={oilNews} />
-      </section>
-
-      <section aria-label={t("dashboard.commoditiesAria")} className="space-y-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("dashboard.commoditiesTab")}
-        </h2>
-        <QuoteGrid
-          quotes={[
-            {
-              quote: commodities.oil,
-              displayName: t("dashboard.nameWti"),
-              hint: t("dashboard.marketOilHint"),
-              emphasized: true,
-            },
-            {
-              quote: commodities.brent,
-              displayName: t("dashboard.nameBrent"),
-              hint: t("dashboard.marketBrentHint"),
-            },
-            {
-              quote: commodities.gold,
-              displayName: t("dashboard.nameGold"),
-              hint: t("dashboard.marketGoldHint"),
-            },
-            {
-              quote: commodities.silver,
-              displayName: t("dashboard.nameSilver"),
-              hint: t("dashboard.marketSilverHint"),
-            },
-          ]}
-        />
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="Quick links">
-        <Link
-          href="/stock"
-          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
-            <CardHeader className="gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                <BarChart3 className="size-5" aria-hidden />
-              </div>
-              <CardTitle className="text-base">{t("dashboard.quickStockTitle")}</CardTitle>
-              <CardDescription className="text-sm">{t("dashboard.quickStockDesc")}</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link
-          href="/dcf-calculator?ticker=AAPL"
-          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
-            <CardHeader className="gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
-                <Calculator className="size-5" aria-hidden />
-              </div>
-              <CardTitle className="text-base">{t("dashboard.quickDcfTitle")}</CardTitle>
-              <CardDescription className="text-sm">{t("dashboard.quickDcfDesc")}</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link
-          href="/watchlist"
-          className="group block rounded-xl outline-none hover-lift focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Card className="h-full border-border bg-card transition-colors group-hover:border-emerald-500/30 group-hover:bg-muted/50">
-            <CardHeader className="gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400">
-                <ListPlus className="size-5" aria-hidden />
-              </div>
-              <CardTitle className="text-base">{t("dashboard.quickWlTitle")}</CardTitle>
-              <CardDescription className="text-sm">{t("dashboard.quickWlDesc")}</CardDescription>
-            </CardHeader>
-          </Card>
-        </Link>
-      </section>
-
-      <DashboardClient />
     </div>
   );
 }
