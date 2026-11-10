@@ -87,35 +87,33 @@ export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: M
             positions={portfolio.holdings.length}
           />
           <div className="grid gap-3 xl:grid-cols-12">
-            <div className="xl:col-span-6 2xl:col-span-6">
+            <div className="xl:col-span-8">
               <ValueWidget history={data.valueHistory} loading={data.valueHistoryLoading} base={data.base} />
             </div>
-            <div className="xl:col-span-3">
+            <div className="xl:col-span-4">
               <AllocationWidget analytics={analytics} />
-            </div>
-            <div className="xl:col-span-3">
-              <UpcomingWidget holdings={portfolio.holdings} quotes={portfolio.quotes} dividends={data.dividends} />
             </div>
           </div>
           <div className="grid gap-3 xl:grid-cols-12">
-            <div className="xl:col-span-7">
+            <div className="xl:col-span-8">
               <HoldingsWidget rows={rows} fx={portfolio.fx} base={data.base} total={analytics.totalValue} />
             </div>
-            <div className="xl:col-span-5">
-              <DividendIncomeWidget dividends={data.dividends} loading={data.dividendsLoading} base={data.base} />
+            <div className="xl:col-span-4">
+              <UpcomingWidget holdings={portfolio.holdings} quotes={portfolio.quotes} dividends={data.dividends} />
             </div>
           </div>
+          <DividendIncomeWidget dividends={data.dividends} loading={data.dividendsLoading} base={data.base} />
         </>
       ) : null}
 
       <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-12">
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-6">
           <WatchlistWidget rows={watch} loading={watchLoading} count={symbols.length} />
         </div>
-        <div className="xl:col-span-3">
+        <div className="xl:col-span-6">
           <MoversWidget analytics={analytics} watch={watch} />
         </div>
-        <div className="lg:col-span-2 xl:col-span-4">
+        <div className="lg:col-span-2 xl:col-span-12">
           <NewsWidget items={news} />
         </div>
       </div>

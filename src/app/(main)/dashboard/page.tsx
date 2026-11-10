@@ -5,14 +5,8 @@ import { fetchMarketNews, fetchQuickQuote } from "@/lib/yahooQuickQuote";
 export const dynamic = "force-dynamic";
 
 const TILES: { key: string; label: string; symbol: string; kind: MarketTile["kind"] }[] = [
-  { key: "spy", label: "S&P 500 (SPY)", symbol: "SPY", kind: "usd" },
-  { key: "qqq", label: "Nasdaq (QQQ)", symbol: "QQQ", kind: "usd" },
-  { key: "dia", label: "Dow (DIA)", symbol: "DIA", kind: "usd" },
-  { key: "iwm", label: "Russell 2000", symbol: "IWM", kind: "usd" },
-  { key: "vix", label: "VIX", symbol: "^VIX", kind: "num" },
-  { key: "tnx", label: "US 10Y", symbol: "^TNX", kind: "pct" },
+  { key: "spy", label: "S&P 500", symbol: "SPY", kind: "usd" },
   { key: "btc", label: "Bitcoin", symbol: "BTC-USD", kind: "usd" },
-  { key: "eur", label: "EUR/USD", symbol: "EURUSD=X", kind: "num" },
   { key: "wti", label: "Oil WTI", symbol: "CL=F", kind: "usd" },
   { key: "brent", label: "Brent", symbol: "BZ=F", kind: "usd" },
   { key: "gold", label: "Gold", symbol: "GC=F", kind: "usd" },

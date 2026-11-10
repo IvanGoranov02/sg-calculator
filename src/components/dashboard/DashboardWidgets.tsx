@@ -207,20 +207,20 @@ export function MarketStrip({ tiles }: { tiles: MarketTile[] }) {
   const shown = tiles.filter((t) => t.quote);
   if (shown.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-12">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
       {shown.map(({ key, label, quote, kind }) => {
         const q = quote!;
         const up = q.changesPercentage >= 0;
         return (
           <div
             key={key}
-            className="relative overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5 shadow-card"
+            className="relative overflow-hidden rounded-xl border border-border bg-card px-4 py-3.5 shadow-card"
             title={q.name}
           >
             <span aria-hidden className={cn("absolute inset-y-0 left-0 w-0.5", up ? "bg-emerald-500" : "bg-red-500")} />
-            <p className="truncate text-[11px] font-medium text-muted-foreground">{label}</p>
-            <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">{formatTilePrice(q, kind)}</p>
-            <Pill value={q.changesPercentage} className="text-[11px]" />
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{formatTilePrice(q, kind)}</p>
+            <Pill value={q.changesPercentage} className="text-xs" />
           </div>
         );
       })}
@@ -286,12 +286,12 @@ export function KpiRow({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {tiles.map((t) => (
         <div key={t.label} className="min-w-0 rounded-xl border border-border bg-card px-4 py-3.5 shadow-card">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t.label}</p>
-          <p className={cn("mt-1.5 truncate text-xl font-semibold tracking-tight tabular-nums xl:text-[1.35rem]", t.tone)}>{t.value}</p>
-          <div className="mt-0.5 min-h-4 truncate text-xs text-muted-foreground">{t.sub}</div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t.label}</p>
+          <p className={cn("mt-1.5 break-words text-2xl font-semibold tracking-tight tabular-nums", t.tone)}>{t.value}</p>
+          <div className="mt-1 min-h-4 text-xs text-muted-foreground">{t.sub}</div>
         </div>
       ))}
     </div>
@@ -450,7 +450,7 @@ export function AllocationWidget({ analytics }: { analytics: PortfolioAnalyticsD
 
   return (
     <Panel title={c.allocation} right={toggle} className="h-full">
-      <div className="flex flex-col items-center gap-3 sm:flex-row xl:flex-col 2xl:flex-row">
+      <div className="flex flex-col items-center gap-4 sm:flex-row">
         <div className="relative size-40 shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -469,7 +469,7 @@ export function AllocationWidget({ analytics }: { analytics: PortfolioAnalyticsD
           {slices.map((s, i) => (
             <li key={s.name} className="flex items-center gap-2">
               <span className="size-2.5 shrink-0 rounded-sm" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} />
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
+              <span className="min-w-0 flex-1 break-words">{s.name}</span>
               <span className="tabular-nums text-muted-foreground">{((s.value / total) * 100).toFixed(1)}%</span>
             </li>
           ))}
@@ -589,7 +589,7 @@ export function UpcomingWidget({
                   <span className="text-[9px] uppercase text-muted-foreground">{d.toLocaleDateString(dateLocale, { month: "short" })}</span>
                   <span className="text-sm font-semibold">{d.getDate()}</span>
                 </div>
-                <Link href={`/stock/${encodeURIComponent(it.symbol)}`} className="min-w-0 flex-1 truncate font-medium hover:text-primary">
+                <Link href={`/stock/${encodeURIComponent(it.symbol)}`} className="min-w-0 flex-1 break-words font-medium hover:text-primary">
                   {it.symbol}
                 </Link>
                 {it.amount ? <span className="text-xs font-medium tabular-nums text-emerald-400">{it.amount}</span> : null}
@@ -629,7 +629,7 @@ export function MoversWidget({
         <ul className="space-y-1.5">
           {rows.map((m) => (
             <li key={m.symbol} className="flex items-center justify-between gap-2 text-sm">
-              <Link href={`/stock/${encodeURIComponent(m.symbol)}`} className="min-w-0 truncate font-medium hover:text-primary" title={m.name ?? m.symbol}>
+              <Link href={`/stock/${encodeURIComponent(m.symbol)}`} className="min-w-0 break-words font-medium hover:text-primary" title={m.name ?? m.symbol}>
                 {m.symbol}
               </Link>
               <Pill value={m.pct} className="text-xs" />
@@ -672,7 +672,7 @@ export function HoldingsWidget({
   return (
     <Panel title={c.holdings} href="/portfolio" hrefLabel={c.viewAll} className="h-full">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[30rem] text-sm">
+        <table className="w-full min-w-[34rem] text-sm">
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
               <th className="pb-2 font-semibold">{c.company}</th>
@@ -763,7 +763,7 @@ export function NewsWidget({ items }: { items: MarketNewsItem[] }) {
           >
             <Newspaper className="mt-0.5 size-4 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden />
             <span className="min-w-0">
-              <span className="line-clamp-2 text-sm font-medium leading-snug">{n.title}</span>
+              <span className="line-clamp-3 text-sm font-medium leading-snug">{n.title}</span>
               <span className="mt-0.5 block text-[11px] text-muted-foreground">
                 {[n.publisher, n.publishedAt ? new Date(n.publishedAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short" }) : null]
                   .filter(Boolean)
