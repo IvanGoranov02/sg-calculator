@@ -1493,6 +1493,29 @@ export function PortfolioClient() {
           ) : null}
         </div>
       </Card>
+
+      {trading212 && !trading212.connected ? (
+        <Card className="border-border bg-card">
+          <CardHeader className="space-y-2">
+            <CardTitle className="text-base sm:text-lg">{t("portfolio.guide.title")}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{t("portfolio.guide.intro")}</CardDescription>
+          </CardHeader>
+          <ol className="space-y-4 px-4 pb-6 sm:px-6">
+            {(["s1", "s2", "s3", "s4", "s5", "s6", "s7"] as const).map((k, i) => (
+              <li key={k} className="flex gap-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-400">
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{t(`portfolio.guide.${k}Title`)}</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{t(`portfolio.guide.${k}Body`)}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="px-4 pb-6 text-xs text-muted-foreground sm:px-6">{t("portfolio.guide.safety")}</p>
+        </Card>
+      ) : null}
         </TabsContent>
 
         <TabsContent value="dividends">
