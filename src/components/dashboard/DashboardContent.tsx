@@ -1,34 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
   AllocationWidget,
   DividendIncomeWidget,
   HoldingsWidget,
   KpiRow,
-  MarketStrip,
   MoversWidget,
-  NewsWidget,
   PortfolioCta,
   UpcomingWidget,
   ValueWidget,
   WatchlistWidget,
   useDashText,
-  type MarketTile,
 } from "@/components/dashboard/DashboardWidgets";
 import { useWatchlist } from "@/components/watchlist/WatchlistProvider";
 import { buildAnalyticsRows } from "@/lib/dashboardData";
 import { useDashboardData } from "@/lib/useDashboardData";
 import { useVisibleInterval } from "@/lib/useVisibleInterval";
 import type { WatchlistQuoteRow } from "@/lib/watchlistTypes";
-import type { MarketNewsItem } from "@/lib/yahooQuickQuote";
 import { useMemo } from "react";
 
 const QUOTES_REFRESH_MS = 60_000;
 
-export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: MarketNewsItem[] }) {
+export function DashboardContent({ marketSlot, newsSlot }: { marketSlot: ReactNode; newsSlot: ReactNode }) {
   const { c } = useDashText();
   const data = useDashboardData(c.other);
   const { symbols } = useWatchlist();
@@ -71,7 +67,7 @@ export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: M
 
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-3 px-0 py-1 sm:px-3 sm:py-2 lg:px-6">
-      <MarketStrip tiles={tiles} />
+      {marketSlot}
 
       {!hasPortfolio && !data.portfolioLoading && data.authed !== undefined && (data.signedOut || data.authed) ? (
         <PortfolioCta signedOut={data.signedOut} />
@@ -114,7 +110,7 @@ export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: M
           <MoversWidget analytics={analytics} watch={watch} />
         </div>
         <div className="lg:col-span-2 xl:col-span-12">
-          <NewsWidget items={news} />
+          {newsSlot}
         </div>
       </div>
 
