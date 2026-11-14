@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Loader2, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
@@ -18,6 +18,7 @@ import { CompanyIdentity, CompanyLogo } from "@/components/company/CompanyIdenti
 import { GrowthPillsRow } from "@/components/stock/GrowthPillsRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { csvDateStamp, downloadCsv, toCsv } from "@/lib/csvExport";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -104,7 +105,7 @@ function UpcomingDividendBox({
       {/* Remount per symbol so a missing or previous logo cannot stick. */}
       <CompanyLogo key={item.symbol} symbol={item.symbol} size="sm" />
       <span
-        className="mt-1.5 w-full truncate text-sm font-semibold leading-tight text-foreground"
+        className="mt-1.5 line-clamp-2 min-h-[2.25rem] w-full break-words text-sm font-semibold leading-tight text-foreground"
         title={companyName ?? item.symbol}
       >
         {companyName ?? item.symbol}
@@ -684,8 +685,26 @@ export function PortfolioDividendsView({
 
       {hasPayments ? (
         <Card className="border-border bg-card">
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
             <CardTitle className="text-base sm:text-lg">{t("portfolioDividends.paymentsTitle")}</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-border"
+              onClick={() =>
+                downloadCsv(
+                  `dividends-${csvDateStamp()}.csv`,
+                  toCsv(
+                    ["Date", "Symbol", "Name", "Amount", "Currency", "Source", "Note"],
+                    data.payments.map((p) => [p.paidOn, p.symbolYahoo ?? p.ticker, p.name ?? "", p.amount, p.currency, p.source, p.note ?? ""]),
+                  ),
+                )
+              }
+            >
+              <Download className="mr-2 size-4" aria-hidden />
+              {t("portfolio.exportCsv")}
+            </Button>
           </CardHeader>
           <div className="-mx-px overflow-x-auto">
             <Table id="recent-dividends" className="min-w-[32rem]">

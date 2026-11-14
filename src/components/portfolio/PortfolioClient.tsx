@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Download, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +19,7 @@ import {
   formatPercent,
   resolveDateLocaleTag,
 } from "@/lib/format";
+import { csvDateStamp, downloadCsv, toCsv } from "@/lib/csvExport";
 import { estimateHoldingAnnualDividend } from "@/lib/portfolioDividends";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { usePreferences } from "@/lib/preferences/PreferencesProvider";
@@ -836,6 +837,27 @@ export function PortfolioClient() {
     return mapped.sort((a, b) => (b.mv ?? -1) - (a.mv ?? -1));
   }, [holdings, quotes, fx]);
 
+  function exportHoldingsCsv() {
+    const csv = toCsv(
+      ["Symbol", "Name", "Source", "Quantity", "Avg price", "Price", "Currency", "Market value", "Cost", "P/L", "P/L %", "Est. annual dividends"],
+      rows.map(({ h, q, qQty, qAvg, holdingCcy, priceInHolding, mv, cost, pl, plPct, estAnnual }) => [
+        h.symbolYahoo,
+        q?.name ?? "",
+        h.source,
+        qQty,
+        qAvg,
+        priceInHolding != null ? Number(priceInHolding.toFixed(4)) : null,
+        holdingCcy,
+        mv != null ? Number(mv.toFixed(2)) : null,
+        Number(cost.toFixed(2)),
+        pl != null ? Number(pl.toFixed(2)) : null,
+        plPct != null ? Number(plPct.toFixed(2)) : null,
+        estAnnual != null ? Number(estAnnual.toFixed(2)) : null,
+      ]),
+    );
+    downloadCsv(`portfolio-${csvDateStamp()}.csv`, csv);
+  }
+
   const analyticsRows = useMemo<AnalyticsRow[]>(
     () =>
       rows.map(({ h, q, mv, cost, pl, estAnnual, holdingCcy }) => ({
@@ -987,6 +1009,12 @@ export function PortfolioClient() {
             {t("portfolio.tabDividends")}
           </TabsTrigger>
         </TabsList>
+        {portfolioView === "holdings" && rows.length > 0 ? (
+          <Button type="button" variant="outline" className="shrink-0 border-border" onClick={exportHoldingsCsv}>
+            <Download className="mr-2 size-4" aria-hidden />
+            {t("portfolio.exportCsv")}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"

@@ -127,7 +127,7 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3">
           <Method label={t("valuation.methodDcf")} value={dcf != null ? formatCurrency(dcf) : "—"} />
           <Method label={t("valuation.methodMultiples")} value={multiples != null ? formatCurrency(multiples) : "—"} />
           <Method
