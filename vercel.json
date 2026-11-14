@@ -1,4 +1,5 @@
 {
   "installCommand": "npm ci",
-  "buildCommand": "npm run build:skip-db"
+  "buildCommand": "npm run build:skip-db",
+  "crons": [{ "path": "/api/cron/verified", "schedule": "0 5 * * *" }]
 }

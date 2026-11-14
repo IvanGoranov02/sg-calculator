@@ -122,6 +122,19 @@ const CONCEPTS: Record<string, string[]> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Proxy statements (DEF 14A "pay versus performance" tables) re-tag net income and
+ * similar figures in millions, filed AFTER the 10-K — so "latest filed wins" would
+ * replace 1,352,446,000 with 1,352. They are not financial statements; ignore them.
+ */
+function isFinancialStatementForm(form: string | undefined): boolean {
+  return !/^(DEF|PRE|DEFA|DEFM|DEFR)/i.test(form ?? "");
+}
+
+/** A fiscal quarter: 13 weeks normally, 12 or 16-17 weeks for 52/53-week filers (COST, PEP). */
+const QUARTER_MIN_DAYS = 75;
+const QUARTER_MAX_DAYS = 125;
+
 function daysBetween(startIso: string, endIso: string): number {
   return Math.round((Date.parse(endIso) - Date.parse(startIso)) / DAY_MS);
 }
@@ -169,6 +182,7 @@ function conceptPoints(facts: EdgarCompanyFacts, concepts: string[]): EdgarFactP
       if (!list) continue;
       for (const p of list) {
         if (!p?.end || typeof p.val !== "number" || !Number.isFinite(p.val)) continue;
+        if (!isFinancialStatementForm(p.form)) continue;
         pts.push(p);
         const key = `${p.start ?? ""}|${p.end}`;
         const w = winnerPriority.get(key);
@@ -255,7 +269,7 @@ export function buildFlowSeries(
     const days = daysBetween(p.start as string, p.end);
     if (days >= 330 && days <= 390 && annualKeys.has(`${p.start}|${p.end}`)) {
       annual.set(p.end, p.val);
-    } else if (days >= 75 && days <= 105) {
+    } else if (days >= QUARTER_MIN_DAYS && days <= QUARTER_MAX_DAYS) {
       quarterly.set(p.end, p.val);
     }
   }
@@ -280,7 +294,7 @@ export function buildFlowSeries(
         (p) =>
           Math.abs(daysBetween(fyPoint.start as string, p.start as string)) <= 7 &&
           p.end <= fyEnd &&
-          daysBetween(p.start as string, p.end) >= 75,
+          daysBetween(p.start as string, p.end) >= QUARTER_MIN_DAYS,
       )
       .sort((a, b) => a.end.localeCompare(b.end));
     if (chain.length === 0) continue;
@@ -289,7 +303,7 @@ export function buildFlowSeries(
     }
     for (let i = 1; i < chain.length; i++) {
       const gapDays = daysBetween(chain[i - 1].end, chain[i].end);
-      if (gapDays < 75 || gapDays > 105) continue;
+      if (gapDays < QUARTER_MIN_DAYS || gapDays > QUARTER_MAX_DAYS) continue;
       if (!quarterly.has(chain[i].end)) {
         // Round away float noise from differencing (matters for per-share values).
         quarterly.set(chain[i].end, Math.round((chain[i].val - chain[i - 1].val) * 1e6) / 1e6);

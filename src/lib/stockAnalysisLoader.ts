@@ -46,6 +46,8 @@ import {
   reconcileFundamentalsCurrency,
 } from "@/lib/yahooStockPriceHistory";
 import { debugLog } from "@/lib/serverDebug";
+import { loadVerifiedBundle } from "@/lib/verified/service";
+import { after } from "next/server";
 
 export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 
@@ -75,6 +77,15 @@ const PRISMA_CACHE_TIMEOUT_MS = 8_000;
 const PRISMA_CACHE_ATTEMPTS = 2;
 const YAHOO_STEP_TIMEOUT_MS = 20_000;
 const GEMINI_GAP_FILL_BUDGET_MS = 22_000;
+
+/** Run after the response when inside a request; plain fire-and-forget elsewhere (scripts/tests). */
+function scheduleAfterResponse(work: () => Promise<void>): void {
+  try {
+    after(work);
+  } catch {
+    void work();
+  }
+}
 
 function logLoadStep(sym: string, step: string, startedAt: number, extra?: string): void {
   const ms = Date.now() - startedAt;
@@ -337,6 +348,34 @@ export async function loadStockAnalysis(
       });
       logLoadStep(sym, "total", loadStarted);
       return { bundle: working, error: null };
+    }
+
+    // Largest companies: statements come from the verified store (SEC filings that passed
+    // arithmetic + second-source checks). No AI and no statement re-fetch on a view; only
+    // live prices/metrics are added. Anything not verified falls through to the pipeline below.
+    if (!opts?.overwriteAdminEdits) {
+      const tVerified = Date.now();
+      const verified = await withTimeoutFallback(
+        loadVerifiedBundle(sym, { schedule: scheduleAfterResponse, checkNow: opts?.forceRefresh }),
+        opts?.forceRefresh ? 45_000 : 20_000,
+        `verified ${sym}`,
+        null,
+      ).catch((e) => {
+        console.warn(`[stock-load] ${sym} verified store skipped:`, e instanceof Error ? e.message : e);
+        return null;
+      });
+      logLoadStep(sym, "verified_read", tVerified, verified ? "hit" : "miss");
+      if (verified) {
+        const { bundle, meta } = verified;
+        opts?.onProgress?.({ kind: "cache_hit" });
+        markFundamentalsSource(bundle, "edgar");
+        (bundle as CachePayload).__verified = meta;
+        opts?.onProgress?.({ kind: "yahoo_prices" });
+        await refreshLivePrices(bundle, sym);
+        await withTimeoutFallback(reconcileFundamentalsCurrency(bundle), 8_000, `fx reconcile ${sym}`, undefined);
+        logLoadStep(sym, "total", loadStarted, "verified");
+        return { bundle, error: null };
+      }
     }
 
     if (!opts?.forceRefresh) {

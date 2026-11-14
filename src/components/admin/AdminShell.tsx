@@ -19,6 +19,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Link href="/admin/cache" className="font-semibold tracking-tight text-foreground">
               {t("admin.title")}
             </Link>
+            <Link href="/admin/verified" className="text-sm text-muted-foreground hover:text-foreground">
+              Verified
+            </Link>
             <span className="hidden text-xs text-muted-foreground sm:inline">·</span>
             <Link
               href="/dashboard"

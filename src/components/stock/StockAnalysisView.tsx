@@ -16,6 +16,7 @@ import { translateStockError } from "@/lib/i18n/messages";
 import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import { VerifiedDataBadge } from "@/components/stock/VerifiedDataBadge";
 
 type StockAnalysisViewProps = {
   ticker: string;
@@ -126,6 +127,7 @@ export function StockAnalysisView({
             onForceRefresh={onForceRefresh}
             refreshing={loading}
           />
+          <VerifiedDataBadge bundle={bundle} />
 
           <StockMetricChart data={bundle} />
         </div>
