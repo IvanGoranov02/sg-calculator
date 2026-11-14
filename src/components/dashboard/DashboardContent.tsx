@@ -119,13 +119,15 @@ export function DashboardContent({ tiles, news }: { tiles: MarketTile[]; news: M
       </div>
 
       <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 pt-1 text-xs text-muted-foreground">
-        {[
-          ["/portfolio", "Portfolio"],
-          ["/watchlist", "Watchlist"],
-          ["/dcf-calculator", "DCF"],
-          ["/events", "Events"],
-          ["/reads", "Reads"],
-        ].map(([href, label]) => (
+        {(
+          [
+            ["/portfolio", c.linkPortfolio],
+            ["/watchlist", c.watchlist],
+            ["/dcf-calculator", "DCF"],
+            ["/events", c.linkEvents],
+            ["/reads", c.linkReads],
+          ] as const
+        ).map(([href, label]) => (
           <Link key={href} href={href} className="hover:text-primary">
             {label}
           </Link>
