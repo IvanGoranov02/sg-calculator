@@ -42,7 +42,7 @@ export function ReadsIndexClient({ posts, isAdmin }: { posts: ReadSummary[]; isA
   const [first, ...rest] = posts;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{s.title}</h1>

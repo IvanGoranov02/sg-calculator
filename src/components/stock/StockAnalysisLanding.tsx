@@ -80,7 +80,7 @@ export function StockAnalysisLanding() {
   const portfolioPreview = useMemo(() => portfolioSymbols.slice(0, 12), [portfolioSymbols]);
 
   return (
-    <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex min-w-0 max-w-[1800px] flex-col gap-8">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
           {t("stock.landingTitle")}

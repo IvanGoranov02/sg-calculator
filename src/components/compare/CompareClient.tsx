@@ -120,7 +120,7 @@ export function CompareClient({ initialSlots }: { initialSlots: CompareSlots }) 
   const lead = twelveMonthLead(filledRows);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="mx-auto flex max-w-[1800px] flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t("compare.title")}</h1>
         <p className="mt-2 text-muted-foreground">{t("compare.intro")}</p>

@@ -42,7 +42,7 @@ export function StockAnalysisView({
 
   if (loading && !bundle) {
     return (
-      <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex min-w-0 max-w-[1800px] flex-col gap-8">
         {loadProgress ? (
           <div className="rounded-xl border border-emerald-500/20 bg-card p-4 shadow-inner shadow-sm">
             <StockLoadProgressBar
@@ -109,7 +109,7 @@ export function StockAnalysisView({
 
   return (
     <StockAnalysisPeriodProvider key={symbol}>
-      <div className="mx-auto flex min-w-0 max-w-6xl flex-col gap-8">
+      <div className="mx-auto flex min-w-0 max-w-[1800px] flex-col gap-8">
         {loading && loadProgress ? (
           <div className="rounded-xl border border-emerald-500/20 bg-card p-4 shadow-inner shadow-sm">
             <StockLoadProgressBar

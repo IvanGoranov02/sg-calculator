@@ -124,7 +124,7 @@ function DcfEmptyState() {
   const { t } = useI18n();
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:gap-6">
       <div className="space-y-1">
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("dcf.pickTicker")}</p>
@@ -200,7 +200,7 @@ function DcfCalculatorForm({ ticker, seed }: DcfCalculatorProps) {
   const currentPrice = seed?.currentPrice ?? 0;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4 sm:gap-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:gap-6">
       <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("dcf.title")}</h1>
       {!seed ? (
         <p className="text-sm text-amber-200/90">{t("dcf.noSeed", { ticker })}</p>

@@ -23,7 +23,7 @@ export function TopHeader() {
   return (
     <header className="sticky top-0 z-10 shrink-0 border-b border-border bg-background/90 pt-[max(0px,env(safe-area-inset-top,0px))] backdrop-blur-md [@media(max-height:500px)]:static">
       <div className="hidden px-4 sm:px-6 lg:block">
-        <div className="mx-auto flex h-12 w-full max-w-6xl items-center gap-3 sm:gap-4">
+        <div className="mx-auto flex h-12 w-full max-w-[1800px] items-center gap-3 sm:gap-4">
           <div className="min-w-0 w-full max-w-[min(100%,18rem)] sm:max-w-xs">
             <Suspense fallback={<SearchFallback />}>
               <StockSearchWithRoute compact />

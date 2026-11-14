@@ -199,7 +199,7 @@ export function DividendCalculator({ seed }: Props) {
     seed?.dividendYield != null ? (seed.dividendYield * 100).toFixed(2) + "%" : "—";
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:gap-8">
+    <div className="mx-auto flex max-w-[1800px] flex-col gap-6 sm:gap-8">
       <div>
         <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
           {t("dividendCalc.title")}
