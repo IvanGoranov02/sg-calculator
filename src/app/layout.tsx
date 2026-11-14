@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stelian Petrov · Stock analysis",
+  title: { default: "Stelian Petrov · Stock analysis", template: "%s · Stelian Petrov" },
   description: "Stock analysis, DCF, and watchlist.",
 };
 

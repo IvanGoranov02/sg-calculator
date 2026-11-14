@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { DcfCalculator } from "@/components/dcf/DcfCalculator";
 import { fetchDcfSeed } from "@/lib/yahooDcfSeed";
+
+export const metadata: Metadata = { title: "DCF Calculator" };
 
 export const dynamic = "force-dynamic";
 

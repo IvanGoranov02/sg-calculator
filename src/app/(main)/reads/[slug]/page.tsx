@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -8,6 +9,12 @@ import { getReadBySlug } from "@/lib/reads";
 export const dynamic = "force-dynamic";
 
 type PageProps = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getReadBySlug(decodeURIComponent(slug)).catch(() => null);
+  return { title: post && post.status !== "draft" ? post.title : "Reads" };
+}
 
 export default async function ReadPage({ params }: PageProps) {
   const { slug } = await params;

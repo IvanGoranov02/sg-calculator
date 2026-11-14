@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { DividendCalculator } from "@/components/dividend/DividendCalculator";
 import { fetchDividendSeed } from "@/lib/yahooDividendSeed";
+
+export const metadata: Metadata = { title: "Dividend Calculator" };
 
 export const dynamic = "force-dynamic";
 

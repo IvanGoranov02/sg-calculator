@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { DashboardContent } from "@/components/dashboard/DashboardContent";
 import type { MarketTile } from "@/components/dashboard/DashboardWidgets";
 import { fetchMarketNews, fetchQuickQuote } from "@/lib/yahooQuickQuote";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 export const dynamic = "force-dynamic";
 

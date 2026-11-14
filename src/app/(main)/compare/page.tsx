@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { CompareClient } from "@/components/compare/CompareClient";
 import { initialCompareSlots } from "@/lib/compareMetrics";
+
+export const metadata: Metadata = { title: "Compare" };
 
 export const dynamic = "force-dynamic";
 

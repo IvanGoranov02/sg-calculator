@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { listReads, type ReadSummary } from "@/lib/reads";
 import { ReadsIndexClient } from "@/components/reads/ReadsIndexClient";
+
+export const metadata: Metadata = { title: "Reads" };
 
 export const dynamic = "force-dynamic";
 
