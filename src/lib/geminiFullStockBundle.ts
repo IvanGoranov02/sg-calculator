@@ -23,6 +23,7 @@ import {
   type StockAnalysisBundle,
   type StockQuote,
 } from "@/lib/stockAnalysisTypes";
+import { debugLog } from "@/lib/serverDebug";
 
 function sortAnnualByFy<T extends { fiscalYear: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
@@ -735,7 +736,7 @@ export async function fetchStockBundleFromGemini(
   const budget = { startedAt: Date.now(), budgetMs };
 
   opts?.onPartStart?.(1);
-  console.log(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
+  debugLog(`[gemini] ${sym} part 1/3: quote + investor + annual statements…`);
   const part1 = (await callGeminiJsonWithinBudget(
     apiKey,
     model,
@@ -745,7 +746,7 @@ export async function fetchStockBundleFromGemini(
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(2);
-  console.log(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
+  debugLog(`[gemini] ${sym} part 2/3: quarterly income + cash flow…`);
   const part2 = (await callGeminiJsonWithinBudget(
     apiKey,
     model,
@@ -755,7 +756,7 @@ export async function fetchStockBundleFromGemini(
   )) as Record<string, unknown>;
 
   opts?.onPartStart?.(3);
-  console.log(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
+  debugLog(`[gemini] ${sym} part 3/3: quarterly balance sheet + dividends…`);
   const part3 = (await callGeminiJsonWithinBudget(
     apiKey,
     model,

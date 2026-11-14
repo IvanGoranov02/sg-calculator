@@ -19,6 +19,7 @@ import {
   type IncomeStatementQuarter,
   type StockAnalysisBundle,
 } from "@/lib/stockAnalysisTypes";
+import { debugLog } from "@/lib/serverDebug";
 
 /** Backfill when a "5y" view would show fewer than this many quarters. */
 export const QUARTERLY_BACKFILL_MIN = 12;
@@ -296,7 +297,7 @@ export async function backfillQuarterlyHistoryFromGemini(
     );
     const added = mergeValidatedBackfill(bundle, raw);
     if (added > 0) {
-      console.log(`[gemini quarterly backfill] ${bundle.quote.symbol}: +${added} validated quarters`);
+      debugLog(`[gemini quarterly backfill] ${bundle.quote.symbol}: +${added} validated quarters`);
     }
   } catch (e) {
     console.warn("[gemini quarterly backfill]", e instanceof Error ? e.message : e);

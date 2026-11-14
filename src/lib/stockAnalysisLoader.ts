@@ -45,6 +45,7 @@ import {
   enrichBundleWithYahooPrices,
   reconcileFundamentalsCurrency,
 } from "@/lib/yahooStockPriceHistory";
+import { debugLog } from "@/lib/serverDebug";
 
 export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
 
@@ -77,7 +78,7 @@ const GEMINI_GAP_FILL_BUDGET_MS = 22_000;
 
 function logLoadStep(sym: string, step: string, startedAt: number, extra?: string): void {
   const ms = Date.now() - startedAt;
-  console.log(`[stock-load] ${sym} ${step} ${ms}ms${extra ? ` ${extra}` : ""}`);
+  debugLog(`[stock-load] ${sym} ${step} ${ms}ms${extra ? ` ${extra}` : ""}`);
 }
 
 async function readStockCache(sym: string): Promise<{ payload: unknown; updatedAt: Date } | null> {
@@ -234,7 +235,7 @@ async function fetchFreshFundamentals(
       degraded = true;
     }
   }
-  console.log(`[fundamentals] ${sym}: source=${source}`);
+  debugLog(`[fundamentals] ${sym}: source=${source}`);
   await enrichFundamentalsPipeline(bundle, sym, await yahooPromise, {
     onProgress: opts?.onProgress,
     mergeMode: source === "gemini" ? "prefer-yahoo" : "fill-gaps",
