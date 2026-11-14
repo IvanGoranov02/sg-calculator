@@ -19,7 +19,7 @@ export const MAX_COMPARE = 2;
 export const DEFAULT_COMPARE_SYMBOLS = ["AAPL", "MSFT"] as const;
 
 /** Slot 0 emerald, slot 1 sky — matches other StockGauge charts. */
-export const COMPARE_SLOT_HEX = ["#10b981", "#4fc3e8"] as const;
+export const COMPARE_SLOT_HEX = ["var(--series-emerald)", "var(--series-sky)"] as const;
 
 /** Same ticker filter as `/api/compare`. */
 export const COMPARE_TICKER_RE = /^[A-Z0-9.\-^]+$/;

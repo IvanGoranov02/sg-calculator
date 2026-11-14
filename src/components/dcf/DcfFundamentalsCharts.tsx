@@ -30,11 +30,11 @@ const metrics: { id: ChartMetric; label: string; suffix: string }[] = [
 ];
 
 const strokeByMetric: Record<ChartMetric, string> = {
-  revenue: "#5b8def",
-  operatingMargin: "#e66fb0",
-  netIncome: "#8b6cf0",
-  ebitda: "#94a3b8",
-  freeCashFlow: "#fbbf24",
+  revenue: "var(--series-blue)",
+  operatingMargin: "var(--series-pink)",
+  netIncome: "var(--series-violet)",
+  ebitda: "var(--series-slate)",
+  freeCashFlow: "var(--series-amber)",
 };
 
 function valueFromPoint(p: DcfFundamentalPoint, metric: ChartMetric): number | null {

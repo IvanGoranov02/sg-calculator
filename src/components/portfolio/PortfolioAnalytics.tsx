@@ -39,8 +39,8 @@ function pickBaseCurrency(preferred: "EUR" | "USD"): string {
 }
 
 const SECTOR_COLORS = [
-  "#3fc88a", "#5b8def", "#8b6cf0", "#fbbf24", "#fb7185",
-  "#22d3ee", "#e66fb0", "#818cf8", "#fb923c", "#4ade80", "#94a3b8",
+  "var(--series-green)", "var(--series-blue)", "var(--series-violet)", "var(--series-amber)", "var(--series-rose)",
+  "var(--series-cyan)", "var(--series-pink)", "var(--series-indigo)", "var(--series-orange)", "var(--series-lime)", "var(--series-slate)",
 ];
 
 export function usePortfolioAnalytics(rows: AnalyticsRow[], fx: PortfolioFxRates): PortfolioAnalyticsData | null {
@@ -112,7 +112,7 @@ export function PortfolioAllocationSection({ analytics }: { analytics: Portfolio
                 name={h.name}
                 pct={pct}
                 value={formatAllocationPercent(pct)}
-                color="#3fc88a"
+                color="var(--series-green)"
               />
             );
           })}

@@ -558,7 +558,7 @@ export function PortfolioDividendsView({
                     );
                   }}
                 />
-                <Bar dataKey="income" fill="#3fc88a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" fill="var(--series-green)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

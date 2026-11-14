@@ -415,9 +415,9 @@ const SLICE_COLORS = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
-  "#e66fb0",
-  "#fb923c",
-  "#94a3b8",
+  "var(--series-pink)",
+  "var(--series-orange)",
+  "var(--series-slate)",
 ];
 
 export function AllocationWidget({ analytics }: { analytics: PortfolioAnalyticsData }) {

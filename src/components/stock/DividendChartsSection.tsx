@@ -206,12 +206,12 @@ export function DividendChartsSection({ data }: DividendChartsSectionProps) {
   }, [data.investor, data.dividendQuarterly]);
 
   const qDpsSeries: FundamentalSeries[] = useMemo(
-    () => [{ dataKey: "qDps", color: "#fb923c", label: t("chartsFund.dividendQtrPerShare") }],
+    () => [{ dataKey: "qDps", color: "var(--series-orange)", label: t("chartsFund.dividendQtrPerShare") }],
     [t],
   );
 
   const payoutSeries: FundamentalSeries[] = useMemo(
-    () => [{ dataKey: "payoutRatio", color: "#3fc88a", label: t("chartsFund.payoutRatioSeries") }],
+    () => [{ dataKey: "payoutRatio", color: "var(--series-green)", label: t("chartsFund.payoutRatioSeries") }],
     [t],
   );
 

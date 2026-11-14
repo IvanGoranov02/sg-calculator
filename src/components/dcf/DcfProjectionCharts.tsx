@@ -75,9 +75,9 @@ export function DcfProjectionCharts({
   );
 
   const valuationRows = useMemo(() => {
-    const rows = [{ name: t("dcf.chartFairValue"), value: fairValuePerShare, fill: "#3fc88a" }];
+    const rows = [{ name: t("dcf.chartFairValue"), value: fairValuePerShare, fill: "var(--series-green)" }];
     if (currentPrice != null && currentPrice > 0) {
-      rows.push({ name: t("dcf.chartPrice"), value: currentPrice, fill: "#5b8def" });
+      rows.push({ name: t("dcf.chartPrice"), value: currentPrice, fill: "var(--series-blue)" });
     }
     return rows;
   }, [currentPrice, fairValuePerShare, t]);
@@ -97,11 +97,11 @@ export function DcfProjectionCharts({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={projectionRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="#71717a" />
+              <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
               <YAxis
                 yAxisId="left"
                 tick={{ fontSize: 11 }}
-                stroke="#71717a"
+                stroke="var(--muted-foreground)"
                 tickFormatter={(v) => formatCurrencyCompact(Number(v))}
               />
               <Tooltip
@@ -119,7 +119,7 @@ export function DcfProjectionCharts({
                 yAxisId="left"
                 dataKey="projected"
                 name={t("dcf.chartProjected")}
-                fill="#8b6cf0"
+                fill="var(--series-violet)"
                 radius={[2, 2, 0, 0]}
                 opacity={0.85}
               />
@@ -137,8 +137,8 @@ export function DcfProjectionCharts({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={projectionRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="#71717a" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#71717a" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
+              <XAxis dataKey="year" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+              <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
               <Tooltip
                 content={({ active, payload, label }) => (
                   <ChartTooltip
@@ -153,7 +153,7 @@ export function DcfProjectionCharts({
                 type="monotone"
                 dataKey="cumulativePv"
                 name={t("dcf.chartCumulative")}
-                stroke="#fbbf24"
+                stroke="var(--series-amber)"
                 strokeWidth={2}
                 dot={false}
               />
@@ -171,8 +171,8 @@ export function DcfProjectionCharts({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={valuationRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#71717a" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#71717a" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+              <YAxis tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" tickFormatter={(v) => formatCurrencyCompact(Number(v))} />
               <Tooltip
                 formatter={(v) => formatCurrency(Number(v))}
                 contentStyle={{

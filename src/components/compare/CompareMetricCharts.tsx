@@ -224,7 +224,7 @@ function MetricBarCard({
                   className="h-full rounded-full transition-[width] duration-300"
                   style={{
                     width: `${width}%`,
-                    background: negative ? "#f87171" : COMPARE_SLOT_HEX[i] ?? COMPARE_SLOT_HEX[0],
+                    background: negative ? "var(--series-red)" : COMPARE_SLOT_HEX[i] ?? COMPARE_SLOT_HEX[0],
                     opacity: pct == null ? 0 : 1,
                   }}
                 />

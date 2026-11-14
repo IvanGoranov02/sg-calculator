@@ -132,13 +132,13 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
 }
 
 const CHART_COLORS = {
-  dividends: "#3fc88a",
-  contributions: "#4fc3e8",
-  growth: "#8b6cf0",
-  principal: "#fbbf24",
-  portfolio: "#3fc88a",
-  income: "#3fc88a",
-  monthly: "#4fc3e8",
+  dividends: "var(--series-green)",
+  contributions: "var(--series-sky)",
+  growth: "var(--series-violet)",
+  principal: "var(--series-amber)",
+  portfolio: "var(--series-green)",
+  income: "var(--series-green)",
+  monthly: "var(--series-sky)",
 };
 
 export function DividendCalculator({ seed }: Props) {
