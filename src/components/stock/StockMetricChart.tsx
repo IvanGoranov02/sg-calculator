@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { Area, Bar, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatCurrencyEur, formatVolume } from "@/lib/format";
@@ -38,7 +38,6 @@ const TEXT = {
     start: "Start",
     prevClose: "Previous close",
     returns: "Average yearly return",
-    volume: "Volume",
     noData: "No price history for this range.",
   },
   bg: {
@@ -61,12 +60,13 @@ const TEXT = {
     start: "Начало",
     prevClose: "Предишно затваряне",
     returns: "Средна годишна доходност",
-    volume: "Обем",
     noData: "Няма ценова история за този период.",
   },
 } as const;
 
-type ChartRow = { i: number; date: string; close: number; volume: number | null };
+type ChartRow = { i: number; date: string; close: number };
+/** Fewer points draw faster while the pointer moves; still finer than a pixel column on most screens. */
+const CHART_POINTS = 360;
 
 function signed(n: number, body: string): string {
   return `${n > 0 ? "+" : n < 0 ? "−" : ""}${body}`;
@@ -98,8 +98,8 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
   const model = useMemo(() => {
     const raw = barsForRange(data.historical, data.intraday, range);
     if (raw.length === 0) return null;
-    const pts = downsample(raw);
-    const rows: ChartRow[] = pts.map((p, i) => ({ i, date: p.date, close: p.close, volume: p.volume }));
+    const pts = downsample(raw, CHART_POINTS);
+    const rows: ChartRow[] = pts.map((p, i) => ({ i, date: p.date, close: p.close }));
     const last = raw[raw.length - 1]!.close;
     // 1D compares with the previous close (what the header shows); other ranges with their first close.
     const prevClose = data.quote.price - data.quote.change;
@@ -115,10 +115,9 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
     const pad = (hi - lo) * 0.08 || hi * 0.02;
     const yTicks = niceTicks(lo - pad, hi + pad, 4);
     const domain: [number, number] = [Math.min(lo - pad, yTicks[0] ?? lo), Math.max(hi + pad, yTicks[yTicks.length - 1] ?? hi)];
-    const maxVol = Math.max(0, ...rows.map((r) => r.volume ?? 0));
     const unit = tickUnitFor(range, range === "1d" && Boolean(data.intraday?.length));
     const xTicks = tickIndexes(pts, unit);
-    return { rows, last, base, high, low, avgVolume, yTicks, domain, maxVol, unit, xTicks };
+    return { rows, last, base, high, low, avgVolume, yTicks, domain, unit, xTicks };
   }, [data.historical, data.intraday, data.quote.price, data.quote.change, range]);
 
   const returns = useMemo(() => {
@@ -149,9 +148,84 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
   const delta = model && shownPrice != null ? shownPrice - model.base : 0;
   const deltaPct = model && model.base > 0 ? (delta / model.base) * 100 : 0;
   const up = delta >= 0;
-  const stroke = up ? UP : DOWN;
-  const gradientId = `price-fill-${up ? "up" : "down"}`;
-  const xTickSet = new Set(model?.xTicks ?? []);
+  // The line colour follows the whole range, not the point under the pointer.
+  const rangeUp = model ? model.last >= model.base : true;
+
+  const onMove = useCallback((state: { activeTooltipIndex?: number | string | null } | undefined) => {
+    const idx = state?.activeTooltipIndex;
+    const n = idx == null ? NaN : Number(idx);
+    setHover(Number.isFinite(n) ? n : null);
+  }, []);
+
+  // Built once per range / data; hovering only updates the headline, so the chart itself is not redrawn.
+  const chart = useMemo(() => {
+    if (!model) return null;
+    const stroke = rangeUp ? UP : DOWN;
+    const gradientId = `price-fill-${rangeUp ? "up" : "down"}`;
+    const last = model.rows.length - 1;
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={model.rows} margin={{ top: 6, right: 0, bottom: 0, left: 0 }} onMouseMove={onMove}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="i"
+            type="number"
+            domain={[0, Math.max(1, last)]}
+            ticks={model.xTicks}
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            height={24}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tickFormatter={(i: number) => (model.rows[i] ? tickLabel(model.rows[i]!.date, model.unit, locale) : "")}
+          />
+          <YAxis
+            orientation="right"
+            domain={model.domain}
+            ticks={model.yTicks}
+            allowDataOverflow
+            tickLine={false}
+            axisLine={false}
+            width={64}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tickFormatter={(v: number) => axisMoney(v)}
+          />
+          {model.yTicks.map((v) => (
+            <ReferenceLine key={v} y={v} stroke="var(--border)" strokeOpacity={0.5} />
+          ))}
+          <ReferenceLine y={model.base} stroke="var(--muted-foreground)" strokeOpacity={0.6} strokeDasharray="2 4" />
+          <Area
+            type="linear"
+            dataKey="close"
+            stroke={stroke}
+            strokeWidth={1.75}
+            fill={`url(#${gradientId})`}
+            dot={false}
+            activeDot={{ r: 4, fill: stroke, stroke: "var(--card)", strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+          <Tooltip
+            cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1, strokeDasharray: "3 3" }}
+            isAnimationActive={false}
+            content={({ active, payload }) => {
+              const row = active ? (payload?.[0]?.payload as ChartRow | undefined) : undefined;
+              if (!row) return null;
+              return (
+                <div className="rounded-md border border-border bg-popover/95 px-2.5 py-1.5 text-xs shadow-lg">
+                  <p className="text-muted-foreground">{fullDate(row.date)}</p>
+                  <p className="font-semibold tabular-nums text-foreground">{money(row.close)}</p>
+                </div>
+              );
+            }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }, [model, rangeUp, onMove, axisMoney, money, fullDate, locale]);
 
   return (
     <Card className="min-w-0 gap-0 border-border bg-card py-0" aria-label={c.section}>
@@ -203,105 +277,7 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
         </div>
 
         <div className="h-64 min-w-0 sm:h-72 lg:h-80" onMouseLeave={() => setHover(null)}>
-          {model ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={model.rows}
-                margin={{ top: 6, right: 0, bottom: 0, left: 0 }}
-                onMouseMove={(state) => {
-                  const idx = state?.activeTooltipIndex;
-                  const n = idx == null ? NaN : Number(idx);
-                  setHover(Number.isFinite(n) ? n : null);
-                }}
-              >
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={stroke} stopOpacity={0.22} />
-                    <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="i"
-                  interval={0}
-                  tickLine={false}
-                  axisLine={{ stroke: "var(--border)" }}
-                  height={24}
-                  tick={(props: { x?: number | string; y?: number | string; payload?: { value?: unknown } }) => {
-                    const i = Number(props.payload?.value);
-                    if (!xTickSet.has(i) || !model.rows[i]) return <g />;
-                    return (
-                      <text x={Number(props.x)} y={Number(props.y ?? 0) + 12} textAnchor="middle" fontSize={11} fill="var(--muted-foreground)">
-                        {tickLabel(model.rows[i]!.date, model.unit, locale)}
-                      </text>
-                    );
-                  }}
-                />
-                <YAxis
-                  yAxisId="price"
-                  orientation="right"
-                  domain={model.domain}
-                  ticks={model.yTicks}
-                  allowDataOverflow
-                  tickLine={false}
-                  axisLine={false}
-                  width={64}
-                  tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                  tickFormatter={(v: number) => axisMoney(v)}
-                />
-                {/* Volume sits in the bottom fifth, behind the price. */}
-                <YAxis yAxisId="volume" hide domain={[0, Math.max(1, model.maxVol * 5)]} />
-                {model.yTicks.map((v) => (
-                  <ReferenceLine key={v} yAxisId="price" y={v} stroke="var(--border)" strokeOpacity={0.5} />
-                ))}
-                <ReferenceLine
-                  yAxisId="price"
-                  y={model.base}
-                  stroke="var(--muted-foreground)"
-                  strokeOpacity={0.6}
-                  strokeDasharray="2 4"
-                />
-                {model.maxVol > 0 ? (
-                  <Bar
-                    yAxisId="volume"
-                    dataKey="volume"
-                    fill="var(--muted-foreground)"
-                    fillOpacity={0.18}
-                    isAnimationActive={false}
-                  />
-                ) : null}
-                <Area
-                  yAxisId="price"
-                  type="linear"
-                  dataKey="close"
-                  stroke={stroke}
-                  strokeWidth={1.75}
-                  fill={`url(#${gradientId})`}
-                  dot={false}
-                  activeDot={{ r: 4, fill: stroke, stroke: "var(--card)", strokeWidth: 2 }}
-                  isAnimationActive={false}
-                />
-                <Tooltip
-                  cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1, strokeDasharray: "3 3" }}
-                  isAnimationActive={false}
-                  content={({ active, payload }) => {
-                    const row = active ? (payload?.[0]?.payload as ChartRow | undefined) : undefined;
-                    if (!row) return null;
-                    return (
-                      <div className="rounded-md border border-border bg-popover/95 px-2.5 py-1.5 text-xs shadow-lg backdrop-blur">
-                        <p className="text-muted-foreground">{fullDate(row.date)}</p>
-                        <p className="font-semibold tabular-nums text-foreground">{money(row.close)}</p>
-                        {row.volume ? (
-                          <p className="tabular-nums text-muted-foreground">
-                            {c.volume} {formatVolume(row.volume)}
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          ) : null}
+          {chart}
         </div>
 
         {model ? (
