@@ -19,6 +19,7 @@ type Props = {
 
 type NdjsonLine =
   | { type: "progress"; payload: StockAnalysisLoadProgress }
+  | { type: "partial"; bundle: StockAnalysisBundle }
   | { type: "done"; bundle: StockAnalysisBundle | null; error: string | null };
 
 export function StockAnalysisPageClient({ ticker }: Props) {
@@ -50,6 +51,8 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       }
       setLoading(true);
       setError(null);
+      // A different company must never show the previous one's numbers while loading.
+      setBundle((prev) => (prev && prev.quote.symbol.trim().toUpperCase() === sym.toUpperCase() ? prev : null));
       setLoadProgress({ event: null, percent: 4, connecting: true });
       void (async () => {
         try {
@@ -95,6 +98,11 @@ export function StockAnalysisPageClient({ ticker }: Props) {
                   percent: stockLoadProgressPercent(msg.payload),
                   connecting: false,
                 });
+              }
+              if (msg.type === "partial") {
+                // Stored data first: the page is usable while live prices are still loading.
+                if (cancelled || !msg.bundle) continue;
+                setBundle(msg.bundle);
               }
               if (msg.type === "done") {
                 if (cancelled) continue;

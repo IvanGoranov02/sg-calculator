@@ -16,6 +16,7 @@ const REFRESH_WINDOW_MS = 10 * 60_000;
 
 type NdjsonLine =
   | { type: "progress"; payload: StockAnalysisLoadProgress }
+  | { type: "partial"; bundle: unknown }
   | { type: "done"; bundle: unknown; error: string | null };
 
 /** Client-side stock page: JSON, or NDJSON stream when `stream=1` (progress + final bundle). */
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
         const result = await loadStockAnalysis(ticker, {
           forceRefresh,
           onProgress: (payload) => send({ type: "progress", payload }),
+          onPartial: (bundle) => send({ type: "partial", bundle }),
         });
         send({ type: "done", bundle: result.bundle, error: result.error });
       } catch (e) {

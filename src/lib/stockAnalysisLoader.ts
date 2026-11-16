@@ -64,6 +64,12 @@ export type LoadStockOptions = {
 
 export type LoadStockAnalysisOptions = LoadStockOptions & {
   onProgress?: (e: StockAnalysisLoadProgress) => void;
+  /**
+   * Called (at most once) with a complete bundle built only from what is already in the
+   * database: stored statements plus the last saved price snapshot. Lets the page paint
+   * at once while live prices are still being fetched; the final result replaces it.
+   */
+  onPartial?: (bundle: StockAnalysisBundle) => void;
 };
 
 type EnrichOptions = {
@@ -166,12 +172,22 @@ async function enrichFundamentalsPipeline(
   sanitizeBundleDilutedShares(bundle);
 }
 
+/** True when a stored payload can be shown as-is (has a price, and needs no FX rescale). */
+function snapshotIsDisplayable(p: CachePayload | null): p is CachePayload {
+  if (!p || !(p.quote?.price > 0) || !Array.isArray(p.historical) || p.historical.length === 0) return false;
+  const fin = (p as { __financialCurrency?: string }).__financialCurrency;
+  return !fin || fin.toUpperCase() === (p.investor?.currency ?? "").toUpperCase();
+}
+
 async function persistStockCache(
   sym: string,
   bundle: StockAnalysisBundle,
   opts?: BuildCachePayloadOptions,
 ): Promise<void> {
-  const plain = buildCachePayload(bundle, opts);
+  await writeStockCache(sym, buildCachePayload(bundle, opts));
+}
+
+async function writeStockCache(sym: string, plain: object): Promise<void> {
   const t0 = Date.now();
   try {
     await withRetry(
@@ -370,8 +386,26 @@ export async function loadStockAnalysis(
         opts?.onProgress?.({ kind: "cache_hit" });
         markFundamentalsSource(bundle, "edgar");
         (bundle as CachePayload).__verified = meta;
+        // Paint immediately: verified statements + the last saved price snapshot.
+        if (opts?.onPartial && snapshotIsDisplayable(cachedPayload) && bundle.investor.currency === "USD") {
+          opts.onPartial({
+            ...bundle,
+            quote: cachedPayload.quote,
+            investor: cachedPayload.investor,
+            historical: cachedPayload.historical ?? [],
+            intraday: cachedPayload.intraday,
+            eurPerUsd: cachedPayload.eurPerUsd,
+            dividendQuarterly: cachedPayload.dividendQuarterly?.length ? cachedPayload.dividendQuarterly : bundle.dividendQuarterly,
+          });
+        }
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await refreshLivePrices(bundle, sym);
+        // Save the price snapshot for the next visitor's instant paint. Copied now (native
+        // currency, before the display-only FX rescale), written after the response.
+        if (bundle.quote.price > 0) {
+          const plain = buildCachePayload(bundle, { lastFullFetchAt: new Date().toISOString() });
+          scheduleAfterResponse(() => writeStockCache(sym, plain));
+        }
         await withTimeoutFallback(reconcileFundamentalsCurrency(bundle), 8_000, `fx reconcile ${sym}`, undefined);
         logLoadStep(sym, "total", loadStarted, "verified");
         return { bundle, error: null };
@@ -389,6 +423,7 @@ export async function loadStockAnalysis(
       ) {
         const bundle = cachedPayload as StockAnalysisBundle;
         opts?.onProgress?.({ kind: "cache_hit" });
+        if (opts?.onPartial && snapshotIsDisplayable(cachedPayload)) opts.onPartial(bundle);
         const yahooPromise = withTimeoutFallback(
           fetchYahooFundamentalsPayload(sym),
           YAHOO_STEP_TIMEOUT_MS,
