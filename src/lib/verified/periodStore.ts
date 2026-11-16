@@ -176,6 +176,18 @@ export async function readPeriods(symbol: string): Promise<PeriodRow[]> {
   return rows.map(mapPeriod);
 }
 
+/** Full rows (with segments) of a handful of companies, for the segments part of the queue. */
+export async function readCompanies(symbols: string[]): Promise<CompanyRow[]> {
+  if (symbols.length === 0) return [];
+  await ensureTables();
+  const rows = await prisma.$queryRawUnsafe<CompanyDb[]>(
+    `SELECT ${COMPANY_COLS},"segments","segmentsCheckedAt" FROM "FundamentalCompany"
+     WHERE "symbol" IN (SELECT jsonb_array_elements_text($1::jsonb))`,
+    JSON.stringify(symbols),
+  );
+  return rows.map(mapCompany);
+}
+
 /** Periods of several companies in one query (Compare, DCF). */
 export async function readPeriodsMany(symbols: string[]): Promise<Map<string, PeriodRow[]>> {
   const out = new Map<string, PeriodRow[]>();

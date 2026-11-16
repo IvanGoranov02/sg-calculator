@@ -90,3 +90,49 @@ export async function fetchStockBundleFromEdgar(
     return null;
   }
 }
+
+/** Raw text of an EDGAR archive file (XBRL instance, label linkbase), or null when unavailable. */
+export async function edgarFetchText(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": edgarUserAgent(), Accept: "application/xml,text/xml,*/*" },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+export type EdgarFiling = {
+  accession: string;
+  form: string;
+  /** Period the report covers (YYYY-MM-DD). */
+  reportDate: string;
+  primaryDocument: string;
+};
+
+/** Recent 10-K / 10-Q filings of a company, newest first. */
+export async function fetchRecentReports(cik: string): Promise<EdgarFiling[]> {
+  const raw = (await edgarFetchJson(`https://data.sec.gov/submissions/CIK${cik}.json`)) as {
+    filings?: { recent?: { accessionNumber?: string[]; form?: string[]; reportDate?: string[]; primaryDocument?: string[] } };
+  } | null;
+  const r = raw?.filings?.recent;
+  if (!r?.accessionNumber || !r.form) return [];
+  const out: EdgarFiling[] = [];
+  for (let i = 0; i < r.accessionNumber.length; i++) {
+    const form = r.form[i];
+    if (form !== "10-K" && form !== "10-Q") continue;
+    const reportDate = r.reportDate?.[i] ?? "";
+    const primaryDocument = r.primaryDocument?.[i] ?? "";
+    if (!reportDate || !primaryDocument) continue;
+    out.push({ accession: r.accessionNumber[i], form, reportDate, primaryDocument });
+  }
+  return out.sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+}
+
+/** URL of a file inside a filing's archive folder. */
+export function edgarArchiveUrl(cik: string, accession: string, file: string): string {
+  return `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accession.replace(/-/g, "")}/${file}`;
+}

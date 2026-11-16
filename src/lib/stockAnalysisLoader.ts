@@ -425,6 +425,7 @@ export async function loadStockAnalysis(
       sanitizeBundleDilutedShares(bundle);
       trimBundleToFundamentalsWindow(bundle);
       (bundle as CachePayload).__store = store.meta;
+      if (store.segments) bundle.segments = store.segments;
     };
     /** A real company the store does not know yet: store it after the response, for next time. */
     const storeForNextTime = () => {

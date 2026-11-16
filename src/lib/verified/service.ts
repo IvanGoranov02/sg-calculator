@@ -2,10 +2,11 @@ import { fetchCompanyFacts, lookupCik } from "@/lib/edgar/client";
 import { bankSeriesFromCompanyFacts, emptyInvestorMetrics } from "@/lib/edgar/normalize";
 import { trimBundleToFundamentalsWindow } from "@/lib/fundamentalsHistoryLimits";
 import { sanitizeBundleDilutedShares } from "@/lib/shareCountSanity";
-import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import type { CompanySegments, StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import {
   listCompanies,
   postponeCompany,
+  readCompanies,
   readCompany,
   readPeriods,
   saveCompanyState,
@@ -29,7 +30,7 @@ import {
   type PeriodRow,
   type StoreStatements,
 } from "@/lib/verified/periods";
-import { refreshSegmentsIfDue } from "@/lib/verified/segments";
+import { SEGMENT_SYMBOLS, refreshSegmentsIfDue, segmentsDue } from "@/lib/verified/segments";
 import { UNIVERSE, isInUniverse } from "@/lib/verified/universe";
 import { buildStatementsFromFacts } from "@/lib/verified/verify";
 import { fetchYahooFundamentalsPayload } from "@/lib/yahooFundamentalsMerge";
@@ -211,6 +212,8 @@ export type StoreLoad = {
   bundle: StockAnalysisBundle | null;
   /** Stored periods, to lay over the regular pipeline's bundle when `bundle` is null. */
   statements: StoreStatements;
+  /** Revenue by business line, when stored for this company. */
+  segments: CompanySegments | null;
 };
 
 /**
@@ -272,8 +275,12 @@ export async function loadFromStore(
     builtAt: company.builtAt,
   };
   const bundle = cov.full ? statementsToBundle(symbol, structuredClone(statements)) : null;
-  if (bundle && company.segments) bundle.segments = company.segments;
-  return { meta, bundle, statements };
+  // Only what the page draws; the bookkeeping of the reader stays in the database.
+  const stored = company.segments;
+  const segments: CompanySegments | null =
+    stored && stored.names.length > 0 ? { names: stored.names, annual: stored.annual, quarterly: stored.quarterly } : null;
+  if (bundle && segments) bundle.segments = segments;
+  return { meta, bundle, statements, segments };
 }
 
 /** Store a company that is not stored yet (any company joins the store once it has been viewed). */
@@ -348,5 +355,19 @@ export async function runQueue(budgetMs: number): Promise<QueueRun> {
     }
   };
   await Promise.all([worker(), worker()]);
+  // Left-over time: read segment notes for the largest companies (several MB per filing).
+  if (Date.now() - started < budgetMs - 8_000) {
+    for (const company of await readCompanies(SEGMENT_SYMBOLS)) {
+      const left = budgetMs - (Date.now() - started);
+      if (left < 8_000) break;
+      if (!segmentsDue(company)) continue;
+      try {
+        await refreshSegmentsIfDue(company, left - 5_000);
+        processed.push({ symbol: company.symbol, result: "segments" });
+      } catch (e) {
+        processed.push({ symbol: company.symbol, result: `segments error: ${e instanceof Error ? e.message.slice(0, 80) : "unknown"}` });
+      }
+    }
+  }
   return { processed, remaining: Math.max(0, queue.length - processed.length), ms: Date.now() - started };
 }
