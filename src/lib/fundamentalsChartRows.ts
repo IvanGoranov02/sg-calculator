@@ -180,6 +180,8 @@ export function buildQuarterlyChartRows(
   bundle: StockAnalysisBundle,
   formatPeriod: (dateIso: string) => string,
   locale = "en-US",
+  /** Longer name for the tooltip ("Q3 2026 · quarter ended 30 Sep 2026"). */
+  formatTitle?: (dateIso: string) => string,
 ): FundamentalsChartRow[] {
   const inc = dedupeQuarterlyIncome(
     sortQuarterlyByDateAsc(bundle.incomeQuarterly).filter((r) => !isStubIncome(r)),
@@ -198,6 +200,7 @@ export function buildQuarterlyChartRows(
     const ebitda = r.ebitda ?? null;
     return {
       label: labels[i]!,
+      ...(formatTitle ? { periodTitle: formatTitle(d) } : {}),
       periodEnd: d,
       revenue: r.revenue,
       netIncome: r.netIncome,

@@ -229,6 +229,19 @@ export function FundamentalChartCard({
     return m;
   }, [data, xKey, xLabelFormatter]);
 
+  /** Longer tooltip names carried by the rows ("Q3 2026 · quarter ended 30 Sep 2026"). */
+  const periodTitles = useMemo(() => {
+    if (xKey !== "periodEnd") return null;
+    const m = new Map<string, string>();
+    for (const row of data) {
+      if (typeof row.periodEnd === "string" && typeof row.periodTitle === "string") m.set(row.periodEnd, row.periodTitle);
+    }
+    return m.size > 0 ? m : null;
+  }, [data, xKey]);
+
+  const formatTooltipLabel = (value: unknown): string =>
+    (value != null ? periodTitles?.get(String(value)) : undefined) ?? formatCategoryLabel(value);
+
   const formatCategoryLabel = (value: unknown): string => {
     if (value == null) return "";
     const s = String(value);
@@ -295,7 +308,7 @@ export function FundamentalChartCard({
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
-            labelFormatter={(label) => formatCategoryLabel(label)}
+            labelFormatter={(label) => formatTooltipLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
               border: "1px solid var(--border)",
@@ -353,7 +366,7 @@ export function FundamentalChartCard({
           />
           <Tooltip
             formatter={formatTooltipValueRaw as never}
-            labelFormatter={(label) => formatCategoryLabel(label)}
+            labelFormatter={(label) => formatTooltipLabel(label)}
             contentStyle={{
               background: "rgba(9,9,11,0.95)",
               border: "1px solid var(--border)",

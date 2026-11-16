@@ -14,6 +14,7 @@ import {
   type FundamentalsChartRow,
 } from "@/lib/fundamentalsChartRows";
 import { growthPillsEntries, growthPillsForKey, isShareCountGrowthKey } from "@/lib/growthPills";
+import { fiscalYearEndMonth, quarterLabel, quarterTitle } from "@/lib/quarterLabels";
 import type { ChartTimeRange } from "@/lib/stockAnalysisPeriod";
 import {
   filterAnnualRowsByPeriod,
@@ -57,8 +58,6 @@ const C = {
 
 const BANK_TEXT = {
   en: {
-    intro:
-      "This company reports like a bank, so the charts show what drives a bank: interest income, fees, loan losses, deposits and loans. Gross profit, free cash flow and debt ratios are left out because they do not describe a bank.",
     revenue: "Revenue by source",
     revenueDesc: "Net interest income (lending minus funding cost) plus fees, trading and other income.",
     nii: "Net interest income",
@@ -82,8 +81,6 @@ const BANK_TEXT = {
     netMargin: "Net margin",
   },
   bg: {
-    intro:
-      "Тази компания се отчита като банка, затова графиките показват това, което движи една банка: лихвен доход, такси, загуби по кредити, депозити и заеми. Брутната печалба, свободният паричен поток и съотношенията за дълг са махнати, защото не описват банка.",
     revenue: "Приходи по източник",
     revenueDesc: "Нетен лихвен доход (лихви по кредити минус цената на финансирането) плюс такси, търговия и други приходи.",
     nii: "Нетен лихвен доход",
@@ -154,22 +151,23 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
   const formatYear = useCallback((fy: string) => t("chart.fyYear", { y: fy }), [t]);
 
+  // Quarters are named ("Q3 '26"), not dated by the month they end: "Sep 26" read as if the
+  // numbers were from September although they came out with the report weeks later.
+  const fyEndMonth = useMemo(() => fiscalYearEndMonth(data.income.map((r) => r.date)), [data.income]);
   const formatPeriod = useCallback(
-    (dateIso: string) => {
-      const d = new Date(`${dateIso}T12:00:00Z`);
-      return d.toLocaleDateString(locale === "bg" ? "bg-BG" : "en-US", {
-        month: "short",
-        year: "2-digit",
-      });
-    },
-    [locale],
+    (dateIso: string) => quarterLabel(dateIso, fyEndMonth, locale),
+    [fyEndMonth, locale],
+  );
+  const formatPeriodTitle = useCallback(
+    (dateIso: string) => quarterTitle(dateIso, fyEndMonth, locale),
+    [fyEndMonth, locale],
   );
 
   const baseRows = useMemo((): Row[] => {
     return freq === "annual"
       ? buildAnnualChartRows(data, formatYear)
-      : buildQuarterlyChartRows(data, formatPeriod, locale);
-  }, [data, freq, formatYear, formatPeriod, locale]);
+      : buildQuarterlyChartRows(data, formatPeriod, locale, formatPeriodTitle);
+  }, [data, freq, formatYear, formatPeriod, formatPeriodTitle, locale]);
 
   const chartAxisProps = useMemo(
     () =>
@@ -551,7 +549,6 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
         <p className="text-sm text-muted-foreground">{t("chartsFund.noRows")}</p>
       ) : isBank ? (
         <>
-          <p className="max-w-3xl text-sm text-muted-foreground">{bankText.intro}</p>
           <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <FundamentalChartCard
               {...chartAxisProps}

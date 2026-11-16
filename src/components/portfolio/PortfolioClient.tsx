@@ -1013,9 +1013,14 @@ export function PortfolioClient() {
       onValueChange={(v) => setPortfolioView(v === "dividends" ? "dividends" : "holdings")}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 sm:gap-x-4">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-          {t("portfolio.title")}
-        </h1>
+        <div className="flex min-w-0 flex-col">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            {t("portfolio.title")}
+          </h1>
+          {portfolioView === "holdings" && rows.length > 0 ? (
+            <DataFreshness at={holdingsFetchedAt} refreshing={loading || syncing} className="text-[11px]" />
+          ) : null}
+        </div>
         <TabsList className="w-fit">
           <TabsTrigger className="flex-none px-4" value="holdings">
             {t("portfolio.tabHoldings")}
@@ -1024,15 +1029,6 @@ export function PortfolioClient() {
             {t("portfolio.tabDividends")}
           </TabsTrigger>
         </TabsList>
-        {portfolioView === "holdings" && rows.length > 0 ? (
-          <DataFreshness at={holdingsFetchedAt} refreshing={loading || syncing} className="self-center" />
-        ) : null}
-        {portfolioView === "holdings" && rows.length > 0 ? (
-          <Button type="button" variant="outline" className="shrink-0 border-border" onClick={exportHoldingsCsv}>
-            <Download className="mr-2 size-4" aria-hidden />
-            {t("portfolio.exportCsv")}
-          </Button>
-        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -1561,6 +1557,15 @@ export function PortfolioClient() {
           </ol>
           <p className="px-4 pb-6 text-xs text-muted-foreground sm:px-6">{t("portfolio.guide.safety")}</p>
         </Card>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" size="sm" className="border-border" onClick={exportHoldingsCsv}>
+            <Download className="mr-2 size-4" aria-hidden />
+            {t("portfolio.exportCsv")}
+          </Button>
+        </div>
       ) : null}
         </TabsContent>
 

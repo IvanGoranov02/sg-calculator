@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { freshnessLabel } from "../freshnessLabel";
+import { fiscalYearEndMonth, quarterLabel, quarterTitle } from "../quarterLabels";
 import { readWatchlistSnapshot, writeWatchlistSnapshot } from "../watchlistSnapshot";
 import type { PeriodRow } from "./periods";
 import { latestAnnualFromRows, ttmMetricsFromRows } from "./storeViews";
@@ -82,4 +83,20 @@ test("freshness label", () => {
   assert.equal(freshnessLabel(t, t + 5 * 60_000, "bg"), "Обновено преди 5 мин");
   assert.equal(freshnessLabel(t, t + 3 * 3_600_000, "en"), "Updated 3 h ago");
   assert.equal(freshnessLabel(t, t + 2 * 86_400_000, "bg"), "Обновено преди 2 дни");
+});
+
+test("quarters are named, not dated: calendar and shifted fiscal years", () => {
+  // Google: year ends in December; the quarter ending 30 Sep is Q3.
+  assert.equal(quarterLabel("2026-09-30", 12, "en"), "Q3 '26");
+  assert.equal(quarterTitle("2026-09-30", 12, "en"), "Q3 2026 · quarter ended 30 Sept 2026".replace("Sept", new Date(Date.UTC(2026, 8, 30)).toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" })));
+  // Apple: year ends late September (52/53 weeks); the December quarter opens the next fiscal year.
+  const apple = fiscalYearEndMonth(["2024-09-28", "2025-09-27"]);
+  assert.equal(apple, 9);
+  assert.equal(quarterLabel("2025-12-27", apple, "en"), "Q1 FY26");
+  assert.equal(quarterLabel("2026-06-27", apple, "bg"), "Q3 ФГ26");
+  assert.equal(quarterLabel("2025-09-27", apple, "en"), "Q4 FY25");
+  // Year ending a few days into February (Walmart-style 31 Jan / 2 Feb ends) counts as January.
+  assert.equal(fiscalYearEndMonth(["2026-02-01"]), 1);
+  assert.equal(quarterLabel("2026-05-03", 1, "en"), "Q1 FY27");
+  assert.equal(fiscalYearEndMonth([]), 12);
 });

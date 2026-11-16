@@ -19,6 +19,7 @@ import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { VerifiedDataBadge } from "@/components/stock/VerifiedDataBadge";
 import { DataFreshness } from "@/components/layout/DataFreshness";
+import { useSession } from "next-auth/react";
 
 type StockAnalysisViewProps = {
   ticker: string;
@@ -43,6 +44,8 @@ export function StockAnalysisView({
   onRetry,
 }: StockAnalysisViewProps) {
   const { t } = useI18n();
+  // Where the numbers came from and how fresh the prices are is for checking the data, not for customers.
+  const isAdmin = Boolean(useSession().data?.user?.isAdmin);
   const symbol = ticker.trim().toUpperCase();
   const errorText = error ? translateStockError(t, error) : null;
 
@@ -132,10 +135,12 @@ export function StockAnalysisView({
             onForceRefresh={onForceRefresh}
             refreshing={loading}
           />
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <VerifiedDataBadge bundle={bundle} />
-            <DataFreshness at={pricesAt} refreshing={loading} />
-          </div>
+          {isAdmin ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <VerifiedDataBadge bundle={bundle} />
+              <DataFreshness at={pricesAt} refreshing={loading} />
+            </div>
+          ) : null}
 
           <StockMetricChart data={bundle} />
         </div>
