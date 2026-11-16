@@ -39,6 +39,7 @@ const TEXT = {
     prevClose: "Previous close",
     returns: "Average yearly return",
     noData: "No price history for this range.",
+    hint: "Hold and drag across the chart to measure a move",
   },
   bg: {
     section: "Цена на акцията",
@@ -61,6 +62,7 @@ const TEXT = {
     prevClose: "Предишно затваряне",
     returns: "Средна годишна доходност",
     noData: "Няма ценова история за този период.",
+    hint: "Задръж и влачи по графиката, за да измериш движение",
   },
 } as const;
 
@@ -78,6 +80,8 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
   const { displayCurrency } = usePreferences();
   const [range, setRange] = useState<PerformanceRange>("1y");
   const [hover, setHover] = useState<number | null>(null);
+  /** Where the left button went down; with `hover` it spans the move being measured. */
+  const [anchor, setAnchor] = useState<number | null>(null);
 
   const rate = data.eurPerUsd;
   const eur = displayCurrency === "eur" && rate != null && Number.isFinite(rate) && rate > 0;
@@ -148,6 +152,17 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
   const delta = model && shownPrice != null ? shownPrice - model.base : 0;
   const deltaPct = model && model.base > 0 ? (delta / model.base) * 100 : 0;
   const up = delta >= 0;
+  const measure =
+    model && anchor != null && hover != null && anchor !== hover && model.rows[anchor] && model.rows[hover]
+      ? (() => {
+          const a = Math.min(anchor, hover);
+          const b = Math.max(anchor, hover);
+          const from = model.rows[a]!;
+          const to = model.rows[b]!;
+          const move = to.close - from.close;
+          return { a, b, from, to, move, pct: from.close > 0 ? (move / from.close) * 100 : 0, last: model.rows.length - 1 };
+        })()
+      : null;
   // The line colour follows the whole range, not the point under the pointer.
   const rangeUp = model ? model.last >= model.base : true;
 
@@ -233,7 +248,26 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           {/* Change for the range; while the pointer is on the chart: that day's price and change from the start. */}
           <div className="min-w-0" aria-live="polite">
-            {model && shownPrice != null ? (
+            {measure ? (
+              <>
+                <div className="flex flex-wrap items-baseline gap-x-2.5">
+                  <span
+                    className={cn(
+                      "text-2xl font-semibold tabular-nums tracking-tight",
+                      measure.move >= 0 ? "text-emerald-400" : "text-red-400",
+                    )}
+                  >
+                    {measure.move >= 0 ? "↑" : "↓"} {signed(measure.move, money(Math.abs(measure.move)))}
+                  </span>
+                  <span className={cn("text-sm font-medium tabular-nums", measure.move >= 0 ? "text-emerald-400" : "text-red-400")}>
+                    ({signed(measure.pct, `${Math.abs(measure.pct).toFixed(2)}%`)})
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                  {fullDate(measure.from.date)} – {fullDate(measure.to.date)}
+                </p>
+              </>
+            ) : model && shownPrice != null ? (
               <>
                 <div className="flex flex-wrap items-baseline gap-x-2.5">
                   <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">{money(shownPrice)}</span>
@@ -241,7 +275,15 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
                     {signed(delta, money(Math.abs(delta)))} ({signed(deltaPct, `${Math.abs(deltaPct).toFixed(2)}%`)})
                   </span>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{hovered ? fullDate(hovered.date) : c.span[range]}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{hovered ? (
+                    fullDate(hovered.date)
+                  ) : (
+                    <>
+                      {c.span[range]}
+                      <span className="hidden md:inline"> · {c.hint}</span>
+                    </>
+                  )}
+                </p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">{c.noData}</p>
@@ -262,6 +304,7 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
                 onClick={() => {
                   setRange(id);
                   setHover(null);
+                  setAnchor(null);
                 }}
                 className={cn(
                   "relative min-h-9 shrink-0 px-2.5 text-xs font-semibold tabular-nums transition-colors sm:px-3",
@@ -276,8 +319,34 @@ export function StockMetricChart({ data }: { data: StockAnalysisBundle }) {
           </div>
         </div>
 
-        <div className="h-64 min-w-0 sm:h-72 lg:h-80" onMouseLeave={() => setHover(null)}>
+        <div
+          className="relative h-64 min-w-0 cursor-crosshair select-none sm:h-72 lg:h-80"
+          onMouseDown={(e) => {
+            if (e.button === 0 && hover != null) setAnchor(hover);
+          }}
+          onMouseUp={() => setAnchor(null)}
+          onMouseLeave={() => {
+            setHover(null);
+            setAnchor(null);
+          }}
+        >
           {chart}
+          {/* Measured span drawn on top of the chart (plot area: right of it is the 64px price scale,
+              top margin 6px, date axis 24px), so dragging never redraws the chart itself. */}
+          {measure ? (
+            <div className="pointer-events-none absolute bottom-6 left-0 right-16 top-1.5" aria-hidden>
+              <div
+                className={cn(
+                  "absolute inset-y-0 border-x border-dashed",
+                  measure.move >= 0 ? "border-emerald-400/70 bg-emerald-400/10" : "border-red-400/70 bg-red-400/10",
+                )}
+                style={{
+                  left: `${(measure.a / Math.max(1, measure.last)) * 100}%`,
+                  width: `${((measure.b - measure.a) / Math.max(1, measure.last)) * 100}%`,
+                }}
+              />
+            </div>
+          ) : null}
         </div>
 
         {model ? (
