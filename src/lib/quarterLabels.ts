@@ -37,16 +37,8 @@ export function quarterLabel(periodEnd: string, fyEndMonth: number, locale: stri
   return `Q${quarter} ${locale === "bg" ? "ФГ" : "FY"}${yy}`;
 }
 
-/** Tooltip title: "Q3 2026 · quarter ended 30 Sep 2026". */
+/** Tooltip title: "Q3 2026", or "Q1 FY2026" for shifted fiscal years. */
 export function quarterTitle(periodEnd: string, fyEndMonth: number, locale: string): string {
   const { quarter, fiscalYear } = fiscalQuarterOf(periodEnd, fyEndMonth);
-  const bg = locale === "bg";
-  const ended = new Date(`${periodEnd.slice(0, 10)}T12:00:00Z`).toLocaleDateString(bg ? "bg-BG" : "en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-  const name = fyEndMonth === 12 ? `Q${quarter} ${fiscalYear}` : `Q${quarter} ${bg ? "ФГ" : "FY"}${fiscalYear}`;
-  return bg ? `${name} · тримесечие до ${ended}` : `${name} · quarter ended ${ended}`;
+  return fyEndMonth === 12 ? `Q${quarter} ${fiscalYear}` : `Q${quarter} ${locale === "bg" ? "ФГ" : "FY"}${fiscalYear}`;
 }

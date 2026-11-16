@@ -88,7 +88,7 @@ test("freshness label", () => {
 test("quarters are named, not dated: calendar and shifted fiscal years", () => {
   // Google: year ends in December; the quarter ending 30 Sep is Q3.
   assert.equal(quarterLabel("2026-09-30", 12, "en"), "Q3 '26");
-  assert.equal(quarterTitle("2026-09-30", 12, "en"), "Q3 2026 · quarter ended 30 Sept 2026".replace("Sept", new Date(Date.UTC(2026, 8, 30)).toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" })));
+  assert.equal(quarterTitle("2026-09-30", 12, "en"), "Q3 2026");
   // Apple: year ends late September (52/53 weeks); the December quarter opens the next fiscal year.
   const apple = fiscalYearEndMonth(["2024-09-28", "2025-09-27"]);
   assert.equal(apple, 9);

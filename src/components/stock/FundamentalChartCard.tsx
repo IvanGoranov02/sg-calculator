@@ -229,7 +229,7 @@ export function FundamentalChartCard({
     return m;
   }, [data, xKey, xLabelFormatter]);
 
-  /** Longer tooltip names carried by the rows ("Q3 2026 · quarter ended 30 Sep 2026"). */
+  /** Longer tooltip names carried by the rows ("Q3 2026"). */
   const periodTitles = useMemo(() => {
     if (xKey !== "periodEnd") return null;
     const m = new Map<string, string>();
