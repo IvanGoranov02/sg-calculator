@@ -1,5 +1,6 @@
 "use client";
 
+import { DataFreshness } from "@/components/layout/DataFreshness";
 import { Download, Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -149,21 +150,22 @@ function applyHoldingsCachePayload(
 function initialHoldingsFromCache(userId: string): {
   payload: PortfolioHoldingsCachePayload | null;
   loading: boolean;
+  fetchedAt: number | null;
 } {
   if (!userId || typeof window === "undefined") {
-    return { payload: null, loading: true };
+    return { payload: null, loading: true, fetchedAt: null };
   }
-  const decision = decidePortfolioHoldingsLoad({
-    userId,
-    reloadToken: 0,
-    liveRefreshToken: 0,
-    memory: readPortfolioHoldingsSessionMemory(),
-    stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
-  });
+  const memory = readPortfolioHoldingsSessionMemory();
+  const stored = readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId);
+  const decision = decidePortfolioHoldingsLoad({ userId, reloadToken: 0, liveRefreshToken: 0, memory, stored });
+  const freshAt = memory?.fetchedAt ?? stored?.fetchedAt ?? null;
   if (decision.action === "reuse" && decision.payload) {
-    return { payload: decision.payload, loading: false };
+    return { payload: decision.payload, loading: false, fetchedAt: freshAt };
   }
-  return { payload: decision.payload, loading: true };
+  if (decision.payload) return { payload: decision.payload, loading: true, fetchedAt: freshAt };
+  // Cache expired: still paint the last saved holdings at once (marked with their age)
+  // while fresh prices load, instead of an empty page with a spinner.
+  return { payload: stored?.payload ?? null, loading: true, fetchedAt: stored?.fetchedAt ?? null };
 }
 
 export function PortfolioClient() {
@@ -207,7 +209,9 @@ export function PortfolioClient() {
     () => holdingsSeed.payload?.trading212 ?? null,
   );
   const [loading, setLoading] = useState(() => holdingsSeed.loading);
+  const [holdingsFetchedAt, setHoldingsFetchedAt] = useState<number | null>(() => holdingsSeed.fetchedAt);
   const [error, setError] = useState<string | null>(null);
+  const staleShown = useRef(false);
   const [holdingsReloadToken, setHoldingsReloadToken] = useState(0);
   const holdingsReloadTokenRef = useRef(0);
   holdingsReloadTokenRef.current = holdingsReloadToken;
@@ -341,6 +345,7 @@ export function PortfolioClient() {
         setTrading212(data.trading212);
         if (data.trading212.environment) setT212Env(data.trading212.environment);
       }
+      setHoldingsFetchedAt(Date.now());
       if (userId) {
         commitPortfolioHoldingsTtlCache({
           storage: browserHoldingsTtlStorage(),
@@ -528,12 +533,14 @@ export function PortfolioClient() {
     const checkHoldings = () => {
       const pending = holdingsLoadInFlight.current;
       if (pending?.userId === userId && pending.reloadToken === holdingsReloadToken) return;
+      const memoryRecord = readPortfolioHoldingsSessionMemory();
+      const storedRecord = readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId);
       const decision = decidePortfolioHoldingsLoad({
         userId,
         reloadToken: holdingsReloadToken,
         liveRefreshToken: 0,
-        memory: readPortfolioHoldingsSessionMemory(),
-        stored: readStoredPortfolioHoldingsTtlCache(browserHoldingsTtlStorage(), userId),
+        memory: memoryRecord,
+        stored: storedRecord,
       });
       if (decision.adoptMemory) {
         writePortfolioHoldingsSessionMemory(decision.adoptMemory);
@@ -546,9 +553,17 @@ export function PortfolioClient() {
           setTrading212,
           setT212Env,
         });
+        setHoldingsFetchedAt(memoryRecord?.fetchedAt ?? storedRecord?.fetchedAt ?? null);
         setError(null);
         setLoading(false);
         return;
+      }
+      // First load with an expired cache (the session was not ready at mount): show the last
+      // saved holdings right away, marked with their age, while fresh data loads.
+      if (holdingsReloadToken === 0 && decision.payload == null && storedRecord?.payload && !staleShown.current) {
+        staleShown.current = true;
+        applyHoldingsCachePayload(storedRecord.payload, { setHoldings, setQuotes, setFx, setTrading212, setT212Env });
+        setHoldingsFetchedAt(storedRecord.fetchedAt);
       }
       // Do not hydrate a non-reuse payload (force/fetch) — avoids a stale flash before refetch.
       void load({ force: decision.action === "force" });
@@ -1009,6 +1024,9 @@ export function PortfolioClient() {
             {t("portfolio.tabDividends")}
           </TabsTrigger>
         </TabsList>
+        {portfolioView === "holdings" && rows.length > 0 ? (
+          <DataFreshness at={holdingsFetchedAt} refreshing={loading || syncing} className="self-center" />
+        ) : null}
         {portfolioView === "holdings" && rows.length > 0 ? (
           <Button type="button" variant="outline" className="shrink-0 border-border" onClick={exportHoldingsCsv}>
             <Download className="mr-2 size-4" aria-hidden />

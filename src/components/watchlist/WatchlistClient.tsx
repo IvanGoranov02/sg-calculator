@@ -2,7 +2,10 @@
 
 import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { DataFreshness } from "@/components/layout/DataFreshness";
+import { browserStorage, readWatchlistSnapshot, writeWatchlistSnapshot } from "@/lib/watchlistSnapshot";
 
 import { CompanyIdentity } from "@/components/company/CompanyIdentity";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -28,6 +31,11 @@ export function WatchlistClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, QuoteHistoryBar[]>>({});
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  /** Latest quotes/history, so each fetch can save a complete snapshot. */
+  const latest = useRef<{ quotes: WatchlistQuoteRow[]; history: Record<string, QuoteHistoryBar[]> }>({ quotes: [], history: {} });
+  const hasQuotes = useRef(false);
 
   const loadQuotes = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -41,6 +49,7 @@ export function WatchlistClient() {
         setLoading(true);
         setError(null);
       }
+      setRefreshing(true);
       try {
         const q = `/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`;
         const res = await fetch(q);
@@ -60,20 +69,40 @@ export function WatchlistClient() {
         }
         setQuotes(ordered);
         setError(null);
+        const now = Date.now();
+        setFetchedAt(now);
+        hasQuotes.current = ordered.length > 0;
+        latest.current = { ...latest.current, quotes: ordered };
+        writeWatchlistSnapshot(browserStorage(), { fetchedAt: now, ...latest.current });
       } catch {
         if (silent) return;
         setError(t("watchlist.errNetwork"));
         setQuotes([]);
       } finally {
         if (!silent) setLoading(false);
+        setRefreshing(false);
       }
     },
     [symbols, t],
   );
 
   useEffect(() => {
-    void loadQuotes();
-  }, [loadQuotes]);
+    // Paint the last quotes seen in this browser at once, then fetch fresh ones quietly.
+    let painted = hasQuotes.current;
+    if (!painted && symbols.length > 0) {
+      const snap = readWatchlistSnapshot<WatchlistQuoteRow, QuoteHistoryBar>(browserStorage(), symbols);
+      if (snap) {
+        latest.current = { quotes: snap.quotes, history: snap.history };
+        hasQuotes.current = true;
+        painted = true;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from the browser snapshot once
+        setQuotes(snap.quotes);
+        setHistory(snap.history);
+        setFetchedAt(snap.fetchedAt);
+      }
+    }
+    void loadQuotes({ silent: painted });
+  }, [loadQuotes, symbols]);
 
   useEffect(() => {
     if (symbols.length === 0) {
@@ -87,9 +116,11 @@ export function WatchlistClient() {
         const data = (await res.json()) as { history?: Record<string, QuoteHistoryBar[]> };
         if (cancelled || !res.ok) return;
         setHistory(data.history ?? {});
+        latest.current = { ...latest.current, history: data.history ?? {} };
       })
       .catch(() => {
-        if (!cancelled) setHistory({});
+        // Keep the bars already on screen (from the snapshot) when the refresh fails.
+        if (!cancelled) setHistory((prev) => prev);
       });
     return () => {
       cancelled = true;
@@ -105,7 +136,10 @@ export function WatchlistClient() {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("watchlist.title")}</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">{t("watchlist.title")}</h1>
+        {symbols.length > 0 ? <DataFreshness at={fetchedAt} refreshing={refreshing} /> : null}
+      </div>
 
       <div className="flex items-end gap-2">
         <WatchlistAddSearch onAdd={add} disabled={symbols.length >= WATCHLIST_MAX} />

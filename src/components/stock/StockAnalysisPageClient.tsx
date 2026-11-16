@@ -25,6 +25,8 @@ type NdjsonLine =
 export function StockAnalysisPageClient({ ticker }: Props) {
   const { status: sessionStatus } = useSession();
   const [bundle, setBundle] = useState<StockAnalysisBundle | null>(null);
+  /** When live prices last arrived; null while only stored data is on screen. */
+  const [pricesAt, setPricesAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState<StockAnalysisPageLoadProgress | null>({
@@ -53,6 +55,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       setError(null);
       // A different company must never show the previous one's numbers while loading.
       setBundle((prev) => (prev && prev.quote.symbol.trim().toUpperCase() === sym.toUpperCase() ? prev : null));
+      setPricesAt(null);
       setLoadProgress({ event: null, percent: 4, connecting: true });
       void (async () => {
         try {
@@ -107,6 +110,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
               if (msg.type === "done") {
                 if (cancelled) continue;
                 setBundle(msg.bundle);
+                setPricesAt(msg.bundle ? Date.now() : null);
                 setError(msg.error);
                 setLoadProgress(null);
                 if (msg.bundle?.quote.symbol) {
@@ -149,6 +153,7 @@ export function StockAnalysisPageClient({ ticker }: Props) {
       error={error}
       loading={loading}
       loadProgress={loadProgress}
+      pricesAt={pricesAt}
       onForceRefresh={sessionStatus === "authenticated" ? handleForceRefresh : undefined}
       onRetry={handleRetry}
     />

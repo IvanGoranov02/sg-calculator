@@ -6,6 +6,9 @@
 import { compareFetchSymbols } from "@/lib/compareMetrics";
 import { mapInvestorMetrics } from "@/lib/mapInvestorMetrics";
 import type { InvestorMetrics } from "@/lib/stockAnalysisTypes";
+import { withTimeoutFallback } from "@/lib/asyncTimeout";
+import { readPeriodsMany } from "@/lib/verified/periodStore";
+import { ttmMetricsFromRows } from "@/lib/verified/storeViews";
 import { yahooFinance } from "@/lib/yahooFinanceClient";
 
 export type CompareRow = {
@@ -75,6 +78,20 @@ async function fetchOne(symbol: string): Promise<CompareRow | null> {
 
 export async function fetchCompareRows(symbols: string[]): Promise<CompareRow[]> {
   const uniq = compareFetchSymbols(symbols);
-  const rows = await Promise.all(uniq.map(fetchOne));
-  return rows.filter((r): r is CompareRow => r !== null);
+  // Stored statements (one query for all symbols) so margins, returns and growth match the
+    // stock page. Companies the store does not hold keep the live figures.
+    const storedPromise = withTimeoutFallback(readPeriodsMany(uniq), 4_000, "compare store read", null).catch(() => null);
+  const rows = (await Promise.all(uniq.map(fetchOne))).filter((r): r is CompareRow => r !== null);
+  const stored = await storedPromise;
+  if (stored) {
+    for (const row of rows) {
+      const periods = stored.get(row.symbol);
+      const ttm = periods ? ttmMetricsFromRows(periods) : null;
+      if (!ttm) continue;
+      for (const [key, value] of Object.entries(ttm) as [keyof typeof ttm, number | null][]) {
+        if (value != null) row.investor[key] = value;
+      }
+    }
+  }
+  return rows;
 }

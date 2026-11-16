@@ -2,6 +2,10 @@
  * Server-only: snapshot metrics + per-share bases for GuruFocus-style DCF from Yahoo Finance.
  */
 
+import { withTimeoutFallback } from "@/lib/asyncTimeout";
+import { readPeriods } from "@/lib/verified/periodStore";
+import type { PeriodRow } from "@/lib/verified/periods";
+import { latestAnnualFromRows } from "@/lib/verified/storeViews";
 import YahooFinance from "yahoo-finance2";
 
 import { capGuruFocusGrowthRate } from "@/lib/dcf";
@@ -144,7 +148,7 @@ export async function fetchDcfSeed(symbol: string): Promise<DcfSeed | null> {
       .filter((r) => r?.date)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
     const latestCf = cashSorted[cashSorted.length - 1];
-    const baseFcf = Number(latestCf?.freeCashFlow ?? 0);
+    let baseFcf = Number(latestCf?.freeCashFlow ?? 0);
 
     const bsSorted = (bsRows as BsRow[])
       .filter((r) => r?.date)
@@ -160,16 +164,30 @@ export async function fetchDcfSeed(symbol: string): Promise<DcfSeed | null> {
       .filter((r) => r?.date)
       .sort((a, b) => a.date.getTime() - b.date.getTime());
     const latestFin = finSorted[finSorted.length - 1];
-    const revenue = Math.max(0, Number(latestFin?.totalRevenue ?? 0));
+    let revenue = Math.max(0, Number(latestFin?.totalRevenue ?? 0));
     const opInc = Number(latestFin?.operatingIncome ?? NaN);
-    const operatingMarginPct =
+    let operatingMarginPct =
       revenue > 0 && Number.isFinite(opInc) ? (opInc / revenue) * 100 : null;
-    const netIncome = Number(latestFin?.netIncome ?? 0);
+    let netIncome = Number(latestFin?.netIncome ?? 0);
     const ebitdaRaw = latestFin?.ebitda;
-    const ebitda =
+    let ebitda =
       ebitdaRaw !== undefined && Number.isFinite(Number(ebitdaRaw))
         ? Number(ebitdaRaw)
         : null;
+
+    // Same figures as the stock page: when the permanent store holds this fiscal year (or a
+    // newer one), its stored statements replace the live ones.
+    const stored = await withTimeoutFallback(readPeriods(sym), 3_000, "dcf store read", [] as PeriodRow[])
+      .then(latestAnnualFromRows)
+      .catch(() => null);
+    const liveEnd = latestFin?.date ? latestFin.date.toISOString().slice(0, 10) : "";
+    if (stored && !stored.isBank && stored.end >= liveEnd.slice(0, 7)) {
+      revenue = stored.revenue;
+      netIncome = stored.netIncome;
+      operatingMarginPct = stored.operatingMarginPct ?? operatingMarginPct;
+      ebitda = stored.ebitda ?? ebitda;
+      if (stored.freeCashFlow != null) baseFcf = stored.freeCashFlow;
+    }
 
     const latestDilutedEps = Number(latestFin?.dilutedEPS ?? NaN);
     const epsPerShare = pickTrailingEps(

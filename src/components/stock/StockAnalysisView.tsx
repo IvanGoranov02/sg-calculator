@@ -18,6 +18,7 @@ import { useI18n } from "@/lib/i18n/LocaleProvider";
 import { StockAnalysisPeriodProvider } from "@/lib/stockAnalysisPeriod";
 import type { StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { VerifiedDataBadge } from "@/components/stock/VerifiedDataBadge";
+import { DataFreshness } from "@/components/layout/DataFreshness";
 
 type StockAnalysisViewProps = {
   ticker: string;
@@ -25,6 +26,8 @@ type StockAnalysisViewProps = {
   error: string | null;
   loading?: boolean;
   loadProgress?: StockAnalysisPageLoadProgress | null;
+  /** When live prices last arrived (ms); shown as "updated … ago". */
+  pricesAt?: number | null;
   onForceRefresh?: () => void;
   onRetry?: () => void;
 };
@@ -35,6 +38,7 @@ export function StockAnalysisView({
   error,
   loading = false,
   loadProgress = null,
+  pricesAt = null,
   onForceRefresh,
   onRetry,
 }: StockAnalysisViewProps) {
@@ -128,7 +132,10 @@ export function StockAnalysisView({
             onForceRefresh={onForceRefresh}
             refreshing={loading}
           />
-          <VerifiedDataBadge bundle={bundle} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <VerifiedDataBadge bundle={bundle} />
+            <DataFreshness at={pricesAt} refreshing={loading} />
+          </div>
 
           <StockMetricChart data={bundle} />
         </div>
