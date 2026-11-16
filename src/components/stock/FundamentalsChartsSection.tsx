@@ -454,9 +454,8 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm shadow-black/10">
-        <h2 className="text-xl font-semibold tracking-tight">{t("chartsFund.title")}</h2>
-      </div>
+      {/* Heading kept for screen readers and the page outline; the visible box only took space. */}
+      <h2 className="sr-only">{t("chartsFund.title")}</h2>
 
       <div
         className={cn(

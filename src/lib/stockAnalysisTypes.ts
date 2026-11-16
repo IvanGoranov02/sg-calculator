@@ -152,7 +152,7 @@ export type HistoricalEodBar = {
 };
 
 /** Price chart range (1D uses intraday when available). */
-export type PerformanceRange = "1d" | "1w" | "1m" | "1y" | "5y" | "max";
+export type PerformanceRange = "1d" | "1w" | "1m" | "3m" | "6m" | "ytd" | "1y" | "5y" | "max";
 
 export type ChartMetric = "price" | "revenue" | "netIncome" | "freeCashFlow" | "eps";
 
