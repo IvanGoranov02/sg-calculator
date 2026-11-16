@@ -23,7 +23,9 @@ export function ValuationVerdictSection({ data }: { data: StockAnalysisBundle })
     const inv = data.investor;
 
     const annualCf = [...data.cashFlow].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
-    const baseFcf = annualCf.length ? annualCf[annualCf.length - 1].freeCashFlow : 0;
+    // Free cash flow means nothing for a bank (deposits and loans flow through it), so the
+    // cash-flow model is skipped and only the earnings multiple is used.
+    const baseFcf = data.bank ? 0 : annualCf.length ? annualCf[annualCf.length - 1].freeCashFlow : 0;
 
     const annualBs = [...data.balanceSheet].sort((a, b) => Number(a.fiscalYear) - Number(b.fiscalYear));
     const latestNetDebt = annualBs.length ? annualBs[annualBs.length - 1].netDebt : null;

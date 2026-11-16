@@ -1,6 +1,6 @@
 import { safePct, safeRatio } from "@/lib/annualTables";
 import { dedupeQuarterlyIncome, nearestQuarterSideRow } from "@/lib/quarterlyAlign";
-import { isEmptyIncomeStatementCore, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
+import { isEmptyIncomeStatementCore, type BankPeriod, type StockAnalysisBundle } from "@/lib/stockAnalysisTypes";
 import { sortIncomeByYearAsc, sortQuarterlyByDateAsc } from "@/lib/stockAnalysisTypes";
 
 /** ISO date (period end) for filtering; stripped before passing to Recharts. Annual rows also carry `fiscalYear`. */
@@ -57,6 +57,47 @@ function isStubIncome(r: {
   operatingIncome?: number;
 }): boolean {
   return isEmptyIncomeStatementCore(r);
+}
+
+/** Bank lines and the ratios built on them, for one chart row (empty object for non-banks). */
+function bankChartFields(
+  bank: BankPeriod | undefined,
+  revenue: number,
+  bs: { stockholdersEquity: number | null; totalAssets: number | null } | undefined,
+): Record<string, number | null> {
+  if (!bank) return {};
+  const { netInterestIncome: nii, nonInterestIncome, nonInterestExpense, provisionForCreditLosses, deposits, loans } = bank;
+  return {
+    netInterestIncome: nii,
+    nonInterestIncome,
+    nonInterestExpense,
+    provisionForCreditLosses,
+    deposits,
+    loans,
+    // Cost to earn one unit of revenue; lower is better.
+    efficiencyRatio: nonInterestExpense != null && revenue > 0 ? safePct(nonInterestExpense, revenue) : null,
+    loanToDeposit: loans != null && deposits != null && deposits > 0 ? safePct(loans, deposits) : null,
+    equityToAssets:
+      bs?.stockholdersEquity != null && bs.totalAssets != null && bs.totalAssets > 0
+        ? safePct(bs.stockholdersEquity, bs.totalAssets)
+        : null,
+    niiShare: nii != null && revenue > 0 ? safePct(nii, revenue) : null,
+  };
+}
+
+function nearestBank(rows: BankPeriod[] | undefined, dateIso: string): BankPeriod | undefined {
+  if (!rows?.length) return undefined;
+  const t = Date.parse(dateIso.slice(0, 10));
+  let best: BankPeriod | undefined;
+  let gap = 11 * 86_400_000;
+  for (const r of rows) {
+    const g = Math.abs(Date.parse(r.date.slice(0, 10)) - t);
+    if (g < gap) {
+      best = r;
+      gap = g;
+    }
+  }
+  return best;
 }
 
 export function buildAnnualChartRows(
@@ -130,6 +171,7 @@ export function buildAnnualChartRows(
       fcfMargin: cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
       dilutedEps: r.dilutedEps ?? null,
       dilutedShares: r.dilutedAverageShares ?? null,
+      ...bankChartFields(nearestBank(bundle.bank?.annual, r.date), rev, bs),
     };
   });
 }
@@ -212,6 +254,7 @@ export function buildQuarterlyChartRows(
       fcfMargin: cf != null && rev !== 0 ? safePct(cf.freeCashFlow, rev) : null,
       dilutedEps: r.dilutedEps ?? null,
       dilutedShares: r.dilutedAverageShares ?? null,
+      ...bankChartFields(nearestBank(bundle.bank?.quarterly, d), rev, bs),
     };
   });
 }

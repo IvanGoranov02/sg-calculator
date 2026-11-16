@@ -55,6 +55,59 @@ const C = {
   valuationPs: "var(--series-rose)",
 };
 
+const BANK_TEXT = {
+  en: {
+    intro:
+      "This company reports like a bank, so the charts show what drives a bank: interest income, fees, loan losses, deposits and loans. Gross profit, free cash flow and debt ratios are left out because they do not describe a bank.",
+    revenue: "Revenue by source",
+    revenueDesc: "Net interest income (lending minus funding cost) plus fees, trading and other income.",
+    nii: "Net interest income",
+    niiShort: "Net interest income",
+    niiDesc: "Interest earned on loans and securities minus interest paid on deposits and debt.",
+    nonInterest: "Fees and other income",
+    provision: "Provision for credit losses",
+    provisionDesc: "Money set aside for loans expected to go bad. Rises when the bank expects trouble.",
+    efficiency: "Efficiency ratio",
+    efficiencyDesc: "Operating costs as % of revenue. Lower is better; under 60% is good for a large bank.",
+    depositsLoans: "Deposits and loans",
+    depositsLoansDesc: "Customer deposits fund the bank; loans are where it earns interest.",
+    deposits: "Deposits",
+    loans: "Loans",
+    loanToDeposit: "Loans as % of deposits",
+    loanToDepositDesc: "How much of the deposits is lent out. Very high means little cushion, very low means idle money.",
+    capital: "Assets and equity",
+    capitalDesc: "Size of the balance sheet and the shareholders' capital behind it.",
+    equityToAssets: "Equity as % of assets",
+    equityToAssetsDesc: "A simple measure of the capital cushion. Regulatory ratios (CET1) are not in the filings data.",
+    netMargin: "Net margin",
+  },
+  bg: {
+    intro:
+      "Тази компания се отчита като банка, затова графиките показват това, което движи една банка: лихвен доход, такси, загуби по кредити, депозити и заеми. Брутната печалба, свободният паричен поток и съотношенията за дълг са махнати, защото не описват банка.",
+    revenue: "Приходи по източник",
+    revenueDesc: "Нетен лихвен доход (лихви по кредити минус цената на финансирането) плюс такси, търговия и други приходи.",
+    nii: "Нетен лихвен доход",
+    niiShort: "Нетен лихвен доход",
+    niiDesc: "Лихвите, спечелени от кредити и ценни книжа, минус лихвите, платени по депозити и дълг.",
+    nonInterest: "Такси и други приходи",
+    provision: "Провизии за кредитни загуби",
+    provisionDesc: "Пари, заделени за кредити, които се очаква да не бъдат върнати. Растат, когато банката очаква проблеми.",
+    efficiency: "Коефициент на ефективност",
+    efficiencyDesc: "Оперативните разходи като % от приходите. По-ниско е по-добре; под 60% е добре за голяма банка.",
+    depositsLoans: "Депозити и заеми",
+    depositsLoansDesc: "Депозитите на клиентите финансират банката; от заемите тя печели лихва.",
+    deposits: "Депозити",
+    loans: "Заеми",
+    loanToDeposit: "Заеми като % от депозитите",
+    loanToDepositDesc: "Каква част от депозитите е раздадена като заеми. Много високо значи малък буфер, много ниско значи неизползвани пари.",
+    capital: "Активи и собствен капитал",
+    capitalDesc: "Размерът на баланса и капиталът на акционерите зад него.",
+    equityToAssets: "Собствен капитал като % от активите",
+    equityToAssetsDesc: "Прост измерител на капиталовия буфер. Регулаторните коефициенти (CET1) не са в данните от отчетите.",
+    netMargin: "Нетен марж",
+  },
+} as const;
+
 function chartGrowthPills(
   rows: Record<string, unknown>[],
   key: string,
@@ -369,6 +422,35 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
   const empty = chartRows.length === 0;
 
+  // Banks get their own set of charts: gross profit, free cash flow, capex, current ratio
+  // and net debt say nothing about a bank, while interest income, deposits, loans and
+  // loan-loss provisions say almost everything.
+  const isBank = Boolean(data.bank && (data.bank.annual.length > 0 || data.bank.quarterly.length > 0));
+  const bankText = BANK_TEXT[locale === "bg" ? "bg" : "en"];
+  const bankSeries = useMemo(
+    () => ({
+      revenueSplit: [
+        { dataKey: "netInterestIncome", color: C.revenue, label: bankText.niiShort },
+        { dataKey: "nonInterestIncome", color: C.gross, label: bankText.nonInterest },
+      ] satisfies FundamentalSeries[],
+      nii: [{ dataKey: "netInterestIncome", color: C.revenue, label: bankText.niiShort }] satisfies FundamentalSeries[],
+      provision: [{ dataKey: "provisionForCreditLosses", color: C.opex, label: bankText.provision }] satisfies FundamentalSeries[],
+      efficiency: [{ dataKey: "efficiencyRatio", color: C.capex, label: bankText.efficiency }] satisfies FundamentalSeries[],
+      depositsLoans: [
+        { dataKey: "deposits", color: C.cash, label: bankText.deposits },
+        { dataKey: "loans", color: C.fcf, label: bankText.loans },
+      ] satisfies FundamentalSeries[],
+      loanToDeposit: [{ dataKey: "loanToDeposit", color: C.fcf, label: bankText.loanToDeposit }] satisfies FundamentalSeries[],
+      capital: [
+        { dataKey: "totalAssets", color: C.assets, label: t("annual.totalAssets") },
+        { dataKey: "equity", color: C.equity, label: t("annual.equity") },
+      ] satisfies FundamentalSeries[],
+      equityToAssets: [{ dataKey: "equityToAssets", color: C.equity, label: bankText.equityToAssets }] satisfies FundamentalSeries[],
+      netMargin: [{ dataKey: "netMargin", color: C.netIncome, label: bankText.netMargin }] satisfies FundamentalSeries[],
+    }),
+    [bankText, t],
+  );
+
   const selectClass =
     "h-9 min-w-[8.5rem] rounded-md border border-border bg-background px-3 text-sm text-foreground shadow-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-emerald-500/50";
 
@@ -467,6 +549,161 @@ export function FundamentalsChartsSection({ data, symbol }: FundamentalsChartsSe
 
       {empty ? (
         <p className="text-sm text-muted-foreground">{t("chartsFund.noRows")}</p>
+      ) : isBank ? (
+        <>
+          <p className="max-w-3xl text-sm text-muted-foreground">{bankText.intro}</p>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.revenue}
+              description={bankText.revenueDesc}
+              data={chartRows}
+              series={bankSeries.revenueSplit}
+              chartType="bar"
+              valueFormat="currency"
+              growthPills={chartGrowthPills(growthPillRows, "revenue", freq)}
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={t("chartsFund.chartNetIncomeSolo")}
+              data={chartRows}
+              series={series.netIncomeSolo}
+              chartType="bar"
+              valueFormat="currency"
+              growthPills={chartGrowthPills(growthPillRows, "netIncome", freq)}
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.nii}
+              description={bankText.niiDesc}
+              data={chartRows}
+              series={bankSeries.nii}
+              valueFormat="currency"
+              growthPills={chartGrowthPills(growthPillRows, "netInterestIncome", freq)}
+            />
+            {hasDilutedEps ? (
+              <FundamentalChartCard
+                {...chartAxisProps}
+                title={t("chartsFund.chartDilutedEps")}
+                data={chartRows}
+                series={series.dilutedEpsSolo}
+                valueFormat="perShare"
+                growthPills={chartGrowthPills(growthPillRows, "dilutedEps", freq)}
+              />
+            ) : null}
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.provision}
+              description={bankText.provisionDesc}
+              data={chartRows}
+              series={bankSeries.provision}
+              chartType="bar"
+              valueFormat="currency"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.efficiency}
+              description={bankText.efficiencyDesc}
+              data={chartRows}
+              series={bankSeries.efficiency}
+              chartType="line"
+              valueFormat="percent"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.depositsLoans}
+              description={bankText.depositsLoansDesc}
+              data={chartRows}
+              series={bankSeries.depositsLoans}
+              valueFormat="currency"
+              growthPills={chartGrowthPillsMulti(
+                growthPillRows,
+                [
+                  { key: "deposits", label: bankText.deposits },
+                  { key: "loans", label: bankText.loans },
+                ],
+                freq,
+              )}
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.loanToDeposit}
+              description={bankText.loanToDepositDesc}
+              data={chartRows}
+              series={bankSeries.loanToDeposit}
+              chartType="line"
+              valueFormat="percent"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={t("chartsFund.chartRoeRoa")}
+              description={t("chartsFund.chartRoeRoaDesc")}
+              data={chartRows}
+              series={series.roeRoa}
+              valueFormat="percent"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.capital}
+              description={bankText.capitalDesc}
+              data={chartRows}
+              series={bankSeries.capital}
+              valueFormat="currency"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.equityToAssets}
+              description={bankText.equityToAssetsDesc}
+              data={chartRows}
+              series={bankSeries.equityToAssets}
+              chartType="line"
+              valueFormat="percent"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={bankText.netMargin}
+              data={chartRows}
+              series={bankSeries.netMargin}
+              chartType="line"
+              valueFormat="percent"
+            />
+            <FundamentalChartCard
+              {...chartAxisProps}
+              title={t("chartsFund.chartPeTtm")}
+              data={chartRows}
+              series={series.peTtm}
+              valueFormat="ratio"
+              growthPills={chartGrowthPills(growthPillRows, "peTtm", freq)}
+            />
+            {hasDilutedShares ? (
+              <FundamentalChartCard
+                {...chartAxisProps}
+                title={t("chartsFund.chartDilutedShares")}
+                data={chartRows}
+                series={series.dilutedSharesSolo}
+                valueFormat="compactCount"
+                growthPills={chartGrowthPills(growthPillRows, "dilutedShares", freq)}
+              />
+            ) : null}
+            {hasShareholderFlows ? (
+              <FundamentalChartCard
+                {...chartAxisProps}
+                title={t("chartsFund.chartShareholder")}
+                data={chartRows}
+                series={series.shareholder}
+                valueFormat="currency"
+                growthPills={chartGrowthPillsMulti(
+                  growthPillRows,
+                  [
+                    { key: "dividendsPaidPos", label: t("annual.dividends") },
+                    { key: "stockRepurchasePos", label: t("annual.buyback") },
+                  ],
+                  freq,
+                )}
+              />
+            ) : null}
+          </div>
+        </>
       ) : (
         <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FundamentalChartCard
