@@ -118,6 +118,30 @@ export type DividendQuarterlyPoint = {
   dividendPerShare: number | null;
 };
 
+/** Bank-specific lines for one period (null when the source does not report the line). */
+export type BankLines = {
+  netInterestIncome: number | null;
+  nonInterestIncome: number | null;
+  nonInterestExpense: number | null;
+  /** Positive = money set aside for expected loan losses. */
+  provisionForCreditLosses: number | null;
+  deposits: number | null;
+  /** Loans net of the allowance for credit losses. */
+  loans: number | null;
+};
+
+export type BankPeriod = BankLines & { date: string; fiscalYear?: string };
+
+/** Revenue of one business line for one period (from the segment note of a filing). */
+export type SegmentPeriod = { date: string; values: Record<string, number> };
+
+export type CompanySegments = {
+  /** Display names in a stable order (largest first by the latest period). */
+  names: string[];
+  annual: SegmentPeriod[];
+  quarterly: SegmentPeriod[];
+};
+
 export type HistoricalEodBar = {
   /** ISO date (daily) or datetime (intraday) */
   date: string;
@@ -201,6 +225,10 @@ export type StockAnalysisBundle = {
   balanceSheetQuarterly: BalanceSheetQuarter[];
   /** Same quarter order as `incomeQuarterly` (aligned by date). */
   dividendQuarterly: DividendQuarterlyPoint[];
+  /** Present only for banks: the lines that matter for them (instead of gross profit / free cash flow). */
+  bank?: { annual: BankPeriod[]; quarterly: BankPeriod[] };
+  /** Revenue by business line, when the filings break it out. */
+  segments?: CompanySegments;
 };
 
 /**

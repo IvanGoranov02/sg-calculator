@@ -39,8 +39,15 @@ export type CachePayload = StockAnalysisBundle & {
   __gapFillAt?: string;
   /** Where the fundamentals came from; EDGAR data is authoritative over Yahoo on re-merge. */
   __fundamentalsSource?: FundamentalsSource;
-  /** Set when the statements come from the verified store (never persisted to this cache). */
-  __verified?: { verifiedAt: string | null; latestQuarter: string | null };
+  /** Set when statements come (fully or partly) from the permanent store; says how far they are confirmed. */
+  __store?: {
+    status: "verified" | "partial" | "failed";
+    mode: "store" | "overlay";
+    latestQuarter: string | null;
+    periods: number;
+    verifiedPeriods: number;
+    builtAt: string | null;
+  };
   /**
    * Currency of `dividendQuarterly` when every positive row is listing cash
    * (quote currency) rather than the financial-reporting currency.

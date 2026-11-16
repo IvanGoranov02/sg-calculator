@@ -1,40 +1,51 @@
 /**
- * Dry run: how many of the top-N companies pass verification? No database involved.
- * Usage: node --import tsx scripts/verified-dry-run.ts [N=100] [SYM,SYM...]
+ * Dry run of the permanent store: what would be stored for each company? No database involved.
+ * Usage: node --import tsx scripts/verified-dry-run.ts [N=100] [SYM,SYM...] [--rows]
  */
-import { readFileSync } from "node:fs";
-
-import { fetchCompanyFacts, lookupCik } from "../src/lib/edgar/client";
-import { buildStatementsFromFacts, verifyStatements } from "../src/lib/verified/verify";
-import { fetchYahooFundamentalsPayload } from "../src/lib/yahooFundamentalsMerge";
+import { companyStatus, fetchFreshCompany } from "../src/lib/verified/service";
+import { storeCoverage } from "../src/lib/verified/periods";
+import { UNIVERSE } from "../src/lib/verified/universe";
 
 async function main() {
-  const n = Number(process.argv[2] ?? 100);
-  const only = process.argv[3]?.split(",");
-  const all = JSON.parse(readFileSync("public/us-companies.json", "utf8")) as { s: string }[];
-  const symbols = only ?? all.slice(0, n).map((c) => c.s);
-  let ok = 0;
-  const codes: Record<string, number> = {};
+  const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+  const showRows = process.argv.includes("--rows");
+  const n = Number(args[0] ?? 100);
+  const only = args[1]?.split(",");
+  const symbols = only ?? UNIVERSE.slice(0, n).map((c) => c.s);
+  const tally: Record<string, number> = {};
+  const add = (k: string) => (tally[k] = (tally[k] ?? 0) + 1);
   for (const sym of symbols) {
-    const entry = await lookupCik(sym);
-    const facts = entry ? await fetchCompanyFacts(entry.cik) : null;
-    const st = facts ? buildStatementsFromFacts(sym, facts) : null;
-    if (!st) {
-      console.log(`${sym}\tFAIL\tno SEC filing data`);
-      codes.no_filings = (codes.no_filings ?? 0) + 1;
-      continue;
+    try {
+      const fresh = await fetchFreshCompany(sym);
+      const cov = storeCoverage(fresh.rows);
+      const status = companyStatus(fresh.rows, fresh);
+      const trust: Record<string, number> = {};
+      for (const r of fresh.rows) trust[r.trust] = (trust[r.trust] ?? 0) + 1;
+      add(status);
+      add(cov.full ? "serve:store" : fresh.rows.length ? "serve:overlay" : "serve:pipeline");
+      if (fresh.profile === "bank") add("bank");
+      console.log(
+        `${sym}\t${status}\t${cov.full ? "store  " : "overlay"}\t${fresh.profile}\tA${cov.annual} Q${cov.quarters}(run ${cov.contiguousQuarters})\t${JSON.stringify(trust)}\t${fresh.issues
+          .slice(0, only ? 20 : 2)
+          .map((e) => e.message)
+          .join(" | ")}`,
+      );
+      if (showRows) {
+        for (const r of fresh.rows) {
+          const b = r.data.bank;
+          console.log(
+            `   ${r.kind} ${r.end} ${r.trust.padEnd(8)} rev=${r.data.inc.revenue} ni=${r.data.inc.netIncome} ocf=${r.data.cf?.operatingCashFlow ?? "-"} assets=${r.data.bs?.totalAssets ?? "-"}${
+              b ? ` nii=${b.netInterestIncome} nonII=${b.nonInterestIncome} prov=${b.provisionForCreditLosses} dep=${b.deposits} loans=${b.loans}` : ""
+            }`,
+          );
+        }
+      }
+    } catch (e) {
+      add("error");
+      console.log(`${sym}\tERROR\t${e instanceof Error ? e.message : e}`);
     }
-    const yahoo = await fetchYahooFundamentalsPayload(sym);
-    const rep = verifyStatements(st, yahoo);
-    if (rep.ok) ok++;
-    for (const c of new Set(rep.errors.map((e) => e.code))) codes[c] = (codes[c] ?? 0) + 1;
-    const shown = rep.errors
-      .slice(0, only ? 40 : 3)
-      .map((e) => e.message)
-      .join(" | ");
-    console.log(`${sym}\t${rep.ok ? "OK  " : "FAIL"}\tA${st.income.length} Q${st.incomeQuarterly.length} x${rep.crossChecked}\t${shown}`);
     await new Promise((r) => setTimeout(r, 150));
   }
-  console.log(`\n${ok}/${symbols.length} verified`, codes);
+  console.log(`\n${symbols.length} companies`, tally);
 }
 void main();

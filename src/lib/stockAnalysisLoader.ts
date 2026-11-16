@@ -46,7 +46,8 @@ import {
   reconcileFundamentalsCurrency,
 } from "@/lib/yahooStockPriceHistory";
 import { debugLog } from "@/lib/serverDebug";
-import { loadVerifiedBundle } from "@/lib/verified/service";
+import { overlayStoreOnBundle } from "@/lib/verified/periods";
+import { ensureStored, loadFromStore, type StoreLoad } from "@/lib/verified/service";
 import { after } from "next/server";
 
 export type { StockAnalysisLoadProgress } from "@/lib/stockLoadProgress";
@@ -366,26 +367,32 @@ export async function loadStockAnalysis(
       return { bundle: working, error: null };
     }
 
-    // Largest companies: statements come from the verified store (SEC filings that passed
-    // arithmetic + second-source checks). No AI and no statement re-fetch on a view; only
-    // live prices/metrics are added. Anything not verified falls through to the pipeline below.
+    // Permanent store first: periods taken from filings / the second source, stored once and
+    // never re-fetched on a view (no AI). With enough stored history the page is served from
+    // the store alone and only live prices are added; with a shorter history the stored
+    // periods are laid over the regular pipeline's result further down.
+    let store: StoreLoad | null = null;
+    let storeAnswered = false;
     if (!opts?.overwriteAdminEdits) {
-      const tVerified = Date.now();
-      const verified = await withTimeoutFallback(
-        loadVerifiedBundle(sym, { schedule: scheduleAfterResponse, checkNow: opts?.forceRefresh }),
+      const tStore = Date.now();
+      store = await withTimeoutFallback(
+        loadFromStore(sym, { schedule: scheduleAfterResponse, checkNow: opts?.forceRefresh }).then((r) => {
+          storeAnswered = true;
+          return r;
+        }),
         opts?.forceRefresh ? 45_000 : 20_000,
-        `verified ${sym}`,
+        `store ${sym}`,
         null,
       ).catch((e) => {
-        console.warn(`[stock-load] ${sym} verified store skipped:`, e instanceof Error ? e.message : e);
+        console.warn(`[stock-load] ${sym} store skipped:`, e instanceof Error ? e.message : e);
         return null;
       });
-      logLoadStep(sym, "verified_read", tVerified, verified ? "hit" : "miss");
-      if (verified) {
-        const { bundle, meta } = verified;
+      logLoadStep(sym, "store_read", tStore, store ? store.meta.mode : "miss");
+      if (store?.bundle) {
+        const { bundle, meta } = store;
         opts?.onProgress?.({ kind: "cache_hit" });
         markFundamentalsSource(bundle, "edgar");
-        (bundle as CachePayload).__verified = meta;
+        (bundle as CachePayload).__store = meta;
         // Paint immediately: verified statements + the last saved price snapshot.
         if (opts?.onPartial && snapshotIsDisplayable(cachedPayload) && bundle.investor.currency === "USD") {
           opts.onPartial({
@@ -407,10 +414,26 @@ export async function loadStockAnalysis(
           scheduleAfterResponse(() => writeStockCache(sym, plain));
         }
         await withTimeoutFallback(reconcileFundamentalsCurrency(bundle), 8_000, `fx reconcile ${sym}`, undefined);
-        logLoadStep(sym, "total", loadStarted, "verified");
+        logLoadStep(sym, "total", loadStarted, "store");
         return { bundle, error: null };
       }
     }
+    /** Stored periods win over whatever the regular pipeline produced for the same periods. */
+    const applyStore = (bundle: StockAnalysisBundle) => {
+      if (!store) return;
+      overlayStoreOnBundle(bundle, store.statements);
+      sanitizeBundleDilutedShares(bundle);
+      trimBundleToFundamentalsWindow(bundle);
+      (bundle as CachePayload).__store = store.meta;
+    };
+    /** A real company the store does not know yet: store it after the response, for next time. */
+    const storeForNextTime = () => {
+      if (storeAnswered && !store) {
+        scheduleAfterResponse(() =>
+          ensureStored(sym).catch((e) => console.warn(`[stock-load] ${sym} store build failed:`, e instanceof Error ? e.message : e)),
+        );
+      }
+    };
 
     if (!opts?.forceRefresh) {
       // Serve cache while fresh, UNLESS a new earnings report has dropped since the
@@ -435,6 +458,7 @@ export async function loadStockAnalysis(
           runGapFill: gapFillIsDue(cachedPayload),
           mergeMode: readFundamentalsSource(cachedPayload) === "gemini" ? "prefer-yahoo" : "fill-gaps",
         });
+        applyStore(bundle);
         opts?.onProgress?.({ kind: "yahoo_prices" });
         await refreshLivePrices(bundle, sym);
         await persistStockCache(sym, bundle, {
@@ -447,16 +471,21 @@ export async function loadStockAnalysis(
           `fx reconcile ${sym}`,
           undefined,
         );
+        storeForNextTime();
         logLoadStep(sym, "total", loadStarted);
         return { bundle, error: null };
       }
     }
 
     const { bundle, degraded } = await fetchFreshFundamentals(sym, opts);
+    if (!degraded) applyStore(bundle);
     opts?.onProgress?.({ kind: "yahoo_prices" });
     await refreshLivePrices(bundle, sym);
     // A live-market-only bundle is never cached, so real filings are used once available.
-    if (!degraded) await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
+    if (!degraded) {
+      await persistStockCache(sym, bundle, { lastFullFetchAt: new Date().toISOString() });
+      storeForNextTime();
+    }
     await withTimeoutFallback(
       reconcileFundamentalsCurrency(bundle),
       8_000,

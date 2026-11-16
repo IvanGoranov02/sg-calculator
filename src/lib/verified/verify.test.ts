@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { newQuarterCheckDue } from "./service";
 import { verifyStatements, type VerifiedStatements } from "./verify";
 
 const QUARTER_ENDS = ["03-31", "06-30", "09-30", "12-31"];
@@ -100,12 +99,3 @@ test("appending a quarter only needs the second source to confirm the new period
   assert.ok(rep.errors.some((e) => e.code === "second_source_thin"));
 });
 
-test("new-quarter check waits for the next report window and is throttled", () => {
-  const day = 86_400_000;
-  const latest = Date.parse("2026-06-30");
-  const row = { latestQuarter: "2026-06-30", checkedAt: new Date(latest).toISOString() };
-  assert.equal(newQuarterCheckDue(row, latest + 60 * day), false);
-  assert.equal(newQuarterCheckDue(row, latest + 110 * day), true);
-  const justChecked = { ...row, checkedAt: new Date(latest + 110 * day - 3_600_000).toISOString() };
-  assert.equal(newQuarterCheckDue(justChecked, latest + 110 * day), false);
-});

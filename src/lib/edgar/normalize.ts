@@ -9,6 +9,7 @@
  */
 
 import type {
+  BankLines,
   BalanceSheetAnnual,
   BalanceSheetQuarter,
   CashFlowAnnual,
@@ -614,4 +615,63 @@ export function bundleFromCompanyFacts(
     balanceSheetQuarterly,
     dividendQuarterly: incomeQuarterly.map((q) => ({ date: q.date, dividendPerShare: null })),
   };
+}
+
+const BANK_FLOW_CONCEPTS: Record<string, string[]> = {
+  netInterestIncome: ["InterestIncomeExpenseNet"],
+  nonInterestIncome: ["NoninterestIncome"],
+  nonInterestExpense: ["NoninterestExpense"],
+  provisionForCreditLosses: [
+    "ProvisionForLoanLeaseAndOtherLosses",
+    "ProvisionForCreditLosses",
+    "ProvisionForLoanAndLeaseLosses",
+    "CreditLossExpenseReversal",
+    "FinancingReceivableExcludingAccruedInterestCreditLossExpenseReversal",
+    "ProvisionForLoanLossesExpensed",
+  ],
+};
+
+const BANK_INSTANT_CONCEPTS: Record<string, string[]> = {
+  deposits: ["Deposits"],
+  loans: [
+    "FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss",
+    "LoansAndLeasesReceivableNetReportedAmount",
+    "NotesReceivableNet",
+    "LoansAndLeasesReceivableNetOfDeferredIncome",
+  ],
+};
+
+export type BankSeries = { annual: Map<string, BankLines>; quarterly: Map<string, BankLines> };
+
+/**
+ * Bank lines from filings, or null when the company does not report like a bank
+ * (no deposits, or no net interest income). Keyed by period end date.
+ */
+export function bankSeriesFromCompanyFacts(facts: EdgarCompanyFacts): BankSeries | null {
+  const flow: Series = {};
+  for (const key of Object.keys(BANK_FLOW_CONCEPTS)) {
+    flow[key] = buildFlowSeries(conceptPoints(facts, BANK_FLOW_CONCEPTS[key]));
+  }
+  const instant: Record<string, InstantSeries> = {};
+  for (const key of Object.keys(BANK_INSTANT_CONCEPTS)) {
+    instant[key] = buildInstantSeries(conceptPoints(facts, BANK_INSTANT_CONCEPTS[key]));
+  }
+  if (flow.netInterestIncome.annual.size === 0 || instant.deposits.annual.size === 0) return null;
+
+  const build = (map: "annual" | "quarterly"): Map<string, BankLines> => {
+    const out = new Map<string, BankLines>();
+    const ends = new Set<string>([...flow.netInterestIncome[map].keys(), ...instant.deposits[map].keys()]);
+    for (const end of ends) {
+      out.set(end, {
+        netInterestIncome: at(flow, "netInterestIncome", map, end),
+        nonInterestIncome: at(flow, "nonInterestIncome", map, end),
+        nonInterestExpense: at(flow, "nonInterestExpense", map, end),
+        provisionForCreditLosses: at(flow, "provisionForCreditLosses", map, end),
+        deposits: instant.deposits[map].get(end) ?? null,
+        loans: instant.loans[map].get(end) ?? null,
+      });
+    }
+    return out;
+  };
+  return { annual: build("annual"), quarterly: build("quarterly") };
 }

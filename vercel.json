@@ -1,5 +1,30 @@
 {
   "installCommand": "npm ci",
   "buildCommand": "npm run build:skip-db",
-  "crons": [{ "path": "/api/cron/verified", "schedule": "0 5 * * *" }]
+  "crons": [
+    {
+      "path": "/api/cron/verified?slot=1",
+      "schedule": "10 3 * * *"
+    },
+    {
+      "path": "/api/cron/verified?slot=2",
+      "schedule": "10 7 * * *"
+    },
+    {
+      "path": "/api/cron/verified?slot=3",
+      "schedule": "10 11 * * *"
+    },
+    {
+      "path": "/api/cron/verified?slot=4",
+      "schedule": "10 15 * * *"
+    },
+    {
+      "path": "/api/cron/verified?slot=5",
+      "schedule": "10 19 * * *"
+    },
+    {
+      "path": "/api/cron/verified?slot=6",
+      "schedule": "10 23 * * *"
+    }
+  ]
 }
